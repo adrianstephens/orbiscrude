@@ -1,0 +1,1670 @@
+#include "extra/identifier.h"
+#include <d3d11_1.h>
+#include "d3d11shader.h" 
+#include "..\dx_shared\dx_fields.h" 
+#include "dx11\dx11_record.h"
+
+using namespace	iso;
+
+template<> const char *field_names<D3D11_CONTEXT_TYPE>::s[] = {
+	"D3D11_CONTEXT_TYPE_ALL",						//0
+	"D3D11_CONTEXT_TYPE_3D",						//1
+	"D3D11_CONTEXT_TYPE_COMPUTE",					//2
+	"D3D11_CONTEXT_TYPE_COPY",						//3
+	"D3D11_CONTEXT_TYPE_VIDEO",						//4
+};
+
+template<> const char *field_names<D3D11_TEXTURE_LAYOUT>::s[] = {
+	"D3D11_TEXTURE_LAYOUT_UNDEFINED",				// 0
+	"D3D11_TEXTURE_LAYOUT_ROW_MAJOR",				// 1
+	"D3D11_TEXTURE_LAYOUT_64K_STANDARD_SWIZZLE",	// 2
+};
+
+template<> const char *field_names<D3D11_CONSERVATIVE_RASTERIZATION_MODE>::s[] = {
+	"D3D11_CONSERVATIVE_RASTERIZATION_MODE_OFF",	// 0
+	"D3D11_CONSERVATIVE_RASTERIZATION_MODE_ON",		// 1
+};
+
+template<> const char *field_names<D3D_SRV_DIMENSION>::s[] = {
+	"D3D_SRV_DIMENSION_UNKNOWN",
+	"D3D_SRV_DIMENSION_BUFFER",
+	"D3D_SRV_DIMENSION_TEXTURE1D",
+	"D3D_SRV_DIMENSION_TEXTURE1DARRAY",
+	"D3D_SRV_DIMENSION_TEXTURE2D",
+	"D3D_SRV_DIMENSION_TEXTURE2DARRAY",
+	"D3D_SRV_DIMENSION_TEXTURE2DMS",
+	"D3D_SRV_DIMENSION_TEXTURE2DMSARRAY",
+	"D3D_SRV_DIMENSION_TEXTURE3D",
+	"D3D_SRV_DIMENSION_TEXTURECUBE",
+	"D3D_SRV_DIMENSION_TEXTURECUBEARRAY",
+	"D3D_SRV_DIMENSION_BUFFEREX",
+};
+
+template<> const char *field_names<D3D11_INPUT_CLASSIFICATION>::s[] = {
+	"D3D11_INPUT_PER_VERTEX_DATA",		//0,
+	"D3D11_INPUT_PER_INSTANCE_DATA",	//1
+};
+
+template<> field fields<D3D11_INPUT_ELEMENT_DESC_rel>::f[] = {
+#undef S
+#define S D3D11_INPUT_ELEMENT_DESC_rel
+	MAKE_DX_FIELD(SemanticName),
+	MAKE_DX_FIELD(SemanticIndex),
+	MAKE_DX_FIELD(Format),
+	MAKE_DX_FIELD(InputSlot),
+	MAKE_DX_FIELD(AlignedByteOffset),
+	MAKE_DX_FIELD(InputSlotClass),
+	MAKE_DX_FIELD(InstanceDataStepRate),
+	TERMINATOR
+};
+
+template<> const char *field_names<D3D11_FILL_MODE>::s[] = {
+	0, 0,
+	"D3D11_FILL_WIREFRAME",	//2,
+	"D3D11_FILL_SOLID",		//3
+};
+
+template<> const char *field_names<D3D11_CULL_MODE>::s[] = {
+	0,
+	"D3D11_CULL_NONE",	//1,
+	"D3D11_CULL_FRONT",	//2,
+	"D3D11_CULL_BACK",	//3
+};
+
+template<> field fields<D3D11_SO_DECLARATION_ENTRY>::f[] = {
+#undef S
+#define S D3D11_SO_DECLARATION_ENTRY
+	MAKE_DX_FIELD(Stream),
+	MAKE_DX_FIELD(SemanticName),
+	MAKE_DX_FIELD(SemanticIndex),
+	MAKE_DX_FIELD(StartComponent),
+	MAKE_DX_FIELD(ComponentCount),
+	MAKE_DX_FIELD(OutputSlot),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_VIEWPORT>::f[] = {
+#undef S
+#define S D3D11_VIEWPORT
+	MAKE_DX_FIELD(TopLeftX),
+	MAKE_DX_FIELD(TopLeftY),
+	MAKE_DX_FIELD(Width),
+	MAKE_DX_FIELD(Height),
+	MAKE_DX_FIELD(MinDepth),
+	MAKE_DX_FIELD(MaxDepth),
+	TERMINATOR
+};
+
+template<> const char *field_names<D3D11_RESOURCE_DIMENSION>::s[] = {
+	"D3D11_RESOURCE_DIMENSION_UNKNOWN",		//0,
+	"D3D11_RESOURCE_DIMENSION_BUFFER",		//1,
+	"D3D11_RESOURCE_DIMENSION_TEXTURE1D",	//2,
+	"D3D11_RESOURCE_DIMENSION_TEXTURE2D",	//3,
+	"D3D11_RESOURCE_DIMENSION_TEXTURE3D",	//4
+};
+
+template<> const char *field_names<D3D11_DSV_DIMENSION>::s[] = {
+	"D3D11_DSV_DIMENSION_UNKNOWN",			//0,
+	"D3D11_DSV_DIMENSION_TEXTURE1D",		//1,
+	"D3D11_DSV_DIMENSION_TEXTURE1DARRAY",	//2,
+	"D3D11_DSV_DIMENSION_TEXTURE2D",		//3,
+	"D3D11_DSV_DIMENSION_TEXTURE2DARRAY",	//4,
+	"D3D11_DSV_DIMENSION_TEXTURE2DMS",		//5,
+	"D3D11_DSV_DIMENSION_TEXTURE2DMSARRAY",	//6
+};
+
+template<> const char *field_names<D3D11_RTV_DIMENSION>::s[] = {
+	"D3D11_RTV_DIMENSION_UNKNOWN",			//0,
+	"D3D11_RTV_DIMENSION_BUFFER",			//1,
+	"D3D11_RTV_DIMENSION_TEXTURE1D",		//2,
+	"D3D11_RTV_DIMENSION_TEXTURE1DARRAY",	//3,
+	"D3D11_RTV_DIMENSION_TEXTURE2D",		//4,
+	"D3D11_RTV_DIMENSION_TEXTURE2DARRAY",	//5,
+	"D3D11_RTV_DIMENSION_TEXTURE2DMS",		//6,
+	"D3D11_RTV_DIMENSION_TEXTURE2DMSARRAY",	//7,
+	"D3D11_RTV_DIMENSION_TEXTURE3D",		//8
+};
+
+template<> const char *field_names<D3D11_UAV_DIMENSION>::s[] = {
+	"D3D11_UAV_DIMENSION_UNKNOWN",			//0,
+	"D3D11_UAV_DIMENSION_BUFFER",			//1,
+	"D3D11_UAV_DIMENSION_TEXTURE1D",		//2,
+	"D3D11_UAV_DIMENSION_TEXTURE1DARRAY",	//3,
+	"D3D11_UAV_DIMENSION_TEXTURE2D",		//4,
+	"D3D11_UAV_DIMENSION_TEXTURE2DARRAY",	//5,
+	"D3D11_UAV_DIMENSION_TEXTURE3D",		//8
+};
+
+template<> const char *field_names<D3D11_USAGE>::s[] = {
+	"D3D11_USAGE_DEFAULT",					//0,
+	"D3D11_USAGE_IMMUTABLE",				//1,
+	"D3D11_USAGE_DYNAMIC",					//2,
+	"D3D11_USAGE_STAGING",					//3
+};
+
+template<> struct field_names<D3D11_BIND_FLAG>		{ static field_bit s[];	};
+field_bit field_names<D3D11_BIND_FLAG>::s[] = {
+	{"D3D11_BIND_VERTEX_BUFFER",			0x1L	},
+	{"D3D11_BIND_INDEX_BUFFER",				0x2L	},
+	{"D3D11_BIND_CONSTANT_BUFFER",			0x4L	},
+	{"D3D11_BIND_SHADER_RESOURCE",			0x8L	},
+	{"D3D11_BIND_STREAM_OUTPUT",			0x10L	},
+	{"D3D11_BIND_RENDER_TARGET",			0x20L	},
+	{"D3D11_BIND_DEPTH_STENCIL",			0x40L	},
+	{"D3D11_BIND_UNORDERED_ACCESS",			0x80L	},
+	{"D3D11_BIND_DECODER",					0x200L	},
+	{"D3D11_BIND_VIDEO_ENCODER",			0x400L	},
+	0,
+};
+
+template<> struct field_names<D3D11_CPU_ACCESS_FLAG>		{ static field_bit s[];	};
+field_bit field_names<D3D11_CPU_ACCESS_FLAG>::s[] = {
+	{"D3D11_CPU_ACCESS_WRITE",	0x10000L	},
+	{"D3D11_CPU_ACCESS_READ",	0x20000L	},
+	0,
+};
+
+template<> struct field_names<D3D11_RESOURCE_MISC_FLAG>		{ static field_bit s[];	};
+field_bit field_names<D3D11_RESOURCE_MISC_FLAG>::s[] = {
+	{"D3D11_RESOURCE_MISC_GENERATE_MIPS",					0x1L	},
+	{"D3D11_RESOURCE_MISC_SHARED",							0x2L	},
+	{"D3D11_RESOURCE_MISC_TEXTURECUBE",						0x4L	},
+	{"D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS",				0x10L	},
+	{"D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS",			0x20L	},
+	{"D3D11_RESOURCE_MISC_BUFFER_STRUCTURED",				0x40L	},
+	{"D3D11_RESOURCE_MISC_RESOURCE_CLAMP",					0x80L	},
+	{"D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX",				0x100L	},
+	{"D3D11_RESOURCE_MISC_GDI_COMPATIBLE",					0x200L	},
+	{"D3D11_RESOURCE_MISC_SHARED_NTHANDLE",					0x800L	},
+	{"D3D11_RESOURCE_MISC_RESTRICTED_CONTENT",				0x1000L	},
+	{"D3D11_RESOURCE_MISC_RESTRICT_SHARED_RESOURCE",		0x2000L	},
+	{"D3D11_RESOURCE_MISC_RESTRICT_SHARED_RESOURCE_DRIVER",	0x4000L	},
+	{"D3D11_RESOURCE_MISC_GUARDED",							0x8000L	},
+	{"D3D11_RESOURCE_MISC_TILE_POOL",						0x20000L},
+	{"D3D11_RESOURCE_MISC_TILED",							0x40000L},
+	0,
+};
+
+template<> const char *field_names<D3D11_MAP>::s[] = {
+	0,
+	"D3D11_MAP_READ",					//1,
+	"D3D11_MAP_WRITE",					//2,
+	"D3D11_MAP_READ_WRITE",				//3,
+	"D3D11_MAP_WRITE_DISCARD",			//4,
+	"D3D11_MAP_WRITE_NO_OVERWRITE",		//5
+};
+
+template<> struct field_names<D3D11_MAP_FLAG>		{ static field_bit s[];	};
+field_bit field_names<D3D11_MAP_FLAG>::s[] = {
+	{"D3D11_MAP_FLAG_DO_NOT_WAIT",	0x100000L},
+	0,
+};
+
+template<> const char *field_names<D3D11_RAISE_FLAG>::s[] = {
+	0,
+	"D3D11_RAISE_FLAG_DRIVER_INTERNAL_ERROR",	//0x1L
+};
+
+template<> const char *field_names<D3D11_CLEAR_FLAG>::s[] = {
+	0,
+	"D3D11_CLEAR_DEPTH",	//0x1L,
+	"D3D11_CLEAR_STENCIL",	//0x2L
+};
+
+template<> field fields<D3D11_BOX>::f[] = {
+#undef S
+#define S D3D11_BOX
+	MAKE_DX_FIELD(left),
+	MAKE_DX_FIELD(top),
+	MAKE_DX_FIELD(front),
+	MAKE_DX_FIELD(right),
+	MAKE_DX_FIELD(bottom),
+	MAKE_DX_FIELD(back),
+	TERMINATOR
+};
+
+template<> const char *field_names<D3D11_COMPARISON_FUNC>::s[] = {
+	0,
+	"D3D11_COMPARISON_NEVER",			//1,
+	"D3D11_COMPARISON_LESS",			//2,
+	"D3D11_COMPARISON_EQUAL",			//3,
+	"D3D11_COMPARISON_LESS_EQUAL",		//4,
+	"D3D11_COMPARISON_GREATER",			//5,
+	"D3D11_COMPARISON_NOT_EQUAL",		//6,
+	"D3D11_COMPARISON_GREATER_EQUAL",	//7,
+	"D3D11_COMPARISON_ALWAYS",			//8
+};
+
+template<> const char *field_names<D3D11_DEPTH_WRITE_MASK>::s[] = {
+	"D3D11_DEPTH_WRITE_MASK_ZERO",		//0,
+	"D3D11_DEPTH_WRITE_MASK_ALL",		//1
+};
+
+template<> const char *field_names<D3D11_STENCIL_OP>::s[] = {
+	0,
+	"D3D11_STENCIL_OP_KEEP",			//1,
+	"D3D11_STENCIL_OP_ZERO",			//2,
+	"D3D11_STENCIL_OP_REPLACE",			//3,
+	"D3D11_STENCIL_OP_INCR_SAT",		//4,
+	"D3D11_STENCIL_OP_DECR_SAT",		//5,
+	"D3D11_STENCIL_OP_INVERT",			//6,
+	"D3D11_STENCIL_OP_INCR",			//7,
+	"D3D11_STENCIL_OP_DECR",			//8
+	0,0,0,0,0,0,0
+};
+
+template<> field fields<D3D11_DEPTH_STENCILOP_DESC>::f[] = {
+#undef S
+#define S D3D11_DEPTH_STENCILOP_DESC
+	MAKE_DX_FIELD(StencilFailOp),
+	MAKE_DX_FIELD(StencilDepthFailOp),
+	MAKE_DX_FIELD(StencilPassOp),
+	MAKE_DX_FIELD(StencilFunc),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_DEPTH_STENCIL_DESC>::f[] = {
+#undef S
+#define S D3D11_DEPTH_STENCIL_DESC
+	MAKE_DX_FIELD(DepthEnable),
+	MAKE_DX_FIELD(DepthWriteMask),
+	MAKE_DX_FIELD(DepthFunc),
+	MAKE_DX_FIELD(StencilEnable),
+	MAKE_DX_FIELD(StencilReadMask),
+	MAKE_DX_FIELD(StencilWriteMask),
+	MAKE_DX_FIELD(FrontFace),
+	MAKE_DX_FIELD(BackFace),
+	TERMINATOR
+};
+
+template<> const char *field_names<D3D11_BLEND>::s[] = {
+	0,
+	"D3D11_BLEND_ZERO",					//1,
+	"D3D11_BLEND_ONE",					//2,
+	"D3D11_BLEND_SRC_COLOR",			//3,
+	"D3D11_BLEND_INV_SRC_COLOR",		//4,
+	"D3D11_BLEND_SRC_ALPHA",			//5,
+	"D3D11_BLEND_INV_SRC_ALPHA",		//6,
+	"D3D11_BLEND_DEST_ALPHA",			//7,
+	"D3D11_BLEND_INV_DEST_ALPHA",		//8,
+	"D3D11_BLEND_DEST_COLOR",			//9,
+	"D3D11_BLEND_INV_DEST_COLOR",		//10,
+	"D3D11_BLEND_SRC_ALPHA_SAT",		//11,
+	"D3D11_BLEND_BLEND_FACTOR",			//14,
+	"D3D11_BLEND_INV_BLEND_FACTOR",		//15,
+	"D3D11_BLEND_SRC1_COLOR",			//16,
+	"D3D11_BLEND_INV_SRC1_COLOR",		//17,
+	"D3D11_BLEND_SRC1_ALPHA",			//18,
+	"D3D11_BLEND_INV_SRC1_ALPHA",		//19
+};
+
+template<> const char *field_names<D3D11_BLEND_OP>::s[] = {
+	0,
+	"D3D11_BLEND_OP_ADD",				//1,
+	"D3D11_BLEND_OP_SUBTRACT",			//2,
+	"D3D11_BLEND_OP_REV_SUBTRACT",		//3,
+	"D3D11_BLEND_OP_MIN",				//4,
+	"D3D11_BLEND_OP_MAX",				//5
+};
+
+template<> struct field_names<D3D11_COLOR_WRITE_ENABLE>		{ static field_bit s[];	};
+field_bit	field_names<D3D11_COLOR_WRITE_ENABLE>::s[] = {
+	{"D3D11_COLOR_WRITE_ENABLE_RED",	1},
+	{"D3D11_COLOR_WRITE_ENABLE_GREEN",	2},
+	{"D3D11_COLOR_WRITE_ENABLE_BLUE",	4},
+	{"D3D11_COLOR_WRITE_ENABLE_ALPHA",	8},
+	{"D3D11_COLOR_WRITE_ENABLE_ALL",	15},
+	0,
+};
+
+template<> const char *field_names<D3D11_LOGIC_OP>::s[] = {
+	"D3D11_LOGIC_OP_CLEAR",
+	"D3D11_LOGIC_OP_SET",
+	"D3D11_LOGIC_OP_COPY",
+	"D3D11_LOGIC_OP_COPY_INVERTED",
+	"D3D11_LOGIC_OP_NOOP",
+	"D3D11_LOGIC_OP_INVERT",
+	"D3D11_LOGIC_OP_AND",
+	"D3D11_LOGIC_OP_NAND",
+	"D3D11_LOGIC_OP_OR",
+	"D3D11_LOGIC_OP_NOR",
+	"D3D11_LOGIC_OP_XOR",
+	"D3D11_LOGIC_OP_EQUIV",
+	"D3D11_LOGIC_OP_AND_REVERSE",
+	"D3D11_LOGIC_OP_AND_INVERTED",
+	"D3D11_LOGIC_OP_OR_REVERSE",
+	"D3D11_LOGIC_OP_OR_INVERTED",
+};
+
+template<> field fields<D3D11_RENDER_TARGET_BLEND_DESC>::f[] = {
+#undef S
+#define S D3D11_RENDER_TARGET_BLEND_DESC
+	MAKE_DX_FIELD(BlendEnable),
+	MAKE_DX_FIELD(SrcBlend),
+	MAKE_DX_FIELD(DestBlend),
+	MAKE_DX_FIELD(BlendOp),
+	MAKE_DX_FIELD(SrcBlendAlpha),
+	MAKE_DX_FIELD(DestBlendAlpha),
+	MAKE_DX_FIELD(BlendOpAlpha),
+	MAKE_DX_FIELD(RenderTargetWriteMask),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_RENDER_TARGET_BLEND_DESC1>::f[] = {
+#undef S
+#define S D3D11_RENDER_TARGET_BLEND_DESC1
+	MAKE_DX_FIELD(BlendEnable),
+	MAKE_DX_FIELD(LogicOpEnable),
+	MAKE_DX_FIELD(SrcBlend),
+	MAKE_DX_FIELD(DestBlend),
+	MAKE_DX_FIELD(BlendOp),
+	MAKE_DX_FIELD(SrcBlendAlpha),
+	MAKE_DX_FIELD(DestBlendAlpha),
+	MAKE_DX_FIELD(BlendOpAlpha),
+	MAKE_DX_FIELD(LogicOp),
+	MAKE_DX_FIELD(RenderTargetWriteMask),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_BLEND_DESC>::f[] = {
+#undef S
+#define S D3D11_BLEND_DESC
+	MAKE_DX_FIELD(AlphaToCoverageEnable),
+	MAKE_DX_FIELD(IndependentBlendEnable),
+	MAKE_DX_FIELD(RenderTarget),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_BLEND_DESC1>::f[] = {
+#undef S
+#define S D3D11_BLEND_DESC1
+	MAKE_DX_FIELD(AlphaToCoverageEnable),
+	MAKE_DX_FIELD(IndependentBlendEnable),
+	MAKE_DX_FIELD(RenderTarget),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_RASTERIZER_DESC>::f[] = {
+#undef S
+#define S D3D11_RASTERIZER_DESC
+	MAKE_DX_FIELD(FillMode),
+	MAKE_DX_FIELD(CullMode),
+	MAKE_DX_FIELD(FrontCounterClockwise),
+	MAKE_DX_FIELD(DepthBias),
+	MAKE_DX_FIELD(DepthBiasClamp),
+	MAKE_DX_FIELD(SlopeScaledDepthBias),
+	MAKE_DX_FIELD(DepthClipEnable),
+	MAKE_DX_FIELD(ScissorEnable),
+	MAKE_DX_FIELD(MultisampleEnable),
+	MAKE_DX_FIELD(AntialiasedLineEnable),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_RASTERIZER_DESC1>::f[] = {
+#undef S
+#define S D3D11_RASTERIZER_DESC1
+	field::call<D3D11_RASTERIZER_DESC>(0, 0),
+	MAKE_DX_FIELD(ForcedSampleCount),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_SUBRESOURCE_DATA>::f[] = {
+#undef S
+#define S D3D11_SUBRESOURCE_DATA
+	MAKE_DX_FIELD(pSysMem),
+	MAKE_DX_FIELD(SysMemPitch),
+	MAKE_DX_FIELD(SysMemSlicePitch),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_MAPPED_SUBRESOURCE>::f[] = {
+#undef S
+#define S D3D11_MAPPED_SUBRESOURCE
+	MAKE_DX_FIELD(pData),
+	MAKE_DX_FIELD(RowPitch),
+	MAKE_DX_FIELD(DepthPitch),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_BUFFER_DESC>::f[] = {
+#undef S
+#define S D3D11_BUFFER_DESC
+	MAKE_DX_FIELD(ByteWidth),
+	MAKE_DX_FIELD(Usage),
+	MAKE_DX_FIELDT(BindFlags, D3D11_BIND_FLAG),
+	MAKE_DX_FIELDT(CPUAccessFlags, D3D11_CPU_ACCESS_FLAG),
+	MAKE_DX_FIELDT(MiscFlags, D3D11_RESOURCE_MISC_FLAG ),
+	MAKE_DX_FIELD(StructureByteStride),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_TEXTURE1D_DESC>::f[] = {
+#undef S
+#define S D3D11_TEXTURE1D_DESC
+	MAKE_DX_FIELD(Width),
+	MAKE_DX_FIELD(MipLevels),
+	MAKE_DX_FIELD(ArraySize),
+	MAKE_DX_FIELD(Format),
+	MAKE_DX_FIELD(Usage),
+	MAKE_DX_FIELDT(BindFlags, D3D11_BIND_FLAG),
+	MAKE_DX_FIELDT(CPUAccessFlags, D3D11_CPU_ACCESS_FLAG),
+	MAKE_DX_FIELDT(MiscFlags, D3D11_RESOURCE_MISC_FLAG ),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_TEXTURE2D_DESC>::f[] = {
+#undef S
+#define S D3D11_TEXTURE2D_DESC
+	MAKE_DX_FIELD(Width),
+	MAKE_DX_FIELD(Height),
+	MAKE_DX_FIELD(MipLevels),
+	MAKE_DX_FIELD(ArraySize),
+	MAKE_DX_FIELD(Format),
+	CALL_FIELD(SampleDesc),
+	MAKE_DX_FIELD(Usage),
+	MAKE_DX_FIELDT(BindFlags, D3D11_BIND_FLAG),
+	MAKE_DX_FIELDT(CPUAccessFlags, D3D11_CPU_ACCESS_FLAG),
+	MAKE_DX_FIELDT(MiscFlags, D3D11_RESOURCE_MISC_FLAG ),
+	TERMINATOR
+};
+template<> field fields<D3D11_TEXTURE3D_DESC>::f[] = {
+#undef S
+#define S D3D11_TEXTURE3D_DESC
+	MAKE_DX_FIELD(Width),
+	MAKE_DX_FIELD(Height),
+	MAKE_DX_FIELD(Depth),
+	MAKE_DX_FIELD(MipLevels),
+	MAKE_DX_FIELD(Format),
+	MAKE_DX_FIELD(Usage),
+	MAKE_DX_FIELDT(BindFlags, D3D11_BIND_FLAG),
+	MAKE_DX_FIELDT(CPUAccessFlags, D3D11_CPU_ACCESS_FLAG),
+	MAKE_DX_FIELDT(MiscFlags, D3D11_RESOURCE_MISC_FLAG ),
+	TERMINATOR
+};
+
+template<> const char *field_names<D3D11_TEXTURECUBE_FACE>::s[] = {
+	"D3D11_TEXTURECUBE_FACE_POSITIVE_X",	//0,
+	"D3D11_TEXTURECUBE_FACE_NEGATIVE_X",	//1,
+	"D3D11_TEXTURECUBE_FACE_POSITIVE_Y",	//2,
+	"D3D11_TEXTURECUBE_FACE_NEGATIVE_Y",	//3,
+	"D3D11_TEXTURECUBE_FACE_POSITIVE_Z",	//4,
+	"D3D11_TEXTURECUBE_FACE_NEGATIVE_Z",	//5
+};
+
+template<> field fields<D3D11_BUFFER_SRV>::f[] = {
+#undef S
+#define S D3D11_BUFFER_SRV
+	MAKE_DX_FIELD(FirstElement),
+	MAKE_DX_FIELD(NumElements),
+	TERMINATOR
+};
+
+template<> const char *field_names<D3D11_BUFFEREX_SRV_FLAG>::s[] = {
+	"D3D11_BUFFEREX_SRV_FLAG_RAW",	//0x1
+};
+
+template<> field fields<D3D11_BUFFEREX_SRV>::f[] = {
+#undef S
+#define S D3D11_BUFFEREX_SRV
+	MAKE_DX_FIELD(FirstElement),
+	MAKE_DX_FIELD(NumElements),
+	MAKE_DX_FIELD(Flags),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_TEX1D_SRV>::f[] = {
+#undef S
+#define S D3D11_TEX1D_SRV
+	MAKE_DX_FIELD(MostDetailedMip),
+	MAKE_DX_FIELD(MipLevels),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_TEX1D_ARRAY_SRV>::f[] = {
+#undef S
+#define S D3D11_TEX1D_ARRAY_SRV
+	MAKE_DX_FIELD(MostDetailedMip),
+	MAKE_DX_FIELD(MipLevels),
+	MAKE_DX_FIELD(FirstArraySlice),
+	MAKE_DX_FIELD(ArraySize),
+};
+
+template<> field fields<D3D11_TEX2D_SRV>::f[] = {
+#undef S
+#define S D3D11_TEX2D_SRV
+	MAKE_DX_FIELD(MostDetailedMip),
+	MAKE_DX_FIELD(MipLevels),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_TEX2D_ARRAY_SRV>::f[] = {
+#undef S
+#define S D3D11_TEX2D_ARRAY_SRV
+	MAKE_DX_FIELD(MostDetailedMip),
+	MAKE_DX_FIELD(MipLevels),
+	MAKE_DX_FIELD(FirstArraySlice),
+	MAKE_DX_FIELD(ArraySize),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_TEX3D_SRV>::f[] = {
+#undef S
+#define S D3D11_TEX3D_SRV
+	MAKE_DX_FIELD(MostDetailedMip),
+	MAKE_DX_FIELD(MipLevels),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_TEXCUBE_SRV>::f[] = {
+#undef S
+#define S D3D11_TEXCUBE_SRV
+	MAKE_DX_FIELD(MostDetailedMip),
+	MAKE_DX_FIELD(MipLevels),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_TEXCUBE_ARRAY_SRV>::f[] = {
+#undef S
+#define S D3D11_TEXCUBE_ARRAY_SRV
+	MAKE_DX_FIELD(MostDetailedMip),
+	MAKE_DX_FIELD(MipLevels),
+	MAKE_DX_FIELD(First2DArrayFace),
+	MAKE_DX_FIELD(NumCubes),
+};
+
+template<> field fields<D3D11_TEX2DMS_SRV>::f[] = {
+	TERMINATOR
+};
+
+template<> field fields<D3D11_TEX2DMS_ARRAY_SRV>::f[] = {
+#undef S
+#define S D3D11_TEX2DMS_ARRAY_SRV
+	MAKE_DX_FIELD(FirstArraySlice),
+	MAKE_DX_FIELD(ArraySize),
+	TERMINATOR
+};
+
+field* D3D11_SHADER_RESOURCE_VIEW_DESC_union[] = {
+	0,
+	fields<D3D11_BUFFER_SRV>::f,
+	fields<D3D11_TEX1D_SRV>::f,
+	fields<D3D11_TEX1D_ARRAY_SRV>::f,
+	fields<D3D11_TEX2D_SRV>::f,
+	fields<D3D11_TEX2D_ARRAY_SRV>::f,
+	fields<D3D11_TEX2DMS_SRV>::f,
+	fields<D3D11_TEX2DMS_ARRAY_SRV>::f,
+	fields<D3D11_TEX3D_SRV>::f,
+	fields<D3D11_TEXCUBE_SRV>::f,
+	fields<D3D11_TEXCUBE_ARRAY_SRV>::f,
+	fields<D3D11_BUFFEREX_SRV>::f,
+};
+	
+template<> field fields<D3D11_SHADER_RESOURCE_VIEW_DESC>::f[] = {
+#undef S
+#define S D3D11_SHADER_RESOURCE_VIEW_DESC
+	MAKE_DX_FIELD(Format),
+	MAKE_DX_FIELD(ViewDimension),
+	MAKE_UNION(Buffer, 1, D3D11_SHADER_RESOURCE_VIEW_DESC_union),
+	TERMINATOR
+};
+template<> field fields<D3D11_BUFFER_RTV>::f[] = {
+#undef S
+#define S D3D11_BUFFER_RTV
+	MAKE_DX_FIELD(FirstElement),
+	MAKE_DX_FIELD(NumElements),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_TEX1D_RTV>::f[] = {
+#undef S
+#define S D3D11_TEX1D_RTV
+	MAKE_DX_FIELD(MipSlice),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_TEX1D_ARRAY_RTV>::f[] = {
+#undef S
+#define S D3D11_TEX1D_ARRAY_RTV
+	MAKE_DX_FIELD(MipSlice),
+	MAKE_DX_FIELD(FirstArraySlice),
+	MAKE_DX_FIELD(ArraySize),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_TEX2D_RTV>::f[] = {
+#undef S
+#define S D3D11_TEX2D_RTV
+	MAKE_DX_FIELD(MipSlice),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_TEX2DMS_RTV>::f[] = {
+	TERMINATOR
+};
+
+template<> field fields<D3D11_TEX2D_ARRAY_RTV>::f[] = {
+#undef S
+#define S D3D11_TEX2D_ARRAY_RTV
+	MAKE_DX_FIELD(MipSlice),
+	MAKE_DX_FIELD(FirstArraySlice),
+	MAKE_DX_FIELD(ArraySize),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_TEX2DMS_ARRAY_RTV>::f[] = {
+#undef S
+#define S D3D11_TEX2DMS_ARRAY_RTV
+	MAKE_DX_FIELD(FirstArraySlice),
+	MAKE_DX_FIELD(ArraySize),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_TEX3D_RTV>::f[] = {
+#undef S
+#define S D3D11_TEX3D_RTV
+	MAKE_DX_FIELD(MipSlice),
+	MAKE_DX_FIELD(FirstWSlice),
+	MAKE_DX_FIELD(WSize),
+	TERMINATOR
+};
+
+field *D3D11_RENDER_TARGET_VIEW_DESC_union[] = {
+	0,
+	fields<D3D11_BUFFER_RTV>::f,
+	fields<D3D11_TEX1D_RTV>::f,
+	fields<D3D11_TEX1D_ARRAY_RTV>::f,
+	fields<D3D11_TEX2D_RTV>::f,
+	fields<D3D11_TEX2D_ARRAY_RTV>::f,
+	fields<D3D11_TEX2DMS_RTV>::f,
+	fields<D3D11_TEX2DMS_ARRAY_RTV>::f,
+	fields<D3D11_TEX3D_RTV>::f,
+};
+
+template<> field fields<D3D11_RENDER_TARGET_VIEW_DESC>::f[] = {
+#undef S
+#define S D3D11_RENDER_TARGET_VIEW_DESC
+	MAKE_DX_FIELD(Format),
+	MAKE_DX_FIELD(ViewDimension),
+	MAKE_UNION(Buffer,1,D3D11_RENDER_TARGET_VIEW_DESC_union),
+	TERMINATOR
+};
+template<> field fields<D3D11_TEX1D_DSV>::f[] = {
+#undef S
+#define S D3D11_TEX1D_DSV
+	MAKE_DX_FIELD(MipSlice),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_TEX1D_ARRAY_DSV>::f[] = {
+#undef S
+#define S D3D11_TEX1D_ARRAY_DSV
+	MAKE_DX_FIELD(MipSlice),
+	MAKE_DX_FIELD(FirstArraySlice),
+	MAKE_DX_FIELD(ArraySize),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_TEX2D_DSV>::f[] = {
+#undef S
+#define S D3D11_TEX2D_DSV
+	MAKE_DX_FIELD(MipSlice),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_TEX2D_ARRAY_DSV>::f[] = {
+#undef S
+#define S D3D11_TEX2D_ARRAY_DSV
+	MAKE_DX_FIELD(MipSlice),
+	MAKE_DX_FIELD(FirstArraySlice),
+	MAKE_DX_FIELD(ArraySize),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_TEX2DMS_DSV>::f[] = {
+	TERMINATOR
+};
+
+template<> field fields<D3D11_TEX2DMS_ARRAY_DSV>::f[] = {
+#undef S
+#define S D3D11_TEX2DMS_ARRAY_DSV
+	MAKE_DX_FIELD(FirstArraySlice),
+	MAKE_DX_FIELD(ArraySize),
+	TERMINATOR
+};
+
+template<> const char *field_names<D3D11_DSV_FLAG>::s[] = {
+	"D3D11_DSV_READ_ONLY_DEPTH",	//0x1L,
+	"D3D11_DSV_READ_ONLY_STENCIL",	//0x2L
+};
+
+field* D3D11_DEPTH_STENCIL_VIEW_DESC_union[] = {
+	0,
+	fields<D3D11_TEX1D_DSV>::f,
+	fields<D3D11_TEX1D_ARRAY_DSV>::f,
+	fields<D3D11_TEX2D_DSV>::f,
+	fields<D3D11_TEX2D_ARRAY_DSV>::f,
+	fields<D3D11_TEX2DMS_DSV>::f,
+	fields<D3D11_TEX2DMS_ARRAY_DSV>::f,
+};
+template<> field fields<D3D11_DEPTH_STENCIL_VIEW_DESC>::f[] = {
+#undef S
+#define S D3D11_DEPTH_STENCIL_VIEW_DESC
+	MAKE_DX_FIELD(Format),
+	MAKE_DX_FIELD(ViewDimension),
+	MAKE_DX_FIELD(Flags),
+	MAKE_UNION(Texture1D, 1, D3D11_DEPTH_STENCIL_VIEW_DESC_union),
+	TERMINATOR
+};
+
+template<> struct field_names<D3D11_BUFFER_UAV_FLAG>		{ static field_bit s[];	};
+field_bit field_names<D3D11_BUFFER_UAV_FLAG>::s[] = {
+	{"D3D11_BUFFER_UAV_FLAG_RAW",		0x1	},
+	{"D3D11_BUFFER_UAV_FLAG_APPEND",	0x2	},
+	{"D3D11_BUFFER_UAV_FLAG_COUNTER",	0x4	},
+	0,
+};
+
+template<> field fields<D3D11_BUFFER_UAV>::f[] = {
+#undef S
+#define S D3D11_BUFFER_UAV
+	MAKE_DX_FIELD(FirstElement),
+	MAKE_DX_FIELD(NumElements),
+	MAKE_DX_FIELD(Flags),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_TEX1D_UAV>::f[] = {
+#undef S
+#define S D3D11_TEX1D_UAV
+	MAKE_DX_FIELD(MipSlice),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_TEX1D_ARRAY_UAV>::f[] = {
+#undef S
+#define S D3D11_TEX1D_ARRAY_UAV
+	MAKE_DX_FIELD(MipSlice),
+	MAKE_DX_FIELD(FirstArraySlice),
+	MAKE_DX_FIELD(ArraySize),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_TEX2D_UAV>::f[] = {
+#undef S
+#define S D3D11_TEX2D_UAV
+	MAKE_DX_FIELD(MipSlice),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_TEX2D_ARRAY_UAV>::f[] = {
+#undef S
+#define S D3D11_TEX2D_ARRAY_UAV
+	MAKE_DX_FIELD(MipSlice),
+	MAKE_DX_FIELD(FirstArraySlice),
+	MAKE_DX_FIELD(ArraySize),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_TEX3D_UAV>::f[] = {
+#undef S
+#define S D3D11_TEX3D_UAV
+	MAKE_DX_FIELD(MipSlice),
+	MAKE_DX_FIELD(FirstWSlice),
+	MAKE_DX_FIELD(WSize),
+	TERMINATOR
+};
+
+field *D3D11_UNORDERED_ACCESS_VIEW_DESC_union[] = {
+	0,
+	fields<D3D11_BUFFER_UAV>::f,
+	fields<D3D11_TEX1D_UAV>::f,
+	fields<D3D11_TEX1D_ARRAY_UAV>::f,
+	fields<D3D11_TEX2D_UAV>::f,
+	fields<D3D11_TEX2D_ARRAY_UAV>::f,
+	0,
+	0,
+	fields<D3D11_TEX3D_UAV>::f,
+};
+
+template<> field fields<D3D11_UNORDERED_ACCESS_VIEW_DESC>::f[] = {
+#undef S
+#define S D3D11_UNORDERED_ACCESS_VIEW_DESC
+	MAKE_DX_FIELD(Format),
+	MAKE_DX_FIELD(ViewDimension),
+	MAKE_UNION(Buffer, 1, D3D11_UNORDERED_ACCESS_VIEW_DESC_union),
+	TERMINATOR
+};
+
+template<> struct field_names<D3D11_FILTER>				{ static field_value s[];	};
+field_value	field_names<D3D11_FILTER>::s[] = {
+	{"D3D11_FILTER_MIN_MAG_MIP_POINT",							0},
+	{"D3D11_FILTER_MIN_MAG_POINT_MIP_LINEAR",					0x1},
+	{"D3D11_FILTER_MIN_POINT_MAG_LINEAR_MIP_POINT",				0x4},
+	{"D3D11_FILTER_MIN_POINT_MAG_MIP_LINEAR",					0x5},
+	{"D3D11_FILTER_MIN_LINEAR_MAG_MIP_POINT",					0x10},
+	{"D3D11_FILTER_MIN_LINEAR_MAG_POINT_MIP_LINEAR",			0x11},
+	{"D3D11_FILTER_MIN_MAG_LINEAR_MIP_POINT",					0x14},
+	{"D3D11_FILTER_MIN_MAG_MIP_LINEAR",							0x15},
+	{"D3D11_FILTER_ANISOTROPIC",								0x55},
+	{"D3D11_FILTER_COMPARISON_MIN_MAG_MIP_POINT",				0x80},
+	{"D3D11_FILTER_COMPARISON_MIN_MAG_POINT_MIP_LINEAR",		0x81},
+	{"D3D11_FILTER_COMPARISON_MIN_POINT_MAG_LINEAR_MIP_POINT",	0x84},
+	{"D3D11_FILTER_COMPARISON_MIN_POINT_MAG_MIP_LINEAR",		0x85},
+	{"D3D11_FILTER_COMPARISON_MIN_LINEAR_MAG_MIP_POINT",		0x90},
+	{"D3D11_FILTER_COMPARISON_MIN_LINEAR_MAG_POINT_MIP_LINEAR",	0x91},
+	{"D3D11_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT",		0x94},
+	{"D3D11_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR",				0x95},
+	{"D3D11_FILTER_COMPARISON_ANISOTROPIC",						0xd5},
+	{"D3D11_FILTER_MINIMUM_MIN_MAG_MIP_POINT",					0x100},
+	{"D3D11_FILTER_MINIMUM_MIN_MAG_POINT_MIP_LINEAR",			0x101},
+	{"D3D11_FILTER_MINIMUM_MIN_POINT_MAG_LINEAR_MIP_POINT",		0x104},
+	{"D3D11_FILTER_MINIMUM_MIN_POINT_MAG_MIP_LINEAR",			0x105},
+	{"D3D11_FILTER_MINIMUM_MIN_LINEAR_MAG_MIP_POINT",			0x110},
+	{"D3D11_FILTER_MINIMUM_MIN_LINEAR_MAG_POINT_MIP_LINEAR",	0x111},
+	{"D3D11_FILTER_MINIMUM_MIN_MAG_LINEAR_MIP_POINT",			0x114},
+	{"D3D11_FILTER_MINIMUM_MIN_MAG_MIP_LINEAR",					0x115},
+	{"D3D11_FILTER_MINIMUM_ANISOTROPIC",						0x155},
+	{"D3D11_FILTER_MAXIMUM_MIN_MAG_MIP_POINT",					0x180},
+	{"D3D11_FILTER_MAXIMUM_MIN_MAG_POINT_MIP_LINEAR",			0x181},
+	{"D3D11_FILTER_MAXIMUM_MIN_POINT_MAG_LINEAR_MIP_POINT",		0x184},
+	{"D3D11_FILTER_MAXIMUM_MIN_POINT_MAG_MIP_LINEAR",			0x185},
+	{"D3D11_FILTER_MAXIMUM_MIN_LINEAR_MAG_MIP_POINT",			0x190},
+	{"D3D11_FILTER_MAXIMUM_MIN_LINEAR_MAG_POINT_MIP_LINEAR",	0x191},
+	{"D3D11_FILTER_MAXIMUM_MIN_MAG_LINEAR_MIP_POINT",			0x194},
+	{"D3D11_FILTER_MAXIMUM_MIN_MAG_MIP_LINEAR",					0x195},
+	{"D3D11_FILTER_MAXIMUM_ANISOTROPIC",						0x1d5},
+	0,
+};
+
+template<> const char *field_names<D3D11_FILTER_TYPE>::s[] = {
+	"D3D11_FILTER_TYPE_POINT",	//0,
+	"D3D11_FILTER_TYPE_LINEAR",	//1
+};
+
+template<> const char *field_names<D3D11_FILTER_REDUCTION_TYPE>::s[] = {
+	"D3D11_FILTER_REDUCTION_TYPE_STANDARD",	//0,
+	"D3D11_FILTER_REDUCTION_TYPE_COMPARISON",	//1,
+	"D3D11_FILTER_REDUCTION_TYPE_MINIMUM",	//2,
+	"D3D11_FILTER_REDUCTION_TYPE_MAXIMUM",	//3
+};
+
+template<> const char *field_names<D3D11_TEXTURE_ADDRESS_MODE>::s[] = {
+	0,
+	"D3D11_TEXTURE_ADDRESS_WRAP",	//1,
+	"D3D11_TEXTURE_ADDRESS_MIRROR",	//2,
+	"D3D11_TEXTURE_ADDRESS_CLAMP",	//3,
+	"D3D11_TEXTURE_ADDRESS_BORDER",	//4,
+	"D3D11_TEXTURE_ADDRESS_MIRROR_ONCE",	//5
+};
+
+template<> field fields<D3D11_SAMPLER_DESC>::f[] = {
+#undef S
+#define S D3D11_SAMPLER_DESC
+	MAKE_DX_FIELD(Filter),
+	MAKE_DX_FIELD(AddressU),
+	MAKE_DX_FIELD(AddressV),
+	MAKE_DX_FIELD(AddressW),
+	MAKE_DX_FIELD(MipLODBias),
+	MAKE_DX_FIELD(MaxAnisotropy),
+	MAKE_DX_FIELD(ComparisonFunc),
+	MAKE_DX_FIELD(BorderColor),
+	MAKE_DX_FIELD(MinLOD),
+	MAKE_DX_FIELD(MaxLOD),
+	TERMINATOR
+};
+
+template<> struct field_names<D3D11_FORMAT_SUPPORT>				{ static field_bit s[];	};
+field_bit	field_names<D3D11_FORMAT_SUPPORT>::s[] = {
+	{"D3D11_FORMAT_SUPPORT_BUFFER",						0x1},
+	{"D3D11_FORMAT_SUPPORT_IA_VERTEX_BUFFER",			0x2},
+	{"D3D11_FORMAT_SUPPORT_IA_INDEX_BUFFER",			0x4},
+	{"D3D11_FORMAT_SUPPORT_SO_BUFFER",					0x8},
+	{"D3D11_FORMAT_SUPPORT_TEXTURE1D",					0x10},
+	{"D3D11_FORMAT_SUPPORT_TEXTURE2D",					0x20},
+	{"D3D11_FORMAT_SUPPORT_TEXTURE3D",					0x40},
+	{"D3D11_FORMAT_SUPPORT_TEXTURECUBE",				0x80},
+	{"D3D11_FORMAT_SUPPORT_SHADER_LOAD",				0x100},
+	{"D3D11_FORMAT_SUPPORT_SHADER_SAMPLE",				0x200},
+	{"D3D11_FORMAT_SUPPORT_SHADER_SAMPLE_COMPARISON",	0x400},
+	{"D3D11_FORMAT_SUPPORT_SHADER_SAMPLE_MONO_TEXT",	0x800},
+	{"D3D11_FORMAT_SUPPORT_MIP",						0x1000},
+	{"D3D11_FORMAT_SUPPORT_MIP_AUTOGEN",				0x2000},
+	{"D3D11_FORMAT_SUPPORT_RENDER_TARGET",				0x4000},
+	{"D3D11_FORMAT_SUPPORT_BLENDABLE",					0x8000},
+	{"D3D11_FORMAT_SUPPORT_DEPTH_STENCIL",				0x10000},
+	{"D3D11_FORMAT_SUPPORT_CPU_LOCKABLE",				0x20000},
+	{"D3D11_FORMAT_SUPPORT_MULTISAMPLE_RESOLVE",		0x40000},
+	{"D3D11_FORMAT_SUPPORT_DISPLAY",					0x80000},
+	{"D3D11_FORMAT_SUPPORT_CAST_WITHIN_BIT_LAYOUT",		0x100000},
+	{"D3D11_FORMAT_SUPPORT_MULTISAMPLE_RENDERTARGET",	0x200000},
+	{"D3D11_FORMAT_SUPPORT_MULTISAMPLE_LOAD",			0x400000},
+	{"D3D11_FORMAT_SUPPORT_SHADER_GATHER",				0x800000},
+	{"D3D11_FORMAT_SUPPORT_BACK_BUFFER_CAST",			0x1000000},
+	{"D3D11_FORMAT_SUPPORT_TYPED_UNORDERED_ACCESS_VIEW",0x2000000},
+	{"D3D11_FORMAT_SUPPORT_SHADER_GATHER_COMPARISON",	0x4000000},
+	{"D3D11_FORMAT_SUPPORT_DECODER_OUTPUT",				0x8000000},
+	{"D3D11_FORMAT_SUPPORT_VIDEO_PROCESSOR_OUTPUT",		0x10000000},
+	{"D3D11_FORMAT_SUPPORT_VIDEO_PROCESSOR_INPUT",		0x20000000},
+	{"D3D11_FORMAT_SUPPORT_VIDEO_ENCODER",				0x40000000},
+	0,
+};
+
+template<> struct field_names<D3D11_FORMAT_SUPPORT2>		{ static field_bit s[];	};
+field_bit field_names<D3D11_FORMAT_SUPPORT2>::s[] = {
+	{"D3D11_FORMAT_SUPPORT2_UAV_ATOMIC_ADD",								0x1		},
+	{"D3D11_FORMAT_SUPPORT2_UAV_ATOMIC_BITWISE_OPS",						0x2		},
+	{"D3D11_FORMAT_SUPPORT2_UAV_ATOMIC_COMPARE_STORE_OR_COMPARE_EXCHANGE",	0x4		},
+	{"D3D11_FORMAT_SUPPORT2_UAV_ATOMIC_EXCHANGE",							0x8		},
+	{"D3D11_FORMAT_SUPPORT2_UAV_ATOMIC_SIGNED_MIN_OR_MAX",					0x10	},
+	{"D3D11_FORMAT_SUPPORT2_UAV_ATOMIC_UNSIGNED_MIN_OR_MAX",				0x20	},
+	{"D3D11_FORMAT_SUPPORT2_UAV_TYPED_LOAD",								0x40	},
+	{"D3D11_FORMAT_SUPPORT2_UAV_TYPED_STORE",								0x80	},
+	{"D3D11_FORMAT_SUPPORT2_OUTPUT_MERGER_LOGIC_OP",						0x100	},
+	{"D3D11_FORMAT_SUPPORT2_TILED",											0x200	},
+	{"D3D11_FORMAT_SUPPORT2_SHAREABLE",										0x400	},
+	0,
+};
+
+template<> const char *field_names<D3D11_ASYNC_GETDATA_FLAG>::s[] = {
+	"D3D11_ASYNC_GETDATA_DONOTFLUSH",	//0x1
+};
+
+template<> const char *field_names<D3D11_QUERY>::s[] = {
+	"D3D11_QUERY_EVENT",	//0,
+	"D3D11_QUERY_OCCLUSION",
+	"D3D11_QUERY_TIMESTAMP",
+	"D3D11_QUERY_TIMESTAMP_DISJOINT",
+	"D3D11_QUERY_PIPELINE_STATISTICS",
+	"D3D11_QUERY_OCCLUSION_PREDICATE",
+	"D3D11_QUERY_SO_STATISTICS",
+	"D3D11_QUERY_SO_OVERFLOW_PREDICATE",
+	"D3D11_QUERY_SO_STATISTICS_STREAM0",
+	"D3D11_QUERY_SO_OVERFLOW_PREDICATE_STREAM0",
+	"D3D11_QUERY_SO_STATISTICS_STREAM1",
+	"D3D11_QUERY_SO_OVERFLOW_PREDICATE_STREAM1",
+	"D3D11_QUERY_SO_STATISTICS_STREAM2",
+	"D3D11_QUERY_SO_OVERFLOW_PREDICATE_STREAM2",
+	"D3D11_QUERY_SO_STATISTICS_STREAM3",
+	"D3D11_QUERY_SO_OVERFLOW_PREDICATE_STREAM3",
+};
+
+template<> const char *field_names<D3D11_QUERY_MISC_FLAG>::s[] = {
+	"D3D11_QUERY_MISC_PREDICATEHINT",	//0x1
+};
+
+template<> field fields<D3D11_QUERY_DESC>::f[] = {
+#undef S
+#define S D3D11_QUERY_DESC
+	MAKE_DX_FIELD(Query),
+	MAKE_DX_FIELD(MiscFlags),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_QUERY_DATA_TIMESTAMP_DISJOINT>::f[] = {
+#undef S
+#define S D3D11_QUERY_DATA_TIMESTAMP_DISJOINT
+	MAKE_DX_FIELD(Frequency),
+	MAKE_DX_FIELD(Disjoint),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_QUERY_DATA_PIPELINE_STATISTICS>::f[] = {
+#undef S
+#define S D3D11_QUERY_DATA_PIPELINE_STATISTICS
+	MAKE_DX_FIELD(IAVertices),
+	MAKE_DX_FIELD(IAPrimitives),
+	MAKE_DX_FIELD(VSInvocations),
+	MAKE_DX_FIELD(GSInvocations),
+	MAKE_DX_FIELD(GSPrimitives),
+	MAKE_DX_FIELD(CInvocations),
+	MAKE_DX_FIELD(CPrimitives),
+	MAKE_DX_FIELD(PSInvocations),
+	MAKE_DX_FIELD(HSInvocations),
+	MAKE_DX_FIELD(DSInvocations),
+	MAKE_DX_FIELD(CSInvocations),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_QUERY_DATA_SO_STATISTICS>::f[] = {
+#undef S
+#define S D3D11_QUERY_DATA_SO_STATISTICS
+	MAKE_DX_FIELD(NumPrimitivesWritten),
+	MAKE_DX_FIELD(PrimitivesStorageNeeded),
+	TERMINATOR
+};
+
+template<> const char *field_names<D3D11_COUNTER>::s[] = {
+	"D3D11_COUNTER_DEVICE_DEPENDENT_0",	//0x40000000
+};
+
+template<> const char *field_names<D3D11_COUNTER_TYPE>::s[] = {
+	"D3D11_COUNTER_TYPE_FLOAT32",
+	"D3D11_COUNTER_TYPE_UINT16",
+	"D3D11_COUNTER_TYPE_UINT32",
+	"D3D11_COUNTER_TYPE_UINT64",
+};
+
+template<> field fields<D3D11_COUNTER_DESC>::f[] = {
+#undef S
+#define S D3D11_COUNTER_DESC
+	MAKE_DX_FIELD(Counter),
+	MAKE_DX_FIELD(MiscFlags),
+};
+
+template<> field fields<D3D11_COUNTER_INFO>::f[] = {
+#undef S
+#define S D3D11_COUNTER_INFO
+	MAKE_DX_FIELD(LastDeviceDependentCounter),
+	MAKE_DX_FIELD(NumSimultaneousCounters),
+	MAKE_DX_FIELD(NumDetectableParallelUnits),
+	TERMINATOR
+};
+
+template<> struct field_names<D3D11_STANDARD_MULTISAMPLE_QUALITY_LEVELS>		{ static field_value s[];	};
+field_value field_names<D3D11_STANDARD_MULTISAMPLE_QUALITY_LEVELS>::s[] = {
+	{"D3D11_STANDARD_MULTISAMPLE_PATTERN",	0xffffffff},
+	{"D3D11_CENTER_MULTISAMPLE_PATTERN",	0xfffffffe},
+	0,
+};
+
+template<> const char *field_names<D3D11_DEVICE_CONTEXT_TYPE>::s[] = {
+	"D3D11_DEVICE_CONTEXT_IMMEDIATE",
+	"D3D11_DEVICE_CONTEXT_DEFERRED",
+};
+
+template<> field fields<D3D11_CLASS_INSTANCE_DESC>::f[] = {
+#undef S
+#define S D3D11_CLASS_INSTANCE_DESC
+	MAKE_DX_FIELD(InstanceId),
+	MAKE_DX_FIELD(InstanceIndex),
+	MAKE_DX_FIELD(TypeId),
+	MAKE_DX_FIELD(ConstantBuffer),
+	MAKE_DX_FIELD(BaseConstantBufferOffset),
+	MAKE_DX_FIELD(BaseTexture),
+	MAKE_DX_FIELD(BaseSampler),
+	MAKE_DX_FIELD(Created),
+	TERMINATOR
+};
+
+template<> const char *field_names<D3D11_FEATURE>::s[] = {
+	"D3D11_FEATURE_THREADING",	//0,
+	"D3D11_FEATURE_DOUBLES",
+	"D3D11_FEATURE_FORMAT_SUPPORT",
+	"D3D11_FEATURE_FORMAT_SUPPORT2",
+	"D3D11_FEATURE_D3D10_X_HARDWARE_OPTIONS",
+	"D3D11_FEATURE_D3D11_OPTIONS",
+	"D3D11_FEATURE_ARCHITECTURE_INFO",
+	"D3D11_FEATURE_D3D9_OPTIONS",
+	"D3D11_FEATURE_SHADER_MIN_PRECISION_SUPPORT",
+	"D3D11_FEATURE_D3D9_SHADOW_SUPPORT",
+	"D3D11_FEATURE_D3D11_OPTIONS1",
+	"D3D11_FEATURE_D3D9_SIMPLE_INSTANCING_SUPPORT",
+	"D3D11_FEATURE_MARKER_SUPPORT",
+	"D3D11_FEATURE_D3D9_OPTIONS1",
+};
+
+template<> field fields<D3D11_FEATURE_DATA_THREADING>::f[] = {
+#undef S
+#define S D3D11_FEATURE_DATA_THREADING
+	MAKE_DX_FIELD(DriverConcurrentCreates),
+	MAKE_DX_FIELD(DriverCommandLists),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_FEATURE_DATA_DOUBLES>::f[] = {
+#undef S
+#define S D3D11_FEATURE_DATA_DOUBLES
+	MAKE_DX_FIELD(DoublePrecisionFloatShaderOps),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_FEATURE_DATA_FORMAT_SUPPORT>::f[] = {
+#undef S
+#define S D3D11_FEATURE_DATA_FORMAT_SUPPORT
+	MAKE_DX_FIELD(InFormat),
+	MAKE_DX_FIELD(OutFormatSupport),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_FEATURE_DATA_FORMAT_SUPPORT2>::f[] = {
+#undef S
+#define S D3D11_FEATURE_DATA_FORMAT_SUPPORT2
+	MAKE_DX_FIELD(InFormat),
+	MAKE_DX_FIELD(OutFormatSupport2),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_FEATURE_DATA_D3D10_X_HARDWARE_OPTIONS>::f[] = {
+#undef S
+#define S D3D11_FEATURE_DATA_D3D10_X_HARDWARE_OPTIONS
+	MAKE_DX_FIELD(ComputeShaders_Plus_RawAndStructuredBuffers_Via_Shader_4_x),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_FEATURE_DATA_D3D11_OPTIONS>::f[] = {
+#undef S
+#define S D3D11_FEATURE_DATA_D3D11_OPTIONS
+	MAKE_DX_FIELD(OutputMergerLogicOp),
+	MAKE_DX_FIELD(UAVOnlyRenderingForcedSampleCount),
+	MAKE_DX_FIELD(DiscardAPIsSeenByDriver),
+	MAKE_DX_FIELD(FlagsForUpdateAndCopySeenByDriver),
+	MAKE_DX_FIELD(ClearView),
+	MAKE_DX_FIELD(CopyWithOverlap),
+	MAKE_DX_FIELD(ConstantBufferPartialUpdate),
+	MAKE_DX_FIELD(ConstantBufferOffsetting),
+	MAKE_DX_FIELD(MapNoOverwriteOnDynamicConstantBuffer),
+	MAKE_DX_FIELD(MapNoOverwriteOnDynamicBufferSRV),
+	MAKE_DX_FIELD(MultisampleRTVWithForcedSampleCountOne),
+	MAKE_DX_FIELD(SAD4ShaderInstructions),
+	MAKE_DX_FIELD(ExtendedDoublesShaderInstructions),
+	MAKE_DX_FIELD(ExtendedResourceSharing),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_FEATURE_DATA_ARCHITECTURE_INFO>::f[] = {
+#undef S
+#define S D3D11_FEATURE_DATA_ARCHITECTURE_INFO
+	MAKE_DX_FIELD(TileBasedDeferredRenderer),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_FEATURE_DATA_D3D9_OPTIONS>::f[] = {
+#undef S
+#define S D3D11_FEATURE_DATA_D3D9_OPTIONS
+	MAKE_DX_FIELD(FullNonPow2TextureSupport),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_FEATURE_DATA_D3D9_SHADOW_SUPPORT>::f[] = {
+#undef S
+#define S D3D11_FEATURE_DATA_D3D9_SHADOW_SUPPORT
+	MAKE_DX_FIELD(SupportsDepthAsTextureWithLessEqualComparisonFilter),
+	TERMINATOR
+};
+
+template<> const char *field_names<D3D11_SHADER_MIN_PRECISION_SUPPORT>::s[] = {
+	0,
+	"D3D11_SHADER_MIN_PRECISION_10_BIT",	//0x1,
+	"D3D11_SHADER_MIN_PRECISION_16_BIT",	//0x2
+};
+
+template<> field fields<D3D11_FEATURE_DATA_SHADER_MIN_PRECISION_SUPPORT>::f[] = {
+#undef S
+#define S D3D11_FEATURE_DATA_SHADER_MIN_PRECISION_SUPPORT
+	MAKE_DX_FIELD(PixelShaderMinPrecision),
+	MAKE_DX_FIELD(AllOtherShaderStagesMinPrecision),
+	TERMINATOR
+};
+
+template<> const char *field_names<D3D11_TILED_RESOURCES_TIER>::s[] = {
+	"D3D11_TILED_RESOURCES_NOT_SUPPORTED",	//0,
+	"D3D11_TILED_RESOURCES_TIER_1",			//1,
+	"D3D11_TILED_RESOURCES_TIER_2",			//2
+};
+
+template<> field fields<D3D11_FEATURE_DATA_D3D11_OPTIONS1>::f[] = {
+#undef S
+#define S D3D11_FEATURE_DATA_D3D11_OPTIONS1
+	MAKE_DX_FIELD(TiledResourcesTier),
+	MAKE_DX_FIELD(MinMaxFiltering),
+	MAKE_DX_FIELD(ClearViewAlsoSupportsDepthOnlyFormats),
+	MAKE_DX_FIELD(MapOnDefaultBuffers),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_FEATURE_DATA_D3D9_SIMPLE_INSTANCING_SUPPORT>::f[] = {
+#undef S
+#define S D3D11_FEATURE_DATA_D3D9_SIMPLE_INSTANCING_SUPPORT
+	MAKE_DX_FIELD(SimpleInstancingSupported),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_FEATURE_DATA_MARKER_SUPPORT>::f[] = {
+#undef S
+#define S D3D11_FEATURE_DATA_MARKER_SUPPORT
+	MAKE_DX_FIELD(Profile),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_FEATURE_DATA_D3D9_OPTIONS1>::f[] = {
+#undef S
+#define S D3D11_FEATURE_DATA_D3D9_OPTIONS1
+	MAKE_DX_FIELD(FullNonPow2TextureSupported),
+	MAKE_DX_FIELD(DepthAsTextureWithLessEqualComparisonFilterSupported),
+	MAKE_DX_FIELD(SimpleInstancingSupported),
+	MAKE_DX_FIELD(TextureCubeFaceRenderTargetWithNonCubeDepthStencilSupported),
+	TERMINATOR
+};
+
+template<> const char *field_names<D3D11_SHADER_VERSION_TYPE>::s[]	= {
+	"D3D11_SHVER_PIXEL_SHADER",		//0
+	"D3D11_SHVER_VERTEX_SHADER",	//1
+	"D3D11_SHVER_GEOMETRY_SHADER",	//2
+	"D3D11_SHVER_HULL_SHADER",		//3
+	"D3D11_SHVER_DOMAIN_SHADER",	//4
+	"D3D11_SHVER_COMPUTE_SHADER",	//5
+};
+
+template<> const char *field_names<D3D_PARAMETER_FLAGS>::s[]	= {
+	"D3D_PF_NONE",					//0
+	"D3D_PF_IN",					//1
+	"D3D_PF_OUT",					//2
+};
+
+//D3D_RESOURCE_RETURN_TYPE D3D11_RESOURCE_RETURN_TYPE;
+//D3D_CBUFFER_TYPE D3D11_CBUFFER_TYPE;
+
+template<> field fields<D3D11_SIGNATURE_PARAMETER_DESC>::f[] = {
+#undef S
+#define S D3D11_SIGNATURE_PARAMETER_DESC
+	MAKE_DX_FIELD(SemanticName),
+	MAKE_DX_FIELD(SemanticIndex),
+	MAKE_DX_FIELD(Register),
+	MAKE_DX_FIELD(SystemValueType),
+	MAKE_DX_FIELD(ComponentType),
+	MAKE_DX_FIELD(Mask),
+	MAKE_DX_FIELD(ReadWriteMask),
+	MAKE_DX_FIELD(Stream),
+	MAKE_DX_FIELD(MinPrecision),
+	0
+};
+
+template<> field fields<D3D11_SHADER_BUFFER_DESC>::f[] = {
+#undef S
+#define S D3D11_SHADER_BUFFER_DESC
+	MAKE_DX_FIELD(Name),
+	MAKE_DX_FIELD(Type),
+	MAKE_DX_FIELD(Variables),
+	MAKE_DX_FIELD(Size),
+	MAKE_DX_FIELD(uFlags),
+	0
+};
+
+template<> field fields<D3D11_SHADER_VARIABLE_DESC>::f[] = {
+#undef S
+#define S D3D11_SHADER_VARIABLE_DESC
+	MAKE_DX_FIELD(Name),
+	MAKE_DX_FIELD(StartOffset),
+	MAKE_DX_FIELD(Size),
+	MAKE_DX_FIELD(uFlags),
+	MAKE_DX_FIELD(DefaultValue),
+	MAKE_DX_FIELD(StartTexture),
+	MAKE_DX_FIELD(TextureSize),
+	MAKE_DX_FIELD(StartSampler),
+	MAKE_DX_FIELD(SamplerSize),
+	0
+};
+
+template<> field fields<D3D11_SHADER_TYPE_DESC>::f[] = {
+#undef S
+#define S D3D11_SHADER_TYPE_DESC
+	MAKE_DX_FIELD(Class),
+	MAKE_DX_FIELD(Type),
+	MAKE_DX_FIELD(Rows),
+	MAKE_DX_FIELD(Columns),
+	MAKE_DX_FIELD(Elements),
+	MAKE_DX_FIELD(Members),
+	MAKE_DX_FIELD(Offset),
+	MAKE_DX_FIELD(Name),
+	0
+};
+
+//D3D_TESSELLATOR_DOMAIN D3D11_TESSELLATOR_DOMAIN;
+//D3D_TESSELLATOR_PARTITIONING D3D11_TESSELLATOR_PARTITIONING;
+//D3D_TESSELLATOR_OUTPUT_PRIMITIVE D3D11_TESSELLATOR_OUTPUT_PRIMITIVE;
+
+template<> field fields<D3D11_SHADER_DESC>::f[] = {
+#undef S
+#define S D3D11_SHADER_DESC
+	MAKE_DX_FIELD(Version),
+	MAKE_DX_FIELD(Creator),
+	MAKE_DX_FIELD(Flags),
+    
+	MAKE_DX_FIELD(ConstantBuffers),
+	MAKE_DX_FIELD(BoundResources),
+	MAKE_DX_FIELD(InputParameters),
+	MAKE_DX_FIELD(OutputParameters),
+
+	MAKE_DX_FIELD(InstructionCount),
+	MAKE_DX_FIELD(TempRegisterCount),
+	MAKE_DX_FIELD(TempArrayCount),
+	MAKE_DX_FIELD(DefCount),
+	MAKE_DX_FIELD(DclCount),
+	MAKE_DX_FIELD(TextureNormalInstructions),
+	MAKE_DX_FIELD(TextureLoadInstructions),
+	MAKE_DX_FIELD(TextureCompInstructions),
+	MAKE_DX_FIELD(TextureBiasInstructions),
+	MAKE_DX_FIELD(TextureGradientInstructions),
+	MAKE_DX_FIELD(FloatInstructionCount),
+	MAKE_DX_FIELD(IntInstructionCount),
+	MAKE_DX_FIELD(UintInstructionCount),
+	MAKE_DX_FIELD(StaticFlowControlCount),
+	MAKE_DX_FIELD(DynamicFlowControlCount),
+	MAKE_DX_FIELD(MacroInstructionCount),
+	MAKE_DX_FIELD(ArrayInstructionCount),
+	MAKE_DX_FIELD(CutInstructionCount),
+	MAKE_DX_FIELD(EmitInstructionCount),
+	MAKE_DX_FIELD(GSOutputTopology),
+	MAKE_DX_FIELD(GSMaxOutputVertexCount),
+	MAKE_DX_FIELD(InputPrimitive),
+	MAKE_DX_FIELD(PatchConstantParameters),
+	MAKE_DX_FIELD(cGSInstanceCount),
+	MAKE_DX_FIELD(cControlPoints),
+	MAKE_DX_FIELD(HSOutputPrimitive),
+	MAKE_DX_FIELD(HSPartitioning),
+	MAKE_DX_FIELD(TessellatorDomain),
+    // instruction counts
+	MAKE_DX_FIELD(cBarrierInstructions),
+	MAKE_DX_FIELD(cInterlockedInstructions),
+	MAKE_DX_FIELD(cTextureStoreInstructions),
+	0
+};
+
+template<> field fields<D3D11_SHADER_INPUT_BIND_DESC>::f[] = {
+#undef S
+#define S D3D11_SHADER_INPUT_BIND_DESC
+	MAKE_DX_FIELD(Name),
+	MAKE_DX_FIELD(Type),
+	MAKE_DX_FIELD(BindPoint),
+	MAKE_DX_FIELD(BindCount),
+    
+	MAKE_DX_FIELD(uFlags),
+	MAKE_DX_FIELD(ReturnType),
+	MAKE_DX_FIELD(Dimension),
+	MAKE_DX_FIELD(NumSamples),
+	0
+};
+
+template<> field fields<D3D11_LIBRARY_DESC>::f[] = {
+#undef S
+#define S D3D11_LIBRARY_DESC
+	MAKE_DX_FIELD(Creator),
+	MAKE_DX_FIELD(Flags),
+	MAKE_DX_FIELD(FunctionCount),
+	0
+};
+
+template<> field fields<D3D11_FUNCTION_DESC>::f[] = {
+#undef S
+#define S D3D11_FUNCTION_DESC
+	MAKE_DX_FIELD(Version),
+	MAKE_DX_FIELD(Creator),
+	MAKE_DX_FIELD(Flags),
+    
+	MAKE_DX_FIELD(ConstantBuffers),
+	MAKE_DX_FIELD(BoundResources),
+
+	MAKE_DX_FIELD(InstructionCount),
+	MAKE_DX_FIELD(TempRegisterCount),
+	MAKE_DX_FIELD(TempArrayCount),
+	MAKE_DX_FIELD(DefCount),
+	MAKE_DX_FIELD(DclCount),
+	MAKE_DX_FIELD(TextureNormalInstructions),
+	MAKE_DX_FIELD(TextureLoadInstructions),
+	MAKE_DX_FIELD(TextureCompInstructions),
+	MAKE_DX_FIELD(TextureBiasInstructions),
+	MAKE_DX_FIELD(TextureGradientInstructions),
+	MAKE_DX_FIELD(FloatInstructionCount),
+	MAKE_DX_FIELD(IntInstructionCount),
+	MAKE_DX_FIELD(UintInstructionCount),
+	MAKE_DX_FIELD(StaticFlowControlCount),
+	MAKE_DX_FIELD(DynamicFlowControlCount),
+	MAKE_DX_FIELD(MacroInstructionCount),
+	MAKE_DX_FIELD(ArrayInstructionCount),
+	MAKE_DX_FIELD(MovInstructionCount),
+	MAKE_DX_FIELD(MovcInstructionCount),
+	MAKE_DX_FIELD(ConversionInstructionCount),
+	MAKE_DX_FIELD(BitwiseInstructionCount),
+	MAKE_DX_FIELD(MinFeatureLevel),
+	MAKE_DX_FIELD(RequiredFeatureFlags),
+
+	MAKE_DX_FIELD(Name),
+	MAKE_DX_FIELD(FunctionParameterCount),
+	MAKE_DX_FIELD(HasReturn),
+	MAKE_DX_FIELD(Has10Level9VertexShader),
+	MAKE_DX_FIELD(Has10Level9PixelShader),
+	0
+};
+
+template<> field fields<D3D11_PARAMETER_DESC>::f[] = {
+#undef S
+#define S D3D11_PARAMETER_DESC
+	MAKE_DX_FIELD(Name),
+	MAKE_DX_FIELD(SemanticName),
+	MAKE_DX_FIELD(Type),
+	MAKE_DX_FIELD(Class),
+	MAKE_DX_FIELD(Rows),
+	MAKE_DX_FIELD(Columns),
+	MAKE_DX_FIELD(InterpolationMode),
+	MAKE_DX_FIELD(Flags),
+
+	MAKE_DX_FIELD(FirstInRegister),
+	MAKE_DX_FIELD(FirstInComponent),
+	MAKE_DX_FIELD(FirstOutRegister),
+	MAKE_DX_FIELD(FirstOutComponent),
+	0
+};
+
+//Error	LNK2001	unresolved external symbol "public: static char const * * iso::field_names<enum D3D11_CONTEXT_TYPE>::s" (?s@?$field_names@W4D3D11_CONTEXT_TYPE@@@iso@@2PAPEBDA)	ORBIScrude	D:\dev\orbiscrude\dx11_view.lib(view_dx11gpu.obj)	1	
+//Error	LNK2001	unresolved external symbol "public: static char const * * iso::field_names<enum D3D11_FENCE_FLAG>::s" (?s@?$field_names@W4D3D11_FENCE_FLAG@@@iso@@2PAPEBDA)	ORBIScrude	D:\dev\orbiscrude\dx11_view.lib(view_dx11gpu.obj)	1	
+//Error	LNK2001	unresolved external symbol "public: static struct iso::field * iso::fields<unsigned long>::f" (?f@?$fields@K@iso@@2PAUfield@2@A)	ORBIScrude	D:\dev\orbiscrude\dx11_view.lib(view_dx11gpu.obj)	1	
+
+template<> field fields<D3D11_QUERY_DESC1>::f[] = {
+#undef S
+#define S D3D11_QUERY_DESC1
+	MAKE_DX_FIELD(Query),
+	MAKE_DX_FIELD(MiscFlags),
+	MAKE_DX_FIELD(ContextType),
+	TERMINATOR
+};
+template<> field fields<D3D11_RASTERIZER_DESC2>::f[] = {
+#undef S
+#define S D3D11_RASTERIZER_DESC2
+	MAKE_DX_FIELD(FillMode),
+	MAKE_DX_FIELD(CullMode),
+	MAKE_DX_FIELD(FrontCounterClockwise),
+	MAKE_DX_FIELD(DepthBias),
+	MAKE_DX_FIELD(DepthBiasClamp),
+	MAKE_DX_FIELD(SlopeScaledDepthBias),
+	MAKE_DX_FIELD(DepthClipEnable),
+	MAKE_DX_FIELD(ScissorEnable),
+	MAKE_DX_FIELD(MultisampleEnable),
+	MAKE_DX_FIELD(AntialiasedLineEnable),
+	MAKE_DX_FIELD(ForcedSampleCount),
+	MAKE_DX_FIELD(ConservativeRaster),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_TEX2D_RTV1>::f[] = {
+#undef S
+#define S D3D11_TEX2D_RTV1
+	MAKE_DX_FIELD(MipSlice),
+	MAKE_DX_FIELD(PlaneSlice),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_TEX2D_ARRAY_RTV1>::f[] = {
+#undef S
+#define S D3D11_TEX2D_ARRAY_RTV1
+	MAKE_DX_FIELD(MipSlice),
+	MAKE_DX_FIELD(FirstArraySlice),
+	MAKE_DX_FIELD(ArraySize),
+	MAKE_DX_FIELD(PlaneSlice),
+	TERMINATOR
+};
+field *D3D11_RENDER_TARGET_VIEW_DESC1_union[] = {
+	0,
+	get_fields(&D3D11_RENDER_TARGET_VIEW_DESC1::Buffer),
+	get_fields(&D3D11_RENDER_TARGET_VIEW_DESC1::Texture1D),
+	get_fields(&D3D11_RENDER_TARGET_VIEW_DESC1::Texture1DArray),
+	get_fields(&D3D11_RENDER_TARGET_VIEW_DESC1::Texture2D),
+	get_fields(&D3D11_RENDER_TARGET_VIEW_DESC1::Texture2DArray),
+	get_fields(&D3D11_RENDER_TARGET_VIEW_DESC1::Texture2DMS),
+	get_fields(&D3D11_RENDER_TARGET_VIEW_DESC1::Texture2DMSArray),
+	get_fields(&D3D11_RENDER_TARGET_VIEW_DESC1::Texture3D),
+};
+template<> field fields<D3D11_RENDER_TARGET_VIEW_DESC1>::f[] = {
+#undef S
+#define S D3D11_RENDER_TARGET_VIEW_DESC1
+	MAKE_DX_FIELD(Format),
+	MAKE_DX_FIELD(ViewDimension),
+	MAKE_UNION(Buffer,1,D3D11_RENDER_TARGET_VIEW_DESC1_union),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_TEX2D_SRV1>::f[] = {
+#undef S
+#define S D3D11_TEX2D_SRV1
+	MAKE_DX_FIELD(MostDetailedMip),
+	MAKE_DX_FIELD(MipLevels),
+	MAKE_DX_FIELD(PlaneSlice),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_TEX2D_ARRAY_SRV1>::f[] = {
+#undef S
+#define S D3D11_TEX2D_ARRAY_SRV1
+	MAKE_DX_FIELD(MostDetailedMip),
+	MAKE_DX_FIELD(MipLevels),
+	MAKE_DX_FIELD(FirstArraySlice),
+	MAKE_DX_FIELD(ArraySize),
+	MAKE_DX_FIELD(PlaneSlice),
+	TERMINATOR
+};
+field *D3D11_SHADER_RESOURCE_VIEW_DESC1_union[] = {
+	0,
+	get_fields(&D3D11_SHADER_RESOURCE_VIEW_DESC1::Buffer),
+	get_fields(&D3D11_SHADER_RESOURCE_VIEW_DESC1::Texture1D),
+	get_fields(&D3D11_SHADER_RESOURCE_VIEW_DESC1::Texture1DArray),
+	get_fields(&D3D11_SHADER_RESOURCE_VIEW_DESC1::Texture2D),
+	get_fields(&D3D11_SHADER_RESOURCE_VIEW_DESC1::Texture2DArray),
+	get_fields(&D3D11_SHADER_RESOURCE_VIEW_DESC1::Texture2DMS),
+	get_fields(&D3D11_SHADER_RESOURCE_VIEW_DESC1::Texture2DMSArray),
+	get_fields(&D3D11_SHADER_RESOURCE_VIEW_DESC1::Texture3D),
+	get_fields(&D3D11_SHADER_RESOURCE_VIEW_DESC1::TextureCube),
+	get_fields(&D3D11_SHADER_RESOURCE_VIEW_DESC1::TextureCubeArray),
+	get_fields(&D3D11_SHADER_RESOURCE_VIEW_DESC1::BufferEx),
+};
+template<> field fields<D3D11_SHADER_RESOURCE_VIEW_DESC1>::f[] = {
+#undef S
+#define S D3D11_SHADER_RESOURCE_VIEW_DESC1
+	MAKE_DX_FIELD(Format),
+	MAKE_DX_FIELD(ViewDimension),
+	MAKE_UNION(Buffer,1,D3D11_SHADER_RESOURCE_VIEW_DESC1_union),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_TEX2D_UAV1>::f[] = {
+#undef S
+#define S D3D11_TEX2D_UAV1
+	MAKE_DX_FIELD(MipSlice),
+	MAKE_DX_FIELD(PlaneSlice),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_TEX2D_ARRAY_UAV1>::f[] = {
+#undef S
+#define S D3D11_TEX2D_ARRAY_UAV1
+	MAKE_DX_FIELD(MipSlice),
+	MAKE_DX_FIELD(FirstArraySlice),
+	MAKE_DX_FIELD(ArraySize),
+	MAKE_DX_FIELD(PlaneSlice),
+	TERMINATOR
+};
+field *D3D11_UNORDERED_ACCESS_VIEW_DESC1_union[] = {
+	0,
+	get_fields(&D3D11_UNORDERED_ACCESS_VIEW_DESC1::Buffer),
+	get_fields(&D3D11_UNORDERED_ACCESS_VIEW_DESC1::Texture1D),
+	get_fields(&D3D11_UNORDERED_ACCESS_VIEW_DESC1::Texture1DArray),
+	get_fields(&D3D11_UNORDERED_ACCESS_VIEW_DESC1::Texture2D),
+	get_fields(&D3D11_UNORDERED_ACCESS_VIEW_DESC1::Texture2DArray),
+	0,
+	0,
+	get_fields(&D3D11_UNORDERED_ACCESS_VIEW_DESC1::Texture3D),
+};
+template<> field fields<D3D11_UNORDERED_ACCESS_VIEW_DESC1>::f[] = {
+#undef S
+#define S D3D11_UNORDERED_ACCESS_VIEW_DESC1
+	MAKE_DX_FIELD(Format),
+	MAKE_DX_FIELD(ViewDimension),
+	MAKE_UNION(Buffer,1,D3D11_UNORDERED_ACCESS_VIEW_DESC1_union),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_TEXTURE2D_DESC1>::f[] = {
+#undef S
+#define S D3D11_TEXTURE2D_DESC1
+	MAKE_DX_FIELD(Width),
+	MAKE_DX_FIELD(Height),
+	MAKE_DX_FIELD(MipLevels),
+	MAKE_DX_FIELD(ArraySize),
+	MAKE_DX_FIELD(Format),
+	MAKE_DX_FIELD(SampleDesc),
+	MAKE_DX_FIELD(Usage),
+	MAKE_DX_FIELD(BindFlags),
+	MAKE_DX_FIELD(CPUAccessFlags),
+	MAKE_DX_FIELD(MiscFlags),
+	MAKE_DX_FIELD(TextureLayout),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_TEXTURE3D_DESC1>::f[] = {
+#undef S
+#define S D3D11_TEXTURE3D_DESC1
+	MAKE_DX_FIELD(Width),
+	MAKE_DX_FIELD(Height),
+	MAKE_DX_FIELD(Depth),
+	MAKE_DX_FIELD(MipLevels),
+	MAKE_DX_FIELD(Format),
+	MAKE_DX_FIELD(Usage),
+	MAKE_DX_FIELD(BindFlags),
+	MAKE_DX_FIELD(CPUAccessFlags),
+	MAKE_DX_FIELD(MiscFlags),
+	MAKE_DX_FIELD(TextureLayout),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_TILED_RESOURCE_COORDINATE>::f[] = {
+#undef S
+#define S D3D11_TILED_RESOURCE_COORDINATE
+	MAKE_DX_FIELD(X),
+	MAKE_DX_FIELD(Y),
+	MAKE_DX_FIELD(Z),
+	MAKE_DX_FIELD(Subresource),
+	TERMINATOR
+};
+
+template<> field fields<D3D11_TILE_REGION_SIZE>::f[] = {
+#undef S
+#define S D3D11_TILE_REGION_SIZE
+	MAKE_DX_FIELD(NumTiles),
+	MAKE_DX_FIELD(bUseBox),
+	MAKE_DX_FIELD(Width),
+	MAKE_DX_FIELD(Height),
+	MAKE_DX_FIELD(Depth),
+	TERMINATOR
+};
+
+MAKE_FIELDS(D3D11_DRAW_INSTANCED_INDIRECT_ARGS, VertexCountPerInstance, InstanceCount, StartVertexLocation, StartInstanceLocation);
+MAKE_FIELDS(D3D11_DRAW_INDEXED_INSTANCED_INDIRECT_ARGS, IndexCountPerInstance, InstanceCount, StartIndexLocation, BaseVertexLocation, StartInstanceLocation);
+
+template<> struct field_names<D3D11_FENCE_FLAG>	{ static field_bit s[];	};
+field_bit	field_names<D3D11_FENCE_FLAG>::s[] = {
+	{"D3D11_FENCE_FLAG_NONE",					1},
+	{"D3D11_FENCE_FLAG_SHARED",					2},
+	{"D3D11_FENCE_FLAG_SHARED_CROSS_ADAPTER",	4},
+	0,
+};
+
+MAKE_FIELDS(dx11::DeviceContext_State::Stage, shader, cb, srv, smp);
+MAKE_FIELDS(dx11::DeviceContext_State::VertexBuffer, buffer, stride, offset);
+MAKE_FIELDS(dx11::DeviceContext_State::IndexBuffer, buffer, format, offset);
+
+MAKE_FIELDS(dx11::DeviceContext_State,
+	vs, ps, ds, hs, gs, cs,
+	ps_uav, cs_uav,
+	so_buffer, so_offset,
+	rs, num_viewport, num_scissor, viewport, scissor,
+	ia, ib, vb, prim,
+	dsv, rtv, blend, blend_factor, sample_mask, depth_stencil,stencil_ref
+);

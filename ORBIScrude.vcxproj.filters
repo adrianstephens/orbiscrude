@@ -1,0 +1,795 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="common">
+      <UniqueIdentifier>{a9f3e1af-fd5f-46e5-90e7-2fcfac8a7957}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="common\base">
+      <UniqueIdentifier>{fa935e27-7d2f-4d60-9a86-2f661c96363a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="common\iso">
+      <UniqueIdentifier>{8518aab0-6714-492c-9a86-f15ce3f5b3bd}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="platform">
+      <UniqueIdentifier>{c9fc385c-3476-45f3-be62-207698208cc1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="platform\windows">
+      <UniqueIdentifier>{404eae81-c30d-413c-b76f-fb1e6487cfc9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="filetypes">
+      <UniqueIdentifier>{c1e8eb02-ea27-4d29-96c6-31a6de07d4b5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="common\extra">
+      <UniqueIdentifier>{7334d796-beb9-46f0-8913-c85387962b75}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="viewers">
+      <UniqueIdentifier>{48780080-27ee-42d1-b7c8-24338265cb7e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="platform\dx9">
+      <UniqueIdentifier>{3cea73c5-5ab3-4051-beb8-ef4b1b3f43be}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="platform\dx11">
+      <UniqueIdentifier>{eb345c51-5645-4b62-9501-362d30ac0d41}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="resources">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="common\maths">
+      <UniqueIdentifier>{8e49402c-e68b-4504-af6e-b2a1e4581419}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="common\comms">
+      <UniqueIdentifier>{e51e0b09-be7b-41ab-b4b4-7f9faec1b08c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="common\hashes">
+      <UniqueIdentifier>{1ffaa121-8701-4260-ba79-dee91f189626}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="common\allocators">
+      <UniqueIdentifier>{78c19a9c-f3b4-4012-83c3-04880d90a4ba}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="common\codec">
+      <UniqueIdentifier>{a4af72f6-0732-4b8b-902f-705caebdb4cb}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="common\codec\texels">
+      <UniqueIdentifier>{31b4e6a9-ff6a-43dd-acae-f4a3f6b1b7a9}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="icon.ico">
+      <Filter>resources</Filter>
+    </None>
+    <None Include="shared\isoeditor\viewers\checker.bmp">
+      <Filter>viewers</Filter>
+    </None>
+    <None Include="settings.bmp">
+      <Filter>resources</Filter>
+    </None>
+    <None Include="screw.ico">
+      <Filter>resources</Filter>
+    </None>
+    <None Include="toolbar_license.bmp">
+      <Filter>resources</Filter>
+    </None>
+    <None Include="orbiscrude.rtf">
+      <Filter>resources</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="shared\common\base\defs.cpp">
+      <Filter>common\base</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\iso\iso.cpp">
+      <Filter>common\iso</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\iso\iso_binary.cpp">
+      <Filter>common\iso</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\iso\iso_convert.cpp">
+      <Filter>common\iso</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\iso\iso_files.cpp">
+      <Filter>common\iso</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\iso\iso_script.cpp">
+      <Filter>common\iso</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\crc32.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\filename.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\shader.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\platforms\pc\platform.cpp">
+      <Filter>platform</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\platforms\pc\sockets.cpp">
+      <Filter>platform</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\platforms\pc\windows\com.cpp">
+      <Filter>platform\windows</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\platforms\pc\windows\dib.cpp">
+      <Filter>platform\windows</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\platforms\pc\windows\splitter.cpp">
+      <Filter>platform\windows</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\platforms\pc\windows\treecolumns.cpp">
+      <Filter>platform\windows</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\platforms\pc\windows\window.cpp">
+      <Filter>platform\windows</Filter>
+    </ClCompile>
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="shared\common\extra\xml.cpp">
+      <Filter>common\extra</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\filetypes\bitmap\bitmap.cpp">
+      <Filter>filetypes</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\filetypes\bitmap\hdr.cpp">
+      <Filter>filetypes</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\systems\conversion\channeluse.cpp" />
+    <ClCompile Include="shared\platforms\pc\windows\filedialogs.cpp">
+      <Filter>platform\windows</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\filetypes\ib.cpp">
+      <Filter>filetypes</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\filetypes\ibz.cpp">
+      <Filter>filetypes</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\extra\async_stream.cpp">
+      <Filter>common\extra</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\filetypes\bitmap\bmp.cpp">
+      <Filter>filetypes</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\filetypes\bitmap\jpg.cpp">
+      <Filter>filetypes</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\filetypes\bitmap\tga.cpp">
+      <Filter>filetypes</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\extra\identifier.cpp">
+      <Filter>common\extra</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\isoeditor\viewers\viewbitmap.cpp">
+      <Filter>viewers</Filter>
+    </ClCompile>
+    <ClCompile Include="settings.cpp" />
+    <ClCompile Include="shared\platforms\pc\windows\theme.cpp">
+      <Filter>platform\windows</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\filetypes\ix.cpp">
+      <Filter>filetypes</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\isoeditor\viewers\gpu.cpp">
+      <Filter>viewers</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\filetypes\3d\model_utils.cpp">
+      <Filter>filetypes</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\isoeditor\viewers\viewbin.cpp">
+      <Filter>viewers</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\extra\date.cpp">
+      <Filter>common\extra</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\platforms\pc\startup.cpp">
+      <Filter>platform</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\extra\colourise.cpp">
+      <Filter>common\extra</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\platforms\pc\windows\dialog.cpp">
+      <Filter>platform\windows</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\platforms\pc\windows\docker.cpp">
+      <Filter>platform\windows</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\extra\c-types.cpp">
+      <Filter>common\extra</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\systems\mesh\shapes.cpp" />
+    <ClCompile Include="shared\platforms\pc\windows\control_helpers.cpp">
+      <Filter>platform\windows</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\platforms\pc\hook.cpp">
+      <Filter>platform</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\platforms\pc\windows\text_control.cpp">
+      <Filter>platform\windows</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\platforms\pc\dx11\_graphics.cpp">
+      <Filter>platform\dx11</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\platforms\pc\dx9\_graphics.cpp">
+      <Filter>platform\dx9</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\maths\dct.cpp">
+      <Filter>common\maths</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\jobs.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\extra\filters.cpp">
+      <Filter>common\extra</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\platforms\pc\hook_stack.cpp">
+      <Filter>platform</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\isoeditor\viewers\debug.cpp">
+      <Filter>viewers</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\extra\c-header.cpp">
+      <Filter>common\extra</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\extra\cpp.cpp">
+      <Filter>common\extra</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\extra\octree.cpp">
+      <Filter>common\extra</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\platforms\pc\_thread.cpp">
+      <Filter>platform</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\isoeditor\viewers\directory_scan.cpp">
+      <Filter>viewers</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\filetypes\code\pdb_utils.cpp">
+      <Filter>filetypes</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\fibers.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\extra\regex.cpp">
+      <Filter>common\extra</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\extra\unicode_tables.cpp">
+      <Filter>common\extra</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\isoeditor\viewers\viewer_identifier.cpp">
+      <Filter>viewers</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\platforms\pc\stack_dump.cpp">
+      <Filter>platform</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\disassembler.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\filetypes\code\demangle_vc.cpp">
+      <Filter>platform</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\comms\ssl.cpp">
+      <Filter>common\comms</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\comms\ftp.cpp">
+      <Filter>common\comms</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\comms\HTTP.cpp">
+      <Filter>common\comms</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\hashes\SHA.cpp">
+      <Filter>common\hashes</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\comms\zip.cpp">
+      <Filter>common\comms</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\comms\asn1.cpp">
+      <Filter>common\comms</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\comms\asn1_objects.cpp">
+      <Filter>common\comms</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\maths\bignum.cpp">
+      <Filter>common\maths</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\hashes\md5.cpp">
+      <Filter>common\hashes</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\filetypes\code\minidump.cpp">
+      <Filter>filetypes</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\rcu.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\isoeditor\viewers\natvis.cpp">
+      <Filter>viewers</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\maths\geometry.cpp">
+      <Filter>common\maths</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\isoeditor\viewers\viewbin_win32.cpp">
+      <Filter>viewers</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\isoeditor\viewers\viewbitmap_win32.cpp">
+      <Filter>viewers</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\platforms\pc\dx\dxgi_helpers.cpp">
+      <Filter>platform\dx11</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\allocators\tlsf.cpp">
+      <Filter>common\allocators</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\codec\aes.cpp">
+      <Filter>common\codec</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\codec\base64.cpp">
+      <Filter>common\codec</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\codec\chacha.cpp">
+      <Filter>common\codec</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\codec\des.cpp">
+      <Filter>common\codec</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\comms\diffie-hellman.cpp">
+      <Filter>common\comms</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\comms\elliptic-curves.cpp">
+      <Filter>common\comms</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\comms\rsa.cpp">
+      <Filter>common\comms</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\comms\srp.cpp">
+      <Filter>common\comms</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\codec\deflate.cpp">
+      <Filter>common\codec</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\comms\dsa.cpp">
+      <Filter>common\comms</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\codec\apple_compression.cpp">
+      <Filter>common\codec</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\extra\ast.cpp">
+      <Filter>common\extra</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\maths\triangulate.cpp">
+      <Filter>common\maths</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\maths\polygon.cpp">
+      <Filter>common\maths</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\codec\texels\dxt.cpp">
+      <Filter>common\codec\texels</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\utilities.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="shared\common\base\algorithm.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\base\array.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\base\atomic.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\base\bits.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\base\defs.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\base\functions.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\base\hash.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\base\list.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\base\pointer.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\base\soft_float.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\base\strings.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\base\tree.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\base\vector.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\iso\iso.h">
+      <Filter>common\iso</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\iso\iso_binary.h">
+      <Filter>common\iso</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\iso\iso_convert.h">
+      <Filter>common\iso</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\iso\iso_custominit.h">
+      <Filter>common\iso</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\iso\iso_files.h">
+      <Filter>common\iso</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\iso\iso_script.h">
+      <Filter>common\iso</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\crc32.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\directory.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\filename.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\shader.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\platforms\pc\windows\d2d.h">
+      <Filter>platform\windows</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\platforms\pc\windows\dib.h">
+      <Filter>platform\windows</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\platforms\pc\windows\splitter.h">
+      <Filter>platform\windows</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\platforms\pc\windows\treecolumns.h">
+      <Filter>platform\windows</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\platforms\pc\windows\window.h">
+      <Filter>platform\windows</Filter>
+    </ClInclude>
+    <ClInclude Include="resource.h">
+      <Filter>resources</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\extra\xml.h">
+      <Filter>common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\filetypes\bitmap\bitmap.h">
+      <Filter>filetypes</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\filetypes\bitmap\bitmapfile.h">
+      <Filter>filetypes</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\filetypes\bitmap\hdr.h">
+      <Filter>filetypes</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\systems\conversion\channeluse.h" />
+    <ClInclude Include="shared\platforms\pc\windows\filedialogs.h">
+      <Filter>platform\windows</Filter>
+    </ClInclude>
+    <ClInclude Include="main.h" />
+    <ClInclude Include="shared\common\extra\async_stream.h">
+      <Filter>common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\filetypes\bitmap\jpg.h">
+      <Filter>filetypes</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\platforms\pc\windows\dwm.h">
+      <Filter>platform\windows</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\stream.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\extra\identifier.h">
+      <Filter>common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\platforms\pc\windows\registry.h">
+      <Filter>platform\windows</Filter>
+    </ClInclude>
+    <ClInclude Include="version.h" />
+    <ClInclude Include="shared\isoeditor\viewers\gpu.h">
+      <Filter>viewers</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\isoeditor\viewers\viewbin.rc.h">
+      <Filter>viewers</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\isoeditor\viewers\viewmesh.rc.h">
+      <Filter>viewers</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\extra\date.h">
+      <Filter>common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\extra\colourise.h">
+      <Filter>common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\platforms\pc\windows\dialog.h">
+      <Filter>platform\windows</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\jobs.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\isoeditor\viewers\viewbitmap.rc.h">
+      <Filter>viewers</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\platforms\pc\windows\docker.h">
+      <Filter>platform\windows</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\extra\c-types.h">
+      <Filter>common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\platforms\pc\windows\control_helpers.h">
+      <Filter>platform\windows</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\platforms\pc\hook.h">
+      <Filter>platform</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\platforms\pc\_atomic.h">
+      <Filter>platform</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\platforms\pc\windows\text_control.h">
+      <Filter>platform\windows</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\platforms\pc\dx11\_graphics.h">
+      <Filter>platform\dx11</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\platforms\pc\dx9\_graphics.h">
+      <Filter>platform\dx9</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\platforms\pc\platform_common.h">
+      <Filter>platform</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\base\iterator.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\platforms\pc\dx11\platform.h">
+      <Filter>platform\dx11</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\maths\dct.h">
+      <Filter>common\maths</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\extra\filters.h">
+      <Filter>common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\base\defs_base.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\base\defs_endian.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\base\defs_int.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\extra\kd_tree.h">
+      <Filter>common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\platforms\pc\hook_stack.h">
+      <Filter>platform</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\isoeditor\viewers\debug.h">
+      <Filter>viewers</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\extra\cpp.h">
+      <Filter>common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\platforms\pc\com.h">
+      <Filter>platform</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\extra\octree.h">
+      <Filter>common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\platforms\pc\_thread.h">
+      <Filter>platform</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\thread.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\isoeditor\viewers\directory_scan.h">
+      <Filter>viewers</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\graphics.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\base\maths.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\extra\regex.h">
+      <Filter>common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\extra\unicode_tables.h">
+      <Filter>common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\fibers.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\isoeditor\viewers\viewer_identifier.h">
+      <Filter>viewers</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\platforms\pc\stack_dump.h">
+      <Filter>platform</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\extra\memory_cache.h">
+      <Filter>common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\extra\expression.h">
+      <Filter>common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\extra\ast.h">
+      <Filter>common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\comms\ssl.h">
+      <Filter>common\comms</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\comms\ftp.h">
+      <Filter>common\comms</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\hashes\SHA.h">
+      <Filter>common\hashes</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\comms\zip.h">
+      <Filter>common\comms</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\comms\zlib_stream.h">
+      <Filter>common\comms</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\comms\ip.h">
+      <Filter>common\comms</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\comms\asn1.h">
+      <Filter>common\comms</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\comms\x509.h">
+      <Filter>common\comms</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\maths\bignum.h">
+      <Filter>common\maths</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\hashes\md5.h">
+      <Filter>common\hashes</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\rcu.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\isoeditor\viewers\natvis.h">
+      <Filter>viewers</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\base\tuple.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\maths\geometry.h">
+      <Filter>common\maths</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\platforms\pc\dx\dxgi_helpers.h">
+      <Filter>platform\dx11</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\allocators\tlsf.h">
+      <Filter>common\allocators</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\allocators\allocator.h">
+      <Filter>common\allocators</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\codec\aes.h">
+      <Filter>common\codec</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\codec\base64.h">
+      <Filter>common\codec</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\codec\chacha.h">
+      <Filter>common\codec</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\codec\des.h">
+      <Filter>common\codec</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\comms\diffie-hellman.h">
+      <Filter>common\comms</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\comms\elliptic-curves.h">
+      <Filter>common\comms</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\comms\rsa.h">
+      <Filter>common\comms</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\comms\srp.h">
+      <Filter>common\comms</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\codec\deflate.h">
+      <Filter>common\codec</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\comms\dsa.h">
+      <Filter>common\comms</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\utilities.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\codec\apple_compression.h">
+      <Filter>common\codec</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\maths\triangulate.h">
+      <Filter>common\maths</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\maths\polygon.h">
+      <Filter>common\maths</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\codec\texels\dxt.h">
+      <Filter>common\codec\texels</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="ORBIScrude.rc">
+      <Filter>resources</Filter>
+    </ResourceCompile>
+    <ResourceCompile Include="shared\isoeditor\viewers\viewbitmap.rc">
+      <Filter>viewers</Filter>
+    </ResourceCompile>
+    <ResourceCompile Include="shared\isoeditor\viewers\viewbin.rc">
+      <Filter>viewers</Filter>
+    </ResourceCompile>
+    <ResourceCompile Include="shared\isoeditor\viewers\viewmesh.rc">
+      <Filter>viewers</Filter>
+    </ResourceCompile>
+    <ResourceCompile Include="version.rc">
+      <Filter>resources</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <IsoCmd Include="shared\common\default.fx">
+      <Filter>common</Filter>
+    </IsoCmd>
+    <IsoCmd Include="settings.ix">
+      <Filter>resources</Filter>
+    </IsoCmd>
+    <IsoCmd Include="screw.png">
+      <Filter>resources</Filter>
+    </IsoCmd>
+    <IsoCmd Include="toolbar_start.psd">
+      <Filter>resources</Filter>
+    </IsoCmd>
+    <IsoCmd Include="shared\isoeditor\viewers\viewbitmap_toolbar.psd">
+      <Filter>viewers</Filter>
+    </IsoCmd>
+    <IsoCmd Include="shared\isoeditor\viewers\viewmesh_toolbar.psd">
+      <Filter>viewers</Filter>
+    </IsoCmd>
+    <IsoCmd Include="imagelist_tab.psd">
+      <Filter>resources</Filter>
+    </IsoCmd>
+    <IsoCmd Include="bad.psd">
+      <Filter>resources</Filter>
+    </IsoCmd>
+    <IsoCmd Include="wait.psd">
+      <Filter>resources</Filter>
+    </IsoCmd>
+    <IsoCmd Include="toolbar_main2.ix">
+      <Filter>resources</Filter>
+    </IsoCmd>
+    <IsoCmd Include="shared\isoeditor\toolbar_nav.psd">
+      <Filter>resources</Filter>
+    </IsoCmd>
+    <IsoCmd Include="shared\isoeditor\viewers\imagelist_debug.psd">
+      <Filter>resources</Filter>
+    </IsoCmd>
+    <IsoCmd Include="buffer.psd">
+      <Filter>resources</Filter>
+    </IsoCmd>
+    <IsoCmd Include="notloaded.psd">
+      <Filter>resources</Filter>
+    </IsoCmd>
+  </ItemGroup>
+  <ItemGroup>
+    <Xml Include="manifest.xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="shared\isoeditor\viewers\d2d_shader.hlsl">
+      <Filter>viewers</Filter>
+    </FxCompile>
+    <FxCompile Include="shared\isoeditor\viewers\d2d_grid.hlsl">
+      <Filter>viewers</Filter>
+    </FxCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <MASM Include="shared\platforms\pc\x64\fcontext.asm">
+      <Filter>platform</Filter>
+    </MASM>
+  </ItemGroup>
+</Project>

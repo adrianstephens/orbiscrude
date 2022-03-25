@@ -1,0 +1,53 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClInclude Include="..\..\shared\isoeditor\plugin.h" />
+    <ClInclude Include="resource.h">
+      <Filter>Resources</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\shared\common\sound.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\shared\common\base\vector.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\shared\isoeditor\viewers\viewsample.rc.h">
+      <Filter>Resources</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\shared\isoeditor\plugin.cpp" />
+    <ClCompile Include="..\..\shared\isoeditor\viewers\viewsample.cpp" />
+    <ClCompile Include="..\..\shared\filetypes\sound\wav.cpp" />
+    <ClCompile Include="..\..\shared\common\sound.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\shared\common\base\vector.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\shared\platforms\pc\_sound.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Resources">
+      <UniqueIdentifier>{ec06d7a2-188e-47fe-ba69-7cd6ee470050}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Common">
+      <UniqueIdentifier>{cc328738-3956-46b7-ab48-b2758511cc8c}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="sound_plugin.rc">
+      <Filter>Resources</Filter>
+    </ResourceCompile>
+    <ResourceCompile Include="..\..\shared\isoeditor\viewers\viewsample.rc">
+      <Filter>Resources</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <IX Include="..\..\shared\isoeditor\viewers\viewsample_toolbar.psd">
+      <Filter>Resources</Filter>
+    </IX>
+  </ItemGroup>
+</Project>

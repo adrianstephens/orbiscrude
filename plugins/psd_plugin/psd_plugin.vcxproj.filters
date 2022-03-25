@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="..\..\shared\isoeditor\plugin.cpp" />
+    <ClCompile Include="..\..\shared\filetypes\bitmap\psd.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="psd_plugin.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\shared\isoeditor\plugin.h" />
+  </ItemGroup>
+</Project>

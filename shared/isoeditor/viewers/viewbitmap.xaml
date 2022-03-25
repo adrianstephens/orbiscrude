@@ -1,0 +1,85 @@
+﻿<Page
+    x:Class="app.ViewBitmap"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    >
+
+    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Padding="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <CommandBar x:Name="commands"  Background="Transparent" IsOpen="False" DefaultLabelPosition="Right">
+            <AppBarToggleButton x:Name="red" Label="Red">
+                <AppBarToggleButton.Icon>
+                    <FontIcon Glyph="&#xe91f;" Foreground="Red"/>
+                </AppBarToggleButton.Icon>
+            </AppBarToggleButton>
+            <AppBarToggleButton x:Name="green"  Label="Green">
+                <AppBarToggleButton.Icon>
+                    <FontIcon Glyph="&#xe91f;" Foreground="Green"/>
+                </AppBarToggleButton.Icon>
+            </AppBarToggleButton>
+            <AppBarToggleButton x:Name="blue" Label="Blue">
+                <AppBarToggleButton.Icon>
+                    <FontIcon Glyph="&#xe91f;" Foreground="Blue"/>
+                </AppBarToggleButton.Icon>
+            </AppBarToggleButton>
+            <AppBarToggleButton x:Name="alpha" Label="Alpha">
+                <AppBarToggleButton.Icon>
+                    <FontIcon FontFamily="Times New Roman" FontStyle="Italic" Glyph="&#x3b1;"/>
+                </AppBarToggleButton.Icon>
+            </AppBarToggleButton>
+            <AppBarSeparator/>
+            <AppBarToggleButton Label="Bilinear" Icon="Filter"/>
+            <AppBarButton Label="Gamma">
+                <AppBarButton.Icon>
+                    <FontIcon FontFamily="Times New Roman" FontStyle="Italic" Glyph="&#x3b3;"/>
+                </AppBarButton.Icon>
+            </AppBarButton>
+            <AppBarButton Label="Min" Icon="Download"/>
+            <AppBarButton Label="Max" Icon="Upload"/>
+            <AppBarButton Label="Autocontrast">
+                <AppBarButton.Icon>
+                    <FontIcon FontFamily="Segoe UI Symbol" Glyph="&#x25d1;"/>
+                </AppBarButton.Icon>
+            </AppBarButton>
+            <AppBarToggleButton x:Name="mips" Label="Mips">
+                <PathIcon Data="F1 M0,0 v16 h12 v-8 h6 v-4 h3 v-2 h2 v-2" HorizontalAlignment="Center"/>
+            </AppBarToggleButton>
+            <AppBarSeparator/>
+            <AppBarButton Label="Save As..." Icon="Save"/>
+            <AppBarToggleButton x:Name="vflip" Label="Updown" Icon="Sort"/>
+            <AppBarToggleButton x:Name="hflip" Label="Leftright" Icon="Switch"/>
+            <AppBarToggleButton Label="Histogram" Icon="FourBars"/>
+            <AppBarToggleButton x:Name="grid" Label="Grid">
+                <AppBarToggleButton.Icon>
+                    <FontIcon Glyph="&#xe80a;"/>
+                </AppBarToggleButton.Icon>
+            </AppBarToggleButton>
+            <AppBarToggleButton x:Name="3d" Label="3D">
+                <AppBarToggleButton.Icon>
+                    <FontIcon Glyph="&#xe809;"/>
+                </AppBarToggleButton.Icon>
+            </AppBarToggleButton>
+        </CommandBar>
+
+        <Canvas x:Name="canvas" Grid.Row="1">
+            <Image x:Name="source" Source="Assets/tile300x300.png" />
+            <Border x:Name="border"
+                BorderThickness="2"
+                BorderBrush="#FFFFD700"
+                Background="#FFFFFFFF"
+            >
+                <TextBlock x:Name="text"
+                    Text="Woohoo! I can go everywhere."
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Padding="4"
+                    TextWrapping="WrapWholeWords" />
+            </Border>
+        </Canvas>
+    </Grid>
+
+</Page>

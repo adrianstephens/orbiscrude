@@ -1,0 +1,109 @@
+// Microsoft Visual C++ generated resource script.
+//
+#include "view_dx12gpu.rc.h"
+#include "windows\common.rc.h"
+
+#define APSTUDIO_READONLY_SYMBOLS
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 2 resource.
+//
+#include "..\..\resource.h"
+#include "winres.h"
+
+/////////////////////////////////////////////////////////////////////////////
+#undef APSTUDIO_READONLY_SYMBOLS
+
+/////////////////////////////////////////////////////////////////////////////
+// English (United States) resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+#pragma code_page(1252)
+
+#ifdef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// TEXTINCLUDE
+//
+
+1 TEXTINCLUDE 
+BEGIN
+    "view_dx12gpu.rc.h\0"
+END
+
+2 TEXTINCLUDE 
+BEGIN
+    "#include ""..\\..\\resource.h""\r\n"
+    "#include ""windows\\common.rc.h""\r\n"
+    "#include ""winres.h""\r\n"
+    "\0"
+END
+
+3 TEXTINCLUDE 
+BEGIN
+    "\r\n"
+    "\0"
+END
+
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Menu
+//
+
+IDR_MENU_DX12GPU MENU
+BEGIN
+    POPUP "DX12GPU"
+    BEGIN
+        MENUITEM "Offsets",                     ID_DX12GPU_OFFSETS
+        MENUITEM SEPARATOR
+        MENUITEM "View RenderTarget",           ID_DX12GPU_VIEWRENDERTARGET
+        MENUITEM "View DepthTarget",            ID_DX12GPU_VIEWDEPTHTARGET
+        MENUITEM "View StencilTarget",          ID_DX12GPU_VIEWSTENCILTARGET
+        MENUITEM SEPARATOR
+        MENUITEM "View State",                  ID_DX12GPU_VIEWSTATE
+        MENUITEM "Compare State",               ID_DX12GPU_COMPARESTATE
+        MENUITEM "View Regs",                   ID_DX12GPU_VIEWREGS
+    END
+END
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Toolbar
+//
+
+IDR_TOOLBAR_DX12GPU TOOLBAR 32, 32
+BEGIN
+    BUTTON      ID_DX12GPU_ALLOBJECTS
+    BUTTON      ID_DX12GPU_ALLRESOURCES
+    BUTTON      ID_DX12GPU_ALLDESCRIPTORS
+	BUTTON      ID_DX12GPU_ALLSHADERS
+	BUTTON      ID_DX12GPU_TIMER
+END
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Bitmap
+//
+
+IDR_TOOLBAR_DX12GPU     BITMAP                  "toolbar_dx12gpu.bmp"
+
+#endif    // English (United States) resources
+/////////////////////////////////////////////////////////////////////////////
+
+DX12CRUDE.DLL           BIN                     "dx12crude.dll"
+
+
+#ifndef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 3 resource.
+//
+
+
+/////////////////////////////////////////////////////////////////////////////
+#endif    // not APSTUDIO_INVOKED
+

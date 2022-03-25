@@ -1,0 +1,2780 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav</Extensions>
+    </Filter>
+    <Filter Include="PC">
+      <UniqueIdentifier>{de2fb693-d1a0-4681-8fb7-33c1a35fc005}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="FileTypes">
+      <UniqueIdentifier>{532f56b0-6c0e-4744-9cae-767d335dfec9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Devices">
+      <UniqueIdentifier>{57ecea80-b5e5-430e-819d-5e9952227e98}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Systems">
+      <UniqueIdentifier>{e8bbb1fe-ae90-41c3-93cf-a944dcd48b20}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Viewers">
+      <UniqueIdentifier>{dd8d26bc-88e6-495d-8452-d6f0c68c5e77}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Disassemblers">
+      <UniqueIdentifier>{3b01fd61-bd4b-4177-ac88-ce3e872937ae}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="FileTypes\2d">
+      <UniqueIdentifier>{be0de7f0-89f1-4aea-ba15-bda62a3c063d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Systems\conversions">
+      <UniqueIdentifier>{3fa8b45a-73be-46bf-9510-eb8994fa2557}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Systems\animation">
+      <UniqueIdentifier>{f078b567-a6bf-4693-b881-3f8cb2d34e90}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Systems\ui">
+      <UniqueIdentifier>{ad6fb211-8b93-4bb7-af69-bf190936c5e9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Systems\mesh">
+      <UniqueIdentifier>{1f0cec59-7c4f-4715-a476-b2440c286b3d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="FileTypes\3d">
+      <UniqueIdentifier>{1be5d9a3-bdf2-4f10-b67c-760450f111f2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="FileTypes\bitmap">
+      <UniqueIdentifier>{dc765ac3-8394-4d6d-af83-f55c0c886b37}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="FileTypes\container">
+      <UniqueIdentifier>{138b6292-6ee8-4e9b-9554-bd0697176c76}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="FileTypes\sound">
+      <UniqueIdentifier>{99d24b8b-6570-42f2-98af-e5ade44ceb3e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="FileTypes\video">
+      <UniqueIdentifier>{9bd23c93-225e-4f37-942a-2d9ed9950027}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="FileTypes\code">
+      <UniqueIdentifier>{85ee813f-6d4c-4646-8d92-bfa4084b5fb8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Systems\communication">
+      <UniqueIdentifier>{b8c71721-d065-443f-87ef-08bf77f3fb07}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="PC\windows">
+      <UniqueIdentifier>{76acefd4-4c75-47ab-b441-c9e28c0468e0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Viewers\Wii">
+      <UniqueIdentifier>{b3556601-8e9b-46de-8c76-d43451952f06}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Viewers\PS3">
+      <UniqueIdentifier>{221716f9-7a65-4f64-86df-a1de42aa1e34}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Viewers\PS4">
+      <UniqueIdentifier>{66860b07-880b-4003-8443-e54afba347fc}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Systems\conversions\platforms">
+      <UniqueIdentifier>{0c09f535-dabd-41a6-a32b-6911efbd7bd9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Systems\speech">
+      <UniqueIdentifier>{9c846eca-a8c1-4453-8131-7e9a01aa5278}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Viewers\ViewBitmap">
+      <UniqueIdentifier>{654f2c05-5cf8-48c7-9440-556d0b974f88}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Viewers\ViewSample">
+      <UniqueIdentifier>{95ed09c2-3db5-4cc7-9e31-0294d3680575}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Viewers\PS4\Resources">
+      <UniqueIdentifier>{da81bd6e-6c56-4929-a94d-3ed0f2c26505}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Systems\particle">
+      <UniqueIdentifier>{b11071d1-3a34-4060-947f-85a6a2f0e2c1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Systems\post">
+      <UniqueIdentifier>{59c21c2e-1898-453e-b11f-144c5d8e3bac}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Viewers\Resources">
+      <UniqueIdentifier>{be2594ea-736a-447c-a370-752f795917ad}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="PC\dx9">
+      <UniqueIdentifier>{f8169ce3-a8e9-48e2-90bf-9e268e75bea9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="PC\dx11">
+      <UniqueIdentifier>{0626693a-cbef-4d46-a599-20b221b7ac8f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="PC\x64">
+      <UniqueIdentifier>{386f408d-1ff7-4cf1-88c8-37f8db75f281}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="PC\x86">
+      <UniqueIdentifier>{dc892f8f-ee83-4227-89e9-3150a12b3880}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resource Files\FileIcons">
+      <UniqueIdentifier>{f2f8785d-11f9-4b37-8b68-c5940947c4f5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resource Files\isocmd">
+      <UniqueIdentifier>{691f9572-c867-44f9-aebc-176d4abc728c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Devices\DeviceIcons">
+      <UniqueIdentifier>{a859b9a4-e985-4071-b27f-f7c6a8752be4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Common">
+      <UniqueIdentifier>{300ad80d-ee29-4669-b6c1-96960d76d1eb}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Common\extra">
+      <UniqueIdentifier>{9f0b56df-01a4-44ff-a683-f8e2b4dd7449}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Common\iso">
+      <UniqueIdentifier>{86a99304-2301-4c10-a09f-eb68d32b7ff2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Common\base">
+      <UniqueIdentifier>{623083c7-38f7-4ded-8ec5-9f1347d62b35}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Common\comms">
+      <UniqueIdentifier>{c2085d3d-3929-4d0f-90e3-e3ff23f5faa8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Common\hashes">
+      <UniqueIdentifier>{fc4ad220-b308-4679-a27c-0cd46ef17d78}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Common\maths">
+      <UniqueIdentifier>{88fbdb30-8b9f-49c3-95f6-01a98a3be50d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Systems\vision">
+      <UniqueIdentifier>{307f134a-0db0-4ec0-a8c2-26b33b87feec}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Systems\shadows">
+      <UniqueIdentifier>{0b9e9bb0-01a7-4d9b-bfa2-22b27ab0777d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="FileTypes\video\vpx">
+      <UniqueIdentifier>{1e9c61d5-5e58-4077-bcfe-6356f6f771aa}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="PC\dx">
+      <UniqueIdentifier>{a8ce0389-30e5-461a-b03e-e85926bc52ac}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Systems\roads">
+      <UniqueIdentifier>{836ab9ca-86df-47d4-abdb-d71da6cde960}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Viewers\PS4\gcn">
+      <UniqueIdentifier>{e065f3dd-06e0-41e5-8874-989314263949}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Common\codec">
+      <UniqueIdentifier>{a2899d32-7b02-4e2c-8ff0-129151067f1b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Common\allocators">
+      <UniqueIdentifier>{98978f0a-12c2-4009-9e50-9b11ed44cf31}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Common\codec\texels">
+      <UniqueIdentifier>{9d236ce6-6acf-4332-8ac1-180def754e6e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Common\codec\mesh">
+      <UniqueIdentifier>{428cedad-8b75-4409-a453-62d3a9baa583}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\common\crc_dictionary.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\filename.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\jobs.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\object.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\render.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\scenetree.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\shader.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\sound.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\utilities.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\extra\async_stream.cpp">
+      <Filter>Common\extra</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\extra\xml.cpp">
+      <Filter>Common\extra</Filter>
+    </ClCompile>
+    <ClCompile Include="viewers\viewflash.cpp">
+      <Filter>Viewers</Filter>
+    </ClCompile>
+    <ClCompile Include="viewers\viewged.cpp">
+      <Filter>Viewers</Filter>
+    </ClCompile>
+    <ClCompile Include="viewers\viewgraph.cpp">
+      <Filter>Viewers</Filter>
+    </ClCompile>
+    <ClCompile Include="viewers\viewmenu.cpp">
+      <Filter>Viewers</Filter>
+    </ClCompile>
+    <ClCompile Include="viewers\viewmodel.cpp">
+      <Filter>Viewers</Filter>
+    </ClCompile>
+    <ClCompile Include="viewers\viewmovie.cpp">
+      <Filter>Viewers</Filter>
+    </ClCompile>
+    <ClCompile Include="viewers\viewparticle.cpp">
+      <Filter>Viewers</Filter>
+    </ClCompile>
+    <ClCompile Include="viewers\viewtext.cpp">
+      <Filter>Viewers</Filter>
+    </ClCompile>
+    <ClCompile Include="disassemblers\dis_ppc.cpp">
+      <Filter>Disassemblers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\systems\conversion\bone.cpp">
+      <Filter>Systems\conversions</Filter>
+    </ClCompile>
+    <ClCompile Include="..\systems\conversion\conversions.cpp">
+      <Filter>Systems\conversions</Filter>
+    </ClCompile>
+    <ClCompile Include="..\systems\conversion\distance_fields.cpp">
+      <Filter>Systems\conversions</Filter>
+    </ClCompile>
+    <ClCompile Include="..\systems\conversion\dupes.cpp">
+      <Filter>Systems\conversions</Filter>
+    </ClCompile>
+    <ClCompile Include="..\systems\conversion\environment_maps.cpp">
+      <Filter>Systems\conversions</Filter>
+    </ClCompile>
+    <ClCompile Include="..\systems\conversion\fontmaker.cpp">
+      <Filter>Systems\conversions</Filter>
+    </ClCompile>
+    <ClCompile Include="..\systems\animation\animation.cpp">
+      <Filter>Systems\animation</Filter>
+    </ClCompile>
+    <ClCompile Include="..\systems\animation\ik.cpp">
+      <Filter>Systems\animation</Filter>
+    </ClCompile>
+    <ClCompile Include="..\systems\ui\menu.cpp">
+      <Filter>Systems\ui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\systems\mesh\model.cpp">
+      <Filter>Systems\mesh</Filter>
+    </ClCompile>
+    <ClCompile Include="..\systems\mesh\patch.cpp">
+      <Filter>Systems\mesh</Filter>
+    </ClCompile>
+    <ClCompile Include="..\systems\ui\font.cpp">
+      <Filter>Systems\ui</Filter>
+    </ClCompile>
+    <ClCompile Include="viewers\gpu.cpp">
+      <Filter>Viewers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\systems\conversion\strip.cpp">
+      <Filter>Systems\conversions</Filter>
+    </ClCompile>
+    <ClCompile Include="isoeditor.cpp" />
+    <ClCompile Include="viewers\viewprofile.cpp">
+      <Filter>Viewers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\systems\conversion\conv_menu.cpp">
+      <Filter>Systems\conversions</Filter>
+    </ClCompile>
+    <ClCompile Include="..\systems\conversion\conv_anim.cpp">
+      <Filter>Systems\conversions</Filter>
+    </ClCompile>
+    <ClCompile Include="..\systems\conversion\conv_mesh.cpp">
+      <Filter>Systems\conversions</Filter>
+    </ClCompile>
+    <ClCompile Include="..\systems\conversion\texture_atlas.cpp">
+      <Filter>Systems\conversions</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\extra\date.cpp">
+      <Filter>Common\extra</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\extra\json.cpp">
+      <Filter>Common\extra</Filter>
+    </ClCompile>
+    <ClCompile Include="viewers\viewcrossword.cpp">
+      <Filter>Viewers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\2d\actionscript.cpp">
+      <Filter>FileTypes\2d</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\2d\flash.cpp">
+      <Filter>FileTypes\2d</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\2d\fonts.cpp">
+      <Filter>FileTypes\2d</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\2d\opentype.cpp">
+      <Filter>FileTypes\2d</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\2d\pdf.cpp">
+      <Filter>FileTypes\2d</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\2d\svg.cpp">
+      <Filter>FileTypes\2d</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\3d\bvh.cpp">
+      <Filter>FileTypes\3d</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\3d\dxf.cpp">
+      <Filter>FileTypes\3d</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\3d\ply.cpp">
+      <Filter>FileTypes\3d</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\3d\pvrpod.cpp">
+      <Filter>FileTypes\3d</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\3d\wavefront.cpp">
+      <Filter>FileTypes\3d</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\3d\xatg.cpp">
+      <Filter>FileTypes\3d</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\bif.cpp">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\bitmap.cpp">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\bmp.cpp">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\dds.cpp">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\gif.cpp">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\gtf.cpp">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\hdr.cpp">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\ifl.cpp">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\ilbm.cpp">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\jpg.cpp">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\lpfanm.cpp">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\mediancut.cpp">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\osx_icon.cpp">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\png.cpp">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\ppm.cpp">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\psd.cpp">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\psp.cpp">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\ptc.cpp">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\pvr.cpp">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\tga.cpp">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\tiff.cpp">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\tpl.cpp">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\wildmagic.cpp">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\xpr.cpp">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\sound\aac.cpp">
+      <Filter>FileTypes\sound</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\sound\ac3.cpp">
+      <Filter>FileTypes\sound</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\sound\adpcm.cpp">
+      <Filter>FileTypes\sound</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\sound\aiff.cpp">
+      <Filter>FileTypes\sound</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\sound\caf.cpp">
+      <Filter>FileTypes\sound</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\sound\dsp.cpp">
+      <Filter>FileTypes\sound</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\sound\flac.cpp">
+      <Filter>FileTypes\sound</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\sound\mp3.cpp">
+      <Filter>FileTypes\sound</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\sound\vag.cpp">
+      <Filter>FileTypes\sound</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\sound\wav.cpp">
+      <Filter>FileTypes\sound</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\sound\xma.cpp">
+      <Filter>FileTypes\sound</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\video\avi.cpp">
+      <Filter>FileTypes\video</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\video\matroska.cpp">
+      <Filter>FileTypes\video</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\video\movie.cpp">
+      <Filter>FileTypes\video</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\video\mpeg.cpp">
+      <Filter>FileTypes\video</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\video\quicktime.cpp">
+      <Filter>FileTypes\video</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\video\thp.cpp">
+      <Filter>FileTypes\video</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\video\wmv.cpp">
+      <Filter>FileTypes\video</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\video\xvid.cpp">
+      <Filter>FileTypes\video</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\c.cpp">
+      <Filter>FileTypes\code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\demangle.cpp">
+      <Filter>FileTypes\code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\demangle2.cpp">
+      <Filter>FileTypes\code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\mcp.cpp">
+      <Filter>FileTypes\code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\obj.cpp">
+      <Filter>FileTypes\code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\xex.cpp">
+      <Filter>FileTypes\code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bin.cpp">
+      <Filter>FileTypes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\crosswords.cpp">
+      <Filter>FileTypes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\ebml.cpp">
+      <Filter>FileTypes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\fx.cpp">
+      <Filter>FileTypes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\gedcom.cpp">
+      <Filter>FileTypes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\ibz.cpp">
+      <Filter>FileTypes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\json2.cpp">
+      <Filter>FileTypes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\office.cpp">
+      <Filter>FileTypes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\pgp.cpp">
+      <Filter>FileTypes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\psion.cpp">
+      <Filter>FileTypes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\pst.cpp">
+      <Filter>FileTypes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\shortcut.cpp">
+      <Filter>FileTypes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\txt.cpp">
+      <Filter>FileTypes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\xml2.cpp">
+      <Filter>FileTypes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\apple.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\archive.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\cab.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\dvd.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\garmin.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\iso9660.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\livearcade.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\ps3_files.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\rar_file.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\sqlite.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\unix.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\wiidisc.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\xdvdfs.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\mct.cpp">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\3d\fbx.cpp">
+      <Filter>FileTypes\3d</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\3d\model_utils.cpp">
+      <Filter>FileTypes\3d</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\iff.cpp">
+      <Filter>FileTypes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\crc32.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\riff.cpp">
+      <Filter>FileTypes</Filter>
+    </ClCompile>
+    <ClCompile Include="disassemblers\dis_intel.cpp">
+      <Filter>Disassemblers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\java.cpp">
+      <Filter>FileTypes\code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\sound\ogg.cpp">
+      <Filter>FileTypes\sound</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\built.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\ib.cpp">
+      <Filter>FileTypes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\ix.cpp">
+      <Filter>FileTypes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\gnf.cpp">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\base\defs.cpp">
+      <Filter>Common\base</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\iso\iso.cpp">
+      <Filter>Common\iso</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\iso\iso_binary.cpp">
+      <Filter>Common\iso</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\iso\iso_convert.cpp">
+      <Filter>Common\iso</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\iso\iso_files.cpp">
+      <Filter>Common\iso</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\iso\iso_script.cpp">
+      <Filter>Common\iso</Filter>
+    </ClCompile>
+    <ClCompile Include="..\systems\communication\isolink_target.cpp">
+      <Filter>Systems\communication</Filter>
+    </ClCompile>
+    <ClCompile Include="..\systems\communication\connection.cpp">
+      <Filter>Systems\communication</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\ps4_files.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\fsarc.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="devices\deci3.cpp">
+      <Filter>Devices</Filter>
+    </ClCompile>
+    <ClCompile Include="devices\devices.cpp">
+      <Filter>Devices</Filter>
+    </ClCompile>
+    <ClCompile Include="devices\orbis.cpp">
+      <Filter>Devices</Filter>
+    </ClCompile>
+    <ClCompile Include="devices\philips_hue.cpp">
+      <Filter>Devices</Filter>
+    </ClCompile>
+    <ClCompile Include="devices\Registry.cpp">
+      <Filter>Devices</Filter>
+    </ClCompile>
+    <ClCompile Include="devices\remote.cpp">
+      <Filter>Devices</Filter>
+    </ClCompile>
+    <ClCompile Include="devices\sectors.cpp">
+      <Filter>Devices</Filter>
+    </ClCompile>
+    <ClCompile Include="devices\videocapture.cpp">
+      <Filter>Devices</Filter>
+    </ClCompile>
+    <ClCompile Include="devices\x360explorer.cpp">
+      <Filter>Devices</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\pc\windows\treecolumns.cpp">
+      <Filter>PC\windows</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\pc\windows\splitter.cpp">
+      <Filter>PC\windows</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\pc\windows\com.cpp">
+      <Filter>PC\windows</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\unity.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="disassemblers\dis_cil.cpp">
+      <Filter>Disassemblers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\Wii\shared\gx_decode.cpp">
+      <Filter>Viewers\Wii</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\Wii\shared\gx_dump.cpp">
+      <Filter>Viewers\Wii</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\Wii\shared\gx_regnames.cpp">
+      <Filter>Viewers\Wii</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\ps3\shared\rsx_dump.cpp">
+      <Filter>Viewers\PS3</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\elf.cpp">
+      <Filter>FileTypes\code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\pe_coff.cpp">
+      <Filter>FileTypes\code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\mach.cpp">
+      <Filter>FileTypes\code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\extra\yaml.cpp">
+      <Filter>Common\extra</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\yaml2.cpp">
+      <Filter>FileTypes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\hdrfile.cpp">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\pc\windows\filedialogs.cpp">
+      <Filter>PC\windows</Filter>
+    </ClCompile>
+    <ClCompile Include="..\systems\conversion\channeluse.cpp">
+      <Filter>Systems\conversions</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\bbc_micro.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="disassemblers\dis_6502.cpp">
+      <Filter>Disassemblers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\xcode.cpp">
+      <Filter>FileTypes\code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\visualstudio.cpp">
+      <Filter>FileTypes\code</Filter>
+    </ClCompile>
+    <ClCompile Include="devices\processes.cpp">
+      <Filter>Devices</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\3d\collada.cpp">
+      <Filter>FileTypes\3d</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\tundra.cpp">
+      <Filter>FileTypes\code</Filter>
+    </ClCompile>
+    <ClCompile Include="devices\p4.cpp">
+      <Filter>Devices</Filter>
+    </ClCompile>
+    <ClCompile Include="devices\url.cpp">
+      <Filter>Devices</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\3d\alembic.cpp">
+      <Filter>FileTypes\3d</Filter>
+    </ClCompile>
+    <ClCompile Include="..\systems\conversion\platformdata.cpp">
+      <Filter>Systems\conversions\platforms</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\ps3\shared\ps3_conversion.cpp">
+      <Filter>Systems\conversions\platforms</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\ps4\shared\ps4_conversion.cpp">
+      <Filter>Systems\conversions\platforms</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\wii\shared\wii_conversion.cpp">
+      <Filter>Systems\conversions\platforms</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\x360\shared\x360_conversion.cpp">
+      <Filter>Systems\conversions\platforms</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\xone\shared\xone_conversion.cpp">
+      <Filter>Systems\conversions\platforms</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\extra\identifier.cpp">
+      <Filter>Common\extra</Filter>
+    </ClCompile>
+    <ClCompile Include="viewers\ps4\view_pssl.cpp">
+      <Filter>Viewers\PS4</Filter>
+    </ClCompile>
+    <ClCompile Include="viewers\ps4\viewps4gpu.cpp">
+      <Filter>Viewers\PS4</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\3d\yif.cpp">
+      <Filter>FileTypes\3d</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\dwarf.cpp">
+      <Filter>FileTypes\code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\tivo.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="devices\device_ftp.cpp">
+      <Filter>Devices</Filter>
+    </ClCompile>
+    <ClCompile Include="devices\device_svn.cpp">
+      <Filter>Devices</Filter>
+    </ClCompile>
+    <ClCompile Include="devices\device_upnp.cpp">
+      <Filter>Devices</Filter>
+    </ClCompile>
+    <ClCompile Include="viewers\view_html.cpp">
+      <Filter>Viewers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\pc\windows\dib.cpp">
+      <Filter>PC\windows</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\pcx.cpp">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\fli.cpp">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="viewers\ps3\viewps3gpu.cpp">
+      <Filter>Viewers\PS3</Filter>
+    </ClCompile>
+    <ClCompile Include="viewers\wii\viewwiigx.cpp">
+      <Filter>Viewers\Wii</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\pix3.cpp">
+      <Filter>FileTypes\code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\minidump.cpp">
+      <Filter>FileTypes\code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\archive_help.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="viewers\viewtree.cpp">
+      <Filter>Viewers</Filter>
+    </ClCompile>
+    <ClCompile Include="viewers\viewincludes.cpp">
+      <Filter>Viewers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\ese.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="devices\durango.cpp">
+      <Filter>Devices</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\ps3\shared\dis_ps3ps.cpp">
+      <Filter>Disassemblers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\ps3\shared\dis_spu.cpp">
+      <Filter>Disassemblers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\x360\shared\dis_x360ps.cpp">
+      <Filter>Disassemblers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\psarc.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="viewers\viewsample.cpp">
+      <Filter>Viewers\ViewSample</Filter>
+    </ClCompile>
+    <ClCompile Include="..\systems\mesh\shapes.cpp">
+      <Filter>Systems\mesh</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\ps3\shared\edge.cpp">
+      <Filter>Viewers\PS3</Filter>
+    </ClCompile>
+    <ClCompile Include="devices\clipboard.cpp">
+      <Filter>Devices</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\pc\windows\dialog.cpp">
+      <Filter>PC\windows</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\extra\colourise.cpp">
+      <Filter>Common\extra</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\pc\windows\docker.cpp">
+      <Filter>PC\windows</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\pc\windows\theme.cpp">
+      <Filter>PC\windows</Filter>
+    </ClCompile>
+    <ClCompile Include="viewers\ps4\gnm_dump.cpp">
+      <Filter>Viewers\PS4</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\pc\dx9\shared\dx9_conversion.cpp">
+      <Filter>Systems\conversions\platforms</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\extra\c-types.cpp">
+      <Filter>Common\extra</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\pc\dx11\shared\dx11_conversion.cpp">
+      <Filter>Systems\conversions\platforms</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\exr.cpp">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\pc\hook.cpp">
+      <Filter>PC</Filter>
+    </ClCompile>
+    <ClCompile Include="find.cpp" />
+    <ClCompile Include="..\common\extra\directshow.cpp">
+      <Filter>Common\extra</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\video\directshow_files.cpp">
+      <Filter>FileTypes\video</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\vmdk.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\ps3\shared\rsx_regs.cpp">
+      <Filter>Viewers\PS3</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\hashes\md5.cpp">
+      <Filter>Common\hashes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\hashes\SHA.cpp">
+      <Filter>Common\hashes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\comms\dhcp.cpp">
+      <Filter>Common\comms</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\comms\dns.cpp">
+      <Filter>Common\comms</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\comms\ftp.cpp">
+      <Filter>Common\comms</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\comms\HTTP.cpp">
+      <Filter>Common\comms</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\comms\ip.cpp">
+      <Filter>Common\comms</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\comms\UPnP.cpp">
+      <Filter>Common\comms</Filter>
+    </ClCompile>
+    <ClCompile Include="viewers\viewshader.cpp">
+      <Filter>Viewers</Filter>
+    </ClCompile>
+    <ClCompile Include="viewers\viewtest2d.cpp">
+      <Filter>Viewers</Filter>
+    </ClCompile>
+    <ClCompile Include="viewers\viewtest3d.cpp">
+      <Filter>Viewers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\systems\particle\particle.cpp">
+      <Filter>Systems\particle</Filter>
+    </ClCompile>
+    <ClCompile Include="..\systems\postprocess\post.cpp">
+      <Filter>Systems\post</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\3d\maya.cpp">
+      <Filter>FileTypes\3d</Filter>
+    </ClCompile>
+    <ClCompile Include="..\systems\mesh\nurbs.cpp">
+      <Filter>Systems\mesh</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\3d\vertexcacheoptimizer.cpp">
+      <Filter>FileTypes\3d</Filter>
+    </ClCompile>
+    <ClCompile Include="viewers\ps4\ps4_connection.cpp">
+      <Filter>Viewers\PS4</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\pc\windows\control_helpers.cpp">
+      <Filter>PC\windows</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\pc\dll.cpp">
+      <Filter>PC</Filter>
+    </ClCompile>
+    <ClCompile Include="viewers\ps4\ps4_shaders.cpp">
+      <Filter>Viewers\PS4</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\pc\windows\text_control.cpp">
+      <Filter>PC\windows</Filter>
+    </ClCompile>
+    <ClCompile Include="disassemblers\dis_arm.cpp">
+      <Filter>Disassemblers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\FAT.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\pc\_controller.cpp">
+      <Filter>PC</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\pc\_sound.cpp">
+      <Filter>PC</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\pc\platform.cpp">
+      <Filter>PC</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\pc\render_output.cpp">
+      <Filter>PC</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\pc\sockets.cpp">
+      <Filter>PC</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\pc\windows\window.cpp">
+      <Filter>PC\windows</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\astc_handler.cpp">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="viewers\viewscene.cpp">
+      <Filter>Viewers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\systems\mesh\light.cpp">
+      <Filter>Systems\mesh</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\WEVR.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\pc\dx11\_graphics.cpp">
+      <Filter>PC\dx11</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\pc\dx9\_graphics.cpp">
+      <Filter>PC\dx9</Filter>
+    </ClCompile>
+    <ClCompile Include="..\systems\shadows\shadow.cpp">
+      <Filter>Systems\shadows</Filter>
+    </ClCompile>
+    <ClCompile Include="viewers\ps4\view_ps4shader.cpp">
+      <Filter>Viewers\PS4</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\sound\atrac9.cpp">
+      <Filter>FileTypes\sound</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\extra\clipper.cpp">
+      <Filter>Common\extra</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\3d\h3d.cpp">
+      <Filter>FileTypes\3d</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\extra\perlin_noise.cpp">
+      <Filter>Common\extra</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\maths\bignum.cpp">
+      <Filter>Common\maths</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\maths\dct.cpp">
+      <Filter>Common\maths</Filter>
+    </ClCompile>
+    <ClCompile Include="devices\serial.cpp">
+      <Filter>Devices</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\bsa.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\nif.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\ast_clr.cpp">
+      <Filter>FileTypes\code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\extra\ast.cpp">
+      <Filter>Common\extra</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\procreate.cpp">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\apple_pkg.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\apple_disk.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\plist.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="hatch.cpp" />
+    <ClCompile Include="..\systems\collision\collision.cpp">
+      <Filter>Systems</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\maths\sparse.cpp">
+      <Filter>Common\maths</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\maths\lp.cpp">
+      <Filter>Common\maths</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\maths\polygon.cpp">
+      <Filter>Common\maths</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\maths\bezier.cpp">
+      <Filter>Common\maths</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\extra\gjk.cpp">
+      <Filter>Common\extra</Filter>
+    </ClCompile>
+    <ClCompile Include="..\systems\vision\contours.cpp">
+      <Filter>Systems\vision</Filter>
+    </ClCompile>
+    <ClCompile Include="..\systems\vision\grabcut.cpp">
+      <Filter>Systems\vision</Filter>
+    </ClCompile>
+    <ClCompile Include="..\systems\vision\sift.cpp">
+      <Filter>Systems\vision</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\extra\filters.cpp">
+      <Filter>Common\extra</Filter>
+    </ClCompile>
+    <ClCompile Include="devices\device_fonts.cpp">
+      <Filter>Devices</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\comms\ssl.cpp">
+      <Filter>Common\comms</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\comms\asn1.cpp">
+      <Filter>Common\comms</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\comms\asn1_objects.cpp">
+      <Filter>Common\comms</Filter>
+    </ClCompile>
+    <ClCompile Include="webserver.cpp" />
+    <ClCompile Include="..\filetypes\video\h264.cpp">
+      <Filter>FileTypes\video</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\pem.cpp">
+      <Filter>FileTypes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\comms\zip.cpp">
+      <Filter>Common\comms</Filter>
+    </ClCompile>
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="viewers\debug.cpp">
+      <Filter>Viewers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\extra\c-header.cpp">
+      <Filter>Common\extra</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\extra\cpp.cpp">
+      <Filter>Common\extra</Filter>
+    </ClCompile>
+    <ClCompile Include="viewers\viewshaders.cpp">
+      <Filter>Viewers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\mdb.cpp">
+      <Filter>FileTypes\code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\ar.cpp">
+      <Filter>FileTypes\code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\dalvik.cpp">
+      <Filter>FileTypes\code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\dicom.cpp">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\bitcode.cpp">
+      <Filter>FileTypes\code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\ast_java.cpp">
+      <Filter>FileTypes\code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\gis.cpp">
+      <Filter>FileTypes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\hha.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\dbf.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="disassemblers\dis_mips.cpp">
+      <Filter>Disassemblers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\3d\lux.cpp">
+      <Filter>FileTypes\3d</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\ti2.cpp">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\3d\shader_gen.cpp">
+      <Filter>FileTypes\3d</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\ciff.cpp">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\extra\ambisonic.cpp">
+      <Filter>Common\extra</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\maths\spherical_harmonics.cpp">
+      <Filter>Common\maths</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\opengl\shared\opengl_conversion.cpp">
+      <Filter>Systems\conversions\platforms</Filter>
+    </ClCompile>
+    <ClCompile Include="..\systems\roads\roads.cpp">
+      <Filter>Systems\roads</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\extra\octree.cpp">
+      <Filter>Common\extra</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\extra\geo.cpp">
+      <Filter>Common\extra</Filter>
+    </ClCompile>
+    <ClCompile Include="..\systems\roads\roads_editor.cpp">
+      <Filter>Systems\roads</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\allocators\tlsf.cpp">
+      <Filter>Common\allocators</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\pc\_thread.cpp">
+      <Filter>PC</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\makefile.cpp">
+      <Filter>FileTypes\code</Filter>
+    </ClCompile>
+    <ClCompile Include="viewers\viewdirectories.cpp">
+      <Filter>Viewers</Filter>
+    </ClCompile>
+    <ClCompile Include="devices\device_directories.cpp">
+      <Filter>Devices</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\ios\shared\isolink_target_ios.cpp">
+      <Filter>Systems\communication</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\mac\shared\isolink_target_mac.cpp">
+      <Filter>Systems\communication</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\pc\shared\isolink_target_pc.cpp">
+      <Filter>Systems\communication</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\ps3\shared\isolink_target_ps3.cpp">
+      <Filter>Systems\communication</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\ps4\shared\isolink_target_ps4.cpp">
+      <Filter>Systems\communication</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\wii\shared\isolink_target_wii.cpp">
+      <Filter>Systems\communication</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\x360\shared\isolink_target_x360.cpp">
+      <Filter>Systems\communication</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\make_rth.cpp">
+      <Filter>FileTypes\code</Filter>
+    </ClCompile>
+    <ClCompile Include="gnm.cpp">
+      <Filter>PC</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\xbf.cpp">
+      <Filter>FileTypes\code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\pc\hook_stack.cpp">
+      <Filter>PC</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\vbitmap.cpp">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\msf.cpp">
+      <Filter>FileTypes\code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\pdb_dia.cpp">
+      <Filter>FileTypes\code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\pdb.cpp">
+      <Filter>FileTypes\code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\pc\dx\spdb.cpp">
+      <Filter>FileTypes\code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\extra\regex.cpp">
+      <Filter>Common\extra</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\extra\unicode_tables.cpp">
+      <Filter>Common\extra</Filter>
+    </ClCompile>
+    <ClCompile Include="disassemblers\dis_atmel.cpp">
+      <Filter>Disassemblers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\gimple.cpp">
+      <Filter>FileTypes\code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\webassembly.cpp">
+      <Filter>FileTypes\code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\gcn\dis_gcn1.cpp">
+      <Filter>Viewers\PS4\gcn</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\gcn\gpu_state.cpp">
+      <Filter>Viewers\PS4\gcn</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\gcn\gpu_tile.cpp">
+      <Filter>Viewers\PS4\gcn</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\gcn\pm4_dump.cpp">
+      <Filter>Viewers\PS4\gcn</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\gcn\sim_gcn1.cpp">
+      <Filter>Viewers\PS4\gcn</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\ps4\shared\sdb.cpp">
+      <Filter>Viewers\PS4</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\js.cpp">
+      <Filter>FileTypes\code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\pdb_utils.cpp">
+      <Filter>FileTypes\code</Filter>
+    </ClCompile>
+    <ClCompile Include="viewers\directory_scan.cpp">
+      <Filter>Viewers</Filter>
+    </ClCompile>
+    <ClCompile Include="perms.cpp" />
+    <ClCompile Include="..\filetypes\container\flatbuffer.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\demangle_vc.cpp">
+      <Filter>FileTypes\code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\disassembler.cpp">
+      <Filter>Disassemblers</Filter>
+    </ClCompile>
+    <ClCompile Include="viewers\viewer_identifier.cpp">
+      <Filter>Viewers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\pc\dx\dis_dxbc.cpp">
+      <Filter>Disassemblers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\demangle_it.cpp">
+      <Filter>FileTypes\code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\matlab.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="..\systems\conversion\conv_bitmap.cpp">
+      <Filter>Systems\conversions</Filter>
+    </ClCompile>
+    <ClCompile Include="..\systems\conversion\conv_gpu.cpp">
+      <Filter>Systems\conversions</Filter>
+    </ClCompile>
+    <ClCompile Include="devices\certificates.cpp">
+      <Filter>Devices</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\2d\toonboom.cpp">
+      <Filter>FileTypes\2d</Filter>
+    </ClCompile>
+    <ClCompile Include="viewers\natvis.cpp">
+      <Filter>Viewers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\opengl\shared\glsl_hal.cpp">
+      <Filter>Systems\conversions\platforms</Filter>
+    </ClCompile>
+    <ClCompile Include="..\systems\conversion\conv_sample.cpp">
+      <Filter>Systems\conversions</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\apple_apfs.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\pcapcpp.cpp">
+      <Filter>FileTypes\code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\lua.cpp">
+      <Filter>FileTypes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\tgc.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\maths\elliptic.cpp">
+      <Filter>Common\maths</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\maths\gpc.cpp">
+      <Filter>Common\maths</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\maths\gpc.orig.c">
+      <Filter>Common\maths</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\maths\simplex_clip.cpp">
+      <Filter>Common\maths</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\maths\clipper2.cpp">
+      <Filter>Common\maths</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\unreal.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\fibers.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\maths\geometry.cpp">
+      <Filter>Common\maths</Filter>
+    </ClCompile>
+    <ClCompile Include="viewers\viewbitmap_win32.cpp">
+      <Filter>Viewers\ViewBitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="viewers\viewbitmap.cpp">
+      <Filter>Viewers\ViewBitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="viewers\viewbin_win32.cpp">
+      <Filter>Viewers</Filter>
+    </ClCompile>
+    <ClCompile Include="viewers\viewbin.cpp">
+      <Filter>Viewers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\pc\dx\dxgi_helpers.cpp">
+      <Filter>PC\dx</Filter>
+    </ClCompile>
+    <ClCompile Include="devices\scanner.cpp">
+      <Filter>Devices</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\amiga.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\codec\fax3.cpp">
+      <Filter>Common\codec</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\codec\huffman.cpp">
+      <Filter>Common\codec</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\codec\apple_compression.cpp">
+      <Filter>Common\codec</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\codec\lz4.cpp">
+      <Filter>Common\codec</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\codec\lzo.cpp">
+      <Filter>Common\codec</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\codec\base64.cpp">
+      <Filter>Common\codec</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\hashes\xxh.cpp">
+      <Filter>Common\hashes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\lz4file.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\comms\srp.cpp">
+      <Filter>Common\comms</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\comms\diffie-hellman.cpp">
+      <Filter>Common\comms</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\comms\dsa.cpp">
+      <Filter>Common\comms</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\comms\elliptic-curves.cpp">
+      <Filter>Common\comms</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\comms\rsa.cpp">
+      <Filter>Common\comms</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\codec\aes.cpp">
+      <Filter>Common\codec</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\codec\des.cpp">
+      <Filter>Common\codec</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\codec\lzx.cpp">
+      <Filter>Common\codec</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\codec\lha.cpp">
+      <Filter>Common\codec</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\lha_file.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\codec\deflate.cpp">
+      <Filter>Common\codec</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\extra\gesture_recognisers.cpp">
+      <Filter>Common\extra</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\maths\simplex.cpp">
+      <Filter>Common\maths</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\maths\svd.cpp">
+      <Filter>Common\maths</Filter>
+    </ClCompile>
+    <ClCompile Include="compare.cpp" />
+    <ClCompile Include="..\common\codec\blake2.cpp">
+      <Filter>Common\codec</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\codec\rar.cpp">
+      <Filter>Common\codec</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\protocol_buffer.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\codec\pred_part_match.cpp">
+      <Filter>Common\codec</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\7z.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\codec\lzma.cpp">
+      <Filter>Common\codec</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\codec\branch.cpp">
+      <Filter>Common\codec</Filter>
+    </ClCompile>
+    <ClCompile Include="..\systems\speech\speech.cpp">
+      <Filter>Systems\speech</Filter>
+    </ClCompile>
+    <ClCompile Include="..\systems\speech\tts.cpp">
+      <Filter>Systems\speech</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\hashes\murmur.cpp">
+      <Filter>Common\hashes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\hashes\cityhash.cpp">
+      <Filter>Common\hashes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\maths\sobol.cpp">
+      <Filter>Common\maths</Filter>
+    </ClCompile>
+    <ClCompile Include="..\systems\speech\synth.cpp">
+      <Filter>Systems\speech</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\extra\csharp.cpp">
+      <Filter>Common\extra</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\maths\martinez.cpp">
+      <Filter>Common\maths</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\maths\tesselate.cpp">
+      <Filter>Common\maths</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\maths\triangulate.cpp">
+      <Filter>Common\maths</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\maths\csg.cpp">
+      <Filter>Common\maths</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\maths\csg2.cpp">
+      <Filter>Common\maths</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\unreal_script.cpp">
+      <Filter>FileTypes\code</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\3d\blender.cpp">
+      <Filter>FileTypes\3d</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\pkm.cpp">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="disassemblers\dis_mali.cpp">
+      <Filter>Disassemblers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\3d\gltf.cpp">
+      <Filter>FileTypes\3d</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\3d\draco_handler.cpp">
+      <Filter>FileTypes\3d</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\codec\texels\astc.cpp">
+      <Filter>Common\codec\texels</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\codec\texels\att.cpp">
+      <Filter>Common\codec\texels</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\codec\texels\dxt.cpp">
+      <Filter>Common\codec\texels</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\codec\texels\dxt_compute.cpp">
+      <Filter>Common\codec\texels</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\codec\texels\etc.cpp">
+      <Filter>Common\codec\texels</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\codec\texels\pvrtc.cpp">
+      <Filter>Common\codec\texels</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\codec\mesh\draco.cpp">
+      <Filter>Common\codec\mesh</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\pc\windows\desktopcomposition.cpp">
+      <Filter>PC\windows</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\comms\WebSocket.cpp">
+      <Filter>Common\comms</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\codec\snappy.cpp">
+      <Filter>Common\codec</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\2d\dwg.cpp">
+      <Filter>FileTypes\2d</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\codec\reed_solomon.cpp">
+      <Filter>Common\codec</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="resource.h">
+      <Filter>Resource Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\crc_dictionary.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\filename.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\jobs.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\object.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\render.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\scenegraph.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\scenetree.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\shader.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\sound.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\stream.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\extra\async_stream.h">
+      <Filter>Common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\extra\xml.h">
+      <Filter>Common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="..\systems\conversion\bone.h">
+      <Filter>Systems\conversions</Filter>
+    </ClInclude>
+    <ClInclude Include="..\systems\animation\animation.h">
+      <Filter>Systems\animation</Filter>
+    </ClInclude>
+    <ClInclude Include="..\systems\animation\ik.h">
+      <Filter>Systems\animation</Filter>
+    </ClInclude>
+    <ClInclude Include="..\systems\ui\menu.h">
+      <Filter>Systems\ui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\systems\mesh\model.h">
+      <Filter>Systems\mesh</Filter>
+    </ClInclude>
+    <ClInclude Include="..\systems\mesh\patch.h">
+      <Filter>Systems\mesh</Filter>
+    </ClInclude>
+    <ClInclude Include="..\systems\ui\font.h">
+      <Filter>Systems\ui</Filter>
+    </ClInclude>
+    <ClInclude Include="viewers\gpu.h">
+      <Filter>Viewers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\systems\conversion\strip.h">
+      <Filter>Systems\conversions</Filter>
+    </ClInclude>
+    <ClInclude Include="..\systems\ui\menu_structs.h">
+      <Filter>Systems\ui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\extra\date.h">
+      <Filter>Common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\extra\json.h">
+      <Filter>Common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\directory.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\2d\cff.h">
+      <Filter>FileTypes\2d</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\2d\flash.h">
+      <Filter>FileTypes\2d</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\2d\ttf.h">
+      <Filter>FileTypes\2d</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\bitmap\bitmap.h">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\bitmap\gtf.h">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\bitmap\hdr.h">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\bitmap\jpg.h">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\bitmap\tpl.h">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\sound\dsp.h">
+      <Filter>FileTypes\sound</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\sound\mp3.h">
+      <Filter>FileTypes\sound</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\sound\sample.h">
+      <Filter>FileTypes\sound</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\sound\vag.h">
+      <Filter>FileTypes\sound</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\sound\xma.h">
+      <Filter>FileTypes\sound</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\video\matroska.h">
+      <Filter>FileTypes\video</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\video\movie.h">
+      <Filter>FileTypes\video</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\code\demangle.h">
+      <Filter>FileTypes\code</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\code\demangle2.h">
+      <Filter>FileTypes\code</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\code\dwarf.h">
+      <Filter>FileTypes\code</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\code\elf.h">
+      <Filter>FileTypes\code</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\code\mach.h">
+      <Filter>FileTypes\code</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\code\pe.h">
+      <Filter>FileTypes\code</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\iff.h">
+      <Filter>FileTypes</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\pid.h">
+      <Filter>FileTypes</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\riff.h">
+      <Filter>FileTypes</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\bitmap\bitmapfile.h">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\3d\model_utils.h">
+      <Filter>FileTypes\3d</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\crc32.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\extra\indexer.h">
+      <Filter>Common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\sound\wav.h">
+      <Filter>FileTypes\sound</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\bitmap\gnf.h">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\events.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\algorithm.h">
+      <Filter>Common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\array.h">
+      <Filter>Common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\atomic.h">
+      <Filter>Common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\bits.h">
+      <Filter>Common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\defs.h">
+      <Filter>Common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\functions.h">
+      <Filter>Common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\list.h">
+      <Filter>Common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\strings.h">
+      <Filter>Common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\tree.h">
+      <Filter>Common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\vector.h">
+      <Filter>Common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\iso\iso.h">
+      <Filter>Common\iso</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\iso\iso_binary.h">
+      <Filter>Common\iso</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\iso\iso_convert.h">
+      <Filter>Common\iso</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\iso\iso_files.h">
+      <Filter>Common\iso</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\iso\iso_script.h">
+      <Filter>Common\iso</Filter>
+    </ClInclude>
+    <ClInclude Include="..\systems\communication\connection.h">
+      <Filter>Systems\communication</Filter>
+    </ClInclude>
+    <ClInclude Include="..\systems\communication\isolink.h">
+      <Filter>Systems\communication</Filter>
+    </ClInclude>
+    <ClInclude Include="..\systems\communication\isolink_target.h">
+      <Filter>Systems\communication</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\hash.h">
+      <Filter>Common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="devices\device.h">
+      <Filter>Devices</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\windows\treecolumns.h">
+      <Filter>PC\windows</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\windows\splitter.h">
+      <Filter>PC\windows</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\pointer.h">
+      <Filter>Common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\Wii\shared\gx_decode.h">
+      <Filter>Viewers\Wii</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\Wii\shared\gx_dump.h">
+      <Filter>Viewers\Wii</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\Wii\shared\gx_regnames.h">
+      <Filter>Viewers\Wii</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\Wii\shared\gx_regs.h">
+      <Filter>Viewers\Wii</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\ps3\shared\rsx_dump.h">
+      <Filter>Viewers\PS3</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\extra\yaml.h">
+      <Filter>Common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\windows\filedialogs.h">
+      <Filter>PC\windows</Filter>
+    </ClInclude>
+    <ClInclude Include="main.h" />
+    <ClInclude Include="..\systems\conversion\channeluse.h">
+      <Filter>Systems\conversions</Filter>
+    </ClInclude>
+    <ClInclude Include="..\systems\conversion\platformdata.h">
+      <Filter>Systems\conversions\platforms</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\extra\si.h">
+      <Filter>Common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\windows\registry.h">
+      <Filter>PC\windows</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\windows\dib.h">
+      <Filter>PC\windows</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\windows\d2d.h">
+      <Filter>PC\windows</Filter>
+    </ClInclude>
+    <ClInclude Include="viewers\ps4\ps4_comms.h">
+      <Filter>Viewers\PS4</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\container\archive_help.h">
+      <Filter>FileTypes\container</Filter>
+    </ClInclude>
+    <ClInclude Include="viewers\viewtree.h">
+      <Filter>Viewers</Filter>
+    </ClInclude>
+    <ClInclude Include="viewers\ps3\ps3_comms.h">
+      <Filter>Viewers\PS3</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\extra\text_stream.h">
+      <Filter>Common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\ps4\shared\sdb.h">
+      <Filter>Viewers\PS4</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\ps3\shared\edge.h">
+      <Filter>Systems\conversions\platforms</Filter>
+    </ClInclude>
+    <ClInclude Include="viewers\viewbitmap.rc.h">
+      <Filter>Viewers\ViewBitmap</Filter>
+    </ClInclude>
+    <ClInclude Include="viewers\viewsample.rc.h">
+      <Filter>Viewers\ViewSample</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\windows\dialog.h">
+      <Filter>PC\windows</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\extra\colourise.h">
+      <Filter>Common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\windows\docker.h">
+      <Filter>PC\windows</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\extra\c-types.h">
+      <Filter>Common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\fx.h">
+      <Filter>FileTypes</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\hook.h">
+      <Filter>PC</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\extra\directshow.h">
+      <Filter>Common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\disassembler.h">
+      <Filter>Disassemblers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\ps3\shared\rsx_regs.h">
+      <Filter>Viewers\PS3</Filter>
+    </ClInclude>
+    <ClInclude Include="viewers\ps3\viewps3gpu.rc.h">
+      <Filter>Viewers\PS3</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\hashes\crc.h">
+      <Filter>Common\hashes</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\hashes\md5.h">
+      <Filter>Common\hashes</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\hashes\SHA.h">
+      <Filter>Common\hashes</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\comms\compand.h">
+      <Filter>Common\comms</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\comms\ftp.h">
+      <Filter>Common\comms</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\comms\HTTP.h">
+      <Filter>Common\comms</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\comms\ip.h">
+      <Filter>Common\comms</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\comms\UPnP.h">
+      <Filter>Common\comms</Filter>
+    </ClInclude>
+    <ClInclude Include="..\systems\mesh\shape_gen.h">
+      <Filter>Systems\mesh</Filter>
+    </ClInclude>
+    <ClInclude Include="..\systems\mesh\shapes.h">
+      <Filter>Systems\mesh</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Systems\Particle\Particle.h">
+      <Filter>Systems\particle</Filter>
+    </ClInclude>
+    <ClInclude Include="..\systems\postprocess\post.h">
+      <Filter>Systems\post</Filter>
+    </ClInclude>
+    <ClInclude Include="viewers\viewmenu.rc.h">
+      <Filter>Viewers\Resources</Filter>
+    </ClInclude>
+    <ClInclude Include="viewers\viewmesh.rc.h">
+      <Filter>Viewers\Resources</Filter>
+    </ClInclude>
+    <ClInclude Include="..\systems\mesh\nurbs.h">
+      <Filter>Systems\mesh</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\extra\identifier.h">
+      <Filter>Common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="viewers\ps4\ps4_connection.h">
+      <Filter>Viewers\PS4</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\windows\control_helpers.h">
+      <Filter>PC\windows</Filter>
+    </ClInclude>
+    <ClInclude Include="viewers\ps4\ps4_shaders.h">
+      <Filter>Viewers\PS4</Filter>
+    </ClInclude>
+    <ClInclude Include="viewers\ps4\viewps4gpu.rc.h">
+      <Filter>Viewers\PS4\Resources</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\windows\text_control.h">
+      <Filter>PC\windows</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\skip_list.h">
+      <Filter>Common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\extra\disk.h">
+      <Filter>Common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\bin.h">
+      <Filter>FileTypes</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\_atomic.h">
+      <Filter>PC</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\_controller.h">
+      <Filter>PC</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\_sound.h">
+      <Filter>PC</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\app.h">
+      <Filter>PC</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\link.h">
+      <Filter>PC</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\render_output.h">
+      <Filter>PC</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\vm.h">
+      <Filter>PC</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\dx9\shared\graphics_defs.h">
+      <Filter>PC\dx9</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\dx9\shared\model_defs.h">
+      <Filter>PC\dx9</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\dx11\platform.h">
+      <Filter>PC\dx11</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\dx11\shared\graphics_defs.h">
+      <Filter>PC\dx11</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\dx11\shared\model_defs.h">
+      <Filter>PC\dx11</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\windows\window.h">
+      <Filter>PC\windows</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\defs_base.h">
+      <Filter>Common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\defs_endian.h">
+      <Filter>Common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\defs_int.h">
+      <Filter>Common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\x64\_maths.h">
+      <Filter>PC\x64</Filter>
+    </ClInclude>
+    <ClInclude Include="..\systems\mesh\light.h">
+      <Filter>Systems\mesh</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\windows\nt.h">
+      <Filter>PC\windows</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\message.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\hashes\simple.h">
+      <Filter>Common\hashes</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\maths.h">
+      <Filter>Common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\x86\_maths.h">
+      <Filter>PC\x86</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\iterator.h">
+      <Filter>Common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\dx11\_graphics.h">
+      <Filter>PC\dx11</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\dx9\_graphics.h">
+      <Filter>PC\dx9</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\sockets.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\extra\clipper.h">
+      <Filter>Common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\windows\com-dataobject.h">
+      <Filter>PC\windows</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\hashes\fnv.h">
+      <Filter>Common\hashes</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\windows\dwm.h">
+      <Filter>PC\windows</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\platform_common.h">
+      <Filter>PC</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\extra\perlin_noise.h">
+      <Filter>Common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\maths\bignum.h">
+      <Filter>Common\maths</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\maths\polynomial.h">
+      <Filter>Common\maths</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\maths\dct.h">
+      <Filter>Common\maths</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\code\cil.h">
+      <Filter>FileTypes\code</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\extra\gcode.h">
+      <Filter>Common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\code\clr.h">
+      <Filter>FileTypes\code</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\extra\random.h">
+      <Filter>Common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\hashes\spooky.h">
+      <Filter>Common\hashes</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\extra\ast.h">
+      <Filter>Common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\block.h">
+      <Filter>Common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\container\plist.h">
+      <Filter>FileTypes\container</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\maths\sparse.h">
+      <Filter>Common\maths</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\maths\bezier.h">
+      <Filter>Common\maths</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\maths\polygon.h">
+      <Filter>Common\maths</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\extra\gjk.h">
+      <Filter>Common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="viewers\viewbin.rc.h">
+      <Filter>Viewers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\maths\statistics.h">
+      <Filter>Common\maths</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\extra\filters.h">
+      <Filter>Common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="..\systems\vision\maxflow_grid.h">
+      <Filter>Systems\vision</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\comms\ssl.h">
+      <Filter>Common\comms</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\comms\asn1.h">
+      <Filter>Common\comms</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\comms\x509.h">
+      <Filter>Common\comms</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\windows\win_file.h">
+      <Filter>PC</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\comms\gz.h">
+      <Filter>Common\comms</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\comms\zip.h">
+      <Filter>Common\comms</Filter>
+    </ClInclude>
+    <ClInclude Include="viewers\debug.h">
+      <Filter>Viewers</Filter>
+    </ClInclude>
+    <ClInclude Include="viewers\ps4\ctypes.h">
+      <Filter>Viewers\PS4\Resources</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\extra\cpp.h">
+      <Filter>Common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\dx\dx_helpers.h">
+      <Filter>PC\dx</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\dx\dxgi_helpers.h">
+      <Filter>PC\dx</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\dx\dxgi_read.h">
+      <Filter>PC\dx</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\comms\zlib_stream.h">
+      <Filter>Common\comms</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\code\dalvik.h">
+      <Filter>FileTypes\code</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\com.h">
+      <Filter>PC</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\code\java.h">
+      <Filter>FileTypes\code</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\3d\shader_gen.h">
+      <Filter>FileTypes\3d</Filter>
+    </ClInclude>
+    <ClInclude Include="..\systems\mesh\model_iso.h">
+      <Filter>Systems\mesh</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\maths\spherical_harmonics.h">
+      <Filter>Common\maths</Filter>
+    </ClInclude>
+    <ClInclude Include="..\systems\roads\roads.h">
+      <Filter>Systems\roads</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\extra\octree.h">
+      <Filter>Common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\extra\geo.h">
+      <Filter>Common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="..\systems\roads\roads_editor.h">
+      <Filter>Systems\roads</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\allocators\allocator.h">
+      <Filter>Common\allocators</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\allocators\pool.h">
+      <Filter>Common\allocators</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\allocators\tlsf.h">
+      <Filter>Common\allocators</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\shared_ptr.h">
+      <Filter>Common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\thread.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\_thread.h">
+      <Filter>PC</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\lock_free_hash.h">
+      <Filter>Common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\code\pdb.h">
+      <Filter>FileTypes\code</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\code\cvinfo_iso.h">
+      <Filter>FileTypes\code</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\code\cvconst.h">
+      <Filter>FileTypes\code</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\code\cvinfo.h">
+      <Filter>FileTypes\code</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\extra\regex.h">
+      <Filter>Common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\graphics.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\gcn\gpu_pm4.h">
+      <Filter>Viewers\PS4\gcn</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\gcn\gpu_regs.h">
+      <Filter>Viewers\PS4\gcn</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\gcn\gpu_state.h">
+      <Filter>Viewers\PS4\gcn</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\gcn\gpu_tile.h">
+      <Filter>Viewers\PS4\gcn</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\gcn\pm4_dump.h">
+      <Filter>Viewers\PS4\gcn</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\gcn\sim_gcn1.h">
+      <Filter>Viewers\PS4\gcn</Filter>
+    </ClInclude>
+    <ClInclude Include="viewers\directory_scan.h">
+      <Filter>Viewers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\extra\unicode_tables.h">
+      <Filter>Common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="viewers\viewbin.h">
+      <Filter>Viewers</Filter>
+    </ClInclude>
+    <ClInclude Include="viewers\viewbitmap.h">
+      <Filter>Viewers\ViewBitmap</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\container\unity_types.h">
+      <Filter>FileTypes\container</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\iso\iso_compat.h">
+      <Filter>Common\iso</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\code\obj.h">
+      <Filter>FileTypes\code</Filter>
+    </ClInclude>
+    <ClInclude Include="viewers\ps4\view_pssl.h">
+      <Filter>Viewers\PS4</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\container\compound_doc.h">
+      <Filter>FileTypes\container</Filter>
+    </ClInclude>
+    <ClInclude Include="viewers\viewer_identifier.h">
+      <Filter>Viewers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\container\flatbuffer.h">
+      <Filter>FileTypes\container</Filter>
+    </ClInclude>
+    <ClInclude Include="viewers\natvis.h">
+      <Filter>Viewers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\sound\dmap.h">
+      <Filter>FileTypes\sound</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\maths\gpc.h">
+      <Filter>Common\maths</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\maths\gpc.orig.h">
+      <Filter>Common\maths</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\maths\clipper2.h">
+      <Filter>Common\maths</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\constants.h">
+      <Filter>Common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\simd.h">
+      <Filter>Common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\tuple.h">
+      <Filter>Common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\interval.h">
+      <Filter>Common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\maths\geometry_iso.h">
+      <Filter>Common\maths</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\maths\geometry.h">
+      <Filter>Common\maths</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\colour.h">
+      <Filter>Common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\soft_float.h">
+      <Filter>Common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="viewers\viewer.h">
+      <Filter>Viewers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\huffman.h">
+      <Filter>Common\codec</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\apple_compression.h">
+      <Filter>Common\codec</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\fax3.h">
+      <Filter>Common\codec</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\lz4.h">
+      <Filter>Common\codec</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\lzo.h">
+      <Filter>Common\codec</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\lzw.h">
+      <Filter>Common\codec</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\codec.h">
+      <Filter>Common\codec</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\base64.h">
+      <Filter>Common\codec</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\hashes\xxh.h">
+      <Filter>Common\hashes</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\vlc.h">
+      <Filter>Common\codec</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\comms\srp.h">
+      <Filter>Common\comms</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\comms\diffie-hellman.h">
+      <Filter>Common\comms</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\comms\dsa.h">
+      <Filter>Common\comms</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\comms\elliptic-curves.h">
+      <Filter>Common\comms</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\comms\rsa.h">
+      <Filter>Common\comms</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\aes.h">
+      <Filter>Common\codec</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\cbc.h">
+      <Filter>Common\codec</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\ccm.h">
+      <Filter>Common\codec</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\cfb.h">
+      <Filter>Common\codec</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\cipher_mode.h">
+      <Filter>Common\codec</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\ctr.h">
+      <Filter>Common\codec</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\des.h">
+      <Filter>Common\codec</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\gcm.h">
+      <Filter>Common\codec</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\lzx.h">
+      <Filter>Common\codec</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\lha.h">
+      <Filter>Common\codec</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\code\msf.h">
+      <Filter>FileTypes\code</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\deflate.h">
+      <Filter>Common\codec</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\window.h">
+      <Filter>Common\codec</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\hashes\hash_stream.h">
+      <Filter>Common\hashes</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\codec_stream.h">
+      <Filter>Common\codec</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\maths\simplex.h">
+      <Filter>Common\maths</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\maths\dynamic_vector.h">
+      <Filter>Common\maths</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\comms\leb128.h">
+      <Filter>Common\comms</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\rar.h">
+      <Filter>Common\codec</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\pred_part_match.h">
+      <Filter>Common\codec</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\lzma.h">
+      <Filter>Common\codec</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\branch.h">
+      <Filter>Common\codec</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\hashes\cityhash.h">
+      <Filter>Common\hashes</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\hashes\murmur.h">
+      <Filter>Common\hashes</Filter>
+    </ClInclude>
+    <ClInclude Include="..\systems\speech\tts.h">
+      <Filter>Systems\speech</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\maths\sobol.h">
+      <Filter>Common\maths</Filter>
+    </ClInclude>
+    <ClInclude Include="devices\directories.h">
+      <Filter>Devices</Filter>
+    </ClInclude>
+    <ClInclude Include="..\systems\ui\font_iso.h">
+      <Filter>Systems\ui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\extra\safe_array.h">
+      <Filter>Common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\maths\tesselate.h">
+      <Filter>Common\maths</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\maths\triangulate.h">
+      <Filter>Common\maths</Filter>
+    </ClInclude>
+    <ClInclude Include="..\systems\vision\contours.h">
+      <Filter>Systems\vision</Filter>
+    </ClInclude>
+    <ClInclude Include="..\systems\vision\grabcut.h">
+      <Filter>Systems\vision</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\maths\csg.h">
+      <Filter>Common\maths</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\maths\csg2.h">
+      <Filter>Common\maths</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\maths\martinez.h">
+      <Filter>Common\maths</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\utilities.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\extra\gpu_helpers.h">
+      <Filter>Common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\extra\rasterise.h">
+      <Filter>Common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\maths\comp_geom.h">
+      <Filter>Common\maths</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\container\unreal.h">
+      <Filter>FileTypes\container</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\deferred.h">
+      <Filter>Common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\texels\astc.h">
+      <Filter>Common\codec\texels</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\texels\att.h">
+      <Filter>Common\codec\texels</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\texels\dxt.h">
+      <Filter>Common\codec\texels</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\texels\dxt_compute.h">
+      <Filter>Common\codec\texels</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\texels\etc.h">
+      <Filter>Common\codec\texels</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\texels\pvrtc.h">
+      <Filter>Common\codec\texels</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\mesh\draco.h">
+      <Filter>Common\codec\mesh</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\gost.h">
+      <Filter>Common\codec</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\windows\desktopcomposition.h">
+      <Filter>PC\windows</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\comms\WebSocket.h">
+      <Filter>Common\comms</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\snappy.h">
+      <Filter>Common\codec</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\reed_solomon.h">
+      <Filter>Common\codec</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\assets\shaders\particle.fxh">
+      <Filter>Systems\particle</Filter>
+    </None>
+    <None Include="doc_ib.ico">
+      <Filter>Resource Files\FileIcons</Filter>
+    </None>
+    <None Include="doc_ibz.ico">
+      <Filter>Resource Files\FileIcons</Filter>
+    </None>
+    <None Include="doc_ih.ico">
+      <Filter>Resource Files\FileIcons</Filter>
+    </None>
+    <None Include="doc_ix.ico">
+      <Filter>Resource Files\FileIcons</Filter>
+    </None>
+    <None Include="refmap.dds">
+      <Filter>Resource Files\isocmd</Filter>
+    </None>
+    <None Include="viewers\checker.bmp">
+      <Filter>Viewers\ViewBitmap</Filter>
+    </None>
+    <None Include="temporary.png">
+      <Filter>Viewers\Resources</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="isoeditor.rc">
+      <Filter>Resource Files</Filter>
+    </ResourceCompile>
+    <ResourceCompile Include="viewers\ps3\viewps3gpu.rc">
+      <Filter>Viewers\PS3</Filter>
+    </ResourceCompile>
+    <ResourceCompile Include="viewers\wii\viewwiigpu.rc">
+      <Filter>Viewers\Wii</Filter>
+    </ResourceCompile>
+    <ResourceCompile Include="viewers\viewbitmap.rc">
+      <Filter>Viewers\ViewBitmap</Filter>
+    </ResourceCompile>
+    <ResourceCompile Include="viewers\viewsample.rc">
+      <Filter>Viewers\ViewSample</Filter>
+    </ResourceCompile>
+    <ResourceCompile Include="viewers\viewbin.rc">
+      <Filter>Viewers\Resources</Filter>
+    </ResourceCompile>
+    <ResourceCompile Include="viewers\viewmenu.rc">
+      <Filter>Viewers\Resources</Filter>
+    </ResourceCompile>
+    <ResourceCompile Include="viewers\viewmesh.rc">
+      <Filter>Viewers\Resources</Filter>
+    </ResourceCompile>
+    <ResourceCompile Include="viewers\ps4\viewps4gpu.rc">
+      <Filter>Viewers\PS4\Resources</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <IsoCmd Include="..\systems\ui\menu.fx">
+      <Filter>Systems\ui</Filter>
+    </IsoCmd>
+    <IsoCmd Include="toolbar_main.psd">
+      <Filter>Resource Files</Filter>
+    </IsoCmd>
+    <IsoCmd Include="..\common\default.fx">
+      <Filter>Common</Filter>
+    </IsoCmd>
+    <IsoCmd Include="..\filetypes\3d\wavefront.fx">
+      <Filter>FileTypes\3d</Filter>
+    </IsoCmd>
+    <IsoCmd Include="viewers\viewbitmap_toolbar.psd">
+      <Filter>Viewers\ViewBitmap</Filter>
+    </IsoCmd>
+    <IsoCmd Include="viewers\viewsample_toolbar.psd">
+      <Filter>Viewers\ViewSample</Filter>
+    </IsoCmd>
+    <IsoCmd Include="toolbar_find.psd">
+      <Filter>Resource Files</Filter>
+    </IsoCmd>
+    <IsoCmd Include="toolbar_nav.psd">
+      <Filter>Resource Files</Filter>
+    </IsoCmd>
+    <IsoCmd Include="viewers\imagelist_debug.psd">
+      <Filter>Viewers\PS4\Resources</Filter>
+    </IsoCmd>
+    <IsoCmd Include="viewers\ps3\toolbar_ps3gpu.psd">
+      <Filter>Viewers\PS3</Filter>
+    </IsoCmd>
+    <IsoCmd Include="..\platforms\pc\windows\imagelist_tab.psd">
+      <Filter>Resource Files</Filter>
+    </IsoCmd>
+    <IsoCmd Include="wait.psd">
+      <Filter>Resource Files</Filter>
+    </IsoCmd>
+    <IsoCmd Include="..\systems\particle\particle.fx">
+      <Filter>Systems\particle</Filter>
+    </IsoCmd>
+    <IsoCmd Include="..\systems\postprocess\post.fx">
+      <Filter>Systems\post</Filter>
+    </IsoCmd>
+    <IsoCmd Include="viewers\ps4\toolbar_ps4gpu.psd">
+      <Filter>Viewers\PS4\Resources</Filter>
+    </IsoCmd>
+    <IsoCmd Include="viewers\viewmesh_toolbar.psd">
+      <Filter>Viewers\Resources</Filter>
+    </IsoCmd>
+    <IsoCmd Include="viewers\toolbar_cpu.psd">
+      <Filter>Viewers\Resources</Filter>
+    </IsoCmd>
+    <IsoCmd Include="..\filetypes\3d\simple.fx">
+      <Filter>FileTypes\3d</Filter>
+    </IsoCmd>
+    <IsoCmd Include="viewers\ps4\cursor_overlay_console.psd">
+      <Filter>Viewers\PS4\Resources</Filter>
+    </IsoCmd>
+    <IsoCmd Include="..\systems\shadows\shadow.fx">
+      <Filter>Systems\shadows</Filter>
+    </IsoCmd>
+    <IsoCmd Include="..\filetypes\3d\h3d.fx">
+      <Filter>FileTypes\3d</Filter>
+    </IsoCmd>
+    <IsoCmd Include="viewers\viewer_font.ix">
+      <Filter>Resource Files\isocmd</Filter>
+    </IsoCmd>
+    <IsoCmd Include="devices\icons\dot.psd">
+      <Filter>Devices\DeviceIcons</Filter>
+    </IsoCmd>
+    <IsoCmd Include="..\systems\roads\roads.fx">
+      <Filter>Systems\roads</Filter>
+    </IsoCmd>
+    <IsoCmd Include="..\platforms\ps4\shared\ortmapi.ix">
+      <Filter>Systems\conversions\platforms</Filter>
+    </IsoCmd>
+    <IsoCmd Include="..\systems\mesh\quadric.fx">
+      <Filter>Systems\mesh</Filter>
+    </IsoCmd>
+    <IsoCmd Include="..\common\maths\tensor.fx">
+      <Filter>Common\maths</Filter>
+    </IsoCmd>
+    <IsoCmd Include="viewers\cursor_overlay_add.psd">
+      <Filter>Viewers\Resources</Filter>
+    </IsoCmd>
+    <IsoCmd Include="..\filetypes\3d\blender.fx">
+      <Filter>FileTypes\3d</Filter>
+    </IsoCmd>
+    <IsoCmd Include="..\common\codec\texels\dxt.fx">
+      <Filter>Common\codec\texels</Filter>
+    </IsoCmd>
+    <IsoCmd Include="..\filetypes\3d\gltf.fx">
+      <Filter>FileTypes\3d</Filter>
+    </IsoCmd>
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="viewers\d2d_shader.hlsl">
+      <Filter>Viewers\ViewBitmap</Filter>
+    </FxCompile>
+    <FxCompile Include="viewers\d2d_grid.hlsl">
+      <Filter>Viewers</Filter>
+    </FxCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="devices\icons\Code.png">
+      <Filter>Devices\DeviceIcons</Filter>
+    </Image>
+    <Image Include="devices\icons\Console.png">
+      <Filter>Devices\DeviceIcons</Filter>
+    </Image>
+    <Image Include="devices\icons\Folder.png">
+      <Filter>Devices\DeviceIcons</Filter>
+    </Image>
+    <Image Include="devices\icons\Harddrive.png">
+      <Filter>Devices\DeviceIcons</Filter>
+    </Image>
+    <Image Include="devices\icons\Hue.png">
+      <Filter>Devices\DeviceIcons</Filter>
+    </Image>
+    <Image Include="devices\icons\PlayStation.png">
+      <Filter>Devices\DeviceIcons</Filter>
+    </Image>
+    <Image Include="devices\icons\Processes.png">
+      <Filter>Devices\DeviceIcons</Filter>
+    </Image>
+    <Image Include="devices\icons\Registry Editor.png">
+      <Filter>Devices\DeviceIcons</Filter>
+    </Image>
+    <Image Include="devices\icons\Settings.png">
+      <Filter>Devices\DeviceIcons</Filter>
+    </Image>
+    <Image Include="devices\icons\UPnP.png">
+      <Filter>Devices\DeviceIcons</Filter>
+    </Image>
+    <Image Include="devices\icons\URL.png">
+      <Filter>Devices\DeviceIcons</Filter>
+    </Image>
+    <Image Include="devices\icons\VideoCap.png">
+      <Filter>Devices\DeviceIcons</Filter>
+    </Image>
+    <Image Include="devices\icons\Windows.png">
+      <Filter>Devices\DeviceIcons</Filter>
+    </Image>
+    <Image Include="devices\icons\Xbox.png">
+      <Filter>Devices\DeviceIcons</Filter>
+    </Image>
+    <Image Include="devices\icons\Clipboard.png">
+      <Filter>Devices\DeviceIcons</Filter>
+    </Image>
+    <Image Include="devices\icons\File.png">
+      <Filter>Devices\DeviceIcons</Filter>
+    </Image>
+    <Image Include="devices\icons\SVN.png">
+      <Filter>Devices\DeviceIcons</Filter>
+    </Image>
+    <Image Include="devices\icons\Fonts.png">
+      <Filter>Devices\DeviceIcons</Filter>
+    </Image>
+    <Image Include="devices\icons\Landscape.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="devices\icons\Root.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="devices\icons\Rs 232 Female-32.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="devices\icons\external.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="devices\icons\p4.png">
+      <Filter>Devices\DeviceIcons</Filter>
+    </Image>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="..\isopod.psd">
+      <Filter>Resource Files</Filter>
+    </CustomBuild>
+    <CustomBuild Include="..\isopod_admin.psd" />
+  </ItemGroup>
+  <ItemGroup>
+    <MASM Include="..\platforms\pc\x64\fcontext.asm">
+      <Filter>PC\x64</Filter>
+    </MASM>
+  </ItemGroup>
+  <ItemGroup>
+    <Manifest Include="IsoEditor.manifest">
+      <Filter>Resource Files</Filter>
+    </Manifest>
+  </ItemGroup>
+</Project>

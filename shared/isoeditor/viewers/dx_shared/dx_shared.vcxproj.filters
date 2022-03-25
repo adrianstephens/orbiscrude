@@ -1,0 +1,84 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClInclude Include="..\..\..\platforms\pc\dx\dx_shaders.h">
+      <Filter>shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\platforms\pc\dx\dx11_effect.h">
+      <Filter>shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\platforms\pc\dx\dxgi_helpers.h">
+      <Filter>shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\platforms\pc\dx\dxgi_read.h">
+      <Filter>shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\platforms\pc\dx\spdb.h">
+      <Filter>shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\platforms\pc\_atomic.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\platforms\pc\dx11\_graphics.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\platforms\pc\x64\_maths.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\common\base\algorithm.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\common\allocators\allocator.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\platforms\pc\dx\sim_dxbc.h">
+      <Filter>shared</Filter>
+    </ClInclude>
+    <ClInclude Include="dx_gpu.h">
+      <Filter>view</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\filetypes\code\msf.h">
+      <Filter>shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\filetypes\code\pdb.h">
+      <Filter>shared</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="dx_fields.cpp">
+      <Filter>view</Filter>
+    </ClCompile>
+    <ClCompile Include="dx_fields.h">
+      <Filter>view</Filter>
+    </ClCompile>
+    <ClCompile Include="dx_gpu.cpp">
+      <Filter>view</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\platforms\pc\dx\spdb.cpp">
+      <Filter>shared</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\platforms\pc\dx\dis_dxbc.cpp">
+      <Filter>shared</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\platforms\pc\dx\sim_dxbc.cpp">
+      <Filter>shared</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\platforms\pc\dx\dxgi_read.cpp">
+      <Filter>shared</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\filetypes\code\msf.cpp">
+      <Filter>shared</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="view">
+      <UniqueIdentifier>{da7aaa9d-e82f-4b8d-b67e-13573a4fe0ad}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="shared">
+      <UniqueIdentifier>{6e2abda5-dc53-45da-b8dd-275c238284c1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="common">
+      <UniqueIdentifier>{dfd4a93f-8404-47a6-8aca-fc25318a302d}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

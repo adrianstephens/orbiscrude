@@ -1,0 +1,30 @@
+﻿<Page
+    x:Class="app.IsoEditor2"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    >
+
+    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition />
+        </Grid.ColumnDefinitions>
+
+        <Rectangle
+            x:Name="XboxContentSafeRect"
+            Width="48"
+            Fill="{ThemeResource NavigationViewDefaultPaneBackground}"
+            Visibility="Collapsed" />
+
+        <NavigationView
+            x:Name="NavigationViewControl"
+            Grid.Column="1"
+            AlwaysShowHeader="True"
+            Header=" "
+            IsTabStop="False"
+            >
+            <Frame x:Name="rootFrame" Navigated="OnRootFrameNavigated" />
+        </NavigationView>
+    </Grid>
+</Page>

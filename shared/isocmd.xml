@@ -1,0 +1,32 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<ProjectSchemaDefinitions
+  xmlns="clr-namespace:Microsoft.Build.Framework.XamlTypes;assembly=Microsoft.Build.Framework"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:sys="clr-namespace:System;assembly=mscorlib"
+  xmlns:transformCallback="Microsoft.Cpp.Dev10.ConvertPropertyCallback"
+>  
+  <Rule Name="IsoCmd" PageTemplate="tool" DisplayName="IsoPod Script Converter" Order="200">
+    <Rule.DataSource>
+      <DataSource Persistence="ProjectFile" ItemType="IsoCmd" />
+    </Rule.DataSource>
+    
+    <Rule.Categories>
+      <Category Name="General" DisplayName="General" />
+      <Category Name="Command Line" Subtype="CommandLine" DisplayName="Command Line" />
+    </Rule.Categories>
+
+    <StringProperty Name="OutDir" Subtype="folder" DisplayName="Output Directory" Description="Output Directory" Switch="[value]" />
+    <StringListProperty Name="Variables" DisplayName="Additional Variables" Description="Additional Variables" Separator=" " Switch="[value]" />
+    <StringListProperty Name="AdditionalDependencies" DisplayName="Additional Dependencies" Description="Additional Dependencies" IncludeInCommandLine="False" />
+    <StringListProperty Name="OutExt" DisplayName="Type" Description="Type" Switch="[value]" />
+    <StringProperty Name="AdditionalOptions" DisplayName="Additional Options" Subtype="AdditionalOptions" Category="Command Line" Switch="[value]" />
+    <BoolProperty Name="Use64Bit" DisplayName="Use 64 bit isocmd" Switch="_x64" />
+    <BoolProperty Name="UseOutname" DisplayName="Use filename for output" />
+    <StringProperty Name="CommandLineTemplate" DisplayName="Command Line" IncludeInCommandLine="False" Visible="False" />
+  </Rule>
+  
+  <ItemType Name="IsoCmd" DisplayName="IsoPod Script Converter" />
+  <FileExtension Name="*.ix;*.ib;*.fx" ContentType="IsoCmd" />
+  <ContentType Name="IsoCmd" DisplayName="IsoPod Script Converter" ItemType="IsoCmd" />
+  
+</ProjectSchemaDefinitions>

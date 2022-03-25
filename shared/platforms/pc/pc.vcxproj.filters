@@ -1,0 +1,161 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="dx11">
+      <UniqueIdentifier>{3990e36a-753b-4a78-b084-ac696e49151d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="x64">
+      <UniqueIdentifier>{154ca9e4-1778-4500-95f3-e893c4ec4042}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="windows">
+      <UniqueIdentifier>{c8ed4eb5-7313-4926-83c5-c93f1a3a53f1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="x86">
+      <UniqueIdentifier>{664ef42d-2780-468a-a832-727a918f836c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="dx12">
+      <UniqueIdentifier>{59a41d3b-afe0-4a60-9905-82f3c1cd375f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="dx9">
+      <UniqueIdentifier>{f1adadae-96ce-43d3-9d8f-02618dacd8e4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="dx">
+      <UniqueIdentifier>{924d228f-7c29-4af3-b911-2bd55ca11964}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="winrt">
+      <UniqueIdentifier>{2d90becb-3aaf-4cb7-bf4d-8ce8bc826084}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="arm64">
+      <UniqueIdentifier>{d13436c4-5b47-4e10-9c2d-713f2ee6a8d2}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="x64\_maths.h">
+      <Filter>x64</Filter>
+    </ClInclude>
+    <ClInclude Include="dx11\platform.h">
+      <Filter>dx11</Filter>
+    </ClInclude>
+    <ClInclude Include="dx11\shared\graphics_defs.h">
+      <Filter>dx11</Filter>
+    </ClInclude>
+    <ClInclude Include="dx11\shared\model_defs.h">
+      <Filter>dx11</Filter>
+    </ClInclude>
+    <ClInclude Include="_atomic.h" />
+    <ClInclude Include="_controller.h" />
+    <ClInclude Include="_sound.h" />
+    <ClInclude Include="app.h" />
+    <ClInclude Include="render_output.h" />
+    <ClInclude Include="session.h" />
+    <ClInclude Include="vm.h" />
+    <ClInclude Include="windows\window.h">
+      <Filter>windows</Filter>
+    </ClInclude>
+    <ClInclude Include="dx9\shared\graphics_defs.h">
+      <Filter>dx9</Filter>
+    </ClInclude>
+    <ClInclude Include="dx9\shared\model_defs.h">
+      <Filter>dx9</Filter>
+    </ClInclude>
+    <ClInclude Include="x86\_maths.h">
+      <Filter>x86</Filter>
+    </ClInclude>
+    <ClInclude Include="dx9\_graphics.h">
+      <Filter>dx9</Filter>
+    </ClInclude>
+    <ClInclude Include="dx11\_graphics.h">
+      <Filter>dx11</Filter>
+    </ClInclude>
+    <ClInclude Include="dx12\_graphics.h">
+      <Filter>dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="dx12\shared\graphics_defs.h">
+      <Filter>dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="dx12\shared\model_defs.h">
+      <Filter>dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="dx12\dx12_helpers.h">
+      <Filter>dx12</Filter>
+    </ClInclude>
+    <ClInclude Include="platform_common.h" />
+    <ClInclude Include="dx\dx_helpers.h">
+      <Filter>dx</Filter>
+    </ClInclude>
+    <ClInclude Include="dx\dx_shaders.h">
+      <Filter>dx</Filter>
+    </ClInclude>
+    <ClInclude Include="dx\dxgi_helpers.h">
+      <Filter>dx</Filter>
+    </ClInclude>
+    <ClInclude Include="dx12\platform.h" />
+    <ClInclude Include="com.h" />
+    <ClInclude Include="_thread.h" />
+    <ClInclude Include="winrt\binding.h">
+      <Filter>winrt</Filter>
+    </ClInclude>
+    <ClInclude Include="winrt\pre_include.h">
+      <Filter>winrt</Filter>
+    </ClInclude>
+    <ClInclude Include="winrt\base.h">
+      <Filter>winrt</Filter>
+    </ClInclude>
+    <ClInclude Include="windows\nt.h">
+      <Filter>windows</Filter>
+    </ClInclude>
+    <ClInclude Include="win32_shared.h" />
+    <ClInclude Include="winrt\coroutine.h">
+      <Filter>winrt</Filter>
+    </ClInclude>
+    <ClInclude Include="winrt\filedialogs.h">
+      <Filter>winrt</Filter>
+    </ClInclude>
+    <ClInclude Include="winrt\vector.h">
+      <Filter>winrt</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="_controller.cpp" />
+    <ClCompile Include="_sound.cpp" />
+    <ClCompile Include="app.cpp" />
+    <ClCompile Include="oculus.cpp" />
+    <ClCompile Include="render_output.cpp" />
+    <ClCompile Include="session.cpp" />
+    <ClCompile Include="sockets.cpp" />
+    <ClCompile Include="windows\window.cpp">
+      <Filter>windows</Filter>
+    </ClCompile>
+    <ClCompile Include="dx9\_graphics.cpp">
+      <Filter>dx9</Filter>
+    </ClCompile>
+    <ClCompile Include="dx11\_graphics.cpp">
+      <Filter>dx11</Filter>
+    </ClCompile>
+    <ClCompile Include="platform.cpp" />
+    <ClCompile Include="video.cpp" />
+    <ClCompile Include="openvr.cpp" />
+    <ClCompile Include="dx12\_graphics.cpp">
+      <Filter>dx12</Filter>
+    </ClCompile>
+    <ClCompile Include="_thread.cpp" />
+    <ClCompile Include="hololens.cpp" />
+    <ClCompile Include="app.uwp.cpp" />
+    <ClCompile Include="dx\dxgi_helpers.cpp">
+      <Filter>dx</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <MARMASM Include="arm64\fcontext.asm">
+      <Filter>arm64</Filter>
+    </MARMASM>
+  </ItemGroup>
+  <ItemGroup>
+    <MASM Include="x64\fcontext.asm" />
+  </ItemGroup>
+  <ItemGroup>
+    <IsoCmd Include="winrt\generate.ix">
+      <Filter>winrt</Filter>
+    </IsoCmd>
+  </ItemGroup>
+</Project>

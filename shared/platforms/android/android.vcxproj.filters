@@ -1,0 +1,24 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClInclude Include="_controller.h" />
+    <ClInclude Include="_sound.h" />
+    <ClInclude Include="app.h" />
+    <ClInclude Include="platform.h" />
+    <ClInclude Include="session.h" />
+    <ClInclude Include="vm.h" />
+    <ClInclude Include="..\opengl\_graphics.h" />
+    <ClInclude Include="_thread.h" />
+    <ClInclude Include="jni_helper.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="_controller.cpp" />
+    <ClCompile Include="_sound.cpp" />
+    <ClCompile Include="app.cpp" />
+    <ClCompile Include="platform.cpp" />
+    <ClCompile Include="sockets.cpp" />
+    <ClCompile Include="..\opengl\_graphics.cpp" />
+    <ClCompile Include="_thread.cpp" />
+    <ClCompile Include="jni_helper.cpp" />
+  </ItemGroup>
+</Project>

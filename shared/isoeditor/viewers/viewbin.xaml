@@ -1,0 +1,30 @@
+﻿<Page
+    x:Class="app.ViewBin"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    >
+
+    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" Padding="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <TextBlock Grid.Row="0" Text="ViewBin" TextWrapping="Wrap" />
+        <Canvas x:Name="canvas" Grid.Row="1">
+            <Image x:Name="source" Source="Assets/tile300x300.png" />
+            <Border x:Name="border"
+                BorderThickness="2"
+                BorderBrush="#FFFFD700"
+                Background="#FFFFFFFF"
+            >
+                <TextBlock x:Name="text"
+                    Text="Woohoo! I can go everywhere."
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Padding="4"
+                    TextWrapping="WrapWholeWords" />
+            </Border>
+        </Canvas>
+    </Grid>
+    
+</Page>

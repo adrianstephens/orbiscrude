@@ -1,0 +1,59 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  
+  <ItemGroup>
+    <PropertyPageSchema Include="$(MSBuildThisFileDirectory)$(MSBuildThisFileName).xml" />
+    <AvailableItemName Include="IsoCmd">
+      <Targets>IsoCmdTarget</Targets>
+    </AvailableItemName>
+  </ItemGroup>
+  
+  <UsingTask TaskName="IsoCmd" TaskFactory="XamlTaskFactory" AssemblyName="Microsoft.Build.Tasks.v4.0">
+    <Task>$(MSBuildThisFileDirectory)$(MSBuildThisFileName).xml</Task>
+  </UsingTask>
+
+  <Target Name="SelectIsoCmdTarget" DependsOnTargets="_SelectedFiles;$(ComputeCompileInputsTargets);SelectCustomBuild">
+    <ItemGroup Condition="'@(SelectedFiles)' != ''">
+      <IsoCmd Remove="@(IsoCmd)" Condition="'%(Identity)' != '@(SelectedFiles)'"/>
+    </ItemGroup>
+  </Target>
+  
+  <Target
+    Name              = "IsoCmdTarget"
+    AfterTargets      = "CustomBuild"
+    Condition         = "'@(IsoCmd)' != ''"
+    DependsOnTargets  = "SelectIsoCmdTarget"
+    Inputs            = "%(IsoCmd.Identity);%(IsoCmd.AdditionalDependencies)"
+    Outputs           = "%(OutDir)%(Filename).%(OutExt)"
+  >
+    <Message Condition = "'%(IsoCmd.UseOutname)'=='true'" Importance = "High" Text = "Isocmd %(IsoCmd.FullPath) to %(OutDir)%(Filename).%(OutExt)" />
+    <Message Condition = "'%(IsoCmd.UseOutname)'=='false'" Importance = "High" Text = "Isocmd %(IsoCmd.FullPath) to %(OutDir).%(OutExt)" />
+    <WriteLinesToFile File = "$(IntDir)$(ProjectName).write.1.tlog" Lines="^%(IsoCmd_tlog.Source);@(IsoCmd_tlog-&gt;'%(Fullpath)')" />
+
+    <IsoCmd
+      Condition           = "'%(IsoCmd.ExcludedFromBuild)' != 'true' and '%(IsoCmd.UseOutname)'=='true'"
+      CommandLineTemplate = "%(IsoCmd.CommandLineTemplate1)"
+      OutDir              = "%(IsoCmd.OutDir)"
+      OutExt              = "%(IsoCmd.OutExt)"
+      Use64Bit            = "%(IsoCmd.Use64Bit)"
+      Variables           = "%(IsoCmd.Variables)"
+      AdditionalOptions   = "%(IsoCmd.AdditionalOptions)"
+      StandardErrorImportance="High"
+    />
+    <IsoCmd
+      Condition           = "'%(IsoCmd.ExcludedFromBuild)' != 'true' and '%(IsoCmd.UseOutname)'=='false'"
+      CommandLineTemplate = "%(IsoCmd.CommandLineTemplate2)"
+      OutDir              = "%(IsoCmd.OutDir)"
+      OutExt              = "%(IsoCmd.OutExt)"
+      Use64Bit            = "%(IsoCmd.Use64Bit)"
+      Variables           = "%(IsoCmd.Variables)"
+      AdditionalOptions   = "%(IsoCmd.AdditionalOptions)"
+      StandardErrorImportance="High"
+    />
+    <WriteLinesToFile
+      Condition           = "'%(IsoCmd.ExcludedFromBuild)' != 'true' and '%(IsoCmd.UseOutname)'=='false'"
+      File                = "%(OutDir)%(Filename).%(OutExt)" Lines="dummy" 
+    />
+  </Target>
+
+</Project>

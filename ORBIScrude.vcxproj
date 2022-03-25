@@ -1,0 +1,820 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="DebugDX11-clang|Win32">
+      <Configuration>DebugDX11-clang</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="DebugDX11-clang|x64">
+      <Configuration>DebugDX11-clang</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="DebugDX11|Win32">
+      <Configuration>DebugDX11</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="DebugDX11|x64">
+      <Configuration>DebugDX11</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="ReleaseDX11-clang|Win32">
+      <Configuration>ReleaseDX11-clang</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="ReleaseDX11-clang|x64">
+      <Configuration>ReleaseDX11-clang</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="ReleaseDX11|Win32">
+      <Configuration>ReleaseDX11</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="ReleaseDX11|x64">
+      <Configuration>ReleaseDX11</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{55B9631A-FC15-4ED1-BB47-781E50CA1444}</ProjectGuid>
+    <ConfigurationType>Application</ConfigurationType>
+    <Keyword>Win32Proj</Keyword>
+    <CharacterSet>MultiByte</CharacterSet>
+    <RootNamespace>ORBIScrude</RootNamespace>
+    <TargetName>ORBIScrude</TargetName>
+    <SccProjectName>Svn</SccProjectName>
+    <SccAuxPath>Svn</SccAuxPath>
+    <SccLocalPath>Svn</SccLocalPath>
+    <SccProvider>SubversionScc</SccProvider>
+  </PropertyGroup>
+  <Import Project="shared\toolset.props" />
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <UseDebugLibraries>true</UseDebugLibraries>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugDX11|Win32'" Label="Configuration">
+    <UseDebugLibraries>true</UseDebugLibraries>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugDX11-clang|Win32'" Label="Configuration">
+    <UseDebugLibraries>true</UseDebugLibraries>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <UseDebugLibraries>true</UseDebugLibraries>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugDX11|x64'" Label="Configuration">
+    <UseDebugLibraries>true</UseDebugLibraries>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugDX11-clang|x64'" Label="Configuration">
+    <UseDebugLibraries>true</UseDebugLibraries>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseDX11|Win32'" Label="Configuration">
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>false</WholeProgramOptimization>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseDX11-clang|Win32'" Label="Configuration">
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>false</WholeProgramOptimization>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseDX11|x64'" Label="Configuration">
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>false</WholeProgramOptimization>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseDX11-clang|x64'" Label="Configuration">
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>false</WholeProgramOptimization>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\masm.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets">
+    <Import Project="isopod.props" />
+    <Import Project="sdk\SCE\ORBIS SDKs\6.000\orbis.props" />
+    <Import Project="sdk\directx\directx9.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='DebugDX11-clang|x64'">
+    <Import Project="sdk\SCE\ps3tmapi\ps3tmapi.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='ReleaseDX11|x64'">
+    <Import Project="sdk\SCE\ps3tmapi\ps3tmapi.props" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseDX11-clang|x64'" Label="PropertySheets">
+    <Import Project="sdk\SCE\ps3tmapi\ps3tmapi.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='ReleaseDX11|Win32'">
+    <Import Project="sdk\SCE\ps3tmapi\ps3tmapi.props" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseDX11-clang|Win32'" Label="PropertySheets">
+    <Import Project="sdk\SCE\ps3tmapi\ps3tmapi.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='DebugDX11|Win32'">
+    <Import Project="sdk\SCE\ps3tmapi\ps3tmapi.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='DebugDX11|x64'">
+    <Import Project="sdk\SCE\ps3tmapi\ps3tmapi.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="sdk\SCE\ps3tmapi\ps3tmapi.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="sdk\SCE\ps3tmapi\ps3tmapi.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="sdk\SCE\ps3tmapi\ps3tmapi.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="sdk\SCE\ps3tmapi\ps3tmapi.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='DebugDX11-clang|Win32'">
+    <Import Project="sdk\SCE\ps3tmapi\ps3tmapi.props" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <ItemDefinitionGroup>
+    <ResourceCompile>
+      <PreprocessorDefinitions>TOOLSET=$(PlatformToolsetVersion)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(IntDir);$(SharedDir)\platforms\pc;$(BuildDir)Debug-clang</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <Manifest>
+      <AdditionalManifestFiles>manifest.xml</AdditionalManifestFiles>
+    </Manifest>
+    <ProjectReference>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+    <PreLinkEvent>
+      <Command>$(BinDir)mergeres $(IntDir)all.res -n $(IntDir)orbiscrude.res  $(BuildDir)ps4_view\$(Configuration)_$(Platform)\viewps4gpu.res $(BuildDir)dx12_view\$(Configuration)_$(Platform)\view_dx12gpu.res $(BuildDir)dx11_view\$(Configuration)_$(Platform)\view_dx11gpu.res  $(BuildDir)view_x64\$(Configuration)_$(Platform)\view_x64.res</Command>
+    </PreLinkEvent>
+    <PreLinkEvent>
+      <Message>Merge RES files</Message>
+    </PreLinkEvent>
+    <PostBuildEvent>
+      <Command>
+        $(BinDir)isocmd_x64 {AESencrypt {LoadAs {"$(TargetPath)" "bin"} "use - ORBIScrude"} } $(TargetDir)$(TargetName).bin
+      </Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <PropertyGroup>
+    <LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>USE_EXPORTS;WIN32;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>.;shared\platforms\pc;shared\common;shared\isoeditor;shared;$(SDK);$(dxsdk_dir)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>d3d9.lib;d3dx9.lib;d3d10_1.lib;d3dcompiler.lib;dxerr.lib;dbghelp.lib;comctl32.lib;wininet.lib;version.lib;$(SDK)libpng-1.5.7\projects\vs2012\Debug Library\zlib.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(dxsdk_dir)\lib\x86</AdditionalLibraryDirectories>
+      <ImportLibrary>$(OutDir)$(TargetName).imp</ImportLibrary>
+      <LargeAddressAware>true</LargeAddressAware>
+      <DelayLoadDLLs>dbghelp.dll</DelayLoadDLLs>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='DebugDX11|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>USE_EXPORTS;WIN32;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>.;shared\platforms\pc;shared\common;shared\isoeditor;shared;$(SDK);$(dxsdk_dir)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>d3d9.lib;d3dx9.lib;d3d10_1.lib;d3dcompiler.lib;dxerr.lib;dbghelp.lib;comctl32.lib;wininet.lib;version.lib;$(SDK)libpng-1.5.7\projects\vs2012\Debug Library\zlib.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(dxsdk_dir)\lib\x86</AdditionalLibraryDirectories>
+      <ImportLibrary>$(OutDir)$(TargetName).imp</ImportLibrary>
+      <LargeAddressAware>true</LargeAddressAware>
+      <DelayLoadDLLs>dbghelp.dll</DelayLoadDLLs>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='DebugDX11-clang|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>USE_EXPORTS;WIN32;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>.;shared\platforms\pc;shared\common;shared\isoeditor;shared;$(SDK);$(dxsdk_dir)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>d3d9.lib;d3dx9.lib;d3d10_1.lib;d3dcompiler.lib;dxerr.lib;dbghelp.lib;comctl32.lib;wininet.lib;version.lib;$(SDK)libpng-1.5.7\projects\vs2012\Debug Library\zlib.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(dxsdk_dir)\lib\x86</AdditionalLibraryDirectories>
+      <ImportLibrary>$(OutDir)$(TargetName).imp</ImportLibrary>
+      <LargeAddressAware>true</LargeAddressAware>
+      <DelayLoadDLLs>dbghelp.dll</DelayLoadDLLs>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>USE_ZLIB;USE_EXPORTS;WIN32;_WINDOWS;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>.;shared\platforms\pc\dx9;shared\platforms\pc\x64;shared\platforms\pc;shared\common;shared;shared\isoeditor;$(SDK);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <ShowIncludes>false</ShowIncludes>
+      <DiagnosticsFormat>Caret</DiagnosticsFormat>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>d3d12.lib;d3dcompiler.lib;dbghelp.lib;comctl32.lib;wininet.lib;version.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SDK);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <ImportLibrary>$(OutDir)$(TargetName).imp</ImportLibrary>
+      <DelayLoadDLLs>dbghelp.dll;libSceGpuAddress_debug.dll</DelayLoadDLLs>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='DebugDX11|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>USE_ZLIB;USE_EXPORTS;WIN32;_WINDOWS;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>.;shared\platforms\pc\dx11;shared\platforms\pc\x64;shared\platforms\pc;shared\common;shared;shared\isoeditor;$(IntDir);$(SDK);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <ShowIncludes>false</ShowIncludes>
+      <MinimalRebuild>false</MinimalRebuild>
+      <DiagnosticsFormat>Caret</DiagnosticsFormat>
+      <SupportJustMyCode>false</SupportJustMyCode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>d3d12.lib;d3dcompiler.lib;dbghelp.lib;comctl32.lib;wininet.lib;version.lib;shcore.lib;$(IntDir)all.res;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SDK);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <ImportLibrary>$(OutDir)$(TargetName).imp</ImportLibrary>
+      <DelayLoadDLLs>libSceGpuAddress.dll;libSceShaderWavePsslc.dll;libSceShaderCompiler.dll;libSceShaderBinary.dll;d3dcompiler_46.dll;PS3TMAPIx64.dll;XtfConsoleManager.dll;XtfConsoleControl.dll</DelayLoadDLLs>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='DebugDX11-clang|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>USE_ZLIB;USE_EXPORTS;WIN32;_WINDOWS;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>.;shared\platforms\pc\dx11;shared\platforms\pc\x64;shared\platforms\pc;shared\common;shared;shared\isoeditor;$(IntDir);$(SDK);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <ShowIncludes>false</ShowIncludes>
+      <MinimalRebuild>false</MinimalRebuild>
+      <DiagnosticsFormat>Caret</DiagnosticsFormat>
+      <SupportJustMyCode>false</SupportJustMyCode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>d3d12.lib;d3dcompiler.lib;dbghelp.lib;comctl32.lib;wininet.lib;version.lib;shcore.lib;libSceGpuAddress_debug.lib;out\ps4_view\$(Configuration)_x64\viewps4gpu.res;out\dx11_view\$(Configuration)_x64\view_dx11gpu.res;out\dx12_view\$(Configuration)_x64\view_dx12gpu.res;out\ps3_view\$(Configuration)_x64\viewps3gpu.res;out\view_wii\$(Configuration)_x64\viewwiigpu.res;out\view_x64\$(Configuration)_x64\view_x64.res;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SDK);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <ImportLibrary>$(OutDir)$(TargetName).imp</ImportLibrary>
+      <DelayLoadDLLs>libSceGpuAddress.dll;libSceShaderWavePsslc.dll;libSceShaderCompiler.dll;libSceShaderBinary.dll;d3dcompiler_46.dll;PS3TMAPIx64.dll;XtfConsoleManager.dll;XtfConsoleControl.dll</DelayLoadDLLs>
+      <AdditionalOptions>/verbose:incr /time /delayload:PVRTexLib.dll  /delayload:OpenMaya.dll  /delayload:foundation.dll  /delayload:xg.dll /manifestdependency:"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'" %(AdditionalOptions)</AdditionalOptions>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>.;shared\platforms\pc;shared\common;shared\isoeditor;shared;$(SDK);$(dxsdk_dir)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalDependencies>d3d9.lib;d3dx9.lib;d3d10_1.lib;d3dcompiler.lib;dxerr.lib;dbghelp.lib;comctl32.lib;wininet.lib;version.lib;$(SDK)libpng-1.5.7\projects\vs2012\Release Library\zlib.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SDK);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <ImportLibrary>$(OutDir)$(TargetName).imp</ImportLibrary>
+      <LargeAddressAware>true</LargeAddressAware>
+      <DelayLoadDLLs>dbghelp.dll</DelayLoadDLLs>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseDX11|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>.;shared\platforms\pc;shared\common;shared\isoeditor;shared;$(SDK);$(dxsdk_dir)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalDependencies>d3d9.lib;d3dx9.lib;d3d10_1.lib;d3dcompiler.lib;dxerr.lib;dbghelp.lib;comctl32.lib;wininet.lib;version.lib;$(SDK)libpng-1.5.7\projects\vs2012\Release Library\zlib.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(dxsdk_dir)\lib\x86</AdditionalLibraryDirectories>
+      <ImportLibrary>$(OutDir)$(TargetName).imp</ImportLibrary>
+      <LargeAddressAware>true</LargeAddressAware>
+      <DelayLoadDLLs>dbghelp.dll</DelayLoadDLLs>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseDX11-clang|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>.;shared\platforms\pc;shared\common;shared\isoeditor;shared;$(SDK);$(dxsdk_dir)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalDependencies>d3d9.lib;d3dx9.lib;d3d10_1.lib;d3dcompiler.lib;dxerr.lib;dbghelp.lib;comctl32.lib;wininet.lib;version.lib;$(SDK)libpng-1.5.7\projects\vs2012\Release Library\zlib.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(dxsdk_dir)\lib\x86</AdditionalLibraryDirectories>
+      <ImportLibrary>$(OutDir)$(TargetName).imp</ImportLibrary>
+      <LargeAddressAware>true</LargeAddressAware>
+      <DelayLoadDLLs>dbghelp.dll</DelayLoadDLLs>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>USE_ZLIB;USE_EXPORTS;WIN32;_WINDOWS;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>.;shared\platforms\pc\dx9;shared\platforms\pc\x64;shared\platforms\pc;shared\common;shared;shared\isoeditor;$(SDK);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <BrowseInformation>true</BrowseInformation>
+      <AdditionalOptions>/d2Zi+ %(AdditionalOptions)</AdditionalOptions>
+      <ShowIncludes>false</ShowIncludes>
+      <DiagnosticsFormat>Caret</DiagnosticsFormat>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalDependencies>d3d12.lib;d3dcompiler.lib;dbghelp.lib;comctl32.lib;wininet.lib;version.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SDK);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <ImportLibrary>$(OutDir)$(TargetName).imp</ImportLibrary>
+      <DelayLoadDLLs>dbghelp.dll</DelayLoadDLLs>
+    </Link>
+    <PostBuildEvent>
+      <Command>$(BinDir)isocmd_x64 {AESencrypt {LoadAs {"$(TargetPath)" "bin"} "use - ORBIScrude"} } $(TargetDir)$(TargetName).bin
+svn commit $(OutputPath) --non-interactive --message build</Command>
+    </PostBuildEvent>
+    <PostBuildEvent>
+      <Message>Encrypt Executable + check in exe+pdb</Message>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseDX11|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>USE_ZLIB;USE_EXPORTS;WIN32;_WINDOWS;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>.;shared\platforms\pc\dx11;shared\platforms\pc\x64;shared\platforms\pc;shared\common;shared;shared\isoeditor;$(SDK);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>/d2Zi+ %(AdditionalOptions)</AdditionalOptions>
+      <ShowIncludes>false</ShowIncludes>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <DiagnosticsFormat>Caret</DiagnosticsFormat>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalDependencies>d3d12.lib;d3dcompiler.lib;dbghelp.lib;comctl32.lib;wininet.lib;version.lib;shcore.lib;$(IntDir)all.res;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SDK);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <ImportLibrary>$(OutDir)$(TargetName).imp</ImportLibrary>
+      <DelayLoadDLLs>libSceGpuAddress.dll;libSceShaderWavePsslc.dll;libSceShaderCompiler.dll;libSceShaderBinary.dll;d3dcompiler_46.dll;PS3TMAPIx64.dll</DelayLoadDLLs>
+    </Link>
+    <PostBuildEvent>
+      <Command>$(BinDir)isocmd_x64 {AESencrypt {LoadAs {"$(TargetPath)" "bin"} "use - ORBIScrude"} } $(TargetDir)$(TargetName).bin
+svn commit $(OutputPath) --non-interactive --message build</Command>
+    </PostBuildEvent>
+    <PostBuildEvent>
+      <Message>Encrypt Executable + check in exe+pdb</Message>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseDX11-clang|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>USE_ZLIB;USE_EXPORTS;WIN32;_WINDOWS;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>.;shared\platforms\pc\dx11;shared\platforms\pc\x64;shared\platforms\pc;shared\common;shared;shared\isoeditor;$(SDK);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>/d2Zi+ %(AdditionalOptions)</AdditionalOptions>
+      <ShowIncludes>false</ShowIncludes>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <DiagnosticsFormat>Caret</DiagnosticsFormat>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalDependencies>d3d12.lib;d3dcompiler.lib;dbghelp.lib;comctl32.lib;wininet.lib;version.lib;shcore.lib;libSceGpuAddress.lib;out\ps4_view\$(Configuration)_x64\viewps4gpu.res;out\dx11_view\$(Configuration)_x64\view_dx11gpu.res;out\dx12_view\$(Configuration)_x64\view_dx12gpu.res;out\ps3_view\$(Configuration)_x64\viewps3gpu.res;out\view_wii\$(Configuration)_x64\viewwiigpu.res;out\view_x64\$(Configuration)_x64\view_x64.res;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SDK);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <ImportLibrary>$(OutDir)$(TargetName).imp</ImportLibrary>
+      <DelayLoadDLLs>libSceGpuAddress.dll;libSceShaderWavePsslc.dll;libSceShaderCompiler.dll;libSceShaderBinary.dll;d3dcompiler_46.dll;PS3TMAPIx64.dll</DelayLoadDLLs>
+      <AdditionalOptions>/verbose:incr /time /delayload:PVRTexLib.dll  /delayload:OpenMaya.dll  /delayload:foundation.dll  /delayload:xg.dll /manifestdependency:"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'" %(AdditionalOptions)</AdditionalOptions>
+    </Link>
+    <PostBuildEvent>
+      <Command>$(BinDir)isocmd_x64 {AESencrypt {LoadAs {"$(TargetPath)" "bin"} "use - ORBIScrude"} } $(TargetDir)$(TargetName).bin
+svn commit $(OutputPath) --non-interactive --message build</Command>
+    </PostBuildEvent>
+    <PostBuildEvent>
+      <Message>Encrypt Executable + check in exe+pdb</Message>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <IsoCmd Include="screw.png">
+      <FileType>Document</FileType>
+      <Variables>sizes={int[]{16 32 64 128 256}}</Variables>
+      <OutExt>ico</OutExt>
+    </IsoCmd>
+    <IsoCmd Include="bad.psd">
+      <FileType>Document</FileType>
+      <OutExt>bmp</OutExt>
+    </IsoCmd>
+    <IsoCmd Include="buffer.psd">
+      <FileType>Document</FileType>
+      <OutExt>bmp</OutExt>
+    </IsoCmd>
+    <None Include="icon.ico" />
+    <IsoCmd Include="settings.ix" />
+    <IsoCmd Include="shared\common\default.fx">
+      <FileType>Document</FileType>
+      <Variables>incdirs=$(AssetsDir)shaders %(Variables)</Variables>
+      <Variables Condition="'$(Configuration)|$(Platform)'=='DebugDX11|x64'">fxargs="/Od /Zi" %(Variables)</Variables>
+      <Variables Condition="'$(Configuration)|$(Platform)'=='DebugDX11-clang|x64'">fxargs="/Od /Zi" %(Variables)</Variables>
+    </IsoCmd>
+    <IsoCmd Include="imagelist_tab.psd">
+      <FileType>Document</FileType>
+      <OutExt>bmp</OutExt>
+    </IsoCmd>
+    <IsoCmd Include="notloaded.psd">
+      <FileType>Document</FileType>
+      <OutExt>bmp</OutExt>
+    </IsoCmd>
+    <None Include="orbiscrude.rtf" />
+    <None Include="screw.ico" />
+    <None Include="settings.bmp" />
+    <None Include="shared\isoeditor\viewers\checker.bmp" />
+    <IsoCmd Include="shared\isoeditor\toolbar_nav.psd">
+      <FileType>Document</FileType>
+      <OutExt>bmp</OutExt>
+    </IsoCmd>
+    <IsoCmd Include="toolbar_main2.ix">
+      <OutExt>png</OutExt>
+      <OutDir>website\images</OutDir>
+    </IsoCmd>
+    <IsoCmd Include="toolbar_start.psd">
+      <FileType>Document</FileType>
+      <OutExt>bmp</OutExt>
+    </IsoCmd>
+    <IsoCmd Include="shared\isoeditor\viewers\viewbitmap_toolbar.psd">
+      <FileType>Document</FileType>
+      <OutExt>bmp</OutExt>
+    </IsoCmd>
+    <IsoCmd Include="shared\isoeditor\viewers\viewmesh_toolbar.psd">
+      <FileType>Document</FileType>
+      <OutExt>bmp</OutExt>
+    </IsoCmd>
+    <IsoCmd Include="shared\isoeditor\viewers\imagelist_debug.psd">
+      <FileType>Document</FileType>
+      <OutExt>bmp</OutExt>
+    </IsoCmd>
+    <MASM Include="shared\platforms\pc\x64\fcontext.asm">
+      <FileType>Document</FileType>
+    </MASM>
+    <None Include="toolbar_license.bmp" />
+    <IsoCmd Include="wait.psd">
+      <FileType>Document</FileType>
+      <OutExt>bmp</OutExt>
+    </IsoCmd>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="settings.cpp" />
+    <ClCompile Include="shared\common\allocators\tlsf.cpp" />
+    <ClCompile Include="shared\common\base\defs.cpp" />
+    <ClCompile Include="shared\common\codec\aes.cpp" />
+    <ClCompile Include="shared\common\codec\apple_compression.cpp" />
+    <ClCompile Include="shared\common\codec\base64.cpp" />
+    <ClCompile Include="shared\common\codec\chacha.cpp" />
+    <ClCompile Include="shared\common\codec\deflate.cpp" />
+    <ClCompile Include="shared\common\codec\des.cpp" />
+    <ClCompile Include="shared\common\codec\texels\dxt.cpp" />
+    <ClCompile Include="shared\common\comms\asn1.cpp" />
+    <ClCompile Include="shared\common\comms\asn1_objects.cpp" />
+    <ClCompile Include="shared\common\comms\diffie-hellman.cpp" />
+    <ClCompile Include="shared\common\comms\dsa.cpp" />
+    <ClCompile Include="shared\common\comms\elliptic-curves.cpp" />
+    <ClCompile Include="shared\common\comms\rsa.cpp" />
+    <ClCompile Include="shared\common\comms\srp.cpp" />
+    <ClCompile Include="shared\common\comms\ssl.cpp" />
+    <ClCompile Include="shared\common\comms\zip.cpp" />
+    <ClCompile Include="shared\common\crc32.cpp" />
+    <ClCompile Include="shared\common\disassembler.cpp" />
+    <ClCompile Include="shared\common\extra\ast.cpp" />
+    <ClCompile Include="shared\common\extra\filters.cpp" />
+    <ClCompile Include="shared\common\extra\octree.cpp" />
+    <ClCompile Include="shared\common\extra\regex.cpp">
+      <Optimization>MaxSpeed</Optimization>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <BasicRuntimeChecks Condition="'$(Configuration)|$(Platform)'=='DebugDX11|x64'">Default</BasicRuntimeChecks>
+      <BasicRuntimeChecks Condition="'$(Configuration)|$(Platform)'=='DebugDX11-clang|x64'">Default</BasicRuntimeChecks>
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='DebugDX11|x64'">MaxSpeed</Optimization>
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='DebugDX11-clang|x64'">Disabled</Optimization>
+    </ClCompile>
+    <ClCompile Include="shared\common\extra\unicode_tables.cpp" />
+    <ClCompile Include="shared\common\fibers.cpp" />
+    <ClCompile Include="shared\common\extra\async_stream.cpp" />
+    <ClCompile Include="shared\common\extra\c-types.cpp" />
+    <ClCompile Include="shared\common\extra\colourise.cpp" />
+    <ClCompile Include="shared\common\extra\date.cpp" />
+    <ClCompile Include="shared\common\comms\ftp.cpp" />
+    <ClCompile Include="shared\common\comms\HTTP.cpp" />
+    <ClCompile Include="shared\common\extra\identifier.cpp" />
+    <ClCompile Include="shared\common\extra\xml.cpp" />
+    <ClCompile Include="shared\common\filename.cpp" />
+    <ClCompile Include="shared\common\maths\geometry.cpp" />
+    <ClCompile Include="shared\common\hashes\md5.cpp" />
+    <ClCompile Include="shared\common\hashes\SHA.cpp" />
+    <ClCompile Include="shared\common\iso\iso.cpp" />
+    <ClCompile Include="shared\common\iso\iso_binary.cpp" />
+    <ClCompile Include="shared\common\iso\iso_convert.cpp" />
+    <ClCompile Include="shared\common\iso\iso_files.cpp" />
+    <ClCompile Include="shared\common\iso\iso_script.cpp" />
+    <ClCompile Include="shared\common\jobs.cpp" />
+    <ClCompile Include="shared\common\maths\bignum.cpp" />
+    <ClCompile Include="shared\common\maths\dct.cpp" />
+    <ClCompile Include="shared\common\maths\polygon.cpp" />
+    <ClCompile Include="shared\common\maths\triangulate.cpp" />
+    <ClCompile Include="shared\common\rcu.cpp" />
+    <ClCompile Include="shared\common\shader.cpp" />
+    <ClCompile Include="shared\common\utilities.cpp" />
+    <ClCompile Include="shared\filetypes\3d\model_utils.cpp" />
+    <ClCompile Include="shared\filetypes\bitmap\bitmap.cpp" />
+    <ClCompile Include="shared\filetypes\bitmap\bmp.cpp" />
+    <ClCompile Include="shared\filetypes\bitmap\hdr.cpp" />
+    <ClCompile Include="shared\filetypes\bitmap\jpg.cpp" />
+    <ClCompile Include="shared\filetypes\bitmap\tga.cpp" />
+    <ClCompile Include="shared\common\extra\c-header.cpp" />
+    <ClCompile Include="shared\common\extra\cpp.cpp" />
+    <ClCompile Include="shared\filetypes\code\demangle_vc.cpp" />
+    <ClCompile Include="shared\filetypes\code\minidump.cpp" />
+    <ClCompile Include="shared\filetypes\code\pdb_utils.cpp" />
+    <ClCompile Include="shared\filetypes\ib.cpp" />
+    <ClCompile Include="shared\filetypes\ibz.cpp" />
+    <ClCompile Include="shared\filetypes\ix.cpp" />
+    <ClCompile Include="shared\isoeditor\viewers\debug.cpp" />
+    <ClCompile Include="shared\isoeditor\viewers\directory_scan.cpp" />
+    <ClCompile Include="shared\isoeditor\viewers\natvis.cpp" />
+    <ClCompile Include="shared\isoeditor\viewers\viewbin_win32.cpp" />
+    <ClCompile Include="shared\isoeditor\viewers\viewbitmap_win32.cpp" />
+    <ClCompile Include="shared\isoeditor\viewers\viewer_identifier.cpp" />
+    <ClCompile Include="shared\platforms\pc\dx11\_graphics.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="shared\platforms\pc\dx\dxgi_helpers.cpp" />
+    <ClCompile Include="shared\platforms\pc\hook.cpp" />
+    <ClCompile Include="shared\platforms\pc\hook_stack.cpp" />
+    <ClCompile Include="shared\platforms\pc\stack_dump.cpp" />
+    <ClCompile Include="shared\platforms\pc\windows\control_helpers.cpp" />
+    <ClCompile Include="shared\platforms\pc\windows\dialog.cpp" />
+    <ClCompile Include="shared\platforms\pc\windows\docker.cpp" />
+    <ClCompile Include="shared\platforms\pc\windows\text_control.cpp" />
+    <ClCompile Include="shared\isoeditor\viewers\gpu.cpp" />
+    <ClCompile Include="shared\isoeditor\viewers\viewbin.cpp" />
+    <ClCompile Include="shared\isoeditor\viewers\viewbitmap.cpp" />
+    <ClCompile Include="shared\platforms\pc\dx9\_graphics.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DebugDX11|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DebugDX11-clang|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='ReleaseDX11|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='ReleaseDX11-clang|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DebugDX11|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DebugDX11-clang|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='ReleaseDX11|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='ReleaseDX11-clang|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="shared\platforms\pc\platform.cpp" />
+    <ClCompile Include="shared\platforms\pc\sockets.cpp" />
+    <ClCompile Include="shared\platforms\pc\startup.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="shared\platforms\pc\_thread.cpp" />
+    <ClCompile Include="shared\platforms\pc\windows\com.cpp" />
+    <ClCompile Include="shared\platforms\pc\windows\dib.cpp" />
+    <ClCompile Include="shared\platforms\pc\windows\filedialogs.cpp" />
+    <ClCompile Include="shared\platforms\pc\windows\splitter.cpp" />
+    <ClCompile Include="shared\platforms\pc\windows\theme.cpp" />
+    <ClCompile Include="shared\platforms\pc\windows\treecolumns.cpp" />
+    <ClCompile Include="shared\platforms\pc\windows\window.cpp" />
+    <ClCompile Include="shared\systems\conversion\channeluse.cpp" />
+    <ClCompile Include="shared\systems\mesh\shapes.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="main.h" />
+    <ClInclude Include="resource.h" />
+    <ClInclude Include="shared\common\allocators\allocator.h" />
+    <ClInclude Include="shared\common\allocators\tlsf.h" />
+    <ClInclude Include="shared\common\base\algorithm.h" />
+    <ClInclude Include="shared\common\base\array.h" />
+    <ClInclude Include="shared\common\base\atomic.h" />
+    <ClInclude Include="shared\common\base\bits.h" />
+    <ClInclude Include="shared\common\base\defs.h" />
+    <ClInclude Include="shared\common\base\defs_base.h" />
+    <ClInclude Include="shared\common\base\defs_endian.h" />
+    <ClInclude Include="shared\common\base\defs_int.h" />
+    <ClInclude Include="shared\common\base\functions.h" />
+    <ClInclude Include="shared\common\base\hash.h" />
+    <ClInclude Include="shared\common\base\iterator.h" />
+    <ClInclude Include="shared\common\base\list.h" />
+    <ClInclude Include="shared\common\base\maths.h" />
+    <ClInclude Include="shared\common\base\pointer.h" />
+    <ClInclude Include="shared\common\base\soft_float.h" />
+    <ClInclude Include="shared\common\base\strings.h" />
+    <ClInclude Include="shared\common\base\tree.h" />
+    <ClInclude Include="shared\common\base\tuple.h" />
+    <ClInclude Include="shared\common\base\vector.h" />
+    <ClInclude Include="shared\common\codec\aes.h" />
+    <ClInclude Include="shared\common\codec\apple_compression.h" />
+    <ClInclude Include="shared\common\codec\base64.h" />
+    <ClInclude Include="shared\common\codec\chacha.h" />
+    <ClInclude Include="shared\common\codec\deflate.h" />
+    <ClInclude Include="shared\common\codec\des.h" />
+    <ClInclude Include="shared\common\codec\texels\dxt.h" />
+    <ClInclude Include="shared\common\comms\asn1.h" />
+    <ClInclude Include="shared\common\comms\diffie-hellman.h" />
+    <ClInclude Include="shared\common\comms\dsa.h" />
+    <ClInclude Include="shared\common\comms\elliptic-curves.h" />
+    <ClInclude Include="shared\common\comms\rsa.h" />
+    <ClInclude Include="shared\common\comms\srp.h" />
+    <ClInclude Include="shared\common\comms\ssl.h" />
+    <ClInclude Include="shared\common\comms\x509.h" />
+    <ClInclude Include="shared\common\comms\zip.h" />
+    <ClInclude Include="shared\common\comms\zlib_stream.h" />
+    <ClInclude Include="shared\common\crc32.h" />
+    <ClInclude Include="shared\common\directory.h" />
+    <ClInclude Include="shared\common\extra\ast.h" />
+    <ClInclude Include="shared\common\extra\expression.h" />
+    <ClInclude Include="shared\common\extra\filters.h" />
+    <ClInclude Include="shared\common\extra\kd_tree.h" />
+    <ClInclude Include="shared\common\extra\memory_cache.h" />
+    <ClInclude Include="shared\common\extra\octree.h" />
+    <ClInclude Include="shared\common\extra\regex.h" />
+    <ClInclude Include="shared\common\extra\unicode_tables.h" />
+    <ClInclude Include="shared\common\fibers.h" />
+    <ClInclude Include="shared\common\graphics.h" />
+    <ClInclude Include="shared\common\extra\async_stream.h" />
+    <ClInclude Include="shared\common\extra\c-types.h" />
+    <ClInclude Include="shared\common\extra\colourise.h" />
+    <ClInclude Include="shared\common\extra\date.h" />
+    <ClInclude Include="shared\common\comms\ftp.h" />
+    <ClInclude Include="shared\common\extra\identifier.h" />
+    <ClInclude Include="shared\common\comms\ip.h" />
+    <ClInclude Include="shared\common\extra\xml.h" />
+    <ClInclude Include="shared\common\filename.h" />
+    <ClInclude Include="shared\common\maths\geometry.h" />
+    <ClInclude Include="shared\common\hashes\md5.h" />
+    <ClInclude Include="shared\common\hashes\SHA.h" />
+    <ClInclude Include="shared\common\iso\iso.h" />
+    <ClInclude Include="shared\common\iso\iso_binary.h" />
+    <ClInclude Include="shared\common\iso\iso_convert.h" />
+    <ClInclude Include="shared\common\iso\iso_custominit.h" />
+    <ClInclude Include="shared\common\iso\iso_files.h" />
+    <ClInclude Include="shared\common\iso\iso_script.h" />
+    <ClInclude Include="shared\common\jobs.h" />
+    <ClInclude Include="shared\common\maths\bignum.h" />
+    <ClInclude Include="shared\common\maths\dct.h" />
+    <ClInclude Include="shared\common\maths\polygon.h" />
+    <ClInclude Include="shared\common\maths\triangulate.h" />
+    <ClInclude Include="shared\common\rcu.h" />
+    <ClInclude Include="shared\common\shader.h" />
+    <ClInclude Include="shared\common\stream.h" />
+    <ClInclude Include="shared\common\thread.h" />
+    <ClInclude Include="shared\common\utilities.h" />
+    <ClInclude Include="shared\filetypes\bitmap\bitmap.h" />
+    <ClInclude Include="shared\filetypes\bitmap\bitmapfile.h" />
+    <ClInclude Include="shared\filetypes\bitmap\hdr.h" />
+    <ClInclude Include="shared\filetypes\bitmap\jpg.h" />
+    <ClInclude Include="shared\common\extra\cpp.h" />
+    <ClInclude Include="shared\isoeditor\viewers\debug.h" />
+    <ClInclude Include="shared\isoeditor\viewers\directory_scan.h" />
+    <ClInclude Include="shared\isoeditor\viewers\gpu.h" />
+    <ClInclude Include="shared\isoeditor\viewers\natvis.h" />
+    <ClInclude Include="shared\isoeditor\viewers\viewbin.rc.h" />
+    <ClInclude Include="shared\isoeditor\viewers\viewbitmap.rc.h" />
+    <ClInclude Include="shared\isoeditor\viewers\viewer_identifier.h" />
+    <ClInclude Include="shared\isoeditor\viewers\viewmesh.rc.h" />
+    <ClInclude Include="shared\platforms\pc\com.h" />
+    <ClInclude Include="shared\platforms\pc\dx11\platform.h" />
+    <ClInclude Include="shared\platforms\pc\dx\dxgi_helpers.h" />
+    <ClInclude Include="shared\platforms\pc\hook_stack.h" />
+    <ClInclude Include="shared\platforms\pc\dx11\_graphics.h" />
+    <ClInclude Include="shared\platforms\pc\dx9\_graphics.h" />
+    <ClInclude Include="shared\platforms\pc\hook.h" />
+    <ClInclude Include="shared\platforms\pc\platform_common.h" />
+    <ClInclude Include="shared\platforms\pc\stack_dump.h" />
+    <ClInclude Include="shared\platforms\pc\_thread.h" />
+    <ClInclude Include="shared\platforms\pc\windows\control_helpers.h" />
+    <ClInclude Include="shared\platforms\pc\windows\d2d.h" />
+    <ClInclude Include="shared\platforms\pc\windows\dialog.h" />
+    <ClInclude Include="shared\platforms\pc\windows\dib.h" />
+    <ClInclude Include="shared\platforms\pc\windows\docker.h" />
+    <ClInclude Include="shared\platforms\pc\windows\dwm.h" />
+    <ClInclude Include="shared\platforms\pc\windows\filedialogs.h" />
+    <ClInclude Include="shared\platforms\pc\windows\registry.h" />
+    <ClInclude Include="shared\platforms\pc\windows\splitter.h" />
+    <ClInclude Include="shared\platforms\pc\windows\text_control.h" />
+    <ClInclude Include="shared\platforms\pc\windows\treecolumns.h" />
+    <ClInclude Include="shared\platforms\pc\windows\window.h" />
+    <ClInclude Include="shared\platforms\pc\_atomic.h" />
+    <ClInclude Include="shared\systems\conversion\channeluse.h" />
+    <ClInclude Include="version.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="ORBIScrude.rc" />
+    <ResourceCompile Include="shared\isoeditor\viewers\viewbin.rc" />
+    <ResourceCompile Include="shared\isoeditor\viewers\viewbitmap.rc">
+      <PreprocessorDefinitions>TOOLSET=$(PlatformToolsetVersion)</PreprocessorDefinitions>
+    </ResourceCompile>
+    <ResourceCompile Include="shared\isoeditor\viewers\viewmesh.rc" />
+    <ResourceCompile Include="version.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Xml Include="manifest.xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="shared\isoeditor\viewers\dx11\dx11_view.vcxproj">
+      <Project>{5d3241c2-dc0b-4036-a36f-2261ecf45d7f}</Project>
+      <LinkLibraryDependencies>true</LinkLibraryDependencies>
+    </ProjectReference>
+    <ProjectReference Include="shared\isoeditor\viewers\dx12\dx12_view.vcxproj">
+      <Project>{b2d25dfe-6a42-426a-9b0a-55e578efc805}</Project>
+      <LinkLibraryDependencies>true</LinkLibraryDependencies>
+    </ProjectReference>
+    <ProjectReference Include="shared\isoeditor\viewers\dx_shared\dx_shared.vcxproj">
+      <Project>{46314fdc-1f1b-4ee2-acd2-621a4e4891fe}</Project>
+      <LinkLibraryDependencies>true</LinkLibraryDependencies>
+    </ProjectReference>
+    <ProjectReference Include="shared\isoeditor\viewers\ps3\ps3_view.vcxproj">
+      <Project>{1cc0e985-04e9-4e40-9772-78d78bfe3686}</Project>
+      <LinkLibraryDependencies>true</LinkLibraryDependencies>
+    </ProjectReference>
+    <ProjectReference Include="shared\isoeditor\viewers\ps4\ps4_view.vcxproj">
+      <Project>{a9fbee41-cdd8-454e-bbfa-56fe3baed8db}</Project>
+      <LinkLibraryDependencies>true</LinkLibraryDependencies>
+    </ProjectReference>
+    <ProjectReference Include="shared\isoeditor\viewers\wii\view_wii.vcxproj">
+      <Project>{0a522767-a189-4bdc-9d61-ba30c32c2353}</Project>
+      <LinkLibraryDependencies>true</LinkLibraryDependencies>
+    </ProjectReference>
+    <ProjectReference Include="shared\isoeditor\viewers\x64\view_x64.vcxproj">
+      <Project>{fcc79066-3419-4213-b799-5abce19756b2}</Project>
+      <LinkLibraryDependencies>true</LinkLibraryDependencies>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="shared\isoeditor\viewers\d2d_grid.hlsl">
+      <ShaderType>Pixel</ShaderType>
+      <ShaderModel>5.0</ShaderModel>
+      <ObjectFileOutput>$(IntDir)%(Filename).cso</ObjectFileOutput>
+    </FxCompile>
+    <FxCompile Include="shared\isoeditor\viewers\d2d_shader.hlsl">
+      <ShaderType>Pixel</ShaderType>
+      <ShaderModel>5.0</ShaderModel>
+      <ObjectFileOutput>$(IntDir)%(Filename).cso</ObjectFileOutput>
+    </FxCompile>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\masm.targets" />
+  </ImportGroup>
+</Project>

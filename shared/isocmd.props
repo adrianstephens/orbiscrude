@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemDefinitionGroup>
+    <IsoCmd>
+      <OutDir>data\</OutDir>
+      <OutExt>ib</OutExt>
+      <UseOutname>true</UseOutname>
+      <Use64Bit>true</Use64Bit>
+      <CommandLineTemplate1>$(BinDir)IsoCmd[Use64Bit] -a [variables] [AdditionalOptions] %(FullPath) [OutDir]%(Filename).[OutExt]</CommandLineTemplate1>
+      <CommandLineTemplate2>$(BinDir)IsoCmd[Use64Bit] -a [variables] [AdditionalOptions] %(FullPath) [OutDir].[OutExt]</CommandLineTemplate2>
+    </IsoCmd>
+  </ItemDefinitionGroup>
+</Project>

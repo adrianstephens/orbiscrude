@@ -1,0 +1,39 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 10.00
+# Visual Studio 2008
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "cgc", "cgc.vcproj", "{EEEB0D36-BFC3-4BF6-8C71-FEF33A62F86B}"
+	ProjectSection(ProjectDependencies) = postProject
+		{9AC2D69B-F7E1-4C68-9DE1-2A0CAFC067A1} = {9AC2D69B-F7E1-4C68-9DE1-2A0CAFC067A1}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "tokenize", "tokenize.vcproj", "{9AC2D69B-F7E1-4C68-9DE1-2A0CAFC067A1}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "cgclib", "cgclib.vc9.vcproj", "{0026E7AE-F735-4D2F-96D8-FFBA432EC821}"
+EndProject
+Global
+	GlobalSection(SubversionScc) = preSolution
+		Svn-Managed = True
+		Manager = AnkhSVN - Subversion Support for Visual Studio
+	EndGlobalSection
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Release|Win32 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{EEEB0D36-BFC3-4BF6-8C71-FEF33A62F86B}.Debug|Win32.ActiveCfg = Debug|Win32
+		{EEEB0D36-BFC3-4BF6-8C71-FEF33A62F86B}.Debug|Win32.Build.0 = Debug|Win32
+		{EEEB0D36-BFC3-4BF6-8C71-FEF33A62F86B}.Release|Win32.ActiveCfg = Release|Win32
+		{EEEB0D36-BFC3-4BF6-8C71-FEF33A62F86B}.Release|Win32.Build.0 = Release|Win32
+		{9AC2D69B-F7E1-4C68-9DE1-2A0CAFC067A1}.Debug|Win32.ActiveCfg = Debug|Win32
+		{9AC2D69B-F7E1-4C68-9DE1-2A0CAFC067A1}.Debug|Win32.Build.0 = Debug|Win32
+		{9AC2D69B-F7E1-4C68-9DE1-2A0CAFC067A1}.Release|Win32.ActiveCfg = Debug|Win32
+		{9AC2D69B-F7E1-4C68-9DE1-2A0CAFC067A1}.Release|Win32.Build.0 = Debug|Win32
+		{0026E7AE-F735-4D2F-96D8-FFBA432EC821}.Debug|Win32.ActiveCfg = Debug|Win32
+		{0026E7AE-F735-4D2F-96D8-FFBA432EC821}.Debug|Win32.Build.0 = Debug|Win32
+		{0026E7AE-F735-4D2F-96D8-FFBA432EC821}.Release|Win32.ActiveCfg = Release|Win32
+		{0026E7AE-F735-4D2F-96D8-FFBA432EC821}.Release|Win32.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

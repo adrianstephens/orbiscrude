@@ -1,0 +1,333 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClInclude Include="controller.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="crc_dictionary.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="crc32.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="directory.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="disassembler.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="events.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="filename.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="geometry.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="gesture.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="graphics.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="jobs.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="lockfree.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="message.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="object.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="profiler.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="render.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="scenegraph.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="scenetree.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="shader.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="sockets.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="soft_float_iso.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="sound.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="stream.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="tweak.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="utilities.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="vector_string.h">
+      <Filter>headers</Filter>
+    </ClInclude>
+    <ClInclude Include="iso\iso.h">
+      <Filter>iso</Filter>
+    </ClInclude>
+    <ClInclude Include="iso\iso_binary.h">
+      <Filter>iso</Filter>
+    </ClInclude>
+    <ClInclude Include="iso\iso_convert.h">
+      <Filter>iso</Filter>
+    </ClInclude>
+    <ClInclude Include="iso\iso_custominit.h">
+      <Filter>iso</Filter>
+    </ClInclude>
+    <ClInclude Include="iso\iso_files.h">
+      <Filter>iso</Filter>
+    </ClInclude>
+    <ClInclude Include="iso\iso_script.h">
+      <Filter>iso</Filter>
+    </ClInclude>
+    <ClInclude Include="base\algorithm.h">
+      <Filter>base</Filter>
+    </ClInclude>
+    <ClInclude Include="base\array.h">
+      <Filter>base</Filter>
+    </ClInclude>
+    <ClInclude Include="base\atomic.h">
+      <Filter>base</Filter>
+    </ClInclude>
+    <ClInclude Include="base\bits.h">
+      <Filter>base</Filter>
+    </ClInclude>
+    <ClInclude Include="base\defs.h">
+      <Filter>base</Filter>
+    </ClInclude>
+    <ClInclude Include="base\defs_base.h">
+      <Filter>base</Filter>
+    </ClInclude>
+    <ClInclude Include="base\defs_endian.h">
+      <Filter>base</Filter>
+    </ClInclude>
+    <ClInclude Include="base\defs_int.h">
+      <Filter>base</Filter>
+    </ClInclude>
+    <ClInclude Include="base\functions.h">
+      <Filter>base</Filter>
+    </ClInclude>
+    <ClInclude Include="base\hash.h">
+      <Filter>base</Filter>
+    </ClInclude>
+    <ClInclude Include="base\iterator.h">
+      <Filter>base</Filter>
+    </ClInclude>
+    <ClInclude Include="base\list.h">
+      <Filter>base</Filter>
+    </ClInclude>
+    <ClInclude Include="base\maths.h">
+      <Filter>base</Filter>
+    </ClInclude>
+    <ClInclude Include="base\pointer.h">
+      <Filter>base</Filter>
+    </ClInclude>
+    <ClInclude Include="base\skip_list.h">
+      <Filter>base</Filter>
+    </ClInclude>
+    <ClInclude Include="base\soft_float.h">
+      <Filter>base</Filter>
+    </ClInclude>
+    <ClInclude Include="base\strings.h">
+      <Filter>base</Filter>
+    </ClInclude>
+    <ClInclude Include="base\tree.h">
+      <Filter>base</Filter>
+    </ClInclude>
+    <ClInclude Include="base\vector.h">
+      <Filter>base</Filter>
+    </ClInclude>
+    <ClInclude Include="extra\async_stream.h">
+      <Filter>extra</Filter>
+    </ClInclude>
+    <ClInclude Include="extra\deflate.h">
+      <Filter>extra</Filter>
+    </ClInclude>
+    <ClInclude Include="allocators\allocator.h">
+      <Filter>allocators</Filter>
+    </ClInclude>
+    <ClInclude Include="allocators\allocator2D.h">
+      <Filter>allocators</Filter>
+    </ClInclude>
+    <ClInclude Include="allocators\pool.h">
+      <Filter>allocators</Filter>
+    </ClInclude>
+    <ClInclude Include="allocators\tlsf.h">
+      <Filter>allocators</Filter>
+    </ClInclude>
+    <ClInclude Include="maths\bezier.h">
+      <Filter>maths</Filter>
+    </ClInclude>
+    <ClInclude Include="maths\bignum.h">
+      <Filter>maths</Filter>
+    </ClInclude>
+    <ClInclude Include="maths\dct.h">
+      <Filter>maths</Filter>
+    </ClInclude>
+    <ClInclude Include="maths\EKF.h">
+      <Filter>maths</Filter>
+    </ClInclude>
+    <ClInclude Include="maths\polygon.h">
+      <Filter>maths</Filter>
+    </ClInclude>
+    <ClInclude Include="maths\polynomial.h">
+      <Filter>maths</Filter>
+    </ClInclude>
+    <ClInclude Include="maths\sparse.h">
+      <Filter>maths</Filter>
+    </ClInclude>
+    <ClInclude Include="maths\statistics.h">
+      <Filter>maths</Filter>
+    </ClInclude>
+    <ClInclude Include="extra\filters.h">
+      <Filter>extra</Filter>
+    </ClInclude>
+    <ClInclude Include="extra\gjk.h">
+      <Filter>extra</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="controller.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="crc_dictionary.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="crc32.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="filename.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="geometry.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="jobs.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="object.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="profiler.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="render.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="scenetree.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="shader.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="sound.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="tweak.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="utilities.cpp">
+      <Filter>source</Filter>
+    </ClCompile>
+    <ClCompile Include="iso\iso.cpp">
+      <Filter>iso</Filter>
+    </ClCompile>
+    <ClCompile Include="iso\iso_binary.cpp">
+      <Filter>iso</Filter>
+    </ClCompile>
+    <ClCompile Include="iso\iso_convert.cpp">
+      <Filter>iso</Filter>
+    </ClCompile>
+    <ClCompile Include="iso\iso_files.cpp">
+      <Filter>iso</Filter>
+    </ClCompile>
+    <ClCompile Include="iso\iso_script.cpp">
+      <Filter>iso</Filter>
+    </ClCompile>
+    <ClCompile Include="base\defs.cpp">
+      <Filter>base</Filter>
+    </ClCompile>
+    <ClCompile Include="extra\async_stream.cpp">
+      <Filter>extra</Filter>
+    </ClCompile>
+    <ClCompile Include="extra\deflate.cpp">
+      <Filter>extra</Filter>
+    </ClCompile>
+    <ClCompile Include="allocators\tlsf.cpp">
+      <Filter>allocators</Filter>
+    </ClCompile>
+    <ClCompile Include="maths\bezier.cpp">
+      <Filter>maths</Filter>
+    </ClCompile>
+    <ClCompile Include="maths\bignum.cpp">
+      <Filter>maths</Filter>
+    </ClCompile>
+    <ClCompile Include="maths\dct.cpp">
+      <Filter>maths</Filter>
+    </ClCompile>
+    <ClCompile Include="maths\EKF.cpp">
+      <Filter>maths</Filter>
+    </ClCompile>
+    <ClCompile Include="maths\lp.cpp">
+      <Filter>maths</Filter>
+    </ClCompile>
+    <ClCompile Include="maths\polygon.cpp">
+      <Filter>maths</Filter>
+    </ClCompile>
+    <ClCompile Include="maths\sparse.cpp">
+      <Filter>maths</Filter>
+    </ClCompile>
+    <ClCompile Include="maths\svd.cpp">
+      <Filter>maths</Filter>
+    </ClCompile>
+    <ClCompile Include="extra\filters.cpp">
+      <Filter>extra</Filter>
+    </ClCompile>
+    <ClCompile Include="extra\gjk.cpp">
+      <Filter>extra</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <IsoCmd Include="default.fx" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="iso">
+      <UniqueIdentifier>{cab04c1b-4766-46a8-95d7-f0098ad9de43}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="base">
+      <UniqueIdentifier>{88361e2d-41be-4013-95e5-9e367f7d471f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="extra">
+      <UniqueIdentifier>{eb147264-0fcb-4ed9-8110-02018654f2ce}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="headers">
+      <UniqueIdentifier>{738c17f5-06e1-47de-a0db-2b71863f997f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source">
+      <UniqueIdentifier>{94971578-9d61-4243-96ce-f95f31faa942}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="allocators">
+      <UniqueIdentifier>{32186a36-26e5-4a0e-b289-ae629d5755da}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="maths">
+      <UniqueIdentifier>{3377e47c-6f70-4c8d-8fd2-1e947eb44a87}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

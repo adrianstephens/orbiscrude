@@ -1,0 +1,263 @@
+; prodg:	c:\program files\sn systems\ps3\bin\autoexp.dat
+; xdk:		c:\program files\microsoft xbox 360 sdk\bin\win32
+; orbis:	C:\Dev\sdk\SCE\ORBIS SDKs\X.XXX\host_tools\debugging\Debugger\iso_autoexp.dat
+; win32:	c:\program files\microsoft visual studio 9.0\common7\packages\debugger\autoexp.dat
+;			C:\Program Files (x86)\microsoft visual studio 9.0\common7\packages\debugger\autoexp.dat
+;			C:\Program Files (x86)\microsoft visual studio 10.0\common7\packages\debugger\autoexp.dat
+;			C:\Program Files (x86)\microsoft visual studio 11.0\common7\packages\debugger\autoexp.dat
+;			file://C:\Program%20Files%20(x86)\microsoft%20visual%20studio%2010.0\common7\packages\debugger\autoexp.dat
+[AutoExpand]
+
+; pc & orbis
+
+iso::tag=<p,s>
+iso::_v1<*>=<q.m128_f32[0],g>
+iso::_v2<*>=<q.m128_f32[0],g>, <q.m128_f32[1],g>
+iso::_v3<*>=<q.m128_f32[0],g>, <q.m128_f32[1],g>, <q.m128_f32[2],g>
+iso::_v4<*>=<q.m128_f32[0],g>, <q.m128_f32[1],g>, <q.m128_f32[2],g>, <q.m128_f32[3],g>
+iso::float1=<x.q.m128_f32[0],g>
+iso::float2=<xy.q.m128_f32[0],g>, <xy.q.m128_f32[1],g>
+iso::float3=<xyz.q.m128_f32[0],g>, <xyz.q.m128_f32[1],g>, <xyz.q.m128_f32[2],g>
+iso::position3=<xyz.q.m128_f32[0],g>, <xyz.q.m128_f32[1],g>, <xyz.q.m128_f32[2],g>
+iso::float4=<xyzw.q.m128_f32[0],g>, <xyzw.q.m128_f32[1],g>, <xyzw.q.m128_f32[2],g>, <xyzw.q.m128_f32[3],g>
+
+; ps3 only:
+; "C:\Program Files (x86)\SN Systems\PS3\bin"
+
+;iso::tag=<p,s>
+iso::_v1<*>=<q[0],g>
+iso::_v2<*>=<q[0],g>, <q[1],g>
+iso::_v3<*>=<q[0],g>, <q[1],g>, <q[2],g>
+iso::_v4<*>=<q[0],g>, <q[1],g>, <q[2],g>, <q[3],g>
+iso::float1=<x.q[0],g>
+iso::float2=<xy.q[0],g>, <xy.q[1],g>
+iso::float3=<xyz.q[0],g>, <xyz.q[1],g>, <xyz.q[2],g>
+iso::position3=<xyz.q[0],g>, <xyz.q[1],g>, <xyz.q[2],g>
+iso::float4=<xyzw.q[0],g>, <xyzw.q[1],g>, <xyzw.q[2],g>, <xyzw.q[3],g>
+iso::colour=<rgba.q[0],g>, <rgba.q[1],g>, <rgba.q[2],g>, <rgba.q[3],g>
+
+; x360 only:
+; "C:\dev\SDK\Microsoft Xbox 360 SDK\bin\win32\autoexp.dat"
+
+iso::tag=$ADDIN(isocrc_vc.dll,IsoCrc32Handler)
+iso::crc32=$ADDIN(isocrc_vc.dll,IsoCrc32Handler)
+iso::_v1<*>=<q.v[0],g>
+iso::_v2<*>=<q.v[0],g>, <q.v[1],g>
+iso::_v3<*>=<q.v[0],g>, <q.v[1],g>, <q.v[2],g>
+iso::_v4<*>=<q.v[0],g>, <q.v[1],g>, <q.v[2],g>, <q.v[3],g>
+iso::float1=<x.q.v[0],g>
+iso::float2=<xy.q.v[0],g>, <xy.q.v[1],g>
+iso::float3=<xyz.q.v[0],g>, <xyz.q.v[1],g>, <xyz.q.v[2],g>
+iso::position3=<xyz.q.v[0],g>, <xyz.q.v[1],g>, <xyz.q.v[2],g>
+iso::float4=<xyzw.q.v[0],g>, <xyzw.q.v[1],g>, <xyzw.q.v[2],g>, <xyzw.q.v[3],g>
+
+[Visualizer]
+
+iso::soft_pointer<*,iso::base_direct> {
+	preview  ( ($T1*)$c.ptr )
+	children ( *($T1*)$c.ptr )
+}
+iso::soft_pointer<*,iso::base_absolute<*> > {
+	preview  ( ($T1*)$c.offset )
+	children ( *($T1*)$c.offset )
+}
+iso::soft_pointer<*,iso::base_relative<*> > {
+	preview (#if ($c.offset != 0) (($T1*)((char*)&$c + $c.offset)) #else (($T1*)0))
+	children ( *($T1*)((char*)&$c + $c.offset) )
+}
+iso::soft_pointer<*,iso::base_fixed<*> > {
+	preview (#if ($c.offset != 0) (($T1*)((char*)iso::base_fixed<$T2>::base + $c.offset)) #else (($T1*)0))
+	children ( *($T1*)((char*)iso::base_fixed<$T2>::base + $c.offset) )
+}
+iso::soft_pointer<*,iso::base_fixed_shift<*,*> > {
+	preview (#if ($c.offset != 0) (($T1*)((char*)iso::base_fixed<$T2>::base + ($c.offset<<$T3))) #else (($T1*)0))
+	children ( *($T1*)((char*)iso::base_fixed<$T2>::base + ($c.offset<<$T3)) )
+}
+iso::soft_pointer<*,iso::base_select<*,*> > {
+	preview (#if ($c.offset != 0) (($T1*)((char*)iso::base_select<$T1,$T2>::base[$c.offset&((1<<$T3)-1)] + ($c.offset&-(1<<$T3)))) #else (($T1*)0))
+	children ( *(($T1*)((char*)iso::base_select<$T2,$T3>::base[$c.offset&((1<<$T3)-1)] + ($c.offset&-(1<<$T3)))) )
+}
+
+iso::iso_string8 {
+	preview (#if ($c.p.offset != 0) (*(char**)&iso::base_fixed<void>::base + ($c.p.offset<<2)) #else ((char*)0))
+	children ( (*(char**)&iso::base_fixed<void>::base + ($c.p.offset<<2)) )
+}
+
+iso::ISO_type|iso::ISO_type const {
+	preview (
+		#switch ($c.type & 31)
+			#case 0 ("unknown")
+			#case 1 (#("int bits=", $c.param1, " frac=", $c.param2))
+			#case 2 (#("float bits=", $c.param1, " exp=", $c.param2))
+			#case 3 ("string")
+			#case 4 (#("composite (", ((iso::ISO_type_composite*)&$c)->count, ") elements"))
+			#case 5 (#("array x ", ((iso::ISO_type_array*)&$c)->count))
+			#case 6 ("openarray")
+			#case 7 ("reference")
+			#case 8 ("virtual")
+			#case 9 (#("user ", 
+				#if (($c.flags & 4) == 0) (
+					*(iso::iso_string8*)&(((iso::ISO_type_user*)&$c)->id)
+				) #else (
+					((iso::ISO_type_user*)&$c)->id.u
+				)
+			))
+			#case 0x13 ("string64")
+			#case 0x16 ("openarray64")
+			#case 0x17 ("reference64")
+			#default("(bad type)")
+	)
+	children ( #(
+		[raw members]: [$c,!],
+		#switch ($c.type & 31)
+			#case 0 ()
+			#case 1 ()
+			#case 2 ()
+			#case 3 ()
+			#case 4 ( #array (
+				expr: ((iso::ISO_element*)(((iso::ISO_type_composite*)&$c)+1))[$i],
+				size: ((iso::ISO_type_composite*)&$c)->count
+			) )
+			#case 5 ( #(
+				count	: ((iso::ISO_type_array*)&$c)->count,
+				subtype	: ((iso::ISO_type_array*)&$c)->subtype,
+				subsize	: ((iso::ISO_type_array*)&$c)->subsize
+			) )
+			#case 6 ( #(
+				subtype	: ((iso::ISO_type_openarray*)&$c)->subtype,
+				subsize	: ((iso::ISO_type_openarray*)&$c)->subsize
+			) )
+			#case 7 ( #(
+				subtype : ((iso::ISO_type_reference*)&$c)->subtype
+			) )
+			#case 8 ()
+			#case 9 ( #(
+				id		: 
+					#if (($c.flags & 4) == 0) (
+						*(iso::iso_string8*)&(((iso::ISO_type_user*)&$c)->id)
+					) #else (
+						((iso::ISO_type_user*)&$c)->id.u
+					),
+				subtype	: ((iso::ISO_type_user*)&$c)->subtype
+			) )
+			#case 0x16 ( #(
+				subtype	: ((iso::ISO_type_openarray64*)&$c)->subtype,
+				subsize	: ((iso::ISO_type_openarray64*)&$c)->subsize
+			) )
+			#case 0x17 ( #(
+				subtype : ((iso::ISO_type_reference64*)&$c)->subtype
+			) )
+			#default ()
+	) )
+}
+
+iso::ISO_value {
+	preview ( #(
+		"id=", #if ($c.id.p == 0) ("0") #elif (($c.flags & 1)!=0) ([(int)$c.id.p,x]) #else ([$c.id.p,s]),
+		", type=", (iso::ISO_TYPE)$c.type->type
+	) )
+}
+
+iso::ISO_ptr<void,*> {
+	preview (
+		#if ($c.p.t != 0) ( #(
+			((iso::ISO_value*)$c.p.t)[-1], " ",
+			(void*)$c.p.t
+		) ) #else (
+			"NULL"
+		)
+	)
+	children (
+		#if ($c.p.t != 0) ( #(
+			header	: ((iso::ISO_value*)$c.p.t)[-1],
+			data	: (void*)$c.p.t
+		) )
+	)
+}
+
+iso::ISO_ptr<*,*> {
+	preview (
+		#if ($c.p != 0) ( #(
+			((iso::ISO_value*)$c.p.t)[-1], " ",
+			$c.p.t->t
+		) ) #else (
+			"NULL"
+		)
+	)
+	children (
+		#if ($c.p != 0) ( #(
+			header	: ((iso::ISO_value*)$c.p.t)[-1],
+			data	: $c.p.t->t
+		) )
+	)
+}
+
+iso::ISO_openarray<*,*> {
+	preview (
+		#if ($c.p != 0) ( #(
+			"p=", $c.p.t, ", count=", ((int*)$c.p)[-1]
+		) ) #else (
+			"NULL"
+		)
+	)
+	children ( #(
+		($T1*)$c.p,
+		#array (
+			expr: (($T1*)$c.p.t)[$i],
+			size: ((int*)$c.p.t)[-1]
+		)
+	) )
+}
+
+iso::WRAP<*> {
+	preview  ( $c.t )
+}
+
+iso::dynamic_array<*> {
+	children (
+		#array (
+			expr: $c.p[$i],
+			size: $c.curr_size
+		)
+	)
+}
+
+iso::list<*>{
+	preview (
+		#list (
+			head : $c.head.next,
+			skip : &$c.head,
+			size : 4,
+			next : next
+		) : $e.t
+	)			      
+	children ( #(
+		[raw members]: [$c,!],
+		#list (
+			head : $c.head.next,
+			skip : &$c.head,
+			size : 100,
+			next : next
+		) : $e.t
+	) )
+}
+
+iso::e_list<*>{
+	children ( #(
+		[raw members]: [$c,!],
+		#list (
+			head : $c.head.next, 
+			skip : &$c.head,
+			size : 100,
+			next : next
+		) : $e
+	) )
+	preview (
+		#list (
+			head : $c.head.next, 
+			skip : &$c.head,
+			size : 4,
+			next : next
+		) : $e
+	)			      
+}

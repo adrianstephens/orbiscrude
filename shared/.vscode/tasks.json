@@ -1,0 +1,84 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "make isocmd",
+            "type": "shell",
+            "command": "${workspaceRoot}\\bin\\make -rRf isocmd.mak -j16",
+            "options": {
+                "cwd": "${workspaceRoot}\\isocmd"
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "Build isoview",
+            "type": "shell",
+            "command": "msbuild",
+            "args": [
+                "/property:GenerateFullPaths=true",
+                "/property:VisualStudioVersion=15.0",
+                "/property:SolutionDir=${workspaceRoot}\\",
+                "/property:Configuration=Debug",
+                "/property:Platform=Win64",
+                "/target:IsoEditor",
+                "${workspaceRoot}\\shared.sln"
+            ],
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            },
+            "problemMatcher": "$msCompile",
+            "options": {
+                "env": {
+                    "path": "C:\\Program Files (x86)\\Microsoft Visual Studio\\2017\\Professional\\MSBuild\\15.0\\Bin;${env.path}"
+                }
+            }
+        },
+        {
+            "label": "build single file",
+            "type": "shell",
+            "command": "d:/dev/shared/bin/make -r SOURCE=${file}",
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "options": {
+                "env": {
+                    "path": "C:/Program Files (x86)/Microsoft Visual Studio/2017/Professional/VC/Tools/MSVC/14.16.27023/bin/Hostx64/x64;${env.path}"
+                }
+            },
+            "group": "build"
+        },
+        {
+            "type": "shell",
+            "label": "cl.exe build active file",
+            "command": "cl.exe",
+            "args": [
+                "/IC:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.18362.0\\ucrt",
+                "/IC:\\Program Files (x86)\\Microsoft Visual Studio\\2017\\Professional\\VC\\Tools\\MSVC\\14.16.27023\\include",
+                "/Zi",
+                "/EHsc",
+                "/Fe:", "${fileDirname}\\${fileBasenameNoExtension}.exe",
+                "${file}",
+                "/link",
+                "/LIBPATH:C:\\Program Files (x86)\\Microsoft Visual Studio\\2017\\Professional\\VC\\Tools\\MSVC\\14.16.27023\\lib\\x64",
+                "/LIBPATH:C:\\Program Files (x86)\\Windows Kits\\10\\Lib\\10.0.18362.0\\um\\x64",
+                "/LIBPATH:C:\\Program Files (x86)\\Windows Kits\\10\\Lib\\10.0.18362.0\\ucrt\\x64",
+                "/DEBUG"
+            ],
+            "options": {
+                "env": {
+                    "path": "C:/Program Files (x86)/Microsoft Visual Studio/2017/Professional/VC/Tools/MSVC/14.16.27023/bin/Hostx64/x64;${env.path}"
+                }
+            },
+            "problemMatcher": [
+                "$gcc"
+            ]
+        }
+    ]
+}

@@ -1,0 +1,8 @@
+*[] {
+	shader = external "water2.fx;ocean"
+	Texture[] texture = {
+		external "%AssetsDir%shaders\textures\water.jpg"
+		external "%AssetsDir%shaders\textures\lino.jpg"
+		external "%AssetsDir%shaders\textures\beach.jpg"
+	}
+}

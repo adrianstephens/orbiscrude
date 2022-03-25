@@ -1,0 +1,7 @@
+*[] {
+	fx = external "sky.fx"
+	transmittance	= Texture external "D:\dev\downloads\OceanLighting\data\transmittance.dds"
+	irradiance		= Texture external "D:\dev\downloads\OceanLighting\data\irradiance.dds"
+	inscatter		= Texture external "D:\dev\downloads\OceanLighting\data\inscatter.dds"
+	noise			= Texture external "D:\dev\downloads\OceanLighting\data\noise.pgm"
+}

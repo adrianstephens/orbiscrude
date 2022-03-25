@@ -1,0 +1,110 @@
+// Microsoft Visual C++ generated resource script.
+//
+#include "view_dx11gpu.rc.h"
+#include "windows\common.rc.h"
+
+#define APSTUDIO_READONLY_SYMBOLS
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 2 resource.
+//
+#include "..\..\resource.h"
+#include "winres.h"
+
+/////////////////////////////////////////////////////////////////////////////
+#undef APSTUDIO_READONLY_SYMBOLS
+
+/////////////////////////////////////////////////////////////////////////////
+// English (United States) resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+#pragma code_page(1252)
+
+#ifdef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// TEXTINCLUDE
+//
+
+1 TEXTINCLUDE 
+BEGIN
+    "view_dx11gpu.h\0"
+END
+
+2 TEXTINCLUDE 
+BEGIN
+    "#include ""..\\..\\resource.h""\r\n"
+    "#include ""windows\\common.rc.h""\r\n"
+    "#include ""winres.h""\r\n"
+    "\0"
+END
+
+3 TEXTINCLUDE 
+BEGIN
+    "\r\n"
+    "\0"
+END
+
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Menu
+//
+
+IDR_MENU_DX11GPU MENU
+BEGIN
+    POPUP "DX11GPU"
+    BEGIN
+        MENUITEM "Offsets",                     ID_DX11GPU_OFFSETS
+        MENUITEM SEPARATOR
+        MENUITEM "View RenderTarget",           ID_DX11GPU_VIEWRENDERTARGET
+        MENUITEM "View DepthTarget",            ID_DX11GPU_VIEWDEPTHTARGET
+        MENUITEM "View StencilTarget",          ID_DX11GPU_VIEWSTENCILTARGET
+        MENUITEM SEPARATOR
+        MENUITEM "View State",                  ID_DX11GPU_VIEWSTATE
+        MENUITEM "Compare State",               ID_DX11GPU_COMPARESTATE
+        MENUITEM "View Regs",                   ID_DX11GPU_VIEWREGS
+		MENUITEM SEPARATOR
+		MENUITEM "Raw",                         ID_DX11GPU_RAW
+	END
+END
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Toolbar
+//
+
+IDR_TOOLBAR_DX11GPU TOOLBAR 32, 32
+BEGIN
+    BUTTON      ID_DX11GPU_ALLOBJECTS
+    BUTTON      ID_DX11GPU_ALLRESOURCES
+	BUTTON      ID_DX11GPU_ALLSHADERS
+	BUTTON      ID_DX11GPU_TIMER
+END
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Bitmap
+//
+
+IDR_TOOLBAR_DX11GPU     BITMAP                  "toolbar_dx11gpu.bmp"
+
+#endif    // English (United States) resources
+/////////////////////////////////////////////////////////////////////////////
+
+DX11CRUDE.DLL           BIN                     "dx11crude.dll"
+
+
+#ifndef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 3 resource.
+//
+
+
+/////////////////////////////////////////////////////////////////////////////
+#endif    // not APSTUDIO_INVOKED
+

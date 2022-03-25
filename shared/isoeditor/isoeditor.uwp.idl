@@ -1,0 +1,10 @@
+import "inspectable.idl";
+import "Windows.UI.Xaml.idl";
+
+namespace app {
+
+	runtimeclass App : Windows.UI.Xaml.Application
+	{
+	}
+
+}

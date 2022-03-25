@@ -1,0 +1,43 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <PropertyGroup Label="UserMacros">
+    <AndroidBuildTools>$(VS_AndroidHome)\build-tools\26.0.1\</AndroidBuildTools>
+    <CompanyName>isopod</CompanyName>
+    <CountryCode>JPN</CountryCode>
+    <LLDBPrebuiltTag>$(TargetAndroidABI)</LLDBPrebuiltTag>
+    <LLDBPrebuiltTag Condition="'$(Platform)' == 'ARM'">armeabi</LLDBPrebuiltTag>
+  </PropertyGroup>
+
+  <Target Name="AndroidKey" Outputs="$(IntDir)$(TargetName).keystore">
+    <Message Text="Generate key"/>
+    <Exec
+      Condition ="!Exists('$(IntDir)$(TargetName).keystore')"
+      Command="&quot;$(VS_JavaHome)/bin/keytool&quot; -genkeypair -validity 1000 -dname &quot;CN=$(CompanyName),O=Android,C=$(CountryCode)&quot; -keystore $(IntDir)$(TargetName).keystore -storepass password -keypass password -alias $(TargetName)_key -keyalg RSA"
+    />
+  </Target>
+
+  <Target Name="AndroidPKG" DependsOnTargets="AndroidKey" AfterTargets="CustomBuildStep" Inputs="$(TargetPath);AndroidManifest.xml" Outputs="$(OutDir)$(TargetName).apk">
+    <!--  make unsigned package -->
+    <Message Text="Create package"/>
+    <Exec Command="$(AndroidBuildTools)aapt package --debug-mode -f -S $(OutDir)res -M AndroidManifest.xml -I $(AndroidSDKAPILevelRoot)android.jar -F $(OutDir)$(TargetName).0.apk $(OutDir)assets"/>
+    <Copy SourceFiles="$(TargetPath)" DestinationFiles="$(OutDir)lib/$(TargetArchABI)/lib$(TargetName).so"/>
+    <Copy SourceFiles="$(GdbServerPath)" DestinationFolder="$(OutDir)lib/$(TargetArchABI)"/>
+    <Copy SourceFiles="$(VS_AndroidHome)\lldb\3.0\android\$(LLDBPrebuiltTag)\lldb-server" DestinationFolder="$(OutDir)lib/$(TargetArchABI)"/>
+    <Exec WorkingDirectory="$(OutDir)" Command="$(AndroidBuildTools)aapt add $(TargetName).0.apk lib/$(TargetArchABI)/lib$(TargetName).so"/>
+    <Exec WorkingDirectory="$(OutDir)" Command="$(AndroidBuildTools)aapt add $(TargetName).0.apk lib/$(TargetArchABI)/lldb-server"/>
+    <!--  sign package -->
+    <Message Text="Sign package"/>
+    <Exec WorkingDirectory="$(OutDir)" Command="&quot;$(VS_JavaHome)/bin/jarsigner&quot; -keystore $(IntDir)$(TargetName).keystore -storepass password -keypass password $(TargetName).0.apk $(TargetName)_key"/>
+    <!--  align package -->
+    <Message Text="Align package"/>
+    <Exec WorkingDirectory="$(OutDir)" Command="$(AndroidBuildTools)zipalign -f 4 $(TargetName).0.apk $(TargetName).apk"/>
+  
+</Target>
+
+  <Target Name="AndroidDeploy">
+    <Message Text="Deploy apk"/>
+    <Exec Command="$(VS_AndroidHome)/platform-tools/adb install -r $(OutDir)$(TargetName).apk"/>
+  </Target>
+
+</Project>

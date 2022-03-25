@@ -1,0 +1,180 @@
+// Microsoft Visual C++ generated resource script.
+//
+#include "viewbitmap.rc.h"
+
+#define APSTUDIO_READONLY_SYMBOLS
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 2 resource.
+//
+#include "windows\common.rc.h"
+#include "winres.h"
+
+/////////////////////////////////////////////////////////////////////////////
+#undef APSTUDIO_READONLY_SYMBOLS
+
+/////////////////////////////////////////////////////////////////////////////
+// English (United States) resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+#pragma code_page(1252)
+
+#ifdef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// TEXTINCLUDE
+//
+
+1 TEXTINCLUDE 
+BEGIN
+    "viewbitmap.rc.h\0"
+END
+
+2 TEXTINCLUDE 
+BEGIN
+    "#include ""windows\\common.rc.h""\r\n"
+    "#include ""winres.h""\r\n"
+    "\0"
+END
+
+3 TEXTINCLUDE 
+BEGIN
+    "\r\n"
+    "\0"
+END
+
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Menu
+//
+
+IDR_MENU_BITMAP MENU
+BEGIN
+    POPUP "Bitmap"
+    BEGIN
+        POPUP "Channel"
+        BEGIN
+            MENUITEM "Red\tR",                      ID_BITMAP_CHANNEL_RED
+            MENUITEM "Green\tG",                    ID_BITMAP_CHANNEL_GREEN
+            MENUITEM "Blue\tB",                     ID_BITMAP_CHANNEL_BLUE
+            MENUITEM "Alpha\tA",                    ID_BITMAP_CHANNEL_ALPHA
+            MENUITEM SEPARATOR
+            MENUITEM "Index\tI",                    ID_BITMAP_CHANNEL_INDEX
+            MENUITEM "Alpha Mask\tM",               ID_BITMAP_CHANNEL_ALPHAMASK
+            MENUITEM "Depth\tD",                    ID_BITMAP_CHANNEL_DEPTH
+            MENUITEM SEPARATOR
+            MENUITEM "All\tEnter",                  ID_BITMAP_CHANNEL_ALL
+        END
+        MENUITEM SEPARATOR
+        MENUITEM "Save As...",                  ID_BITMAP_SAVEAS
+    END
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Accelerator
+//
+
+IDR_ACCELERATOR_BITMAP ACCELERATORS
+BEGIN
+    VK_RETURN,      ID_BITMAP_CHANNEL_ALL,  VIRTKEY, NOINVERT
+    "A",            ID_BITMAP_CHANNEL_ALPHA, VIRTKEY, NOINVERT
+    "M",            ID_BITMAP_CHANNEL_ALPHAMASK, VIRTKEY, NOINVERT
+    "B",            ID_BITMAP_CHANNEL_BLUE, VIRTKEY, NOINVERT
+    "D",            ID_BITMAP_CHANNEL_DEPTH, VIRTKEY, NOINVERT
+    "G",            ID_BITMAP_CHANNEL_GREEN, VIRTKEY, NOINVERT
+    "I",            ID_BITMAP_CHANNEL_INDEX, VIRTKEY, NOINVERT
+    "R",            ID_BITMAP_CHANNEL_RED,  VIRTKEY, NOINVERT
+    "C",            ID_EDIT_COPY,           VIRTKEY, CONTROL, NOINVERT
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Toolbar
+//
+
+IDR_TOOLBAR_BITMAP TOOLBAR 16, 16
+BEGIN
+    BUTTON      ID_BITMAP_CHANNEL_RED
+    BUTTON      ID_BITMAP_CHANNEL_GREEN
+    BUTTON      ID_BITMAP_CHANNEL_BLUE
+    BUTTON      ID_BITMAP_CHANNEL_ALPHA
+    SEPARATOR
+    BUTTON      ID_BITMAP_BILINEAR
+    BUTTON      ID_BITMAP_GAMMA
+    BUTTON      ID_BITMAP_MIN
+    BUTTON      ID_BITMAP_MAX
+    BUTTON      ID_BITMAP_AUTOCONTRAST
+    BUTTON      ID_BITMAP_MIPS
+    SEPARATOR
+    BUTTON      ID_BITMAP_SAVEAS
+    BUTTON      ID_BITMAP_UPDOWN
+    BUTTON      ID_BITMAP_LEFTRIGHT
+    BUTTON		ID_BITMAP_HISTOGRAM
+    BUTTON		ID_BITMAP_GRID
+    BUTTON		ID_BITMAP_SLICES
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Bitmap
+//
+
+IDR_TOOLBAR_BITMAP      BITMAP                  "viewbitmap_toolbar.bmp"
+IDB_CHECKER             BITMAP                  "checker.bmp"
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// SHADER
+//
+
+#if TOOLSET >= 110
+d2d_shader              SHADER                  "d2d_shader.cso"
+d2d_grid                SHADER                  "d2d_grid.cso"
+#endif
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// String Table
+//
+
+STRINGTABLE
+BEGIN
+    ID_BITMAP_CHANNEL_RED   "Red Channel"
+    ID_BITMAP_CHANNEL_GREEN "Green Channel"
+    ID_BITMAP_CHANNEL_BLUE  "Blue Channel"
+    ID_BITMAP_CHANNEL_ALPHA "Alpha Channel"
+    ID_BITMAP_BILINEAR      "Bilinear Mode"
+    ID_BITMAP_GAMMA         "Gamma"
+    ID_BITMAP_MIN           "Minimum range"
+    ID_BITMAP_MAX           "Maximum range"
+    ID_BITMAP_AUTOCONTRAST  "Auto Contrast"
+    ID_BITMAP_MIPS          "Show/Hide Mips"
+    ID_BITMAP_UPDOWN        "Flip Vertically"
+    ID_BITMAP_LEFTRIGHT     "Flip Horizontally"
+    ID_BITMAP_SAVEAS        "Save As..."
+    ID_BITMAP_HISTOGRAM     "Histogram"
+END
+
+#endif    // English (United States) resources
+/////////////////////////////////////////////////////////////////////////////
+
+
+
+#ifndef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 3 resource.
+//
+
+
+/////////////////////////////////////////////////////////////////////////////
+#endif    // not APSTUDIO_INVOKED
+

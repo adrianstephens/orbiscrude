@@ -1,0 +1,262 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug-clang|x64">
+      <Configuration>Debug-clang</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release-clang|x64">
+      <Configuration>Release-clang</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{67a20651-fb18-4e51-8c33-67ab72d73a72}</ProjectGuid>
+    <RootNamespace>IsoEditor.uwp</RootNamespace>
+    <DefaultLanguage>en-US</DefaultLanguage>
+    <MinimumVisualStudioVersion>14.0</MinimumVisualStudioVersion>
+    <AppContainerApplication>true</AppContainerApplication>
+    <ApplicationType>Windows Store</ApplicationType>
+    <WindowsTargetPlatformMinVersion>10.0.17134.0</WindowsTargetPlatformMinVersion>
+    <ApplicationTypeRevision>10.0</ApplicationTypeRevision>
+    <ProjectName>IsoEditor.uwp</ProjectName>
+    <ConfigurationType>Application</ConfigurationType>
+    <SccProjectName>Svn</SccProjectName>
+    <SccAuxPath>Svn</SccAuxPath>
+    <SccLocalPath>Svn</SccLocalPath>
+    <SccProvider>SubversionScc</SccProvider>
+    <PackageCertificateKeyFile>UWP_TemporaryKey.pfx</PackageCertificateKeyFile>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <Import Project="..\toolset.props" />
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(SolutionDir)isopod.props" />
+    <Import Project="$(SDK)zlib\1.2.8\zlib.props" />
+    <Import Project="$(SDK)\libpng\1.6.16\libpng.props" />
+  </ImportGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <PropertyGroup Label="UserMacros" />
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <AdditionalOptions>/bigobj /await %(AdditionalOptions)</AdditionalOptions>
+      <DisableSpecificWarnings>4146;4453;28204</DisableSpecificWarnings>
+      <AdditionalIncludeDirectories>$(SolutionDir)platforms\pc\dx11;$(SolutionDir)platforms\pc\x64;$(SolutionDir)platforms\pc;$(SolutionDir)common;$(SolutionDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <CompileAsWinRT>false</CompileAsWinRT>
+      <PreprocessorDefinitions>PLAT_WINRT;_UNICODE;UNICODE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <CompileAsManaged>false</CompileAsManaged>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug-clang|x64'">
+    <ClCompile>
+      <AdditionalOptions>/bigobj /clang:-fcoroutines-ts /clang:-ftemplate-backtrace-limit=0 %(AdditionalOptions)</AdditionalOptions>
+      <DisableSpecificWarnings>4146;4453;28204</DisableSpecificWarnings>
+      <AdditionalIncludeDirectories>$(SolutionDir)platforms\pc\dx11;$(SolutionDir)platforms\pc\x64;$(SolutionDir)platforms\pc;$(SolutionDir)common;$(SolutionDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <CompileAsWinRT>false</CompileAsWinRT>
+      <PreprocessorDefinitions>PLAT_WINRT;_UNICODE;UNICODE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <AdditionalOptions>/bigobj /await %(AdditionalOptions)</AdditionalOptions>
+      <DisableSpecificWarnings>4146;4453;28204</DisableSpecificWarnings>
+      <AdditionalIncludeDirectories>$(SolutionDir)platforms\pc\dx11;$(SolutionDir)platforms\pc\x64;$(SolutionDir)platforms\pc;$(SolutionDir)common;$(SolutionDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <CompileAsWinRT>false</CompileAsWinRT>
+      <PreprocessorDefinitions>PLAT_WINRT;_UNICODE;UNICODE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release-clang|x64'">
+    <ClCompile>
+      <AdditionalOptions>/bigobj /clang:-fcoroutines-ts /clang:-ftemplate-backtrace-limit=0 %(AdditionalOptions)</AdditionalOptions>
+      <DisableSpecificWarnings>4146;4453;28204</DisableSpecificWarnings>
+      <AdditionalIncludeDirectories>$(SolutionDir)platforms\pc\dx11;$(SolutionDir)platforms\pc\x64;$(SolutionDir)platforms\pc;$(SolutionDir)common;$(SolutionDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <CompileAsWinRT>false</CompileAsWinRT>
+      <PreprocessorDefinitions>PLAT_WINRT;_UNICODE;UNICODE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClInclude Include="..\common\base\defs.h" />
+    <ClInclude Include="..\common\base\defs_base.h" />
+    <ClInclude Include="..\common\crc32.h" />
+    <ClInclude Include="..\common\iso\iso.h" />
+    <ClInclude Include="..\common\iso\iso_binary.h" />
+    <ClInclude Include="..\common\iso\iso_convert.h" />
+    <ClInclude Include="..\common\iso\iso_custominit.h" />
+    <ClInclude Include="..\common\iso\iso_files.h" />
+    <ClInclude Include="..\common\iso\iso_script.h" />
+    <ClInclude Include="..\common\jobs.h" />
+    <ClInclude Include="..\common\stream.h" />
+    <ClInclude Include="..\filetypes\bitmap\bitmap.h" />
+    <ClInclude Include="..\filetypes\bitmap\bitmapfile.h" />
+    <ClInclude Include="..\platforms\pc\winrt\base.h" />
+    <ClInclude Include="..\platforms\pc\winrt\Binding.h" />
+    <ClInclude Include="..\platforms\pc\winrt\coroutine.h" />
+    <ClInclude Include="..\platforms\pc\winrt\pre_include.h" />
+    <ClInclude Include="..\platforms\pc\winrt\UIHelper.h" />
+    <ClInclude Include="..\platforms\pc\winrt\window.h" />
+    <ClInclude Include="devices\device.h" />
+    <ClInclude Include="pch.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <AppxManifest Include="IsoEditor.appxmanifest">
+      <SubType>Designer</SubType>
+    </AppxManifest>
+    <CustomBuild Include="..\isopod.psd">
+      <FileType>Document</FileType>
+      <Command>
+        $(BinDir)IsoCmd_x64 {Crop{Resize{external "%(FullPath)"  -300 300} 0 0  -300 -300}} Assets\tile300x300.png
+        $(BinDir)IsoCmd_x64 {Crop{Resize{external "%(FullPath)"  -620 -300} 0 0  -620 -300}} Assets\tile620x300.png
+        $(BinDir)IsoCmd_x64 {Crop{Resize{external "%(FullPath)"  -1240 -600} 0 0  -1240 -600}} Assets\spash1240x600.png
+        $(BinDir)IsoCmd_x64 {Crop{Resize{external "%(FullPath)"  -88 88} 0 0  -88 -88}} Assets\icon88x88.png
+        $(BinDir)IsoCmd_x64 {Crop{Resize{external "%(FullPath)"  -50 50} 0 0  -50 -50}} Assets\storelogo50x50.png
+      </Command>
+      <Message>Making Tiles</Message>
+      <Outputs>Assets\tile300x300.png;Assets\tile620x300.png;Assets\icon88x88.png</Outputs>
+    </CustomBuild>
+    <None Include="devices\icons\dot.psd" />
+    <None Include="UWP_TemporaryKey.pfx" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="Assets\icon88x88.png" />
+    <Image Include="Assets\IDB_DEVICE_CLIPBOARD.png" />
+    <Image Include="Assets\IDB_DEVICE_CODE.png" />
+    <Image Include="Assets\IDB_DEVICE_CONSOLE.png" />
+    <Image Include="Assets\IDB_DEVICE_FILE.png" />
+    <Image Include="Assets\IDB_DEVICE_FOLDER.png" />
+    <Image Include="Assets\IDB_DEVICE_FONTS.png" />
+    <Image Include="Assets\IDB_DEVICE_HARDDRIVE.png" />
+    <Image Include="Assets\IDB_DEVICE_HUE.png" />
+    <Image Include="Assets\IDB_DEVICE_LANDSCAPE.png" />
+    <Image Include="Assets\IDB_DEVICE_PLAYSTATION.png" />
+    <Image Include="Assets\IDB_DEVICE_PROCESSES.png" />
+    <Image Include="Assets\IDB_DEVICE_REGISTRY.png" />
+    <Image Include="Assets\IDB_DEVICE_ROOT.png" />
+    <Image Include="Assets\IDB_DEVICE_SERIALPORT.png" />
+    <Image Include="Assets\IDB_DEVICE_SETTINGS.png" />
+    <Image Include="Assets\IDB_DEVICE_SVN.png" />
+    <Image Include="Assets\IDB_DEVICE_UPNP.png" />
+    <Image Include="Assets\IDB_DEVICE_URL.png" />
+    <Image Include="Assets\IDB_DEVICE_VIDEOCAP.png" />
+    <Image Include="Assets\IDB_DEVICE_WINDOWS.png" />
+    <Image Include="Assets\IDB_DEVICE_XBOX.png" />
+    <Image Include="Assets\spash1240x600.png" />
+    <Image Include="Assets\storelogo50x50.png" />
+    <Image Include="Assets\tile300x300.png" />
+    <Image Include="Assets\tile620x300.png" />
+    <Image Include="devices\icons\Clipboard.png" />
+    <Image Include="devices\icons\Code.png" />
+    <Image Include="devices\icons\Console.png" />
+    <Image Include="devices\icons\FILE.png" />
+    <Image Include="devices\icons\FOLDER.png" />
+    <Image Include="devices\icons\Fonts.png" />
+    <Image Include="devices\icons\Harddrive.png" />
+    <Image Include="devices\icons\HUE.png" />
+    <Image Include="devices\icons\PlayStation.png" />
+    <Image Include="devices\icons\Processes.png" />
+    <Image Include="devices\icons\Registry Editor.png" />
+    <Image Include="devices\icons\Settings.png" />
+    <Image Include="devices\icons\svn.png" />
+    <Image Include="devices\icons\UPNP.png" />
+    <Image Include="devices\icons\URL.png" />
+    <Image Include="devices\icons\VideoCap.png" />
+    <Image Include="devices\icons\Windows.png" />
+    <Image Include="devices\icons\Xbox.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\common\allocators\tlsf.cpp" />
+    <ClCompile Include="..\common\base\defs.cpp" />
+    <ClCompile Include="..\common\comms\HTTP.cpp" />
+    <ClCompile Include="..\common\comms\ip.cpp" />
+    <ClCompile Include="..\common\comms\UPnP.cpp" />
+    <ClCompile Include="..\common\crc32.cpp" />
+    <ClCompile Include="..\common\extra\xml.cpp" />
+    <ClCompile Include="..\common\filename.cpp" />
+    <ClCompile Include="..\common\iso\iso.cpp" />
+    <ClCompile Include="..\common\iso\iso_binary.cpp" />
+    <ClCompile Include="..\common\iso\iso_convert.cpp" />
+    <ClCompile Include="..\common\iso\iso_files.cpp" />
+    <ClCompile Include="..\common\iso\iso_script.cpp" />
+    <ClCompile Include="..\common\jobs.cpp" />
+    <ClCompile Include="..\filetypes\bin.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\bitmap.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\png.cpp" />
+    <ClCompile Include="..\filetypes\ib.cpp" />
+    <ClCompile Include="..\platforms\pc\platform.cpp" />
+    <ClCompile Include="..\platforms\pc\sockets.cpp" />
+    <ClCompile Include="..\platforms\pc\winrt\UIHelper.cpp" />
+    <ClCompile Include="..\platforms\pc\winrt\window.cpp" />
+    <ClCompile Include="..\platforms\pc\_thread.cpp" />
+    <ClCompile Include="devices\devices.cpp" />
+    <ClCompile Include="devices\device_upnp.cpp" />
+    <ClCompile Include="devices\philips_hue.cpp" />
+    <ClCompile Include="isoeditor.cpp" />
+    <ClCompile Include="main.uwp.cpp">
+      <DisableSpecificWarnings>4146;4453;28204</DisableSpecificWarnings>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="pch.cpp">
+      <PrecompiledHeader>Create</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="TreeViewTest.xaml.cpp">
+      <DependentUpon>TreeViewTest.xaml</DependentUpon>
+    </ClCompile>
+    <ClCompile Include="viewers\viewbin.cpp" />
+    <ClCompile Include="viewers\viewbin.xaml.cpp">
+      <DependentUpon>viewers\viewbin.xaml</DependentUpon>
+    </ClCompile>
+    <ClCompile Include="viewers\viewbitmap.xaml.cpp">
+      <DependentUpon>viewers\viewbitmap.xaml</DependentUpon>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="viewers\viewbitmap.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="IsoEditor.xaml">
+      <SubType>Designer</SubType>
+      <FileType>Document</FileType>
+      <DeploymentContent>true</DeploymentContent>
+    </None>
+    <None Include="viewers\viewbitmap.xaml">
+      <SubType>Designer</SubType>
+      <FileType>Document</FileType>
+      <DeploymentContent>true</DeploymentContent>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Midl Include="isoeditor.uwp.idl" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="viewers\viewbin.xaml">
+      <SubType>Designer</SubType>
+      <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</DeploymentContent>
+      <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Debug-clang|x64'">true</DeploymentContent>
+      <FileType>Document</FileType>
+      <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</DeploymentContent>
+      <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Release-clang|x64'">true</DeploymentContent>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="TreeViewTest.xaml">
+      <SubType>Designer</SubType>
+      <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</DeploymentContent>
+      <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Debug-clang|x64'">true</DeploymentContent>
+      <FileType>Document</FileType>
+      <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</DeploymentContent>
+      <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Release-clang|x64'">true</DeploymentContent>
+    </None>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

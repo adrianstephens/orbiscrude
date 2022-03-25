@@ -1,0 +1,81 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="hashes">
+      <UniqueIdentifier>{7a7c6e63-3e4f-4929-8943-40ebccb0e819}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="common\comms\asn1.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="common\comms\asn1_objects.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="common\comms\base64.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="common\comms\ssl.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="common\hashes\des.cpp">
+      <Filter>hashes</Filter>
+    </ClCompile>
+    <ClCompile Include="common\hashes\diffie-hellman.cpp">
+      <Filter>hashes</Filter>
+    </ClCompile>
+    <ClCompile Include="common\hashes\dsa.cpp">
+      <Filter>hashes</Filter>
+    </ClCompile>
+    <ClCompile Include="common\hashes\elliptic-curves.cpp">
+      <Filter>hashes</Filter>
+    </ClCompile>
+    <ClCompile Include="common\hashes\rsa.cpp">
+      <Filter>hashes</Filter>
+    </ClCompile>
+    <ClCompile Include="common\hashes\SHA.cpp">
+      <Filter>hashes</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="common\comms\asn1.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="common\comms\base64.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="common\comms\ssl.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="common\hashes\des.h">
+      <Filter>hashes</Filter>
+    </ClInclude>
+    <ClInclude Include="common\hashes\diffie-hellman.h">
+      <Filter>hashes</Filter>
+    </ClInclude>
+    <ClInclude Include="common\hashes\dsa.h">
+      <Filter>hashes</Filter>
+    </ClInclude>
+    <ClInclude Include="common\hashes\elliptic-curves.h">
+      <Filter>hashes</Filter>
+    </ClInclude>
+    <ClInclude Include="common\hashes\rsa.h">
+      <Filter>hashes</Filter>
+    </ClInclude>
+    <ClInclude Include="common\hashes\SHA.h">
+      <Filter>hashes</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>

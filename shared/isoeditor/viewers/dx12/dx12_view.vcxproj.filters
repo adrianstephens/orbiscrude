@@ -1,0 +1,32 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="resources">
+      <UniqueIdentifier>{4b5f6918-0b22-42c0-a2e7-692ebd2279a9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="filetypes">
+      <UniqueIdentifier>{14e9f9ab-aa4c-4088-ba9f-21eaeb9d9399}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="dx12_fields.cpp" />
+    <ClCompile Include="view_dx12gpu.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="view_dx12gpu.rc.h">
+      <Filter>resources</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\platforms\pc\dx12\dx12_record.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <IsoCmd Include="toolbar_dx12gpu.psd">
+      <Filter>resources</Filter>
+    </IsoCmd>
+    <IsoCmd Include="..\cursor_overlay_add.psd" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="view_dx12gpu.rc">
+      <Filter>resources</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+</Project>

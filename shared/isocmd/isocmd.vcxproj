@@ -1,0 +1,752 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug-clang|x64">
+      <Configuration>Debug-clang</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release-clang|x64">
+      <Configuration>Release-clang</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectName>IsoCmd</ProjectName>
+    <ProjectGuid>{485A3589-9D67-40FD-AC9F-892B8246DC67}</ProjectGuid>
+    <RootNamespace>IsoCmd</RootNamespace>
+    <Keyword>Win32Proj</Keyword>
+    <SccProjectName>Svn</SccProjectName>
+    <SccAuxPath>Svn</SccAuxPath>
+    <SccLocalPath>Svn</SccLocalPath>
+    <SccProvider>SubversionScc</SccProvider>
+  </PropertyGroup>
+  <Import Project="..\toolset.props" />
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <WholeProgramOptimization>false</WholeProgramOptimization>
+    <ConfigurationType>Application</ConfigurationType>
+    <PlatformTag>dx11</PlatformTag>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(SolutionDir)isopod.props" />
+    <Import Project="$(SDK)directx\directx9.props" />
+    <Import Project="$(SDK)zlib\1.2.8\zlib.props" />
+    <Import Project="$(SDK)libpng\1.6.16\libpng.props" />
+	<Import Project="$(SDK)lame\3.99.5\lame.props" />
+	<Import Project="$(SDK)SCE\ORBIS SDKs\6.000\orbis.props" Condition="exists('$(SDK)SCE\ORBIS SDKs\6.000\orbis.props')"/>
+	<Import Project="$(SDK)SCE\PS3TMAPI\ps3tmapi.props" Condition="exists('$(SDK)SCE\PS3TMAPI\ps3tmapi.props')"/>
+	<Import Project="$(SDK)SCE\cell\cell.props" Condition="exists('$(SDK)SCE\cell\cell.props')"/>
+    <Import Project="$(SDK)durango.props" Condition="exists('$(SDK)durango.props')"/>
+	<Import Project="$(SDK)Nintendo\RVL_SDK\wii.props" Condition="exists('$(SDK)Nintendo\RVL_SDK\wii.props')"/>
+  </ImportGroup>
+  <PropertyGroup>
+    <_ProjectFileVersion>10.0.30319.1</_ProjectFileVersion>
+    <LinkIncremental Condition="'$(Configuration)'=='Debug'">true</LinkIncremental>
+    <LinkIncremental Condition="'$(Configuration)'=='Release'">false</LinkIncremental>
+    <TargetName Condition="'$(Platform)'=='x64'">$(ProjectName)_x64</TargetName>
+    <TargetName Condition="'$(Clang)'=='true'">$(TargetName)_clang</TargetName>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <AdditionalIncludeDirectories>..\platforms\pc\x86;..\platforms\pc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;_CONSOLE;CROSS_PLATFORM;USE_HTTP;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <MinimalRebuild>false</MinimalRebuild>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>vfw32.lib;winmm.lib;wininet.lib;dbghelp.lib;d3dcompiler.lib;$(sdk)WMFSDK11\lib\wmvcore.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(sdk)Nintendo\RVL_SDK\x86\lib;$(sdk)unrar\4.2.4\build\win32\Debug.v11;$(sdk)xvidcore\build\win32\Debug-static\Win32;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <DelayLoadDLLs>d3dx9_43.dll;d3dcompiler_43.dll;libflac_dynamic.dll;xenondx.dll;xbdm.dll;hio2.dll;PVRTexLib.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Console</SubSystem>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <TargetMachine>MachineX86</TargetMachine>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <AdditionalIncludeDirectories>..\platforms\msvc;..\platforms\pc\x64;..\platforms\pc;$(SharedDir)platforms\pc\dx11;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;_CONSOLE;CROSS_PLATFORM;USE_HTTP;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <MinimalRebuild>false</MinimalRebuild>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+      <SupportJustMyCode>false</SupportJustMyCode>
+      <DiagnosticsFormat>Column</DiagnosticsFormat>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>$(IntDir)tensor.ib.obj;$(IntDir)dxt.ib.obj;runtimeobject.lib;vfw32.lib;winmm.lib;wininet.lib;dbghelp.lib;d3dcompiler.lib;$(SDK)\PowerVR\Tools\PVRTexTool\Library\Windows_x86_64\Dynamic\PVRTexLib.lib;$(XEDK)\lib\x64\vs2010\xmaencoder.lib;$(XEDK)\lib\x64\vs2010\xgraphics.lib;$(XEDK)\lib\x64\vs2010\xcompress.lib;$(XEDK)\lib\x64\vs2010\d3d9.lib;$(SCE_ORBIS_SDK_DIR)\host_tools\lib\libSceGpuAddress_debug.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SDK);$(SDK)RVL_SDK\x86\lib;$(xedk)\lib\win32\vs2010;$(sdk)\xvidcore\build\win32\Debug-static\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <DelayLoadDLLs>d3dcompiler_46.dll;d3dcompiler_47.dll;d3dcompiler_47_xdk.dll;xenondx_x64.dll;xbdm.dll;hio2.dll;libflac_dynamic.dll;PVRTexLib.dll;xg.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Console</SubSystem>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+    </Link>
+    <PostBuildEvent>
+      <Command>
+      </Command>
+    </PostBuildEvent>
+    <PostBuildEvent>
+      <Message>
+      </Message>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug-clang|x64'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>..\platforms\clang;..\platforms\pc\x64;..\platforms\pc;$(SharedDir)platforms\pc\dx11;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;_CONSOLE;CROSS_PLATFORM;USE_HTTP;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <MinimalRebuild>false</MinimalRebuild>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+      <SupportJustMyCode>false</SupportJustMyCode>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
+      <DiagnosticsFormat>Classic</DiagnosticsFormat>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>$(IntDir)tensor.ib.obj;$(IntDir)dxt.ib.obj;runtimeobject.lib;vfw32.lib;winmm.lib;wininet.lib;dbghelp.lib;d3dcompiler.lib;$(SDK)\PowerVR\Tools\PVRTexTool\Library\Windows_x86_64\Dynamic\PVRTexLib.lib;$(XEDK)\lib\x64\vs2010\xmaencoder.lib;$(XEDK)\lib\x64\vs2010\xgraphics.lib;$(XEDK)\lib\x64\vs2010\xcompress.lib;$(XEDK)\lib\x64\vs2010\d3d9.lib;$(SCE_ORBIS_SDK_DIR)\host_tools\lib\libSceGpuAddress.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SDK);$(SDK)RVL_SDK\x86\lib;$(xedk)\lib\win32\vs2010;$(sdk)\xvidcore\build\win32\Debug-static\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <DelayLoadDLLs>d3dcompiler_46.dll;d3dcompiler_47.dll;d3dcompiler_47_xdk.dll;xenondx_x64.dll;xbdm.dll;hio2.dll;libflac_dynamic.dll;PVRTexLib.dll;xg.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Console</SubSystem>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <AdditionalOptions>/DELAYLOAD:"d3dcompiler_47.dll" /DELAYLOAD:"d3dcompiler_47_xdk.dll" /DELAYLOAD:"libSceShaderCompiler.dll" /DELAYLOAD:"libSceShaderWavePsslc.dll" /DELAYLOAD:"libSceGpuAddress.dll" /DELAYLOAD:"xenondx_x64.dll" /DELAYLOAD:"libcgc_x64.dll" /DELAYLOAD:"unrar.dll" /DELAYLOAD:"xbdm.dll" /DELAYLOAD:"hio2.dll" /DELAYLOAD:"libflac_dynamic.dll" /DELAYLOAD:"ps3tmapix64.dll" /DELAYLOAD:"PVRTexLib.dll" /DELAYLOAD:"xg.dll" /DELAYLOAD:"OpenMaya.dll" /DELAYLOAD:"Foundation.dll" %(AdditionalOptions)</AdditionalOptions>
+    </Link>
+    <PostBuildEvent>
+      <Command>
+      </Command>
+    </PostBuildEvent>
+    <PostBuildEvent>
+      <Message>
+      </Message>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <Optimization>MaxSpeed</Optimization>
+      <WholeProgramOptimization>true</WholeProgramOptimization>
+      <AdditionalIncludeDirectories>..\platforms\pc\x86;..\platforms\pc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;_CONSOLE;CROSS_PLATFORM;USE_HTTP;RELEASE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <MinimalRebuild>false</MinimalRebuild>
+    </ClCompile>
+    <ProjectReference>
+      <LinkLibraryDependencies>true</LinkLibraryDependencies>
+    </ProjectReference>
+    <Link>
+      <AdditionalDependencies>vfw32.lib;winmm.lib;wininet.lib;dbghelp.lib;d3dcompiler.lib;$(sdk)WMFSDK11\lib\wmvcore.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(sdk)Nintendo\RVL_SDK\x86\lib;$(sdk)unrar\4.2.4\build\win32\Release.v11;$(sdk)xvidcore\build\win32\Release-static\Win32;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <DelayLoadDLLs>d3dx9_43.dll;d3dcompiler_43.dll;libflac_dynamic.dll;xenondx.dll;xbdm.dll;hio2.dll;PVRTexLib.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Console</SubSystem>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <TargetMachine>MachineX86</TargetMachine>
+    </Link>
+    <PostBuildEvent>
+      <Command>copy $(TargetPath) $(BinDir)</Command>
+      <Message>Copy to BIN</Message>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <Optimization>MaxSpeed</Optimization>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+      <AdditionalIncludeDirectories>..\platforms\msvc;..\platforms\pc\x64;..\platforms\pc;$(SharedDir)platforms\pc\dx11;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;_CONSOLE;CROSS_PLATFORM;USE_HTTP;RELEASE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <MinimalRebuild>false</MinimalRebuild>
+      <AdditionalOptions>/d2Zi+ %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ProjectReference>
+      <LinkLibraryDependencies>true</LinkLibraryDependencies>
+    </ProjectReference>
+    <Link>
+      <AdditionalDependencies>$(IntDir)tensor.ib.obj;$(IntDir)dxt.ib.obj;vfw32.lib;winmm.lib;wininet.lib;dbghelp.lib;d3dcompiler.lib;$(SDK)\PowerVR\Tools\PVRTexTool\Library\Windows_x86_64\Dynamic\PVRTexLib.lib;$(XEDK)\lib\x64\vs2010\xmaencoder.lib;$(XEDK)\lib\x64\vs2010\xgraphics.lib;$(XEDK)\lib\x64\vs2010\xcompress.lib;$(XEDK)\lib\x64\vs2010\d3d9.lib;$(SCE_ORBIS_SDK_DIR)\host_tools\lib\libSceGpuAddress.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SDK);$(SDK)RVL_SDK\x86\lib;$(xedk)\lib\win32\vs2010;$(sdk)xvidcore\build\win32\Release-static\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <DelayLoadDLLs>d3dcompiler_46.dll;d3dcompiler_47.dll;d3dcompiler_47_xdk.dll;xenondx_x64.dll;xbdm.dll;hio2.dll;libflac_dynamic.dll;xg.dll;PVRTexLib.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Console</SubSystem>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <AdditionalOptions>/cgthreads:8 %(AdditionalOptions)</AdditionalOptions>
+    </Link>
+    <Bscmake>
+      <PreserveSbr>true</PreserveSbr>
+    </Bscmake>
+    <PostBuildEvent>
+      <Command>copy $(TargetPath) $(BinDir)</Command>
+      <Message>Copy to BIN</Message>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release-clang|x64'">
+    <ClCompile>
+      <Optimization>MaxSpeed</Optimization>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+      <AdditionalIncludeDirectories>..\platforms\clang;..\platforms\pc\x64;..\platforms\pc;$(SharedDir)platforms\pc\dx11;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;_CONSOLE;CROSS_PLATFORM;USE_HTTP;RELEASE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <MinimalRebuild>false</MinimalRebuild>
+      <AdditionalOptions>/d2Zi+ %(AdditionalOptions)</AdditionalOptions>
+      <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
+    </ClCompile>
+    <ProjectReference>
+      <LinkLibraryDependencies>true</LinkLibraryDependencies>
+    </ProjectReference>
+    <Link>
+      <DelayLoadDLLs>d3dcompiler_46.dll;d3dcompiler_47.dll;d3dcompiler_47_xdk.dll;xenondx_x64.dll;xbdm.dll;hio2.dll;libflac_dynamic.dll;xg.dll;PVRTexLib.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Console</SubSystem>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <AdditionalOptions>/DELAYLOAD:"d3dcompiler_47.dll" /DELAYLOAD:"d3dcompiler_47_xdk.dll" /DELAYLOAD:"libSceShaderCompiler.dll" /DELAYLOAD:"libSceShaderWavePsslc.dll" /DELAYLOAD:"libSceGpuAddress.dll" /DELAYLOAD:"xenondx_x64.dll" /DELAYLOAD:"libcgc_x64.dll" /DELAYLOAD:"unrar.dll" /DELAYLOAD:"xbdm.dll" /DELAYLOAD:"hio2.dll" /DELAYLOAD:"libflac_dynamic.dll" /DELAYLOAD:"ps3tmapix64.dll" /DELAYLOAD:"PVRTexLib.dll" /DELAYLOAD:"xg.dll" /DELAYLOAD:"OpenMaya.dll" /DELAYLOAD:"Foundation.dll" %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalLibraryDirectories>$(SDK);$(SDK)RVL_SDK\x86\lib;$(sdk)\xvidcore\build\win32\Debug-static\x64;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>$(IntDir)tensor.ib.obj;$(IntDir)dxt.ib.obj;runtimeobject.lib;vfw32.lib;winmm.lib;wininet.lib;dbghelp.lib;d3dcompiler.lib;$(SDK)\PowerVR\Tools\PVRTexTool\Library\Windows_x86_64\Dynamic\PVRTexLib.lib;$(XEDK)\lib\x64\vs2010\xmaencoder.lib;$(XEDK)\lib\x64\vs2010\xgraphics.lib;$(XEDK)\lib\x64\vs2010\xcompress.lib;$(XEDK)\lib\x64\vs2010\d3d9.lib;$(SCE_ORBIS_SDK_DIR)\host_tools\lib\libSceGpuAddress.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <Bscmake>
+      <PreserveSbr>true</PreserveSbr>
+    </Bscmake>
+    <PostBuildEvent>
+      <Command>copy $(TargetPath) $(BinDir)IsoCmd_x64.exe</Command>
+      <Message>Copy to BIN</Message>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="..\common\base\defs.cpp" />
+    <ClCompile Include="..\common\codec\aes.cpp" />
+    <ClCompile Include="..\common\codec\apple_compression.cpp" />
+    <ClCompile Include="..\common\codec\base64.cpp" />
+    <ClCompile Include="..\common\codec\bencode.cpp" />
+    <ClCompile Include="..\common\codec\deflate.cpp" />
+    <ClCompile Include="..\common\codec\des.cpp" />
+    <ClCompile Include="..\common\codec\fax3.cpp" />
+    <ClCompile Include="..\common\codec\huffman.cpp" />
+    <ClCompile Include="..\common\codec\lz4.cpp" />
+    <ClCompile Include="..\common\codec\lzma.cpp" />
+    <ClCompile Include="..\common\codec\lzo.cpp" />
+    <ClCompile Include="..\common\codec\lzx.cpp" />
+    <ClCompile Include="..\common\codec\mesh\draco.cpp" />
+    <ClCompile Include="..\common\codec\texels\astc.cpp" />
+    <ClCompile Include="..\common\codec\texels\att.cpp" />
+    <ClCompile Include="..\common\codec\texels\dxt.cpp" />
+    <ClCompile Include="..\common\codec\texels\dxt_compute.cpp" />
+    <ClCompile Include="..\common\codec\texels\etc.cpp" />
+    <ClCompile Include="..\common\codec\texels\pvrtc.cpp" />
+    <ClCompile Include="..\common\comms\asn1.cpp" />
+    <ClCompile Include="..\common\comms\asn1_objects.cpp" />
+    <ClCompile Include="..\common\comms\diffie-hellman.cpp" />
+    <ClCompile Include="..\common\comms\dsa.cpp" />
+    <ClCompile Include="..\common\comms\elliptic-curves.cpp" />
+    <ClCompile Include="..\common\comms\rsa.cpp" />
+    <ClCompile Include="..\common\comms\srp.cpp" />
+    <ClCompile Include="..\common\comms\ssl.cpp" />
+    <ClCompile Include="..\common\comms\WebSocket.cpp" />
+    <ClCompile Include="..\common\comms\zip.cpp" />
+    <ClCompile Include="..\common\extra\ast.cpp" />
+    <ClCompile Include="..\common\extra\c-header.cpp" />
+    <ClCompile Include="..\common\extra\c-types.cpp" />
+    <ClCompile Include="..\common\extra\cpp.cpp" />
+    <ClCompile Include="..\common\extra\date.cpp" />
+    <ClCompile Include="..\common\extra\filters.cpp" />
+    <ClCompile Include="..\common\extra\gjk.cpp" />
+    <ClCompile Include="..\common\extra\json_schema.cpp" />
+    <ClCompile Include="..\common\extra\octree.cpp" />
+    <ClCompile Include="..\common\extra\regex.cpp" />
+    <ClCompile Include="..\common\extra\unicode_tables.cpp" />
+    <ClCompile Include="..\common\maths\csg.cpp" />
+    <ClCompile Include="..\common\maths\geometry.cpp" />
+    <ClCompile Include="..\common\jobs.cpp" />
+    <ClCompile Include="..\common\maths\dct.cpp" />
+    <ClCompile Include="..\common\extra\identifier.cpp" />
+    <ClCompile Include="..\common\extra\json.cpp" />
+    <ClCompile Include="..\common\allocators\tlsf.cpp" />
+    <ClCompile Include="..\common\extra\perlin_noise.cpp" />
+    <ClCompile Include="..\common\iso\iso.cpp" />
+    <ClCompile Include="..\common\iso\iso_binary.cpp" />
+    <ClCompile Include="..\common\iso\iso_convert.cpp" />
+    <ClCompile Include="..\common\iso\iso_files.cpp" />
+    <ClCompile Include="..\common\iso\iso_script.cpp" />
+    <ClCompile Include="..\common\maths\gpc.cpp" />
+    <ClCompile Include="..\common\maths\polygon.cpp" />
+    <ClCompile Include="..\common\maths\spherical_harmonics.cpp" />
+    <ClCompile Include="..\common\maths\svd.cpp" />
+    <ClCompile Include="..\common\maths\triangulate.cpp" />
+    <ClCompile Include="..\common\shader.cpp" />
+    <ClCompile Include="..\filetypes\2d\actionscript.cpp" />
+    <ClCompile Include="..\filetypes\2d\flash.cpp" />
+    <ClCompile Include="..\filetypes\2d\fonts.cpp" />
+    <ClCompile Include="..\filetypes\2d\opentype.cpp" />
+    <ClCompile Include="..\filetypes\2d\pdf.cpp" />
+    <ClCompile Include="..\filetypes\2d\svg.cpp" />
+    <ClCompile Include="..\filetypes\3d\draco_handler.cpp" />
+    <ClCompile Include="..\filetypes\3d\model_utils.cpp" />
+    <ClCompile Include="..\filetypes\3d\vertexcacheoptimizer.cpp" />
+    <ClCompile Include="..\filetypes\3d\wavefront.cpp" />
+    <ClCompile Include="..\filetypes\3d\yif.cpp" />
+    <ClCompile Include="..\filetypes\bin.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\astc_handler.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\bif.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\bitmap.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\bmp.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\dds.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\fli.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\gif.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\gnf.cpp">
+      <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\hdr.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\ifl.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\ilbm.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\jpg.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\lpfanm.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\mediancut.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\osx_icon.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\pcx.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\pkm.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\png.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\ppm.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\psd.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\psp.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\pvr.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\tga.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\tiff.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\tpl.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\wildmagic.cpp" />
+    <ClCompile Include="..\filetypes\code\c.cpp" />
+    <ClCompile Include="..\filetypes\code\demangle.cpp" />
+    <ClCompile Include="..\filetypes\code\demangle2.cpp" />
+    <ClCompile Include="..\filetypes\code\dwarf.cpp" />
+    <ClCompile Include="..\filetypes\code\elf.cpp" />
+    <ClCompile Include="..\filetypes\code\makefile.cpp">
+      <CompileAsWinRT Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</CompileAsWinRT>
+      <CompileAsWinRT Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</CompileAsWinRT>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\make_rth.cpp" />
+    <ClCompile Include="..\filetypes\code\make_tlh.cpp" />
+    <ClCompile Include="..\filetypes\code\mcp.cpp" />
+    <ClCompile Include="..\filetypes\code\obj.cpp" />
+    <ClCompile Include="..\filetypes\code\pe_coff.cpp">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">/bigobj %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\visualstudio.cpp" />
+    <ClCompile Include="..\filetypes\code\xex.cpp" />
+    <ClCompile Include="..\filetypes\container\apple.cpp" />
+    <ClCompile Include="..\filetypes\container\archive.cpp" />
+    <ClCompile Include="..\filetypes\container\archive_help.cpp" />
+    <ClCompile Include="..\filetypes\container\cab.cpp" />
+    <ClCompile Include="..\filetypes\container\flatbuffer.cpp" />
+    <ClCompile Include="..\filetypes\container\iso9660.cpp" />
+    <ClCompile Include="..\filetypes\container\livearcade.cpp" />
+    <ClCompile Include="..\filetypes\container\plist.cpp" />
+    <ClCompile Include="..\filetypes\container\unix.cpp" />
+    <ClCompile Include="..\filetypes\container\unreal.cpp" />
+    <ClCompile Include="..\filetypes\container\wiidisc.cpp" />
+    <ClCompile Include="..\filetypes\container\xdvdfs.cpp" />
+    <ClCompile Include="..\filetypes\crosswords.cpp" />
+    <ClCompile Include="..\filetypes\ebml.cpp" />
+    <ClCompile Include="..\filetypes\fx.cpp" />
+    <ClCompile Include="..\filetypes\gedcom.cpp" />
+    <ClCompile Include="..\filetypes\container\hha.cpp" />
+    <ClCompile Include="..\filetypes\ib.cpp" />
+    <ClCompile Include="..\filetypes\ibz.cpp" />
+    <ClCompile Include="..\filetypes\iff.cpp" />
+    <ClCompile Include="..\filetypes\ix.cpp" />
+    <ClCompile Include="..\filetypes\json2.cpp" />
+    <ClCompile Include="..\filetypes\office.cpp" />
+    <ClCompile Include="..\filetypes\pgp.cpp" />
+    <ClCompile Include="..\filetypes\psion.cpp" />
+    <ClCompile Include="..\filetypes\pst.cpp" />
+    <ClCompile Include="..\filetypes\shortcut.cpp" />
+    <ClCompile Include="..\filetypes\sound\aac.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\sound\adpcm.cpp" />
+    <ClCompile Include="..\filetypes\sound\aiff.cpp" />
+    <ClCompile Include="..\filetypes\sound\caf.cpp" />
+    <ClCompile Include="..\filetypes\sound\dsp.cpp" />
+    <ClCompile Include="..\filetypes\sound\flac.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\sound\mp3.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\sound\vag.cpp" />
+    <ClCompile Include="..\filetypes\sound\wav.cpp" />
+    <ClCompile Include="..\filetypes\txt.cpp" />
+    <ClCompile Include="..\filetypes\video\avi.cpp" />
+    <ClCompile Include="..\filetypes\video\matroska.cpp" />
+    <ClCompile Include="..\filetypes\video\movie.cpp" />
+    <ClCompile Include="..\filetypes\video\mpeg.cpp" />
+    <ClCompile Include="..\filetypes\video\quicktime.cpp" />
+    <ClCompile Include="..\filetypes\video\thp.cpp" />
+    <ClCompile Include="..\filetypes\video\xvid.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\xml2.cpp" />
+    <ClCompile Include="..\platforms\opengl\shared\glsl_hal.cpp" />
+    <ClCompile Include="..\platforms\opengl\shared\opengl_conversion.cpp" />
+    <ClCompile Include="..\platforms\pc\dx11\shared\dx11_conversion.cpp">
+      <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\platforms\pc\dx11\_graphics.cpp" />
+    <ClCompile Include="..\platforms\pc\dx9\shared\dx9_conversion.cpp" />
+    <ClCompile Include="..\platforms\pc\dx\dxgi_helpers.cpp" />
+    <ClCompile Include="..\platforms\pc\dx\dxgi_read.cpp" />
+    <ClCompile Include="..\platforms\pc\sockets.cpp" />
+    <ClCompile Include="..\platforms\pc\_thread.cpp" />
+    <ClCompile Include="..\platforms\ps3\shared\edge.cpp" />
+    <ClCompile Include="..\platforms\ps3\shared\rsx_regs.cpp" />
+    <ClCompile Include="..\platforms\gcn\gpu_tile.cpp">
+      <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\platforms\ps4\shared\ps4_conversion.cpp">
+      <AdditionalIncludeDirectories>$(SCE_ORBIS_SDK_DIR)\target\include_common;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\platforms\xone\shared\xone_conversion.cpp">
+      <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\systems\communication\isolink_target.cpp" />
+    <ClCompile Include="..\platforms\ios\shared\isolink_target_ios.cpp" />
+    <ClCompile Include="..\platforms\mac\shared\isolink_target_mac.cpp" />
+    <ClCompile Include="..\platforms\pc\shared\isolink_target_pc.cpp" />
+    <ClCompile Include="..\platforms\ps3\shared\isolink_target_ps3.cpp" />
+    <ClCompile Include="..\platforms\ps4\shared\isolink_target_ps4.cpp" />
+    <ClCompile Include="..\systems\conversion\bone.cpp" />
+    <ClCompile Include="..\systems\conversion\channeluse.cpp" />
+    <ClCompile Include="..\systems\conversion\conversions.cpp" />
+    <ClCompile Include="..\systems\conversion\conv_anim.cpp" />
+    <ClCompile Include="..\systems\conversion\conv_bitmap.cpp" />
+    <ClCompile Include="..\systems\conversion\conv_gpu.cpp" />
+    <ClCompile Include="..\systems\conversion\conv_menu.cpp" />
+    <ClCompile Include="..\systems\conversion\conv_mesh.cpp" />
+    <ClCompile Include="..\systems\conversion\conv_sample.cpp" />
+    <ClCompile Include="..\systems\conversion\distance_fields.cpp">
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Full</Optimization>
+      <DebugInformationFormat Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">ProgramDatabase</DebugInformationFormat>
+      <BasicRuntimeChecks Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Default</BasicRuntimeChecks>
+    </ClCompile>
+    <ClCompile Include="..\systems\conversion\dupes.cpp" />
+    <ClCompile Include="..\systems\conversion\encryption.cpp" />
+    <ClCompile Include="..\systems\conversion\environment_maps.cpp" />
+    <ClCompile Include="..\systems\conversion\strip.cpp" />
+    <ClCompile Include="..\systems\conversion\texture_atlas.cpp" />
+    <ClCompile Include="..\systems\speech\tts.cpp" />
+    <ClCompile Include="..\systems\vision\contours.cpp" />
+    <ClCompile Include="..\systems\vision\grabcut.cpp" />
+    <ClCompile Include="byacc.cpp" />
+    <ClCompile Include="externals.cpp" />
+    <ClCompile Include="..\systems\conversion\fontmaker.cpp" />
+    <ClCompile Include="lexer.template.cpp" />
+    <ClCompile Include="listinputs.cpp" />
+    <ClCompile Include="main.cpp">
+      <AdditionalOptions>/await %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Debug-clang|x64'">
+      </AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\systems\conversion\platformdata.cpp" />
+    <ClCompile Include="..\common\crc32.cpp" />
+    <ClCompile Include="..\common\crc_dictionary.cpp" />
+    <ClCompile Include="..\common\filename.cpp" />
+    <ClCompile Include="..\common\utilities.cpp" />
+    <ClCompile Include="..\common\extra\async_stream.cpp" />
+    <ClCompile Include="..\common\maths\bignum.cpp" />
+    <ClCompile Include="..\common\comms\HTTP.cpp" />
+    <ClCompile Include="..\common\hashes\md5.cpp" />
+    <ClCompile Include="..\common\hashes\SHA.cpp" />
+    <ClCompile Include="..\common\extra\xml.cpp" />
+    <ClCompile Include="..\platforms\pc\platform.cpp" />
+    <ClCompile Include="parser.template.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\common\base\algorithm.h" />
+    <ClInclude Include="..\common\base\array.h" />
+    <ClInclude Include="..\common\base\atomic.h" />
+    <ClInclude Include="..\common\base\bits.h" />
+    <ClInclude Include="..\common\base\block.h" />
+    <ClInclude Include="..\common\base\constants.h" />
+    <ClInclude Include="..\common\base\deferred.h" />
+    <ClInclude Include="..\common\base\defs.h" />
+    <ClInclude Include="..\common\base\defs_base.h" />
+    <ClInclude Include="..\common\base\soft_float.h" />
+    <ClInclude Include="..\common\base\defs_int.h" />
+    <ClInclude Include="..\common\base\functions.h" />
+    <ClInclude Include="..\common\base\hash.h" />
+    <ClInclude Include="..\common\base\interval.h" />
+    <ClInclude Include="..\common\base\iterator.h" />
+    <ClInclude Include="..\common\base\list.h" />
+    <ClInclude Include="..\common\base\maths.h" />
+    <ClInclude Include="..\common\base\simd.h" />
+    <ClInclude Include="..\common\base\skip_list.h" />
+    <ClInclude Include="..\common\codec\aes.h" />
+    <ClInclude Include="..\common\codec\apple_compression.h" />
+    <ClInclude Include="..\common\codec\base64.h" />
+    <ClInclude Include="..\common\codec\bencode.h" />
+    <ClInclude Include="..\common\codec\codec.h" />
+    <ClInclude Include="..\common\codec\codec_stream.h" />
+    <ClInclude Include="..\common\codec\deflate.h" />
+    <ClInclude Include="..\common\codec\des.h" />
+    <ClInclude Include="..\common\codec\fax3.h" />
+    <ClInclude Include="..\common\codec\huffman.h" />
+    <ClInclude Include="..\common\codec\lz4.h" />
+    <ClInclude Include="..\common\codec\lzma.h" />
+    <ClInclude Include="..\common\codec\lzo.h" />
+    <ClInclude Include="..\common\codec\lzw.h" />
+    <ClInclude Include="..\common\codec\lzx.h" />
+    <ClInclude Include="..\common\codec\mesh\draco.h" />
+    <ClInclude Include="..\common\codec\prob_coder.h" />
+    <ClInclude Include="..\common\codec\texels\astc.h" />
+    <ClInclude Include="..\common\codec\texels\att.h" />
+    <ClInclude Include="..\common\codec\texels\dxt.h" />
+    <ClInclude Include="..\common\codec\texels\dxt_compute.h" />
+    <ClInclude Include="..\common\codec\texels\etc.h" />
+    <ClInclude Include="..\common\codec\texels\pvrtc.h" />
+    <ClInclude Include="..\common\codec\vlc.h" />
+    <ClInclude Include="..\common\comms\diffie-hellman.h" />
+    <ClInclude Include="..\common\comms\dsa.h" />
+    <ClInclude Include="..\common\comms\elliptic-curves.h" />
+    <ClInclude Include="..\common\comms\rsa.h" />
+    <ClInclude Include="..\common\comms\srp.h" />
+    <ClInclude Include="..\common\comms\WebSocket.h" />
+    <ClInclude Include="..\common\extra\json_schema.h" />
+    <ClInclude Include="..\common\extra\octree.h" />
+    <ClInclude Include="..\common\extra\regex.h" />
+    <ClInclude Include="..\common\hashes\crc.h" />
+    <ClInclude Include="..\common\hashes\hash_stream.h" />
+    <ClInclude Include="..\common\maths\csg.h" />
+    <ClInclude Include="..\common\maths\graph.h" />
+    <ClInclude Include="..\common\maths\triangulate.h" />
+    <ClInclude Include="..\common\packed_types.h" />
+    <ClInclude Include="..\common\base\strings.h" />
+    <ClInclude Include="..\common\base\swizzle.h" />
+    <ClInclude Include="..\common\base\tree.h" />
+    <ClInclude Include="..\common\base\tuple.h" />
+    <ClInclude Include="..\common\base\vector.h" />
+    <ClInclude Include="..\common\comms\asn1.h" />
+    <ClInclude Include="..\common\comms\ssl.h" />
+    <ClInclude Include="..\common\comms\x509.h" />
+    <ClInclude Include="..\common\comms\zip.h" />
+    <ClInclude Include="..\common\crc32.h" />
+    <ClInclude Include="..\common\directory.h" />
+    <ClInclude Include="..\common\extra\ast.h" />
+    <ClInclude Include="..\common\extra\cpp.h" />
+    <ClInclude Include="..\common\extra\date.h" />
+    <ClInclude Include="..\common\extra\filters.h" />
+    <ClInclude Include="..\common\extra\gjk.h" />
+    <ClInclude Include="..\common\maths\geometry.h" />
+    <ClInclude Include="..\common\graphics.h" />
+    <ClInclude Include="..\common\linq.h" />
+    <ClInclude Include="..\common\maths\dct.h" />
+    <ClInclude Include="..\common\extra\edit_distance.h" />
+    <ClInclude Include="..\common\extra\identifier.h" />
+    <ClInclude Include="..\common\extra\json.h" />
+    <ClInclude Include="..\common\extra\perlin_noise.h" />
+    <ClInclude Include="..\common\hashes\murmur.h" />
+    <ClInclude Include="..\common\allocators\tlsf.h" />
+    <ClInclude Include="..\common\filename.h" />
+    <ClInclude Include="..\common\iso\iso.h" />
+    <ClInclude Include="..\common\iso\iso_binary.h" />
+    <ClInclude Include="..\common\iso\iso_convert.h" />
+    <ClInclude Include="..\common\iso\iso_files.h" />
+    <ClInclude Include="..\common\iso\iso_script.h" />
+    <ClInclude Include="..\common\maths\fft.h" />
+    <ClInclude Include="..\common\maths\gpc.h" />
+    <ClInclude Include="..\common\maths\polygon.h" />
+    <ClInclude Include="..\common\maths\spherical_harmonics.h" />
+    <ClInclude Include="..\common\scenegraph.h" />
+    <ClInclude Include="..\common\shader.h" />
+    <ClInclude Include="..\common\thread.h" />
+    <ClInclude Include="..\common\utilities.h" />
+    <ClInclude Include="..\common\extra\async_stream.h" />
+    <ClInclude Include="..\common\maths\bignum.h" />
+    <ClInclude Include="..\common\comms\HTTP.h" />
+    <ClInclude Include="..\common\hashes\md5.h" />
+    <ClInclude Include="..\common\hashes\SHA.h" />
+    <ClInclude Include="..\common\extra\xml.h" />
+    <ClInclude Include="..\common\events.h" />
+    <ClInclude Include="..\common\stream.h" />
+    <ClInclude Include="..\filetypes\2d\cff.h" />
+    <ClInclude Include="..\filetypes\2d\flash.h" />
+    <ClInclude Include="..\filetypes\2d\ttf.h" />
+    <ClInclude Include="..\filetypes\3d\model_utils.h" />
+    <ClInclude Include="..\filetypes\bitmap\bitmap.h" />
+    <ClInclude Include="..\filetypes\bitmap\bitmapfile.h" />
+    <ClInclude Include="..\filetypes\bitmap\gnf.h" />
+    <ClInclude Include="..\filetypes\bitmap\hdr.h" />
+    <ClInclude Include="..\filetypes\bitmap\jpg.h" />
+    <ClInclude Include="..\filetypes\bitmap\tpl.h" />
+    <ClInclude Include="..\filetypes\code\coff.h" />
+    <ClInclude Include="..\filetypes\code\demangle.h" />
+    <ClInclude Include="..\filetypes\code\demangle2.h" />
+    <ClInclude Include="..\filetypes\code\dwarf.h" />
+    <ClInclude Include="..\filetypes\code\elf.h" />
+    <ClInclude Include="..\filetypes\code\mach.h" />
+    <ClInclude Include="..\filetypes\code\pe.h" />
+    <ClInclude Include="..\filetypes\container\archive_help.h" />
+    <ClInclude Include="..\filetypes\container\plist.h" />
+    <ClInclude Include="..\filetypes\iff.h" />
+    <ClInclude Include="..\filetypes\pid.h" />
+    <ClInclude Include="..\filetypes\riff.h" />
+    <ClInclude Include="..\filetypes\sound\dsp.h" />
+    <ClInclude Include="..\filetypes\sound\mp3.h" />
+    <ClInclude Include="..\filetypes\sound\sample.h" />
+    <ClInclude Include="..\filetypes\sound\vag.h" />
+    <ClInclude Include="..\filetypes\sound\xma.h">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release-clang|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug-clang|x64'">true</ExcludedFromBuild>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\video\matroska.h" />
+    <ClInclude Include="..\filetypes\video\movie.h" />
+    <ClInclude Include="..\platforms\msvc\_simd.h" />
+    <ClInclude Include="..\platforms\pc\dx11\_graphics.h" />
+    <ClInclude Include="..\platforms\pc\_thread.h" />
+    <ClInclude Include="..\platforms\ps3\shared\rsx_regs.h" />
+    <ClInclude Include="..\platforms\gcn\gpu_regs.h">
+      <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
+    </ClInclude>
+    <ClInclude Include="..\platforms\gcn\gpu_tile.h">
+      <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
+    </ClInclude>
+    <ClInclude Include="..\platforms\ps4\shared\graphics_defs.h">
+      <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
+    </ClInclude>
+    <ClInclude Include="..\platforms\ps4\shared\model_defs.h">
+      <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
+    </ClInclude>
+    <ClInclude Include="..\platforms\Wii\shared\gx_regs.h" />
+    <ClInclude Include="..\platforms\Wii\shared\wii_hal.h" />
+    <ClInclude Include="..\systems\communication\isolink.h" />
+    <ClInclude Include="..\systems\communication\isolink_target.h" />
+    <ClInclude Include="..\systems\conversion\channeluse.h" />
+    <ClInclude Include="..\systems\conversion\platformdata.h" />
+    <ClInclude Include="..\systems\conversion\strip.h" />
+    <ClInclude Include="..\systems\conversion\vq.h" />
+    <ClInclude Include="..\systems\speech\tts.h" />
+    <ClInclude Include="parser.template.h">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClInclude>
+  </ItemGroup>
+
+	<ItemGroup Condition="'$(REVOLUTION_SDK_ROOT)' != ''">
+		<ClCompile Include="..\platforms\Wii\shared\wii1.cpp"  />
+		<ClCompile Include="..\platforms\Wii\shared\wii_arrange.cpp"/>
+		<ClCompile Include="..\platforms\Wii\shared\wii_conversion.cpp"/>
+		<ClCompile Include="..\platforms\Wii\shared\wii_hal.cpp"/>
+		<ClCompile Include="..\platforms\Wii\shared\isolink_target_wii.cpp"/>
+	</ItemGroup>
+
+	<ItemGroup  Condition="'$(Platform)'!='x64'">
+		<ClCompile Include="..\platforms\x360\shared\isolink_target_x360.cpp">
+			<AdditionalIncludeDirectories>$(xedk)\include\win32;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+		</ClCompile>
+		<ClCompile Include="..\platforms\x360\shared\x360_conversion.cpp">
+			<AdditionalIncludeDirectories>$(XEDK)\include\win32;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+			<ExcludedFromBuild Condition="'$(Platform)'=='x64'">true</ExcludedFromBuild>
+		</ClCompile>
+		<ClCompile Include="..\filetypes\bitmap\mct.cpp">
+			<AdditionalIncludeDirectories>$(XEDK)\include\win32;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+		</ClCompile>
+		<ClCompile Include="..\filetypes\bitmap\ptc.cpp">
+			<AdditionalIncludeDirectories>$(XEDK)\include\win32;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+		</ClCompile>
+		<ClCompile Include="..\filetypes\bitmap\xpr.cpp">
+			<AdditionalIncludeDirectories>$(XEDK)\include\win32;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+		</ClCompile>
+		<ClCompile Include="..\filetypes\sound\xma.cpp">
+			<AdditionalIncludeDirectories>$(XEDK)\include\win32;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+		</ClCompile>
+	</ItemGroup>
+
+	<ItemGroup  Condition="'$(SCE_PS3_ROOT)'!=''">
+		<ClCompile Include="..\filetypes\bitmap\gtf.cpp" />
+		<ClCompile Include="..\platforms\ps3\shared\ps3_conversion.cpp" />
+	</ItemGroup>
+
+	<ItemGroup>
+    <IsoCmd Include="..\common\codec\texels\dxt.fx">
+      <OutExt Condition="'$(Configuration)|$(Platform)'=='Debug-clang|x64'">ib.obj</OutExt>
+      <OutExt Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">ib.obj</OutExt>
+      <OutExt Condition="'$(Configuration)|$(Platform)'=='Release-clang|x64'">ib.obj</OutExt>
+      <OutExt Condition="'$(Configuration)|$(Platform)'=='Release|x64'">ib.obj</OutExt>
+    </IsoCmd>
+    <IsoCmd Include="..\common\maths\tensor.fx">
+      <OutExt Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">ib.obj</OutExt>
+      <OutExt Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">ib.obj</OutExt>
+      <OutExt Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">ib.obj</OutExt>
+      <OutExt Condition="'$(Configuration)|$(Platform)'=='Release|x64'">ib.obj</OutExt>
+      <OutExt Condition="'$(Configuration)|$(Platform)'=='Release-clang|x64'">ib.obj</OutExt>
+      <OutExt Condition="'$(Configuration)|$(Platform)'=='Debug-clang|x64'">ib.obj</OutExt>
+    </IsoCmd>
+    <IsoCmd Include="..\platforms\ps4\shared\ortmapi.ix">
+      <Variables> asext=txt %(Variables)</Variables>
+      <OutExt>tlh</OutExt>
+    </IsoCmd>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\cgc\cgclib.vcxproj">
+      <Project>{0026e7ae-f735-4d2f-96d8-ffba432ec821}</Project>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="commands.txt" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

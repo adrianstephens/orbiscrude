@@ -1,0 +1,1771 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="DebugDX11-clang|Win32">
+      <Configuration>DebugDX11-clang</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="DebugDX11-clang|x64">
+      <Configuration>DebugDX11-clang</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="DebugDX11|Win32">
+      <Configuration>DebugDX11</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="DebugDX11|x64">
+      <Configuration>DebugDX11</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="DebugDX9|Win32">
+      <Configuration>DebugDX9</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="DebugDX9|x64">
+      <Configuration>DebugDX9</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="ReleaseDX11-clang|Win32">
+      <Configuration>ReleaseDX11-clang</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="ReleaseDX11-clang|x64">
+      <Configuration>ReleaseDX11-clang</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="ReleaseDX11|Win32">
+      <Configuration>ReleaseDX11</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="ReleaseDX11|x64">
+      <Configuration>ReleaseDX11</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="ReleaseDX9|Win32">
+      <Configuration>ReleaseDX9</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="ReleaseDX9|x64">
+      <Configuration>ReleaseDX9</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <_ProjectFileVersion>10.0.30319.1</_ProjectFileVersion>
+    <ProjectName>IsoEditor</ProjectName>
+    <ProjectGuid>{DE9A536D-84CE-4FCC-9CA2-7455170B6129}</ProjectGuid>
+    <RootNamespace>IsoEditor</RootNamespace>
+    <Keyword>Win32Proj</Keyword>
+    <SccProjectName>Svn</SccProjectName>
+    <SccAuxPath>Svn</SccAuxPath>
+    <SccLocalPath>Svn</SccLocalPath>
+    <SccProvider>SubversionScc</SccProvider>
+    <LibConfiguration>Release</LibConfiguration>
+    <ConfigurationType>Application</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <Import Project="..\toolset.props" />
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\masm.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(SolutionDir)isopod.props" />
+    <Import Project="$(SDK)openexr\openexr-2.1.0\openexr.props" />
+    <Import Project="$(SDK)zlib\1.2.5\zlib.props" />
+    <Import Project="$(SDK)libpng\1.6.16\libpng.props" />
+    <Import Project="$(SDK)lame\3.99.5\lame.props" />
+    <Import Project="$(SDK)directx\directx9.props" />
+    <Import Project="$(SDK)bzip2\1.0.6\bzip2.props" />
+    <Import Project="$(SDK)flac\1.3.1\flac.props" />
+    <Import Project="$(SDK)OculusSDK\1.3.2\oculus.props" />
+    <Import Project="$(SDK)Maya\Maya2018\maya.props" />
+    <Import Project="$(SDK)libvorbis\1.3.5\ogg-vorbis.props" />
+    <Import Project="$(SDK)libopus\1.1.2\libopus.props" />
+    <Import Project="$(SDK)SCE\ORBIS SDKs\6.000\orbis.props" />
+    <Import Project="$(SDK)SCE\PS3TMAPI\ps3tmapi.props" />
+    <Import Project="$(SDK)p4\p4.props" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <IntDir>$(BuildDir)$(ProjectName)\$(Configuration)_$(Platform)\</IntDir>
+    <OutDir>$(BuildDir)$(BaseConfiguration)\</OutDir>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='DebugDX11|x64'">$(ProjectName)_x64_dx11</TargetName>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='DebugDX11-clang|x64'">$(ProjectName)_x64_dx11_clang</TargetName>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='ReleaseDX11-clang|x64'">$(ProjectName)_x64_dx11_clang</TargetName>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='DebugDX9|x64'">$(ProjectName)_x64</TargetName>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='ReleaseDX9|x64'">$(ProjectName)_x64</TargetName>
+    <TargetName Condition="'$(Configuration)|$(Platform)'=='ReleaseDX11|x64'">$(ProjectName)_x64_dx11</TargetName>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='DebugDX9|Win32'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+      <AdditionalIncludeDirectories>.;..\platforms\pc\dx9;..\platforms\pc;..;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;_WINDOWS;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;ISO_EDITOR;USE_HTTP;CROSS_PLATFORM;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <MinimalRebuild>false</MinimalRebuild>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <AdditionalUsingDirectories>$(VCInstallDir)vcpackages;$(DevEnvDir)PrivateAssemblies;$(WindowsSDKDir)UnionMetadata</AdditionalUsingDirectories>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>d3d9.lib;d3dx9.lib;d3d10_1.lib;d3dcompiler.lib;dinput8.lib;dsound.lib;dxerr.lib;dbghelp.lib;psapi.lib;winmm.lib;comctl32.lib;vfw32.lib;wininet.lib;iphlpapi.lib;strmiids.lib;ESENT.lib;$(XEDK)\lib\win32\vs2010\xgraphics.lib;$(XEDK)\lib\win32\vs2010\d3d9.lib;$(XEDK)\lib\win32\vs2010\xbdm.lib;$(XEDK)\lib\win32\vs2010\xmaencoder.lib;$(SDK)WMFSDK11\lib\wmvcore.lib;$(SDK)bzip2105\LIB_Release\libbz2.lib;$(SDK)PVRTexLib\Windows_x86_32\Lib\PVRTexLib.lib;$(SDK)a52dec-0.7.4\vc++\Release\liba52.lib;$(SDK)p4\lib\vs2012\x86\dyn-debug\libclient.lib;$(SDK)p4\lib\vs2012\x86\dyn-debug\libp4sslstub.lib;$(SDK)p4\lib\vs2012\x86\dyn-debug\librpc.lib;$(SDK)p4\lib\vs2012\x86\dyn-debug\libsupp.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+      <AdditionalLibraryDirectories>$(dxsdk_dir)\lib\x86;$(sn_ps3_path)\sdk\lib;$(xedk)\lib\win32\vs2010;$(sdk)\RVL_SDK\x86\lib;$(WindowsSDK_LibraryPath_x86);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <DelayLoadDLLs>XenonDX.dll;libcgc.dll;xbdm.dll;unrar.dll;hio2.dll;dtlib.dll;dbghelp.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Windows</SubSystem>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <DataExecutionPrevention>
+      </DataExecutionPrevention>
+      <TargetMachine>MachineX86</TargetMachine>
+      <LargeAddressAware>true</LargeAddressAware>
+      <ImportLibrary>$(OutDir)$(TargetName).imp</ImportLibrary>
+    </Link>
+    <IsoCmd>
+      <OutDir>$(IntDir)</OutDir>
+      <variables>exportfor=pc</variables>
+      <Use64Bit>true</Use64Bit>
+    </IsoCmd>
+    <PostBuildEvent>
+      <Command>
+      </Command>
+    </PostBuildEvent>
+    <ResourceCompile>
+      <PreprocessorDefinitions>TOOLSET=$(PlatformToolsetVersion);ISO_EDITOR</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(IntDir);$(AssetsDir);$(SharedDir)\platforms\pc</AdditionalIncludeDirectories>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='DebugDX9|x64'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+      <AdditionalIncludeDirectories>.;$(SharedDir)platforms\pc\x64;$(SharedDir)platforms\pc\dx9;$(SharedDir)platforms\pc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;_WINDOWS;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;ISO_EDITOR;USE_HTTP;CROSS_PLATFORM;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <MinimalRebuild>false</MinimalRebuild>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <AdditionalUsingDirectories>$(VCInstallDir)vcpackages;$(DevEnvDir)PrivateAssemblies;$(WindowsSDKDir)UnionMetadata</AdditionalUsingDirectories>
+      <AdditionalOptions>/d2Zi+ /Zc:threadSafeInit- %(AdditionalOptions)</AdditionalOptions>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <SupportJustMyCode>false</SupportJustMyCode>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>$(IntDir)tensor.ib.obj;$(IntDir)dxt.ib.obj;dxguid.lib;d3d10_1.lib;d3dcompiler.lib;dinput8.lib;dsound.lib;dbghelp.lib;psapi.lib;winmm.lib;comctl32.lib;vfw32.lib;wmvcore.lib;wininet.lib;iphlpapi.lib;strmiids.lib;$(XEDK)\lib\x64\vs2010\xgraphics.lib;$(XEDK)\lib\x64\vs2010\d3d9.lib;$(XEDK)\lib\x64\vs2010\xbdm.lib;$(XEDK)\lib\x64\vs2010\xmaencoder.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+      <AdditionalLibraryDirectories>$(SDK);$(sn_ps3_path)\sdk\lib;$(xedk)\lib\x64\vs2010;$(DurangoXDK)PC\lib\amd64;$(WindowsSDK_LibraryPath_x64);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <DelayLoadDLLs>d3dcompiler_46.dll;XenonDX_x64.dll;libcgc_x64.dll;xbdm.dll;unrar.dll;hio2.dll;dtlib.dll;xg.dll;dbghelp.dll;XtfConsoleManager.dll;XtfConsoleControl.dll;XtfFileIO.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Windows</SubSystem>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <DataExecutionPrevention>
+      </DataExecutionPrevention>
+      <LargeAddressAware>true</LargeAddressAware>
+      <EntryPointSymbol>
+      </EntryPointSymbol>
+    </Link>
+    <IsoCmd>
+      <OutDir>$(IntDir)</OutDir>
+      <variables>exportfor=pc</variables>
+      <Use64Bit>true</Use64Bit>
+    </IsoCmd>
+    <PostBuildEvent />
+    <ResourceCompile>
+      <AdditionalIncludeDirectories>$(IntDir);$(AssetsDir);$(SharedDir)\platforms\pc</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>TOOLSET=$(PlatformToolsetVersion);ISO_EDITOR</PreprocessorDefinitions>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='DebugDX11|Win32'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+      <AdditionalIncludeDirectories>.;..\platforms\pc\dx11;..\platforms\pc;$(dxsdk_dir)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;_WINDOWS;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;ISO_EDITOR;USE_DX11;USE_HTTP;CROSS_PLATFORM;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <MinimalRebuild>false</MinimalRebuild>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <AdditionalUsingDirectories>$(VCInstallDir)vcpackages;$(DevEnvDir)PrivateAssemblies;$(WindowsSDKDir)UnionMetadata</AdditionalUsingDirectories>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>d3d9.lib;d3dx9.lib;d3d10_1.lib;d3dcompiler.lib;dinput8.lib;dsound.lib;dbghelp.lib;psapi.lib;dxerr.lib;winmm.lib;comctl32.lib;vfw32.lib;wininet.lib;iphlpapi.lib;strmiids.lib;dbghelp.lib;$(XEDK)\lib\win32\vs2010\xgraphics.lib;$(XEDK)\lib\win32\vs2010\d3d9.lib;$(XEDK)\lib\win32\vs2010\xbdm.lib;$(XEDK)\lib\win32\vs2010\xmaencoder.lib;$(SDK)WMFSDK11\lib\wmvcore.lib;$(SDK)bzip2105\LIB_Release\libbz2.lib;$(SDK)PVRTexLib\Windows_x86_32\Lib\PVRTexLib.lib;$(SDK)a52dec-0.7.4\vc++\Release\liba52.lib;$(SDK)p4\lib\static2010\libclient.lib;$(SDK)p4\lib\static2010\libp4sslstub.lib;$(SDK)p4\lib\static2010\librpc.lib;$(SDK)p4\lib\static2010\libsupp.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+      <AdditionalLibraryDirectories>$(dxsdk_dir)\lib\x86;$(sn_ps3_path)\sdk\lib;$(xedk)\lib\win32\vs2010;$(sdk)\RVL_SDK\x86\lib;$(WindowsSDK_LibraryPath_x86);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <DelayLoadDLLs>XenonDX.dll;libcgc.dll;xbdm.dll;unrar.dll;hio2.dll;dtlib.dll;dbghelp.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Windows</SubSystem>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <DataExecutionPrevention>
+      </DataExecutionPrevention>
+      <TargetMachine>MachineX86</TargetMachine>
+      <LargeAddressAware>true</LargeAddressAware>
+      <ImportLibrary>$(OutDir)$(TargetName).imp</ImportLibrary>
+    </Link>
+    <IsoCmd>
+      <OutDir>$(IntDir)</OutDir>
+      <variables>exportfor=pc</variables>
+      <Use64Bit>true</Use64Bit>
+    </IsoCmd>
+    <PostBuildEvent>
+      <Command>
+      </Command>
+    </PostBuildEvent>
+    <ResourceCompile>
+      <PreprocessorDefinitions>TOOLSET=$(PlatformToolsetVersion);ISO_EDITOR</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(IntDir);$(AssetsDir);$(SharedDir)\platforms\pc</AdditionalIncludeDirectories>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='DebugDX11-clang|Win32'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+      <AdditionalIncludeDirectories>.;..\platforms\pc\dx11;..\platforms\pc;$(dxsdk_dir)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;_WINDOWS;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;ISO_EDITOR;USE_DX11;USE_HTTP;CROSS_PLATFORM;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <MinimalRebuild>false</MinimalRebuild>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <AdditionalUsingDirectories>$(VCInstallDir)vcpackages;$(DevEnvDir)PrivateAssemblies;$(WindowsSDKDir)UnionMetadata</AdditionalUsingDirectories>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>d3d9.lib;d3dx9.lib;d3d10_1.lib;d3dcompiler.lib;dinput8.lib;dsound.lib;dbghelp.lib;psapi.lib;dxerr.lib;winmm.lib;comctl32.lib;vfw32.lib;wininet.lib;iphlpapi.lib;strmiids.lib;dbghelp.lib;$(XEDK)\lib\win32\vs2010\xgraphics.lib;$(XEDK)\lib\win32\vs2010\d3d9.lib;$(XEDK)\lib\win32\vs2010\xbdm.lib;$(XEDK)\lib\win32\vs2010\xmaencoder.lib;$(SDK)WMFSDK11\lib\wmvcore.lib;$(SDK)bzip2105\LIB_Release\libbz2.lib;$(SDK)PVRTexLib\Windows_x86_32\Lib\PVRTexLib.lib;$(SDK)a52dec-0.7.4\vc++\Release\liba52.lib;$(SDK)p4\lib\static2010\libclient.lib;$(SDK)p4\lib\static2010\libp4sslstub.lib;$(SDK)p4\lib\static2010\librpc.lib;$(SDK)p4\lib\static2010\libsupp.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+      <AdditionalLibraryDirectories>$(dxsdk_dir)\lib\x86;$(sn_ps3_path)\sdk\lib;$(xedk)\lib\win32\vs2010;$(sdk)\RVL_SDK\x86\lib;$(WindowsSDK_LibraryPath_x86);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <DelayLoadDLLs>XenonDX.dll;libcgc.dll;xbdm.dll;unrar.dll;hio2.dll;dtlib.dll;dbghelp.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Windows</SubSystem>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <DataExecutionPrevention>
+      </DataExecutionPrevention>
+      <TargetMachine>MachineX86</TargetMachine>
+      <LargeAddressAware>true</LargeAddressAware>
+      <ImportLibrary>$(OutDir)$(TargetName).imp</ImportLibrary>
+    </Link>
+    <IsoCmd>
+      <OutDir>$(IntDir)</OutDir>
+      <variables>exportfor=pc</variables>
+      <Use64Bit>true</Use64Bit>
+    </IsoCmd>
+    <PostBuildEvent>
+      <Command>
+      </Command>
+    </PostBuildEvent>
+    <ResourceCompile>
+      <PreprocessorDefinitions>TOOLSET=$(PlatformToolsetVersion);ISO_EDITOR</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(IntDir);$(AssetsDir);$(SharedDir)\platforms\pc</AdditionalIncludeDirectories>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseDX11-clang|Win32'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+      <AdditionalIncludeDirectories>.;..\platforms\pc\dx11;..\platforms\pc;$(dxsdk_dir)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;_WINDOWS;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;ISO_EDITOR;USE_DX11;USE_HTTP;CROSS_PLATFORM;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <MinimalRebuild>false</MinimalRebuild>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <AdditionalUsingDirectories>$(VCInstallDir)vcpackages;$(DevEnvDir)PrivateAssemblies;$(WindowsSDKDir)UnionMetadata</AdditionalUsingDirectories>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>d3d9.lib;d3dx9.lib;d3d10_1.lib;d3dcompiler.lib;dinput8.lib;dsound.lib;dbghelp.lib;psapi.lib;dxerr.lib;winmm.lib;comctl32.lib;vfw32.lib;wininet.lib;iphlpapi.lib;strmiids.lib;dbghelp.lib;$(XEDK)\lib\win32\vs2010\xgraphics.lib;$(XEDK)\lib\win32\vs2010\d3d9.lib;$(XEDK)\lib\win32\vs2010\xbdm.lib;$(XEDK)\lib\win32\vs2010\xmaencoder.lib;$(SDK)WMFSDK11\lib\wmvcore.lib;$(SDK)bzip2105\LIB_Release\libbz2.lib;$(SDK)PVRTexLib\Windows_x86_32\Lib\PVRTexLib.lib;$(SDK)a52dec-0.7.4\vc++\Release\liba52.lib;$(SDK)p4\lib\static2010\libclient.lib;$(SDK)p4\lib\static2010\libp4sslstub.lib;$(SDK)p4\lib\static2010\librpc.lib;$(SDK)p4\lib\static2010\libsupp.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+      <AdditionalLibraryDirectories>$(dxsdk_dir)\lib\x86;$(sn_ps3_path)\sdk\lib;$(xedk)\lib\win32\vs2010;$(sdk)\RVL_SDK\x86\lib;$(WindowsSDK_LibraryPath_x86);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <DelayLoadDLLs>XenonDX.dll;libcgc.dll;xbdm.dll;unrar.dll;hio2.dll;dtlib.dll;dbghelp.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Windows</SubSystem>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <DataExecutionPrevention>
+      </DataExecutionPrevention>
+      <TargetMachine>MachineX86</TargetMachine>
+      <LargeAddressAware>true</LargeAddressAware>
+      <ImportLibrary>$(OutDir)$(TargetName).imp</ImportLibrary>
+    </Link>
+    <IsoCmd>
+      <OutDir>$(IntDir)</OutDir>
+      <variables>exportfor=pc</variables>
+      <Use64Bit>true</Use64Bit>
+    </IsoCmd>
+    <PostBuildEvent>
+      <Command>
+      </Command>
+    </PostBuildEvent>
+    <ResourceCompile>
+      <PreprocessorDefinitions>TOOLSET=$(PlatformToolsetVersion);ISO_EDITOR</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(IntDir);$(AssetsDir);$(SharedDir)\platforms\pc</AdditionalIncludeDirectories>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='DebugDX11|x64'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <AdditionalIncludeDirectories>.;$(SharedDir)platforms\pc\x64;$(SharedDir)platforms\pc\dx11;$(SharedDir)platforms\pc;$(xedk)\include\win32;$(XboxOneXDKLatest)PC\include;$(DurangoXDK)PC\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;_WINDOWS;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;ISO_EDITOR;USE_DX11;USE_HTTP;CROSS_PLATFORM;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <MinimalRebuild>false</MinimalRebuild>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <AdditionalUsingDirectories>$(VCInstallDir)vcpackages;$(DevEnvDir)PrivateAssemblies;$(WindowsSDKDir)UnionMetadata</AdditionalUsingDirectories>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+      <AdditionalOptions>/d2Zi+ /Zc:threadSafeInit- %(AdditionalOptions)</AdditionalOptions>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <SupportJustMyCode>false</SupportJustMyCode>
+      <DiagnosticsFormat>Caret</DiagnosticsFormat>
+      <UseStandardPreprocessor>true</UseStandardPreprocessor>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>$(IntDir)tensor.ib.obj;$(IntDir)dxt.ib.obj;windowsapp.lib;d3d11.lib;dxguid.lib;d3d10_1.lib;d3dcompiler.lib;dinput8.lib;dsound.lib;dbghelp.lib;psapi.lib;winmm.lib;comctl32.lib;vfw32.lib;wmvcore.lib;wininet.lib;iphlpapi.lib;strmiids.lib;shcore.lib;$(XEDK)\lib\x64\vs2010\xgraphics.lib;$(XEDK)\lib\x64\vs2010\d3d9.lib;$(XEDK)\lib\x64\vs2010\xbdm.lib;$(XEDK)\lib\x64\vs2010\xmaencoder.lib;$(SDK)PowerVR\Tools\PVRTexTool\Library\Windows_x86_64\Dynamic\PVRTexLib.lib;$(SCE_ROOT_DIR)\Common\External Tools\ATRAC9 Windows Library\at9\lib\libatrac9.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+      <AdditionalLibraryDirectories>$(xedk)\lib\x64\vs2010;$(XboxOneXDKLatest)PC\lib\amd64;$(DurangoXDK)PC\lib\amd64;$(WindowsSDK_LibraryPath_x64);D:\dev\Github\opencv\build\install\x64\vc14\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <DelayLoadDLLs>d3d9.dll;d3dx9.dll;d3dx9_43.dll;d3d10_1.dll;d3dcompiler_47.dll;d3dcompiler_47_xdk.dll;XenonDX_x64.dll;libcgc_x64.dll;xbdm.dll;unrar.dll;hio2.dll;dtlib.dll;xg.dll;dbghelp.dll;XtfConsoleManager.dll;XtfConsoleControl.dll;XtfFileIO.dll;PVRTexLib.dll;libatrac9.dll;AVIFIL32.dll;SETUPAPI.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Windows</SubSystem>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <DataExecutionPrevention>
+      </DataExecutionPrevention>
+      <LargeAddressAware>true</LargeAddressAware>
+      <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
+      <AdditionalOptions>/verbose:incr /time %(AdditionalOptions)</AdditionalOptions>
+    </Link>
+    <IsoCmd>
+      <OutDir>$(IntDir)</OutDir>
+      <variables>exportfor=dx11</variables>
+      <Use64Bit>true</Use64Bit>
+    </IsoCmd>
+    <PostBuildEvent />
+    <Bscmake />
+    <ResourceCompile>
+      <AdditionalIncludeDirectories>$(IntDir);$(AssetsDir);$(SharedDir)\platforms\pc</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>TOOLSET=$(PlatformToolsetVersion);ISO_EDITOR</PreprocessorDefinitions>
+    </ResourceCompile>
+    <CustomBuildStep>
+      <Command>
+      </Command>
+    </CustomBuildStep>
+    <Manifest>
+      <OutputManifestFile>mymanifest</OutputManifestFile>
+    </Manifest>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='DebugDX11-clang|x64'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <AdditionalIncludeDirectories>.;$(SharedDir)platforms\pc\x64;$(SharedDir)platforms\pc\dx11;$(SharedDir)platforms\pc;$(xedk)\include\win32;D:\dev\Github\opencv\build\install\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;_WINDOWS;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;ISO_EDITOR;USE_DX11;USE_HTTP;USE_SSL;CROSS_PLATFORM;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <MinimalRebuild>false</MinimalRebuild>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <AdditionalUsingDirectories>$(VCInstallDir)vcpackages;$(DevEnvDir)PrivateAssemblies;$(WindowsSDKDir)UnionMetadata</AdditionalUsingDirectories>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+      <AdditionalOptions>/d2Zi+ /Zc:threadSafeInit- %(AdditionalOptions)</AdditionalOptions>
+      <SupportJustMyCode>false</SupportJustMyCode>
+      <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>$(IntDir)tensor.ib.obj;$(IntDir)dxt.ib.obj;d3d11.lib;dxguid.lib;d3d10_1.lib;d3dcompiler.lib;dinput8.lib;dsound.lib;dbghelp.lib;psapi.lib;winmm.lib;comctl32.lib;vfw32.lib;wmvcore.lib;wininet.lib;iphlpapi.lib;strmiids.lib;shcore.lib;windowsapp.lib;$(XEDK)\lib\x64\vs2010\xgraphics.lib;$(XEDK)\lib\x64\vs2010\d3d9.lib;$(XEDK)\lib\x64\vs2010\xbdm.lib;$(XEDK)\lib\x64\vs2010\xmaencoder.lib;$(SDK)PowerVR\Tools\PVRTexTool\Library\Windows_x86_64\Dynamic\PVRTexLib.lib;$(SCE_ROOT_DIR)\Common\External Tools\ATRAC9 Windows Library\at9\lib\libatrac9.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+      <AdditionalLibraryDirectories>$(xedk)\lib\x64\vs2010;$(XboxOneXDKLatest)PC\lib\amd64;$(DurangoXDK)PC\lib\amd64;$(WindowsSDK_LibraryPath_x64);D:\dev\Github\opencv\build\install\x64\vc14\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <DelayLoadDLLs>d3d9.dll;d3dx9.dll;d3dx9_43.dll;d3d10_1.dll;d3dcompiler_47.dll;XenonDX_x64.dll;libcgc_x64.dll;xbdm.dll;unrar.dll;hio2.dll;dtlib.dll;xg.dll;dbghelp.dll;XtfConsoleManager.dll;XtfConsoleControl.dll;XtfFileIO.dll;PVRTexLib.dll;libatrac9.dll;AVIFIL32.dll;SETUPAPI.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Windows</SubSystem>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <DataExecutionPrevention>
+      </DataExecutionPrevention>
+      <LargeAddressAware>true</LargeAddressAware>
+      <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
+      <AdditionalOptions>/verbose:incr /time /delayload:PVRTexLib.dll  /delayload:OpenMaya.dll  /delayload:foundation.dll  /delayload:xg.dll /delayload:libatrac9.dll /manifestdependency:"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'" %(AdditionalOptions)</AdditionalOptions>
+      <StackReserveSize>16777216</StackReserveSize>
+      <ManifestFile>$(ProjectName).manifest</ManifestFile>
+    </Link>
+    <IsoCmd>
+      <OutDir>$(IntDir)</OutDir>
+      <variables>exportfor=dx11</variables>
+      <Use64Bit>true</Use64Bit>
+    </IsoCmd>
+    <PostBuildEvent />
+    <Bscmake />
+    <ResourceCompile>
+      <AdditionalIncludeDirectories>$(IntDir);$(AssetsDir);$(SharedDir)\platforms\pc</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>TOOLSET=$(PlatformToolsetVersion);ISO_EDITOR</PreprocessorDefinitions>
+    </ResourceCompile>
+    <CustomBuildStep>
+      <Command>
+      </Command>
+    </CustomBuildStep>
+    <Manifest>
+      <OutputManifestFile>mymanifest</OutputManifestFile>
+    </Manifest>
+    <FxCompile>
+      <AdditionalIncludeDirectories>$(AssetsDir)shaders;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </FxCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseDX11-clang|x64'">
+    <ClCompile>
+      <Optimization>Full</Optimization>
+      <AdditionalIncludeDirectories>.;$(SharedDir)platforms\pc\x64;$(SharedDir)platforms\pc\dx11;$(SharedDir)platforms\pc;$(xedk)\include\win32;D:\dev\Github\opencv\build\install\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;_WINDOWS;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;ISO_EDITOR;USE_DX11;USE_HTTP;CROSS_PLATFORM;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <MinimalRebuild>false</MinimalRebuild>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <AdditionalUsingDirectories>$(VCInstallDir)vcpackages;$(DevEnvDir)PrivateAssemblies;$(WindowsSDKDir)UnionMetadata</AdditionalUsingDirectories>
+      <WholeProgramOptimization>false</WholeProgramOptimization>
+      <AdditionalOptions>/d2Zi+ /Zc:threadSafeInit- %(AdditionalOptions)</AdditionalOptions>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <SupportJustMyCode>false</SupportJustMyCode>
+      <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>$(IntDir)tensor.ib.obj;$(IntDir)dxt.ib.obj;d3d11.lib;dxguid.lib;d3d10_1.lib;d3dcompiler.lib;dinput8.lib;dsound.lib;dbghelp.lib;psapi.lib;winmm.lib;comctl32.lib;vfw32.lib;wmvcore.lib;wininet.lib;iphlpapi.lib;strmiids.lib;shcore.lib;windowsapp.lib;$(XEDK)\lib\x64\vs2010\xgraphics.lib;$(XEDK)\lib\x64\vs2010\d3d9.lib;$(XEDK)\lib\x64\vs2010\xbdm.lib;$(XEDK)\lib\x64\vs2010\xmaencoder.lib;$(SDK)PowerVR\Tools\PVRTexTool\Library\Windows_x86_64\Dynamic\PVRTexLib.lib;$(SCE_ROOT_DIR)\Common\External Tools\ATRAC9 Windows Library\at9\lib\libatrac9.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+      <AdditionalLibraryDirectories>$(xedk)\lib\x64\vs2010;$(XboxOneXDKLatest)PC\lib\amd64;$(DurangoXDK)PC\lib\amd64;$(WindowsSDK_LibraryPath_x64);D:\dev\Github\opencv\build\install\x64\vc14\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <DelayLoadDLLs>d3d9.dll;d3dx9.dll;d3dx9_43.dll;d3d10_1.dll;d3dcompiler_47.dll;XenonDX_x64.dll;libcgc_x64.dll;xbdm.dll;unrar.dll;hio2.dll;dtlib.dll;xg.dll;dbghelp.dll;XtfConsoleManager.dll;XtfConsoleControl.dll;XtfFileIO.dll;PVRTexLib.dll;libatrac9.dll;AVIFIL32.dll;SETUPAPI.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Windows</SubSystem>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <DataExecutionPrevention>
+      </DataExecutionPrevention>
+      <LargeAddressAware>true</LargeAddressAware>
+      <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
+      <AdditionalOptions>/verbose:incr /time /delayload:PVRTexLib.dll  /delayload:OpenMaya.dll  /delayload:foundation.dll  /delayload:xg.dll /delayload:libatrac9.dll /manifestdependency:"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'" %(AdditionalOptions)</AdditionalOptions>
+    </Link>
+    <IsoCmd>
+      <OutDir>$(IntDir)</OutDir>
+      <variables>exportfor=dx11</variables>
+      <Use64Bit>true</Use64Bit>
+    </IsoCmd>
+    <PostBuildEvent>
+      <Message>copy to BIN</Message>
+      <Command>copy $(TargetPath) $(BinDir)\isoeditor.exe</Command>
+    </PostBuildEvent>
+    <ResourceCompile>
+      <AdditionalIncludeDirectories>$(IntDir);$(AssetsDir);$(SharedDir)\platforms\pc</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>TOOLSET=$(PlatformToolsetVersion);ISO_EDITOR</PreprocessorDefinitions>
+    </ResourceCompile>
+    <CustomBuildStep>
+      <Command>
+      </Command>
+    </CustomBuildStep>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseDX9|Win32'">
+    <ClCompile>
+      <Optimization>Full</Optimization>
+      <AdditionalIncludeDirectories>.;..\platforms\pc\dx9;..\platforms\pc;..;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;_WINDOWS;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;ISO_EDITOR;USE_HTTP;CROSS_PLATFORM;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <OpenMPSupport>false</OpenMPSupport>
+      <AdditionalUsingDirectories>$(VCInstallDir)vcpackages;$(DevEnvDir)PrivateAssemblies;$(WindowsSDKDir)UnionMetadata</AdditionalUsingDirectories>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>d3d9.lib;d3dx9.lib;d3d10_1.lib;d3dcompiler.lib;dinput8.lib;dsound.lib;dbghelp.lib;psapi.lib;dxerr.lib;winmm.lib;comctl32.lib;vfw32.lib;wininet.lib;iphlpapi.lib;strmiids.lib;ESENT.lib;$(XEDK)\lib\win32\vs2010\xgraphics.lib;$(XEDK)\lib\win32\vs2010\d3d9.lib;$(XEDK)\lib\win32\vs2010\xbdm.lib;$(XEDK)\lib\win32\vs2010\xmaencoder.lib;$(SDK)WMFSDK11\lib\wmvcore.lib;$(SDK)bzip2105\LIB_Release\libbz2.lib;$(SDK)PVRTexLib\Windows_x86_32\Lib\PVRTexLib.lib;$(SDK)a52dec-0.7.4\vc++\Release\liba52.lib;$(SDK)p4\lib\vs2012\x86\dyn\libclient.lib;$(SDK)p4\lib\vs2012\x86\dyn\libp4sslstub.lib;$(SDK)p4\lib\vs2012\x86\dyn\librpc.lib;$(SDK)p4\lib\vs2012\x86\dyn\libsupp.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+      <AdditionalLibraryDirectories>$(dxsdk_dir)\lib\x86;$(sn_ps3_path)\sdk\lib;$(xedk)\lib\win32\vs2010;$(sdk)\RVL_SDK\x86\lib;$(WindowsSDK_LibraryPath_x86);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <DelayLoadDLLs>XenonDX.dll;libcgc.dll;xbdm.dll;unrar.dll;hio2.dll;dtlib.dll;dbghelp.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Windows</SubSystem>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <DataExecutionPrevention>
+      </DataExecutionPrevention>
+      <TargetMachine>MachineX86</TargetMachine>
+      <LargeAddressAware>true</LargeAddressAware>
+      <ImportLibrary>$(OutDir)$(TargetName).imp</ImportLibrary>
+    </Link>
+    <IsoCmd>
+      <OutDir>$(IntDir)</OutDir>
+      <variables>exportfor=pc</variables>
+      <Use64Bit>true</Use64Bit>
+    </IsoCmd>
+    <ResourceCompile>
+      <PreprocessorDefinitions>TOOLSET=$(PlatformToolsetVersion);ISO_EDITOR</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(IntDir);$(AssetsDir);$(SharedDir)\platforms\pc</AdditionalIncludeDirectories>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseDX11|Win32'">
+    <ClCompile>
+      <Optimization>Full</Optimization>
+      <AdditionalIncludeDirectories>.;..\platforms\pc;..;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;_WINDOWS;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;ISO_EDITOR;USE_HTTP;CROSS_PLATFORM;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <OpenMPSupport>false</OpenMPSupport>
+      <AdditionalUsingDirectories>$(VCInstallDir)vcpackages;$(DevEnvDir)PrivateAssemblies;$(WindowsSDKDir)UnionMetadata</AdditionalUsingDirectories>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>d3d9.lib;d3dx9.lib;d3d10_1.lib;d3dcompiler.lib;dinput8.lib;dsound.lib;dbghelp.lib;psapi.lib;dxerr.lib;winmm.lib;comctl32.lib;vfw32.lib;wininet.lib;iphlpapi.lib;strmiids.lib;ESENT.lib;$(XEDK)\lib\win32\vs2010\xgraphics.lib;$(XEDK)\lib\win32\vs2010\d3d9.lib;$(XEDK)\lib\win32\vs2010\xbdm.lib;$(XEDK)\lib\win32\vs2010\xmaencoder.lib;$(SDK)WMFSDK11\lib\wmvcore.lib;$(SDK)bzip2105\LIB_Release\libbz2.lib;$(SDK)PVRTexLib\Windows_x86_32\Lib\PVRTexLib.lib;$(SDK)a52dec-0.7.4\vc++\Release\liba52.lib;$(SDK)p4\lib\vs2012\x86\dyn\libclient.lib;$(SDK)p4\lib\vs2012\x86\dyn\libp4sslstub.lib;$(SDK)p4\lib\vs2012\x86\dyn\librpc.lib;$(SDK)p4\lib\vs2012\x86\dyn\libsupp.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+      <AdditionalLibraryDirectories>$(dxsdk_dir)\lib\x86;$(sn_ps3_path)\sdk\lib;$(xedk)\lib\win32\vs2010;$(sdk)\RVL_SDK\x86\lib;$(WindowsSDK_LibraryPath_x86);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <DelayLoadDLLs>XenonDX.dll;libcgc.dll;xbdm.dll;unrar.dll;hio2.dll;dtlib.dll;dbghelp.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Windows</SubSystem>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <DataExecutionPrevention>
+      </DataExecutionPrevention>
+      <TargetMachine>MachineX86</TargetMachine>
+      <LargeAddressAware>true</LargeAddressAware>
+      <ImportLibrary>$(OutDir)$(TargetName).imp</ImportLibrary>
+    </Link>
+    <IsoCmd>
+      <OutDir>$(IntDir)</OutDir>
+      <variables>exportfor=pc</variables>
+      <Use64Bit>true</Use64Bit>
+    </IsoCmd>
+    <ResourceCompile>
+      <PreprocessorDefinitions>TOOLSET=$(PlatformToolsetVersion);ISO_EDITOR</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(IntDir);$(AssetsDir);$(SharedDir)\platforms\pc</AdditionalIncludeDirectories>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseDX9|x64'">
+    <ClCompile>
+      <Optimization>Full</Optimization>
+      <AdditionalIncludeDirectories>.;$(SharedDir)platforms\pc\x64;$(SharedDir)platforms\pc\dx9;$(SharedDir)platforms\pc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;_WINDOWS;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;ISO_EDITOR;USE_HTTP;CROSS_PLATFORM;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <OpenMPSupport>false</OpenMPSupport>
+      <AdditionalOptions>/d2Zi+ /Zc:threadSafeInit- %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalUsingDirectories>$(VCInstallDir)vcpackages;$(DevEnvDir)PrivateAssemblies;$(WindowsSDKDir)UnionMetadata</AdditionalUsingDirectories>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>$(IntDir)tensor.ib.obj;$(IntDir)dxt.ib.obj;d3d10_1.lib;d3dcompiler.lib;dinput8.lib;dsound.lib;dbghelp.lib;dxguid.lib;psapi.lib;winmm.lib;comctl32.lib;vfw32.lib;wmvcore.lib;wininet.lib;iphlpapi.lib;strmiids.lib;$(XEDK)\lib\x64\vs2010\d3d9.lib;xgraphics.lib;xbdm.lib;xmaencoder.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+      <AdditionalLibraryDirectories>$(sn_ps3_path)\sdk\lib;$(xedk)\lib\x64\vs2010;$(DurangoXDK)PC\lib\amd64;$(WindowsSDK_LibraryPath_x64);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <DelayLoadDLLs>d3dcompiler_46.dll;XenonDX_x64.dll;libcgc_x64.dll;xbdm.dll;unrar.dll;hio2.dll;dtlib.dll;xg.dll;dbghelp.dll;XtfConsoleManager.dll;XtfConsoleControl.dll;XtfFileIO.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Windows</SubSystem>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <DataExecutionPrevention>
+      </DataExecutionPrevention>
+      <LargeAddressAware>true</LargeAddressAware>
+    </Link>
+    <IsoCmd>
+      <OutDir>$(IntDir)</OutDir>
+      <variables>exportfor=pc</variables>
+      <Use64Bit>true</Use64Bit>
+    </IsoCmd>
+    <ResourceCompile>
+      <AdditionalIncludeDirectories>$(IntDir);$(AssetsDir);$(SharedDir)\platforms\pc</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>TOOLSET=$(PlatformToolsetVersion);ISO_EDITOR</PreprocessorDefinitions>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseDX11|x64'">
+    <ClCompile>
+      <Optimization>Full</Optimization>
+      <AdditionalIncludeDirectories>.;$(SharedDir)platforms\pc\x64;$(SharedDir)platforms\pc\dx11;$(SharedDir)platforms\pc;$(xedk)\include\win32;$(XboxOneXDKLatest)PC\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;_WINDOWS;_CRT_SECURE_NO_WARNINGS;_CRT_NONSTDC_NO_WARNINGS;ISO_EDITOR;USE_DX11;USE_HTTP;CROSS_PLATFORM;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <RuntimeTypeInfo>false</RuntimeTypeInfo>
+      <OpenMPSupport>false</OpenMPSupport>
+      <AdditionalOptions>/d2Zi+ /Zc:threadSafeInit- %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalUsingDirectories>$(VCInstallDir)vcpackages;$(DevEnvDir)PrivateAssemblies;$(WindowsSDKDir)UnionMetadata</AdditionalUsingDirectories>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>$(IntDir)tensor.ib.obj;$(IntDir)dxt.ib.obj;d3d11.lib;dxguid.lib;d3d10_1.lib;d3dcompiler.lib;dinput8.lib;dsound.lib;dbghelp.lib;psapi.lib;winmm.lib;comctl32.lib;vfw32.lib;wmvcore.lib;wininet.lib;iphlpapi.lib;strmiids.lib;shcore.lib;$(XEDK)\lib\x64\vs2010\xgraphics.lib;$(XEDK)\lib\x64\vs2010\d3d9.lib;$(XEDK)\lib\x64\vs2010\xbdm.lib;$(XEDK)\lib\x64\vs2010\xmaencoder.lib;$(SDK)\PowerVR\Tools\PVRTexTool\Library\Windows_x86_64\Dynamic\PVRTexLib.lib;$(SCE_ROOT_DIR)\Common\External Tools\ATRAC9 Windows Library\at9\lib\libatrac9.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
+      <AdditionalLibraryDirectories>$(xedk)\lib\x64\vs2010;$(XboxOneXDKLatest)PC\lib\amd64;$(WindowsSDK_LibraryPath_x64);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <DelayLoadDLLs>d3d9.dll;d3dx9.dll;d3dx9_43.dll;d3d10_1.dll;d3dcompiler_47.dll;XenonDX_x64.dll;libcgc_x64.dll;xbdm.dll;unrar.dll;hio2.dll;dtlib.dll;xg.dll;dbghelp.dll;XtfConsoleManager.dll;XtfConsoleControl.dll;XtfFileIO.dll;PVRTexLib.dll;libatrac9.dll;AVIFIL32.dll;SETUPAPI.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Windows</SubSystem>
+      <OptimizeReferences>true</OptimizeReferences>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <DataExecutionPrevention>
+      </DataExecutionPrevention>
+      <LargeAddressAware>true</LargeAddressAware>
+    </Link>
+    <IsoCmd>
+      <OutDir>$(IntDir)</OutDir>
+      <variables>exportfor=dx11</variables>
+      <Use64Bit>true</Use64Bit>
+    </IsoCmd>
+    <ResourceCompile>
+      <AdditionalIncludeDirectories>$(IntDir);$(AssetsDir);$(SharedDir)\platforms\pc</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>TOOLSET=$(PlatformToolsetVersion);ISO_EDITOR</PreprocessorDefinitions>
+    </ResourceCompile>
+    <PostBuildEvent>
+      <Message>copy to BIN</Message>
+      <Command>copy $(TargetPath) $(BinDir)\isoeditor.exe</Command>
+    </PostBuildEvent>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="..\common\base\defs.cpp" />
+    <ClCompile Include="..\common\codec\aes.cpp" />
+    <ClCompile Include="..\common\codec\branch.cpp" />
+    <ClCompile Include="..\common\codec\blake2.cpp" />
+    <ClCompile Include="..\common\codec\des.cpp" />
+    <ClCompile Include="..\common\codec\lha.cpp" />
+    <ClCompile Include="..\common\codec\lz4.cpp" />
+    <ClCompile Include="..\common\codec\lzo.cpp" />
+    <ClCompile Include="..\common\codec\lzx.cpp" />
+    <ClCompile Include="..\common\codec\mesh\draco.cpp" />
+    <ClCompile Include="..\common\codec\pred_part_match.cpp" />
+    <ClCompile Include="..\common\codec\rar.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DebugDX11-clang|x64'">false</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\common\codec\lzma.cpp" />
+    <ClCompile Include="..\common\codec\reed_solomon.cpp" />
+    <ClCompile Include="..\common\codec\snappy.cpp" />
+    <ClCompile Include="..\common\codec\texels\astc.cpp" />
+    <ClCompile Include="..\common\codec\texels\att.cpp" />
+    <ClCompile Include="..\common\codec\texels\dxt.cpp" />
+    <ClCompile Include="..\common\codec\texels\dxt_compute.cpp" />
+    <ClCompile Include="..\common\codec\texels\etc.cpp" />
+    <ClCompile Include="..\common\codec\texels\pvrtc.cpp" />
+    <ClCompile Include="..\common\comms\asn1.cpp" />
+    <ClCompile Include="..\common\comms\asn1_objects.cpp" />
+    <ClCompile Include="..\common\codec\base64.cpp" />
+    <ClCompile Include="..\common\comms\diffie-hellman.cpp" />
+    <ClCompile Include="..\common\comms\dsa.cpp" />
+    <ClCompile Include="..\common\comms\elliptic-curves.cpp" />
+    <ClCompile Include="..\common\comms\rsa.cpp" />
+    <ClCompile Include="..\common\comms\srp.cpp" />
+    <ClCompile Include="..\common\comms\ssl.cpp" />
+    <ClCompile Include="..\common\comms\WebSocket.cpp" />
+    <ClCompile Include="..\common\comms\zip.cpp" />
+    <ClCompile Include="..\common\disassembler.cpp" />
+    <ClCompile Include="..\common\extra\ambisonic.cpp" />
+    <ClCompile Include="..\common\codec\apple_compression.cpp" />
+    <ClCompile Include="..\common\extra\ast.cpp" />
+    <ClCompile Include="..\common\extra\c-header.cpp" />
+    <ClCompile Include="..\common\extra\c-types.cpp" />
+    <ClCompile Include="..\common\extra\clipper.cpp" />
+    <ClCompile Include="..\common\extra\colourise.cpp" />
+    <ClCompile Include="..\common\extra\cpp.cpp" />
+    <ClCompile Include="..\common\extra\csharp.cpp" />
+    <ClCompile Include="..\common\extra\date.cpp" />
+    <ClCompile Include="..\common\codec\fax3.cpp" />
+    <ClCompile Include="..\common\extra\filters.cpp" />
+    <ClCompile Include="..\common\extra\geo.cpp" />
+    <ClCompile Include="..\common\extra\gjk.cpp" />
+    <ClCompile Include="..\common\codec\huffman.cpp" />
+    <ClCompile Include="..\common\extra\octree.cpp" />
+    <ClCompile Include="..\common\extra\gesture_recognisers.cpp" />
+    <ClCompile Include="..\common\extra\unicode_tables.cpp" />
+    <ClCompile Include="..\common\fibers.cpp" />
+    <ClCompile Include="..\common\hashes\cityhash.cpp" />
+    <ClCompile Include="..\common\hashes\murmur.cpp" />
+    <ClCompile Include="..\common\hashes\xxh.cpp" />
+    <ClCompile Include="..\common\maths\bezier.cpp" />
+    <ClCompile Include="..\common\maths\clipper2.cpp" />
+    <ClCompile Include="..\common\maths\csg.cpp" />
+    <ClCompile Include="..\common\maths\csg2.cpp" />
+    <ClCompile Include="..\common\maths\dct.cpp" />
+    <ClCompile Include="..\common\comms\dhcp.cpp" />
+    <ClCompile Include="..\common\extra\directshow.cpp" />
+    <ClCompile Include="..\common\comms\dns.cpp" />
+    <ClCompile Include="..\common\comms\ftp.cpp" />
+    <ClCompile Include="..\common\extra\identifier.cpp" />
+    <ClCompile Include="..\common\comms\ip.cpp" />
+    <ClCompile Include="..\common\extra\json.cpp" />
+    <ClCompile Include="..\common\extra\perlin_noise.cpp" />
+    <ClCompile Include="..\common\allocators\tlsf.cpp" />
+    <ClCompile Include="..\common\extra\yaml.cpp" />
+    <ClCompile Include="..\common\maths\geometry.cpp" />
+    <ClCompile Include="..\common\iso\iso.cpp" />
+    <ClCompile Include="..\common\iso\iso_binary.cpp" />
+    <ClCompile Include="..\common\iso\iso_convert.cpp" />
+    <ClCompile Include="..\common\iso\iso_files.cpp" />
+    <ClCompile Include="..\common\iso\iso_script.cpp" />
+    <ClCompile Include="..\common\maths\elliptic.cpp" />
+    <ClCompile Include="..\common\maths\gpc.cpp" />
+    <ClCompile Include="..\common\maths\gpc.orig.c" />
+    <ClCompile Include="..\common\maths\lp.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DebugDX11-clang|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='ReleaseDX11-clang|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='ReleaseDX11|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='ReleaseDX9|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DebugDX9|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DebugDX11|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\common\maths\martinez.cpp" />
+    <ClCompile Include="..\common\maths\polygon.cpp" />
+    <ClCompile Include="..\common\maths\simplex.cpp" />
+    <ClCompile Include="..\common\maths\simplex_clip.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DebugDX11|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DebugDX11-clang|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='ReleaseDX11-clang|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='ReleaseDX11|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='ReleaseDX9|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DebugDX9|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\common\maths\sobol.cpp" />
+    <ClCompile Include="..\common\maths\sparse.cpp" />
+    <ClCompile Include="..\common\maths\spherical_harmonics.cpp" />
+    <ClCompile Include="..\common\extra\regex.cpp" />
+    <ClCompile Include="..\common\maths\svd.cpp" />
+    <ClCompile Include="..\common\maths\tesselate.cpp" />
+    <ClCompile Include="..\common\maths\triangulate.cpp" />
+    <ClCompile Include="..\filetypes\2d\actionscript.cpp" />
+    <ClCompile Include="..\filetypes\2d\dwg.cpp" />
+    <ClCompile Include="..\filetypes\2d\flash.cpp" />
+    <ClCompile Include="..\filetypes\2d\fonts.cpp" />
+    <ClCompile Include="..\filetypes\2d\opentype.cpp" />
+    <ClCompile Include="..\filetypes\2d\pdf.cpp" />
+    <ClCompile Include="..\filetypes\2d\svg.cpp" />
+    <ClCompile Include="..\filetypes\2d\toonboom.cpp" />
+    <ClCompile Include="..\filetypes\3d\alembic.cpp" />
+    <ClCompile Include="..\filetypes\3d\blender.cpp" />
+    <ClCompile Include="..\filetypes\3d\bvh.cpp" />
+    <ClCompile Include="..\filetypes\3d\collada.cpp" />
+    <ClCompile Include="..\filetypes\3d\draco_handler.cpp" />
+    <ClCompile Include="..\filetypes\3d\dxf.cpp" />
+    <ClCompile Include="..\filetypes\3d\fbx.cpp" />
+    <ClCompile Include="..\filetypes\3d\gltf.cpp" />
+    <ClCompile Include="..\filetypes\3d\h3d.cpp" />
+    <ClCompile Include="..\filetypes\3d\lux.cpp" />
+    <ClCompile Include="..\filetypes\3d\maya.cpp" />
+    <ClCompile Include="..\filetypes\3d\model_utils.cpp" />
+    <ClCompile Include="..\filetypes\3d\ply.cpp" />
+    <ClCompile Include="..\filetypes\3d\pvrpod.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DebugDX11|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DebugDX11-clang|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='ReleaseDX11-clang|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\3d\shader_gen.cpp" />
+    <ClCompile Include="..\filetypes\3d\vertexcacheoptimizer.cpp" />
+    <ClCompile Include="..\filetypes\3d\wavefront.cpp" />
+    <ClCompile Include="..\filetypes\3d\xatg.cpp" />
+    <ClCompile Include="..\filetypes\3d\yif.cpp" />
+    <ClCompile Include="..\filetypes\bin.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\astc_handler.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\bif.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\bitmap.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\bmp.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\ciff.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\dds.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\dicom.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\exr.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\fli.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\gif.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\gnf.cpp">
+      <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\gtf.cpp">
+      <AdditionalIncludeDirectories>$(XEDK)\include\win32;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\hdr.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\hdrfile.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\ifl.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\ilbm.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\jpg.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\lpfanm.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\mct.cpp">
+      <AdditionalIncludeDirectories>$(XEDK)\include\win32;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\mediancut.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\osx_icon.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\pcx.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\pkm.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\png.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\ppm.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\procreate.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\psd.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\psp.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\ptc.cpp">
+      <AdditionalIncludeDirectories>$(XEDK)\include\win32;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ExcludedFromBuild Condition="'$(Platform)'=='x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\pvr.cpp">
+      <ExcludedFromBuild Condition="'$(Platform)'=='x64'">false</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\tga.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\ti2.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\tiff.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\tpl.cpp">
+      <AdditionalIncludeDirectories>$(REVOLUTION_SDK_ROOT)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\vbitmap.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\wildmagic.cpp" />
+    <ClCompile Include="..\filetypes\bitmap\xpr.cpp">
+      <AdditionalIncludeDirectories>$(XEDK)\include\win32;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ExcludedFromBuild Condition="'|$(Platform)'=='x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\ar.cpp" />
+    <ClCompile Include="..\filetypes\code\ast_clr.cpp">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='DebugDX11-clang|x64'"> /clang:-O0 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\ast_java.cpp" />
+    <ClCompile Include="..\filetypes\code\bitcode.cpp" />
+    <ClCompile Include="..\filetypes\code\c.cpp" />
+    <ClCompile Include="..\filetypes\code\dalvik.cpp" />
+    <ClCompile Include="..\filetypes\code\demangle.cpp" />
+    <ClCompile Include="..\filetypes\code\demangle2.cpp" />
+    <ClCompile Include="..\filetypes\code\demangle_it.cpp" />
+    <ClCompile Include="..\filetypes\code\demangle_vc.cpp" />
+    <ClCompile Include="..\filetypes\code\dwarf.cpp" />
+    <ClCompile Include="..\filetypes\code\elf.cpp" />
+    <ClCompile Include="..\filetypes\code\gimple.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\java.cpp" />
+    <ClCompile Include="..\filetypes\code\mach.cpp" />
+    <ClCompile Include="..\filetypes\code\makefile.cpp" />
+    <ClCompile Include="..\filetypes\code\make_rth.cpp" />
+    <ClCompile Include="..\filetypes\code\mcp.cpp" />
+    <ClCompile Include="..\filetypes\code\mdb.cpp" />
+    <ClCompile Include="..\filetypes\code\minidump.cpp">
+      <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\msf.cpp" />
+    <ClCompile Include="..\filetypes\code\obj.cpp" />
+    <ClCompile Include="..\filetypes\code\pcapcpp.cpp" />
+    <ClCompile Include="..\filetypes\code\pdb_dia.cpp">
+      <AdditionalIncludeDirectories>$(VCInstallDir)..\DIA SDK\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\pdb.cpp" />
+    <ClCompile Include="..\filetypes\code\pdb_utils.cpp" />
+    <ClCompile Include="..\filetypes\code\pe_coff.cpp">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='DebugDX11|x64'">/bigobj %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\pix3.cpp" />
+    <ClCompile Include="..\filetypes\code\tundra.cpp" />
+    <ClCompile Include="..\filetypes\code\unreal_script.cpp" />
+    <ClCompile Include="..\filetypes\code\visualstudio.cpp" />
+    <ClCompile Include="..\filetypes\code\webassembly.cpp" />
+    <ClCompile Include="..\filetypes\code\xbf.cpp" />
+    <ClCompile Include="..\filetypes\code\xcode.cpp" />
+    <ClCompile Include="..\filetypes\code\xex.cpp" />
+    <ClCompile Include="..\filetypes\container\7z.cpp" />
+    <ClCompile Include="..\filetypes\container\amiga.cpp" />
+    <ClCompile Include="..\filetypes\container\apple.cpp" />
+    <ClCompile Include="..\filetypes\container\apple_apfs.cpp" />
+    <ClCompile Include="..\filetypes\container\apple_disk.cpp" />
+    <ClCompile Include="..\filetypes\container\apple_pkg.cpp" />
+    <ClCompile Include="..\filetypes\container\archive.cpp" />
+    <ClCompile Include="..\filetypes\container\archive_help.cpp" />
+    <ClCompile Include="..\filetypes\container\bbc_micro.cpp" />
+    <ClCompile Include="..\filetypes\container\bsa.cpp" />
+    <ClCompile Include="..\filetypes\container\built.cpp" />
+    <ClCompile Include="..\filetypes\container\cab.cpp" />
+    <ClCompile Include="..\filetypes\container\dbf.cpp" />
+    <ClCompile Include="..\filetypes\container\dvd.cpp" />
+    <ClCompile Include="..\filetypes\container\ese.cpp" />
+    <ClCompile Include="..\filetypes\container\FAT.cpp" />
+    <ClCompile Include="..\filetypes\container\flatbuffer.cpp" />
+    <ClCompile Include="..\filetypes\container\fsarc.cpp" />
+    <ClCompile Include="..\filetypes\container\garmin.cpp" />
+    <ClCompile Include="..\filetypes\container\hha.cpp" />
+    <ClCompile Include="..\filetypes\container\iso9660.cpp" />
+    <ClCompile Include="..\filetypes\container\lha_file.cpp" />
+    <ClCompile Include="..\filetypes\container\livearcade.cpp" />
+    <ClCompile Include="..\filetypes\container\lz4file.cpp" />
+    <ClCompile Include="..\filetypes\container\matlab.cpp" />
+    <ClCompile Include="..\filetypes\container\nif.cpp" />
+    <ClCompile Include="..\filetypes\container\plist.cpp" />
+    <ClCompile Include="..\filetypes\container\protocol_buffer.cpp" />
+    <ClCompile Include="..\filetypes\container\ps3_files.cpp" />
+    <ClCompile Include="..\filetypes\container\ps4_files.cpp" />
+    <ClCompile Include="..\filetypes\container\psarc.cpp" />
+    <ClCompile Include="..\filetypes\container\rar_file.cpp" />
+    <ClCompile Include="..\filetypes\container\sqlite.cpp" />
+    <ClCompile Include="..\filetypes\container\tgc.cpp" />
+    <ClCompile Include="..\filetypes\container\tivo.cpp" />
+    <ClCompile Include="..\filetypes\container\unity.cpp" />
+    <ClCompile Include="..\filetypes\container\unix.cpp" />
+    <ClCompile Include="..\filetypes\container\unreal.cpp" />
+    <ClCompile Include="..\filetypes\container\vmdk.cpp" />
+    <ClCompile Include="..\filetypes\container\WEVR.cpp" />
+    <ClCompile Include="..\filetypes\container\wiidisc.cpp" />
+    <ClCompile Include="..\filetypes\container\xdvdfs.cpp" />
+    <ClCompile Include="..\filetypes\crosswords.cpp" />
+    <ClCompile Include="..\filetypes\ebml.cpp" />
+    <ClCompile Include="..\filetypes\fx.cpp">
+      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\gedcom.cpp" />
+    <ClCompile Include="..\filetypes\gis.cpp" />
+    <ClCompile Include="..\filetypes\ib.cpp" />
+    <ClCompile Include="..\filetypes\ibz.cpp" />
+    <ClCompile Include="..\filetypes\iff.cpp" />
+    <ClCompile Include="..\filetypes\ix.cpp" />
+    <ClCompile Include="..\filetypes\code\js.cpp" />
+    <ClCompile Include="..\filetypes\json2.cpp" />
+    <ClCompile Include="..\filetypes\lua.cpp" />
+    <ClCompile Include="..\filetypes\office.cpp" />
+    <ClCompile Include="..\filetypes\pem.cpp" />
+    <ClCompile Include="..\filetypes\pgp.cpp" />
+    <ClCompile Include="..\filetypes\psion.cpp" />
+    <ClCompile Include="..\filetypes\pst.cpp" />
+    <ClCompile Include="..\filetypes\riff.cpp" />
+    <ClCompile Include="..\filetypes\shortcut.cpp" />
+    <ClCompile Include="..\filetypes\sound\aac.cpp">
+      <ExcludedFromBuild Condition="'$(Platform)'=='x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\sound\ac3.cpp">
+      <ExcludedFromBuild Condition="'$(Platform)'=='x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\sound\adpcm.cpp" />
+    <ClCompile Include="..\filetypes\sound\aiff.cpp" />
+    <ClCompile Include="..\filetypes\sound\atrac9.cpp" />
+    <ClCompile Include="..\filetypes\sound\caf.cpp" />
+    <ClCompile Include="..\filetypes\sound\dsp.cpp" />
+    <ClCompile Include="..\filetypes\sound\flac.cpp" />
+    <ClCompile Include="..\filetypes\sound\mp3.cpp" />
+    <ClCompile Include="..\filetypes\sound\ogg.cpp" />
+    <ClCompile Include="..\filetypes\sound\vag.cpp" />
+    <ClCompile Include="..\filetypes\sound\wav.cpp" />
+    <ClCompile Include="..\filetypes\sound\xma.cpp">
+      <AdditionalIncludeDirectories>$(XEDK)\include\win32;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ExcludedFromBuild Condition="'$(Platform)'=='x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\txt.cpp" />
+    <ClCompile Include="..\filetypes\video\avi.cpp" />
+    <ClCompile Include="..\filetypes\video\directshow_files.cpp" />
+    <ClCompile Include="..\filetypes\video\h264.cpp" />
+    <ClCompile Include="..\filetypes\video\matroska.cpp" />
+    <ClCompile Include="..\filetypes\video\movie.cpp" />
+    <ClCompile Include="..\filetypes\video\mpeg.cpp" />
+    <ClCompile Include="..\filetypes\video\quicktime.cpp" />
+    <ClCompile Include="..\filetypes\video\thp.cpp" />
+    <ClCompile Include="..\filetypes\video\wmv.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\video\xvid.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\xml2.cpp" />
+    <ClCompile Include="..\filetypes\yaml2.cpp" />
+    <ClCompile Include="..\platforms\opengl\shared\glsl_hal.cpp" />
+    <ClCompile Include="..\platforms\opengl\shared\opengl_conversion.cpp" />
+    <ClCompile Include="..\platforms\pc\dx11\_graphics.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DebugDX9|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='ReleaseDX9|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\platforms\pc\dx11\shared\dx11_conversion.cpp" />
+    <ClCompile Include="..\platforms\pc\dx9\_graphics.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='ReleaseDX11|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DebugDX11|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DebugDX11-clang|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='ReleaseDX11-clang|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\platforms\pc\dx9\shared\dx9_conversion.cpp" />
+    <ClCompile Include="..\platforms\pc\dx\dis_dxbc.cpp" />
+    <ClCompile Include="..\platforms\pc\dx\dxgi_helpers.cpp" />
+    <ClCompile Include="..\platforms\pc\dx\spdb.cpp" />
+    <ClCompile Include="..\platforms\pc\hook.cpp" />
+    <ClCompile Include="..\platforms\pc\hook_stack.cpp" />
+    <ClCompile Include="..\platforms\pc\platform.cpp" />
+    <ClCompile Include="..\platforms\pc\render_output.cpp" />
+    <ClCompile Include="..\platforms\pc\sockets.cpp" />
+    <ClCompile Include="..\platforms\pc\windows\desktopcomposition.cpp" />
+    <ClCompile Include="..\platforms\pc\_thread.cpp" />
+    <ClCompile Include="..\platforms\pc\windows\com.cpp" />
+    <ClCompile Include="..\platforms\pc\windows\control_helpers.cpp" />
+    <ClCompile Include="..\platforms\pc\windows\dialog.cpp" />
+    <ClCompile Include="..\platforms\pc\windows\docker.cpp" />
+    <ClCompile Include="..\platforms\pc\windows\filedialogs.cpp" />
+    <ClCompile Include="..\platforms\pc\windows\text_control.cpp" />
+    <ClCompile Include="..\platforms\pc\windows\theme.cpp" />
+    <ClCompile Include="..\platforms\pc\windows\window.cpp" />
+    <ClCompile Include="..\platforms\pc\_controller.cpp" />
+    <ClCompile Include="..\platforms\pc\_sound.cpp" />
+    <ClCompile Include="..\platforms\ps3\shared\edge.cpp" />
+    <ClCompile Include="..\platforms\ps3\shared\ps3_conversion.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\platforms\ps3\shared\rsx_dump.cpp" />
+    <ClCompile Include="..\platforms\ps3\shared\rsx_regs.cpp" />
+    <ClCompile Include="..\platforms\gcn\gpu_state.cpp" />
+    <ClCompile Include="..\platforms\gcn\gpu_tile.cpp" />
+    <ClCompile Include="..\platforms\gcn\pm4_dump.cpp" />
+    <ClCompile Include="..\platforms\ps4\shared\ps4_conversion.cpp">
+      <ExcludedFromBuild Condition="'$(Platform)'=='Win32'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\platforms\ps4\shared\sdb.cpp" />
+    <ClCompile Include="..\platforms\Wii\shared\gx_decode.cpp">
+      <AdditionalIncludeDirectories>$(REVOLUTION_SDK_ROOT)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="..\platforms\Wii\shared\gx_dump.cpp">
+      <AdditionalIncludeDirectories>$(REVOLUTION_SDK_ROOT)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="..\platforms\Wii\shared\gx_regnames.cpp" />
+    <ClCompile Include="..\platforms\wii\shared\wii_conversion.cpp">
+      <AdditionalIncludeDirectories>$(REVOLUTION_SDK_ROOT)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ExcludedFromBuild Condition="'$(Platform)'=='x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\platforms\x360\shared\x360_conversion.cpp">
+      <AdditionalIncludeDirectories>$(XEDK)\include\win32;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ExcludedFromBuild Condition="'$(Platform)'=='x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\platforms\xone\shared\xone_conversion.cpp">
+      <AdditionalIncludeDirectories>$(DurangoXDK)PC\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DebugDX11|x64'">true</ExcludedFromBuild>
+      <AdditionalIncludeDirectories>$(DurangoXDK)xdk\Include\um;$(DurangoXDK)PC\Include;$(XboxOneXDKLatest)PC\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="..\systems\animation\ik.cpp" />
+    <ClCompile Include="..\systems\collision\collision.cpp" />
+    <ClCompile Include="..\systems\communication\connection.cpp" />
+    <ClCompile Include="..\systems\communication\isolink_target.cpp" />
+    <ClCompile Include="..\platforms\ios\shared\isolink_target_ios.cpp" />
+    <ClCompile Include="..\platforms\mac\shared\isolink_target_mac.cpp" />
+    <ClCompile Include="..\platforms\pc\shared\isolink_target_pc.cpp" />
+    <ClCompile Include="..\platforms\ps3\shared\isolink_target_ps3.cpp" />
+    <ClCompile Include="..\platforms\ps4\shared\isolink_target_ps4.cpp" />
+    <ClCompile Include="..\platforms\wii\shared\isolink_target_wii.cpp">
+      <AdditionalIncludeDirectories>$(revolution_sdk_root)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ExcludedFromBuild Condition="'$(Platform)'=='x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="..\platforms\x360\shared\isolink_target_x360.cpp">
+      <AdditionalIncludeDirectories>$(xedk)\include\win32;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="..\systems\conversion\bone.cpp" />
+    <ClCompile Include="..\systems\conversion\channeluse.cpp" />
+    <ClCompile Include="..\systems\conversion\conversions.cpp" />
+    <ClCompile Include="..\systems\conversion\conv_anim.cpp" />
+    <ClCompile Include="..\systems\conversion\conv_bitmap.cpp" />
+    <ClCompile Include="..\systems\conversion\conv_gpu.cpp" />
+    <ClCompile Include="..\systems\conversion\conv_menu.cpp" />
+    <ClCompile Include="..\systems\conversion\conv_mesh.cpp" />
+    <ClCompile Include="..\systems\conversion\conv_sample.cpp" />
+    <ClCompile Include="..\systems\conversion\dupes.cpp" />
+    <ClCompile Include="..\systems\conversion\strip.cpp" />
+    <ClCompile Include="..\systems\conversion\texture_atlas.cpp" />
+    <ClCompile Include="..\systems\mesh\light.cpp" />
+    <ClCompile Include="..\systems\mesh\model.cpp" />
+    <ClCompile Include="..\systems\mesh\nurbs.cpp" />
+    <ClCompile Include="..\systems\mesh\patch.cpp" />
+    <ClCompile Include="..\systems\mesh\shapes.cpp" />
+    <ClCompile Include="..\systems\postprocess\post.cpp" />
+    <ClCompile Include="..\systems\roads\roads.cpp" />
+    <ClCompile Include="..\systems\roads\roads_editor.cpp" />
+    <ClCompile Include="..\systems\shadows\shadow.cpp" />
+    <ClCompile Include="..\systems\speech\speech.cpp" />
+    <ClCompile Include="..\systems\speech\synth.cpp" />
+    <ClCompile Include="..\systems\speech\tts.cpp" />
+    <ClCompile Include="..\systems\ui\font.cpp" />
+    <ClCompile Include="..\systems\ui\menu.cpp" />
+    <ClCompile Include="..\systems\vision\contours.cpp" />
+    <ClCompile Include="..\systems\vision\grabcut.cpp" />
+    <ClCompile Include="..\systems\vision\sift.cpp" />
+    <ClCompile Include="compare.cpp" />
+    <ClCompile Include="devices\certificates.cpp" />
+    <ClCompile Include="devices\clipboard.cpp" />
+    <ClCompile Include="devices\deci3.cpp">
+      <ExcludedFromBuild Condition="'$(Platform)'=='x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="devices\devices.cpp" />
+    <ClCompile Include="devices\device_fonts.cpp" />
+    <ClCompile Include="devices\device_ftp.cpp" />
+    <ClCompile Include="devices\device_svn.cpp" />
+    <ClCompile Include="devices\device_upnp.cpp" />
+    <ClCompile Include="devices\durango.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="devices\device_directories.cpp" />
+    <ClCompile Include="devices\orbis.cpp" />
+    <ClCompile Include="devices\p4.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DebugDX11-clang|x64'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='ReleaseDX11-clang|x64'">false</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="devices\philips_hue.cpp" />
+    <ClCompile Include="devices\processes.cpp" />
+    <ClCompile Include="devices\Registry.cpp" />
+    <ClCompile Include="devices\remote.cpp" />
+    <ClCompile Include="devices\scanner.cpp" />
+    <ClCompile Include="devices\sectors.cpp" />
+    <ClCompile Include="devices\serial.cpp" />
+    <ClCompile Include="devices\url.cpp" />
+    <ClCompile Include="devices\videocapture.cpp" />
+    <ClCompile Include="devices\x360explorer.cpp" />
+    <ClCompile Include="disassemblers\dis_6502.cpp" />
+    <ClCompile Include="disassemblers\dis_arm.cpp" />
+    <ClCompile Include="disassemblers\dis_atmel.cpp" />
+    <ClCompile Include="disassemblers\dis_cil.cpp" />
+    <ClCompile Include="disassemblers\dis_intel.cpp" />
+    <ClCompile Include="disassemblers\dis_mali.cpp" />
+    <ClCompile Include="disassemblers\dis_mips.cpp" />
+    <ClCompile Include="disassemblers\dis_ppc.cpp" />
+    <ClCompile Include="..\platforms\ps3\shared\dis_ps3ps.cpp" />
+    <ClCompile Include="..\platforms\gcn\dis_gcn1.cpp" />
+    <ClCompile Include="..\platforms\ps3\shared\dis_spu.cpp" />
+    <ClCompile Include="..\platforms\x360\shared\dis_x360ps.cpp" />
+    <ClCompile Include="..\platforms\gcn\sim_gcn1.cpp" />
+    <ClCompile Include="..\platforms\pc\dll.cpp" />
+    <ClCompile Include="find.cpp" />
+    <ClCompile Include="gnm.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="hatch.cpp" />
+    <ClCompile Include="isoeditor.cpp" />
+    <ClCompile Include="..\common\crc32.cpp" />
+    <ClCompile Include="..\common\crc_dictionary.cpp" />
+    <ClCompile Include="..\common\filename.cpp" />
+    <ClCompile Include="..\common\jobs.cpp" />
+    <ClCompile Include="..\common\object.cpp" />
+    <ClCompile Include="..\common\render.cpp" />
+    <ClCompile Include="..\common\scenetree.cpp" />
+    <ClCompile Include="..\common\shader.cpp" />
+    <ClCompile Include="..\common\sound.cpp" />
+    <ClCompile Include="..\common\utilities.cpp" />
+    <ClCompile Include="..\common\extra\async_stream.cpp" />
+    <ClCompile Include="..\common\maths\bignum.cpp" />
+    <ClCompile Include="..\common\comms\HTTP.cpp" />
+    <ClCompile Include="..\common\hashes\md5.cpp" />
+    <ClCompile Include="..\common\hashes\SHA.cpp" />
+    <ClCompile Include="..\common\comms\UPnP.cpp" />
+    <ClCompile Include="..\common\extra\xml.cpp" />
+    <ClCompile Include="..\common\codec\deflate.cpp" />
+    <ClCompile Include="..\platforms\pc\windows\dib.cpp" />
+    <ClCompile Include="..\platforms\pc\windows\splitter.cpp" />
+    <ClCompile Include="..\platforms\pc\windows\treecolumns.cpp" />
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="perms.cpp">
+      <ExcludedFromBuild>true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="viewers\debug.cpp" />
+    <ClCompile Include="viewers\directory_scan.cpp" />
+    <ClCompile Include="viewers\gpu.cpp" />
+    <ClCompile Include="viewers\natvis.cpp" />
+    <ClCompile Include="viewers\ps4\gnm_dump.cpp" />
+    <ClCompile Include="viewers\ps4\ps4_connection.cpp" />
+    <ClCompile Include="viewers\ps4\ps4_shaders.cpp" />
+    <ClCompile Include="viewers\ps4\view_ps4shader.cpp" />
+    <ClCompile Include="viewers\viewbin.cpp" />
+    <ClCompile Include="viewers\viewbin_win32.cpp" />
+    <ClCompile Include="viewers\viewbitmap_win32.cpp" />
+    <ClCompile Include="viewers\viewbitmap.cpp" />
+    <ClCompile Include="viewers\viewcrossword.cpp" />
+    <ClCompile Include="viewers\viewdirectories.cpp" />
+    <ClCompile Include="viewers\viewer_identifier.cpp" />
+    <ClCompile Include="viewers\viewflash.cpp" />
+    <ClCompile Include="viewers\viewged.cpp" />
+    <ClCompile Include="viewers\viewgraph.cpp" />
+    <ClCompile Include="viewers\viewincludes.cpp" />
+    <ClCompile Include="viewers\viewmenu.cpp" />
+    <ClCompile Include="viewers\viewmodel.cpp" />
+    <ClCompile Include="viewers\viewmovie.cpp" />
+    <ClCompile Include="viewers\viewparticle.cpp" />
+    <ClCompile Include="viewers\viewprofile.cpp" />
+    <ClCompile Include="viewers\ps3\viewps3gpu.cpp" />
+    <ClCompile Include="viewers\ps4\viewps4gpu.cpp" />
+    <ClCompile Include="viewers\viewsample.cpp" />
+    <ClCompile Include="viewers\viewscene.cpp" />
+    <ClCompile Include="viewers\viewshader.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DebugDX9|x64'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='ReleaseDX9|x64'">true</ExcludedFromBuild>
+    </ClCompile>
+    <ClCompile Include="viewers\viewshaders.cpp" />
+    <ClCompile Include="viewers\viewtest2d.cpp" />
+    <ClCompile Include="viewers\viewtest3d.cpp" />
+    <ClCompile Include="viewers\viewtext.cpp" />
+    <ClCompile Include="viewers\viewtree.cpp" />
+    <ClCompile Include="viewers\wii\viewwiigx.cpp">
+      <AdditionalIncludeDirectories>C:\dev\SDK\RVL_SDK\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <ClCompile Include="..\systems\animation\animation.cpp" />
+    <ClCompile Include="..\systems\conversion\distance_fields.cpp" />
+    <ClCompile Include="..\systems\conversion\environment_maps.cpp" />
+    <ClCompile Include="..\systems\conversion\fontmaker.cpp" />
+    <ClCompile Include="..\systems\particle\particle.cpp" />
+    <ClCompile Include="..\systems\conversion\platformdata.cpp" />
+    <ClCompile Include="viewers\ps4\view_pssl.cpp" />
+    <ClCompile Include="viewers\view_html.cpp" />
+    <ClCompile Include="webserver.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\common\allocators\allocator.h" />
+    <ClInclude Include="..\common\allocators\pool.h" />
+    <ClInclude Include="..\common\allocators\tlsf.h" />
+    <ClInclude Include="..\common\base\algorithm.h" />
+    <ClInclude Include="..\common\base\array.h" />
+    <ClInclude Include="..\common\base\atomic.h" />
+    <ClInclude Include="..\common\base\bits.h" />
+    <ClInclude Include="..\common\base\block.h" />
+    <ClInclude Include="..\common\base\colour.h" />
+    <ClInclude Include="..\common\base\constants.h" />
+    <ClInclude Include="..\common\base\deferred.h" />
+    <ClInclude Include="..\common\base\defs.h" />
+    <ClInclude Include="..\common\base\defs_base.h" />
+    <ClInclude Include="..\common\base\defs_endian.h" />
+    <ClInclude Include="..\common\base\interval.h" />
+    <ClInclude Include="..\common\base\soft_float.h" />
+    <ClInclude Include="..\common\base\defs_int.h" />
+    <ClInclude Include="..\common\base\functions.h" />
+    <ClInclude Include="..\common\base\hash.h" />
+    <ClInclude Include="..\common\base\iterator.h" />
+    <ClInclude Include="..\common\base\list.h" />
+    <ClInclude Include="..\common\base\lock_free_hash.h" />
+    <ClInclude Include="..\common\base\maths.h" />
+    <ClInclude Include="..\common\base\shared_ptr.h" />
+    <ClInclude Include="..\common\base\simd.h" />
+    <ClInclude Include="..\common\base\skip_list.h" />
+    <ClInclude Include="..\common\base\pointer.h" />
+    <ClInclude Include="..\common\base\strings.h" />
+    <ClInclude Include="..\common\base\tree.h" />
+    <ClInclude Include="..\common\base\tuple.h" />
+    <ClInclude Include="..\common\base\vector.h" />
+    <ClInclude Include="..\common\codec\aes.h" />
+    <ClInclude Include="..\common\codec\branch.h" />
+    <ClInclude Include="..\common\codec\cbc.h" />
+    <ClInclude Include="..\common\codec\ccm.h" />
+    <ClInclude Include="..\common\codec\cfb.h" />
+    <ClInclude Include="..\common\codec\cipher_mode.h" />
+    <ClInclude Include="..\common\codec\codec.h" />
+    <ClInclude Include="..\common\codec\codec_stream.h" />
+    <ClInclude Include="..\common\codec\ctr.h" />
+    <ClInclude Include="..\common\codec\des.h" />
+    <ClInclude Include="..\common\codec\gost.h" />
+    <ClInclude Include="..\common\codec\mesh\draco.h" />
+    <ClInclude Include="..\common\codec\pred_part_match.h" />
+    <ClInclude Include="..\common\codec\rar.h" />
+    <ClInclude Include="..\common\codec\reed_solomon.h" />
+    <ClInclude Include="..\common\codec\snappy.h" />
+    <ClInclude Include="..\common\codec\texels\astc.h" />
+    <ClInclude Include="..\common\codec\texels\att.h" />
+    <ClInclude Include="..\common\codec\texels\dxt.h" />
+    <ClInclude Include="..\common\codec\texels\dxt_compute.h" />
+    <ClInclude Include="..\common\codec\texels\etc.h" />
+    <ClInclude Include="..\common\codec\texels\pvrtc.h" />
+    <ClInclude Include="..\common\codec\window.h" />
+    <ClInclude Include="..\common\codec\fax3.h" />
+    <ClInclude Include="..\common\codec\gcm.h" />
+    <ClInclude Include="..\common\codec\lha.h" />
+    <ClInclude Include="..\common\codec\lz4.h" />
+    <ClInclude Include="..\common\codec\lzo.h" />
+    <ClInclude Include="..\common\codec\lzw.h" />
+    <ClInclude Include="..\common\codec\lzx.h" />
+    <ClInclude Include="..\common\codec\vlc.h" />
+    <ClInclude Include="..\common\codec\lzma.h" />
+    <ClInclude Include="..\common\comms\asn1.h" />
+    <ClInclude Include="..\common\codec\base64.h" />
+    <ClInclude Include="..\common\comms\diffie-hellman.h" />
+    <ClInclude Include="..\common\comms\dsa.h" />
+    <ClInclude Include="..\common\comms\elliptic-curves.h" />
+    <ClInclude Include="..\common\comms\gz.h" />
+    <ClInclude Include="..\common\comms\leb128.h" />
+    <ClInclude Include="..\common\comms\rsa.h" />
+    <ClInclude Include="..\common\comms\srp.h" />
+    <ClInclude Include="..\common\comms\ssl.h" />
+    <ClInclude Include="..\common\comms\WebSocket.h" />
+    <ClInclude Include="..\common\comms\x509.h" />
+    <ClInclude Include="..\common\comms\zip.h" />
+    <ClInclude Include="..\common\comms\zlib_stream.h" />
+    <ClInclude Include="..\common\directory.h" />
+    <ClInclude Include="..\common\codec\apple_compression.h" />
+    <ClInclude Include="..\common\extra\ast.h" />
+    <ClInclude Include="..\common\extra\c-types.h" />
+    <ClInclude Include="..\common\extra\clipper.h" />
+    <ClInclude Include="..\common\extra\colourise.h" />
+    <ClInclude Include="..\common\comms\compand.h" />
+    <ClInclude Include="..\common\extra\cpp.h" />
+    <ClInclude Include="..\common\extra\disk.h" />
+    <ClInclude Include="..\common\extra\filters.h" />
+    <ClInclude Include="..\common\extra\gcode.h" />
+    <ClInclude Include="..\common\extra\geo.h" />
+    <ClInclude Include="..\common\extra\gjk.h" />
+    <ClInclude Include="..\common\extra\gpu_helpers.h" />
+    <ClInclude Include="..\common\codec\huffman.h" />
+    <ClInclude Include="..\common\extra\identifier.h" />
+    <ClInclude Include="..\common\extra\octree.h" />
+    <ClInclude Include="..\common\extra\perlin_noise.h" />
+    <ClInclude Include="..\common\extra\random.h" />
+    <ClInclude Include="..\common\extra\rasterise.h" />
+    <ClInclude Include="..\common\extra\regex.h" />
+    <ClInclude Include="..\common\extra\safe_array.h" />
+    <ClInclude Include="..\common\extra\unicode_tables.h" />
+    <ClInclude Include="..\common\hashes\cityhash.h" />
+    <ClInclude Include="..\common\hashes\hash_stream.h" />
+    <ClInclude Include="..\common\hashes\murmur.h" />
+    <ClInclude Include="..\common\hashes\xxh.h" />
+    <ClInclude Include="..\common\maths\comp_geom.h" />
+    <ClInclude Include="..\common\maths\csg.h" />
+    <ClInclude Include="..\common\maths\csg2.h" />
+    <ClInclude Include="..\common\maths\dynamic_vector.h" />
+    <ClInclude Include="..\common\maths\geometry_iso.h" />
+    <ClInclude Include="..\common\graphics.h" />
+    <ClInclude Include="..\common\hashes\spooky.h" />
+    <ClInclude Include="..\common\iso\iso_compat.h" />
+    <ClInclude Include="..\common\maths\bezier.h" />
+    <ClInclude Include="..\common\maths\clipper2.h" />
+    <ClInclude Include="..\common\maths\gpc.h" />
+    <ClInclude Include="..\common\maths\gpc.orig.h" />
+    <ClInclude Include="..\common\maths\martinez.h" />
+    <ClInclude Include="..\common\maths\polygon.h" />
+    <ClInclude Include="..\common\maths\polynomial.h" />
+    <ClInclude Include="..\common\hashes\crc.h" />
+    <ClInclude Include="..\common\extra\date.h" />
+    <ClInclude Include="..\common\maths\dct.h" />
+    <ClInclude Include="..\common\extra\directshow.h" />
+    <ClInclude Include="..\common\comms\ftp.h" />
+    <ClInclude Include="..\common\extra\indexer.h" />
+    <ClInclude Include="..\common\comms\ip.h" />
+    <ClInclude Include="..\common\extra\json.h" />
+    <ClInclude Include="..\common\extra\si.h" />
+    <ClInclude Include="..\common\extra\text_stream.h" />
+    <ClInclude Include="..\common\extra\yaml.h" />
+    <ClInclude Include="..\common\maths\geometry.h" />
+    <ClInclude Include="..\common\hashes\fnv.h" />
+    <ClInclude Include="..\common\hashes\simple.h" />
+    <ClInclude Include="..\common\iso\iso.h" />
+    <ClInclude Include="..\common\iso\iso_binary.h" />
+    <ClInclude Include="..\common\iso\iso_convert.h" />
+    <ClInclude Include="..\common\iso\iso_files.h" />
+    <ClInclude Include="..\common\iso\iso_script.h" />
+    <ClInclude Include="..\common\maths\simplex.h" />
+    <ClInclude Include="..\common\maths\sobol.h" />
+    <ClInclude Include="..\common\maths\sparse.h" />
+    <ClInclude Include="..\common\maths\spherical_harmonics.h" />
+    <ClInclude Include="..\common\maths\statistics.h" />
+    <ClInclude Include="..\common\maths\tesselate.h" />
+    <ClInclude Include="..\common\maths\triangulate.h" />
+    <ClInclude Include="..\common\message.h" />
+    <ClInclude Include="..\common\sockets.h" />
+    <ClInclude Include="..\common\thread.h" />
+    <ClInclude Include="..\common\utilities.h" />
+    <ClInclude Include="..\filetypes\2d\cff.h" />
+    <ClInclude Include="..\filetypes\2d\flash.h" />
+    <ClInclude Include="..\filetypes\2d\ttf.h" />
+    <ClInclude Include="..\filetypes\3d\model_utils.h" />
+    <ClInclude Include="..\filetypes\3d\shader_gen.h" />
+    <ClInclude Include="..\filetypes\bin.h" />
+    <ClInclude Include="..\filetypes\bitmap\bitmap.h" />
+    <ClInclude Include="..\filetypes\bitmap\gnf.h" />
+    <ClInclude Include="..\filetypes\bitmap\gtf.h" />
+    <ClInclude Include="..\filetypes\bitmap\hdr.h" />
+    <ClInclude Include="..\filetypes\bitmap\bitmapfile.h" />
+    <ClInclude Include="..\filetypes\bitmap\jpg.h" />
+    <ClInclude Include="..\filetypes\bitmap\tpl.h" />
+    <ClInclude Include="..\filetypes\code\cil.h" />
+    <ClInclude Include="..\filetypes\code\clr.h" />
+    <ClInclude Include="..\filetypes\code\cvconst.h" />
+    <ClInclude Include="..\filetypes\code\cvinfo.h" />
+    <ClInclude Include="..\filetypes\code\cvinfo_iso.h" />
+    <ClInclude Include="..\filetypes\code\dalvik.h" />
+    <ClInclude Include="..\filetypes\code\demangle.h" />
+    <ClInclude Include="..\filetypes\code\demangle2.h" />
+    <ClInclude Include="..\filetypes\code\dwarf.h" />
+    <ClInclude Include="..\filetypes\code\elf.h" />
+    <ClInclude Include="..\filetypes\code\java.h" />
+    <ClInclude Include="..\filetypes\code\mach.h" />
+    <ClInclude Include="..\filetypes\code\msf.h" />
+    <ClInclude Include="..\filetypes\code\obj.h" />
+    <ClInclude Include="..\filetypes\code\pdb.h" />
+    <ClInclude Include="..\filetypes\code\pe.h" />
+    <ClInclude Include="..\filetypes\container\archive_help.h" />
+    <ClInclude Include="..\filetypes\container\compound_doc.h" />
+    <ClInclude Include="..\filetypes\container\flatbuffer.h" />
+    <ClInclude Include="..\filetypes\container\plist.h" />
+    <ClInclude Include="..\filetypes\container\unity_types.h" />
+    <ClInclude Include="..\filetypes\container\unreal.h" />
+    <ClInclude Include="..\filetypes\fx.h" />
+    <ClInclude Include="..\filetypes\iff.h" />
+    <ClInclude Include="..\filetypes\pid.h" />
+    <ClInclude Include="..\filetypes\riff.h" />
+    <ClInclude Include="..\filetypes\sound\dmap.h" />
+    <ClInclude Include="..\filetypes\sound\dsp.h" />
+    <ClInclude Include="..\filetypes\sound\mp3.h" />
+    <ClInclude Include="..\filetypes\sound\sample.h" />
+    <ClInclude Include="..\filetypes\sound\vag.h" />
+    <ClInclude Include="..\filetypes\sound\wav.h" />
+    <ClInclude Include="..\filetypes\sound\xma.h" />
+    <ClInclude Include="..\filetypes\video\matroska.h" />
+    <ClInclude Include="..\filetypes\video\movie.h" />
+    <ClInclude Include="..\platforms\pc\app.h" />
+    <ClInclude Include="..\platforms\pc\com.h" />
+    <ClInclude Include="..\platforms\pc\dx11\_graphics.h" />
+    <ClInclude Include="..\platforms\pc\dx11\platform.h" />
+    <ClInclude Include="..\platforms\pc\dx11\shared\graphics_defs.h" />
+    <ClInclude Include="..\platforms\pc\dx11\shared\model_defs.h" />
+    <ClInclude Include="..\platforms\pc\dx9\_graphics.h" />
+    <ClInclude Include="..\platforms\pc\dx9\shared\graphics_defs.h" />
+    <ClInclude Include="..\platforms\pc\dx9\shared\model_defs.h" />
+    <ClInclude Include="..\platforms\pc\dx\dxgi_helpers.h" />
+    <ClInclude Include="..\platforms\pc\dx\dxgi_read.h" />
+    <ClInclude Include="..\platforms\pc\dx\dx_helpers.h" />
+    <ClInclude Include="..\platforms\pc\hook.h" />
+    <ClInclude Include="..\platforms\pc\link.h" />
+    <ClInclude Include="..\platforms\pc\platform_common.h" />
+    <ClInclude Include="..\platforms\pc\render_output.h" />
+    <ClInclude Include="..\platforms\pc\windows\desktopcomposition.h" />
+    <ClInclude Include="..\platforms\pc\_thread.h" />
+    <ClInclude Include="..\platforms\pc\vm.h" />
+    <ClInclude Include="..\platforms\pc\windows\com-dataobject.h" />
+    <ClInclude Include="..\platforms\pc\windows\control_helpers.h" />
+    <ClInclude Include="..\platforms\pc\windows\d2d.h" />
+    <ClInclude Include="..\platforms\pc\windows\dialog.h" />
+    <ClInclude Include="..\platforms\pc\windows\docker.h" />
+    <ClInclude Include="..\platforms\pc\windows\dwm.h" />
+    <ClInclude Include="..\platforms\pc\windows\filedialogs.h" />
+    <ClInclude Include="..\platforms\pc\windows\nt.h" />
+    <ClInclude Include="..\platforms\pc\windows\registry.h" />
+    <ClInclude Include="..\platforms\pc\windows\text_control.h" />
+    <ClInclude Include="..\platforms\pc\windows\window.h" />
+    <ClInclude Include="..\platforms\pc\windows\win_file.h" />
+    <ClInclude Include="..\platforms\pc\x64\_maths.h" />
+    <ClInclude Include="..\platforms\pc\_atomic.h" />
+    <ClInclude Include="..\platforms\pc\_controller.h" />
+    <ClInclude Include="..\platforms\pc\x86\_maths.h" />
+    <ClInclude Include="..\platforms\pc\_sound.h" />
+    <ClInclude Include="..\platforms\ps3\shared\edge.h" />
+    <ClInclude Include="..\platforms\ps3\shared\rsx_dump.h" />
+    <ClInclude Include="..\platforms\ps3\shared\rsx_regs.h" />
+    <ClInclude Include="..\platforms\gcn\gpu_pm4.h" />
+    <ClInclude Include="..\platforms\gcn\gpu_regs.h" />
+    <ClInclude Include="..\platforms\gcn\gpu_state.h" />
+    <ClInclude Include="..\platforms\gcn\gpu_tile.h" />
+    <ClInclude Include="..\platforms\gcn\pm4_dump.h" />
+    <ClInclude Include="..\platforms\ps4\shared\sdb.h" />
+    <ClInclude Include="..\platforms\Wii\shared\gx_decode.h" />
+    <ClInclude Include="..\platforms\Wii\shared\gx_dump.h" />
+    <ClInclude Include="..\platforms\Wii\shared\gx_regnames.h" />
+    <ClInclude Include="..\platforms\Wii\shared\gx_regs.h" />
+    <ClInclude Include="..\systems\animation\ik.h" />
+    <ClInclude Include="..\systems\communication\connection.h" />
+    <ClInclude Include="..\systems\communication\isolink.h" />
+    <ClInclude Include="..\systems\communication\isolink_target.h" />
+    <ClInclude Include="..\systems\conversion\bone.h" />
+    <ClInclude Include="..\systems\conversion\channeluse.h" />
+    <ClInclude Include="..\systems\conversion\strip.h" />
+    <ClInclude Include="..\systems\mesh\light.h" />
+    <ClInclude Include="..\systems\mesh\model.h" />
+    <ClInclude Include="..\systems\mesh\model_iso.h" />
+    <ClInclude Include="..\systems\mesh\nurbs.h" />
+    <ClInclude Include="..\systems\mesh\patch.h" />
+    <ClInclude Include="..\systems\mesh\shapes.h" />
+    <ClInclude Include="..\systems\mesh\shape_gen.h" />
+    <ClInclude Include="..\systems\postprocess\post.h" />
+    <ClInclude Include="..\systems\roads\roads.h" />
+    <ClInclude Include="..\systems\roads\roads_editor.h" />
+    <ClInclude Include="..\systems\speech\tts.h" />
+    <ClInclude Include="..\systems\ui\font.h" />
+    <ClInclude Include="..\systems\ui\font_iso.h" />
+    <ClInclude Include="..\systems\ui\menu.h" />
+    <ClInclude Include="..\systems\ui\menu_structs.h" />
+    <ClInclude Include="..\systems\vision\contours.h" />
+    <ClInclude Include="..\systems\vision\grabcut.h" />
+    <ClInclude Include="..\systems\vision\maxflow_grid.h" />
+    <ClInclude Include="devices\device.h" />
+    <ClInclude Include="..\common\disassembler.h" />
+    <ClInclude Include="..\platforms\gcn\sim_gcn1.h" />
+    <ClInclude Include="devices\directories.h" />
+    <ClInclude Include="main.h" />
+    <ClInclude Include="resource.h" />
+    <ClInclude Include="..\common\crc32.h" />
+    <ClInclude Include="..\common\crc_dictionary.h" />
+    <ClInclude Include="..\common\filename.h" />
+    <ClInclude Include="..\common\jobs.h" />
+    <ClInclude Include="..\common\object.h" />
+    <ClInclude Include="..\common\render.h" />
+    <ClInclude Include="..\common\scenegraph.h" />
+    <ClInclude Include="..\common\scenetree.h" />
+    <ClInclude Include="..\common\shader.h" />
+    <ClInclude Include="..\common\sound.h" />
+    <ClInclude Include="..\common\stream.h" />
+    <ClInclude Include="..\common\extra\async_stream.h" />
+    <ClInclude Include="..\common\maths\bignum.h" />
+    <ClInclude Include="..\common\comms\HTTP.h" />
+    <ClInclude Include="..\common\hashes\md5.h" />
+    <ClInclude Include="..\common\hashes\SHA.h" />
+    <ClInclude Include="..\common\comms\UPnP.h" />
+    <ClInclude Include="..\common\extra\xml.h" />
+    <ClInclude Include="..\common\codec\deflate.h" />
+    <ClInclude Include="..\common\events.h" />
+    <ClInclude Include="..\platforms\pc\windows\dib.h" />
+    <ClInclude Include="..\platforms\pc\windows\splitter.h" />
+    <ClInclude Include="..\platforms\pc\windows\treecolumns.h" />
+    <ClInclude Include="..\systems\animation\animation.h" />
+    <ClInclude Include="..\Systems\Particle\Particle.h" />
+    <ClInclude Include="..\systems\conversion\platformdata.h" />
+    <ClInclude Include="viewers\debug.h" />
+    <ClInclude Include="viewers\directory_scan.h" />
+    <ClInclude Include="viewers\gpu.h" />
+    <ClInclude Include="viewers\natvis.h" />
+    <ClInclude Include="viewers\ps3\ps3_comms.h" />
+    <ClInclude Include="viewers\ps3\viewps3gpu.rc.h" />
+    <ClInclude Include="viewers\ps4\ctypes.h" />
+    <ClInclude Include="viewers\ps4\ps4_comms.h" />
+    <ClInclude Include="viewers\ps4\ps4_connection.h" />
+    <ClInclude Include="viewers\ps4\ps4_shaders.h" />
+    <ClInclude Include="viewers\ps4\viewps4gpu.rc.h" />
+    <ClInclude Include="viewers\ps4\view_pssl.h" />
+    <ClInclude Include="viewers\viewbin.h" />
+    <ClInclude Include="viewers\viewbin.rc.h" />
+    <ClInclude Include="viewers\viewbitmap.h" />
+    <ClInclude Include="viewers\viewbitmap.rc.h" />
+    <ClInclude Include="viewers\viewer.h" />
+    <ClInclude Include="viewers\viewer_identifier.h" />
+    <ClInclude Include="viewers\viewmenu.rc.h" />
+    <ClInclude Include="viewers\viewmesh.rc.h" />
+    <ClInclude Include="viewers\viewsample.rc.h" />
+    <ClInclude Include="viewers\viewtree.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <IsoCmd Include="..\common\codec\texels\dxt.fx">
+      <OutExt Condition="'$(Configuration)|$(Platform)'=='DebugDX11-clang|x64'">ib.obj</OutExt>
+    </IsoCmd>
+    <IsoCmd Include="..\common\maths\tensor.fx">
+      <OutExt>ib.obj</OutExt>
+    </IsoCmd>
+    <IsoCmd Include="..\filetypes\3d\blender.fx">
+      <Variables>incdirs=$(AssetsDir)shaders %(variables)</Variables>
+    </IsoCmd>
+    <IsoCmd Include="..\filetypes\3d\gltf.fx">
+      <Variables>incdirs=$(AssetsDir)shaders %(variables)</Variables>
+    </IsoCmd>
+    <IsoCmd Include="..\filetypes\3d\h3d.fx">
+      <variables>incdirs=$(AssetsDir)shaders  exportfor=pc</variables>
+      <Variables Condition="'$(Configuration)|$(Platform)'=='DebugDX11-clang|x64'">incdirs=$(AssetsDir)shaders %(variables)</Variables>
+    </IsoCmd>
+    <IsoCmd Include="..\platforms\pc\windows\imagelist_tab.psd">
+      <FileType>Document</FileType>
+      <OutExt>bmp</OutExt>
+    </IsoCmd>
+    <IsoCmd Include="..\platforms\ps4\shared\ortmapi.ix">
+      <Variables>asext=txt</Variables>
+      <OutExt>tlh</OutExt>
+    </IsoCmd>
+    <IsoCmd Include="..\systems\mesh\quadric.fx">
+      <Variables>incdirs=$(AssetsDir)shaders %(variables)</Variables>
+    </IsoCmd>
+    <IsoCmd Include="..\systems\roads\roads.fx">
+      <Variables>incdirs=$(AssetsDir)shaders %(Variables)</Variables>
+    </IsoCmd>
+    <IsoCmd Include="devices\icons\dot.psd">
+      <FileType>Document</FileType>
+      <OutExt>png</OutExt>
+    </IsoCmd>
+    <IsoCmd Include="..\systems\shadows\shadow.fx">
+      <OutDir>$(ProjectDir)</OutDir>
+      <variables>header=%(FullPath).h incdirs=$(AssetsDir)shaders %(variables)</variables>
+    </IsoCmd>
+    <IsoCmd Include="toolbar_main.psd">
+      <FileType>Document</FileType>
+      <OutExt>bmp</OutExt>
+    </IsoCmd>
+    <IsoCmd Include="toolbar_find.psd">
+      <FileType>Document</FileType>
+      <OutExt>bmp</OutExt>
+    </IsoCmd>
+    <None Include="viewers\checker.bmp" />
+    <IsoCmd Include="viewers\viewer_font.ix" />
+    <IsoCmd Include="viewers\viewsample_toolbar.psd">
+      <FileType>Document</FileType>
+      <OutExt>bmp</OutExt>
+    </IsoCmd>
+    <IsoCmd Include="viewers\ps4\toolbar_ps4gpu.psd">
+      <FileType>Document</FileType>
+      <OutExt>bmp</OutExt>
+    </IsoCmd>
+    <IsoCmd Include="toolbar_nav.psd">
+      <FileType>Document</FileType>
+      <OutExt>bmp</OutExt>
+    </IsoCmd>
+    <IsoCmd Include="viewers\toolbar_cpu.psd">
+      <FileType>Document</FileType>
+      <OutExt>bmp</OutExt>
+    </IsoCmd>
+    <IsoCmd Include="viewers\viewbitmap_toolbar.psd">
+      <FileType>Document</FileType>
+      <OutExt>bmp</OutExt>
+    </IsoCmd>
+    <IsoCmd Include="viewers\viewmesh_toolbar.psd">
+      <FileType>Document</FileType>
+      <OutExt>bmp</OutExt>
+    </IsoCmd>
+    <IsoCmd Include="viewers\imagelist_debug.psd">
+      <FileType>Document</FileType>
+      <OutExt>bmp</OutExt>
+    </IsoCmd>
+    <IsoCmd Include="viewers\ps3\toolbar_ps3gpu.psd">
+      <FileType>Document</FileType>
+      <OutExt>bmp</OutExt>
+    </IsoCmd>
+    <IsoCmd Include="wait.psd">
+      <FileType>Document</FileType>
+      <OutExt>bmp</OutExt>
+    </IsoCmd>
+    <IsoCmd Include="viewers\ps4\cursor_overlay_console.psd">
+      <FileType>Document</FileType>
+      <OutExt>cur</OutExt>
+    </IsoCmd>
+    <IsoCmd Include="viewers\cursor_overlay_add.psd">
+      <FileType>Document</FileType>
+      <OutExt Condition="'$(Configuration)|$(Platform)'=='ReleaseDX11-clang|x64'">cur</OutExt>
+    </IsoCmd>
+    <IsoCmd Include="..\common\default.fx">
+      <variables>incdirs=$(AssetsDir)shaders %(variables)</variables>
+      <OutDir>$(ProjectDir)</OutDir>
+    </IsoCmd>
+    <IsoCmd Include="..\filetypes\3d\wavefront.fx">
+      <variables>incdirs=$(AssetsDir)shaders %(variables)</variables>
+      <OutDir>$(ProjectDir)</OutDir>
+    </IsoCmd>
+    <IsoCmd Include="..\systems\particle\particle.fx">
+      <variables>incdirs=$(AssetsDir)shaders %(variables)</variables>
+      <OutDir>$(ProjectDir)</OutDir>
+    </IsoCmd>
+    <IsoCmd Include="..\systems\postprocess\post.fx">
+      <variables>header=%(FullPath).h incdirs=$(AssetsDir)shaders %(variables)</variables>
+      <OutDir>$(ProjectDir)</OutDir>
+    </IsoCmd>
+    <IsoCmd Include="..\systems\ui\menu.fx">
+      <variables>header=%(FullPath).h incdirs=$(AssetsDir)shaders %(variables)</variables>
+      <OutDir>$(ProjectDir)</OutDir>
+    </IsoCmd>
+    <IsoCmd Include="..\filetypes\3d\simple.fx">
+      <variables>incdirs=$(AssetsDir)shaders %(variables)</variables>
+    </IsoCmd>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="..\isopod.psd">
+      <FileType>Document</FileType>
+      <Message>Making Icon</Message>
+      <Command>$(BinDir)IsoCmd_x64 {Crop{Resize{external "%(FullPath)"  -64 64} 0 0  -64 -64}} $(IntDir)isopod.ico</Command>
+      <Outputs>$(IntDir)isopod.ico</Outputs>
+    </CustomBuild>
+    <CustomBuild Include="..\isopod_admin.psd">
+      <FileType>Document</FileType>
+      <Message>Making Icon</Message>
+      <Command>$(BinDir)IsoCmd_x64 {Crop{Resize{external "%(FullPath)"  -64 64} 0 0  -64 -64}} $(IntDir)isopod_admin.ico</Command>
+      <Outputs>$(IntDir)isopod_admin.ico</Outputs>
+    </CustomBuild>
+    <MASM Include="..\platforms\pc\x64\fcontext.asm">
+      <FileType>Document</FileType>
+    </MASM>
+    <None Include="..\assets\shaders\particle.fxh" />
+    <None Include="doc_ib.ico" />
+    <None Include="doc_ibz.ico" />
+    <None Include="doc_ih.ico" />
+    <None Include="doc_ix.ico" />
+    <None Include="refmap.dds" />
+    <None Include="temporary.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="isoeditor.rc">
+      <AdditionalIncludeDirectories>$(IntDir);$(OutDir);$(AssetsDir);$(SharedDir)\platforms\pc</AdditionalIncludeDirectories>
+    </ResourceCompile>
+    <ResourceCompile Include="viewers\ps3\viewps3gpu.rc" />
+    <ResourceCompile Include="viewers\ps4\viewps4gpu.rc" />
+    <ResourceCompile Include="viewers\viewbin.rc" />
+    <ResourceCompile Include="viewers\viewbitmap.rc" />
+    <ResourceCompile Include="viewers\viewmenu.rc" />
+    <ResourceCompile Include="viewers\viewmesh.rc" />
+    <ResourceCompile Include="viewers\viewsample.rc" />
+    <ResourceCompile Include="viewers\wii\viewwiigpu.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\sdk\libopus\1.1.2\opus.vcxproj">
+      <Project>{219ec965-228a-1824-174d-96449d05f88a}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\..\sdk\libvorbis\1.3.5\libvorbis.vcxproj">
+      <Project>{3a214e06-b95e-4d61-a291-1f8df2ec10fd}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\cgc\cgclib.vcxproj">
+      <Project>{0026e7ae-f735-4d2f-96d8-ffba432ec821}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\utilities\hook.vcxproj">
+      <Project>{8f65d5bd-b68c-40c6-97c6-74ee8f7eb048}</Project>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="viewers\d2d_grid.hlsl">
+      <ShaderType>Pixel</ShaderType>
+      <ObjectFileOutput>$(IntDir)%(Filename).cso</ObjectFileOutput>
+      <ShaderModel>5.0</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="viewers\d2d_shader.hlsl">
+      <ShaderType>Pixel</ShaderType>
+      <ObjectFileOutput>$(IntDir)%(Filename).cso</ObjectFileOutput>
+      <ShaderModel>5.0</ShaderModel>
+    </FxCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="devices\icons\Clipboard.png" />
+    <Image Include="devices\icons\Code.png" />
+    <Image Include="devices\icons\Console.png" />
+    <Image Include="devices\icons\external.png" />
+    <Image Include="devices\icons\File.png" />
+    <Image Include="devices\icons\Folder.png" />
+    <Image Include="devices\icons\Fonts.png" />
+    <Image Include="devices\icons\Harddrive.png" />
+    <Image Include="devices\icons\Hue.png" />
+    <Image Include="devices\icons\Landscape.png" />
+    <Image Include="devices\icons\p4.png" />
+    <Image Include="devices\icons\PlayStation.png" />
+    <Image Include="devices\icons\Processes.png" />
+    <Image Include="devices\icons\Registry Editor.png" />
+    <Image Include="devices\icons\Root.png" />
+    <Image Include="devices\icons\Rs 232 Female-32.png" />
+    <Image Include="devices\icons\Settings.png" />
+    <Image Include="devices\icons\SVN.png" />
+    <Image Include="devices\icons\UPnP.png" />
+    <Image Include="devices\icons\URL.png" />
+    <Image Include="devices\icons\VideoCap.png" />
+    <Image Include="devices\icons\Windows.png" />
+    <Image Include="devices\icons\Xbox.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Manifest Include="IsoEditor.manifest" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\masm.targets" />
+  </ImportGroup>
+</Project>

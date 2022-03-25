@@ -1,0 +1,89 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="dllmain.cpp" />
+    <ClCompile Include="..\..\..\platforms\pc\dx11\dx11_record.cpp" />
+    <ClCompile Include="..\..\..\platforms\pc\dxgi_record.cpp" />
+    <ClCompile Include="..\..\..\platforms\pc\hook.cpp" />
+    <ClCompile Include="..\..\..\platforms\pc\platform.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\common\filename.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\common\base\defs.cpp">
+      <Filter>common\base</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\platforms\pc\hook_stack.cpp" />
+    <ClCompile Include="..\..\..\platforms\pc\_thread.cpp" />
+    <ClCompile Include="..\..\..\platforms\pc\sockets.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\..\platforms\pc\dxgi_record.h" />
+    <ClInclude Include="..\..\..\platforms\pc\hook.h" />
+    <ClInclude Include="..\..\..\platforms\pc\hook_com.h" />
+    <ClInclude Include="..\..\..\common\filename.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\common\base\algorithm.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\common\base\array.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\common\base\atomic.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\common\base\bits.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\common\base\defs.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\common\base\defs_base.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\common\base\defs_endian.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\common\base\defs_int.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\common\base\functions.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\common\base\hash.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\common\base\iterator.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\common\base\list.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\common\base\maths.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\common\base\pointer.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\common\base\soft_float.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\common\base\strings.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\common\base\tree.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\platforms\pc\dx11\dx11_record.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="common">
+      <UniqueIdentifier>{c8e95e71-2245-455a-9d18-f666f7571bac}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="common\base">
+      <UniqueIdentifier>{9de1c2d6-627e-4f99-9e20-f1b21b9fc90a}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

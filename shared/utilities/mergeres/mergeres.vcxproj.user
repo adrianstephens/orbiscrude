@@ -1,0 +1,7 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <LocalDebuggerCommandArguments>D:\dev\orbiscrude\out\ORBIScrude\DebugDX11-clang_x64\all.res -n D:\dev\orbiscrude\out\ORBIScrude\DebugDX11-clang_x64\orbiscrude.res  D:\dev\orbiscrude\out\ps4_view\DebugDX11-clang_x64\viewps4gpu.res D:\dev\orbiscrude\out\dx12_view\DebugDX11-clang_x64\view_dx12gpu.res D:\dev\orbiscrude\out\dx11_view\DebugDX11-clang_x64\view_dx11gpu.res D:\dev\orbiscrude\out\xone_view\DebugDX11-clang_x64\view_xonegpu.res D:\dev\orbiscrude\out\view_x64\DebugDX11-clang_x64\view_x64.res</LocalDebuggerCommandArguments>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+  </PropertyGroup>
+</Project>

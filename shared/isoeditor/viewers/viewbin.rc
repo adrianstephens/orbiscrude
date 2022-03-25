@@ -1,0 +1,152 @@
+// Microsoft Visual C++ generated resource script.
+//
+#include "viewbin.rc.h"
+
+#define APSTUDIO_READONLY_SYMBOLS
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 2 resource.
+//
+#include "windows\common.rc.h"
+#include "winres.h"
+
+/////////////////////////////////////////////////////////////////////////////
+#undef APSTUDIO_READONLY_SYMBOLS
+
+/////////////////////////////////////////////////////////////////////////////
+// English (United States) resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+#pragma code_page(1252)
+
+#ifdef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// TEXTINCLUDE
+//
+
+1 TEXTINCLUDE 
+BEGIN
+    "viewbin.rc.h\0"
+END
+
+2 TEXTINCLUDE 
+BEGIN
+    "#include ""windows\\common.rc.h""\r\n"
+    "#include ""winres.h""\r\n"
+    "\0"
+END
+
+3 TEXTINCLUDE 
+BEGIN
+    "\r\n"
+    "\0"
+END
+
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Menu
+//
+
+IDR_MENU_BINARYCONTEXT MENU
+BEGIN
+    POPUP "BinaryContext"
+    BEGIN
+        MENUITEM "Copy",                        ID_EDIT_COPY
+        MENUITEM "Delete",                      ID_EDIT_DELETE
+        MENUITEM "Open",                        ID_BINARY_OPEN
+        MENUITEM "Follow",                      ID_BINARY_FOLLOW
+        MENUITEM "Set Colour",                  ID_BINARY_COLOUR
+    END
+END
+
+IDR_MENU_BINARY MENU
+BEGIN
+    POPUP "Format"
+    BEGIN
+        MENUITEM "Binary",                      ID_BINARY_RADIX_BINARY
+        MENUITEM "Octal",                       ID_BINARY_RADIX_OCTAL
+        MENUITEM "Decimal",                     ID_BINARY_RADIX_DECIMAL
+        MENUITEM "Hex",                         ID_BINARY_RADIX_HEX
+        MENUITEM "Floating Point",              ID_BINARY_FLOATINGPOINT
+        MENUITEM SEPARATOR
+        MENUITEM "Signed",                      ID_BINARY_SIGNED
+        MENUITEM "Leading Zeros",               ID_BINARY_LEADINGZEROS
+    END
+    POPUP "Size"
+    BEGIN
+        MENUITEM "8 bit",                       ID_BINARY_SIZE_8BIT
+        MENUITEM "16 bit",                      ID_BINARY_SIZE_16BIT
+        MENUITEM "32 bit",                      ID_BINARY_SIZE_32BIT
+        MENUITEM "64 bit",                      ID_BINARY_SIZE_64BIT
+    END
+    MENUITEM "Ascii",                       ID_BINARY_ASCII
+    MENUITEM "Big Endian",                  ID_BINARY_BIGENDIAN
+    POPUP "Disassembly"
+    BEGIN
+        MENUITEM SEPARATOR
+        MENUITEM "Set Symbols",                 ID_BINARY_DISASSEMBLY_SETSYMBOLS
+        MENUITEM "Set Strings",                 ID_BINARY_DISASSEMBLY_SETSTRINGS
+    END
+    POPUP "Bytes per line"
+    BEGIN
+        MENUITEM "Auto",                        ID_BINARY_BYTESPERLINE_AUTO
+        MENUITEM "4",                           ID_BINARY_BYTESPERLINE_4
+        MENUITEM "8",                           ID_BINARY_BYTESPERLINE_8
+        MENUITEM "16",                          ID_BINARY_BYTESPERLINE_16
+        MENUITEM "32",                          ID_BINARY_BYTESPERLINE_32
+        MENUITEM "64",                          ID_BINARY_BYTESPERLINE_64
+        MENUITEM "Specify...",                  ID_BINARY_BYTESPERLINE_SPECIFY
+    END
+    MENUITEM SEPARATOR
+    MENUITEM "Go to...",                    ID_BINARY_GOTO
+    MENUITEM "Find...",                     ID_EDIT_FIND
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Accelerator
+//
+
+IDR_ACCELERATOR_BINARY ACCELERATORS
+BEGIN
+    "E",            ID_BINARY_BIGENDIAN,    VIRTKEY, NOINVERT
+    "F",            ID_BINARY_FLOATINGPOINT, VIRTKEY, NOINVERT
+    "G",            ID_BINARY_GOTO,         VIRTKEY, CONTROL, NOINVERT
+    "Z",            ID_BINARY_LEADINGZEROS, VIRTKEY, NOINVERT
+    "D",            ID_BINARY_RADIX_DECIMAL, VIRTKEY, NOINVERT
+    "H",            ID_BINARY_RADIX_HEX,    VIRTKEY, NOINVERT
+    "O",            ID_BINARY_RADIX_OCTAL,  VIRTKEY, NOINVERT
+    VK_RIGHT,       ID_BINARY_SELEND,       VIRTKEY, CONTROL, NOINVERT
+    VK_LEFT,        ID_BINARY_SELSTART,     VIRTKEY, CONTROL, NOINVERT
+    "S",            ID_BINARY_SIGNED,       VIRTKEY, NOINVERT
+    "W",            ID_BINARY_SIZE_16BIT,   VIRTKEY, NOINVERT
+    "L",            ID_BINARY_SIZE_32BIT,   VIRTKEY, NOINVERT
+    "B",            ID_BINARY_SIZE_8BIT,    VIRTKEY, NOINVERT
+    "C",            ID_EDIT_COPY,           VIRTKEY, CONTROL, NOINVERT
+    "F",            ID_EDIT_FIND,           VIRTKEY, CONTROL, NOINVERT
+    VK_F3,          ID_EDIT_FINDNEXT,       VIRTKEY, NOINVERT
+    VK_F3,          ID_EDIT_FINDPREV,       VIRTKEY, SHIFT, NOINVERT
+    VK_ESCAPE,      ID_EDIT_FINDABORT,      VIRTKEY, NOINVERT
+END
+
+#endif    // English (United States) resources
+/////////////////////////////////////////////////////////////////////////////
+
+
+
+#ifndef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 3 resource.
+//
+
+
+/////////////////////////////////////////////////////////////////////////////
+#endif    // not APSTUDIO_INVOKED
+

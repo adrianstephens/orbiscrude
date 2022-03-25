@@ -1,0 +1,156 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="test_hash.cpp" />
+    <ClCompile Include="..\systems\conversion\environment_maps.cpp" />
+    <ClCompile Include="..\common\iso\iso.cpp" />
+    <ClCompile Include="..\common\maths\lp.cpp" />
+    <ClCompile Include="..\common\allocators\tlsf.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\crc32.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\extra\perlin_noise.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\jobs.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="test_linq.cpp" />
+    <ClCompile Include="..\common\base\defs.cpp">
+      <Filter>common\base</Filter>
+    </ClCompile>
+    <ClCompile Include="test_re.cpp" />
+    <ClCompile Include="..\common\extra\regex.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\extra\unicode_tables.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\isoeditor\perms.cpp" />
+    <ClCompile Include="test_vec.cpp" />
+    <ClCompile Include="other.cpp" />
+    <ClCompile Include="test_rcu.cpp" />
+    <ClCompile Include="test_fibers.cpp" />
+    <ClCompile Include="..\common\fibers.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\rcu.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\utilities.cpp">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\maths\spherical_harmonics.cpp">
+      <Filter>common\maths</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\maths\sparse.cpp">
+      <Filter>common\maths</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\maths\svd.cpp">
+      <Filter>common\maths</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="common">
+      <UniqueIdentifier>{ece058f4-28bc-4afc-b17d-7766cd1d066e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="common\base">
+      <UniqueIdentifier>{82d774fa-1647-4b0c-b38e-d87cd904154f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="common\maths">
+      <UniqueIdentifier>{dfc4ce6c-b85f-4c04-bac0-e30a67fb870b}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\common\allocators\tlsf.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\crc32.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\extra\perlin_noise.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\jobs.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\vector.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\fibers.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\maths\spherical_harmonics.h">
+      <Filter>common\maths</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\maths\sparse.h">
+      <Filter>common\maths</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\algorithm.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\array.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\atomic.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\bits.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\block.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\deferred.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\defs.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\defs_base.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\defs_endian.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\defs_int.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\functions.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\hash.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\interval.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\iterator.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\list.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\lock_free_hash.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\maths.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\soft_float.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\sparse_array.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\strings.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\tree.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>

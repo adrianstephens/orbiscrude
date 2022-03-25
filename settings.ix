@@ -1,0 +1,192 @@
+define variables.stringids = 1
+define string		path
+define string		filename
+define string		font
+define int{u8}[4]	rgba8
+define {
+	int{u32} id
+	int{x32} size
+	int{x64} base
+	int{x64} read
+} queue
+
+*[] {
+	General = struct {
+		int{8 'no source' 'combined lines' 'all'} 'shader source' = 'combined lines'
+		bool	'collect perf data'			= true
+		bool	'time batches in isolation'	= true
+		bool	'check for updates'			= true
+		bool	'create settings blocks'	= true
+		bool	'show numeric values'		= true
+		bool	'show enum values'			= true
+		bool	'show markers'				= true
+		bool	'embed sdb files'			= false
+		string	window						= "0,0,1024,640"
+	} {}
+	Capture = struct {
+		bool	'use breakpoints'			= true
+		queue[] 'fixed queues'
+	} {}
+	Paths = struct {
+		path[]		elf_path
+		path[]		sdb_path
+		path[]		plugin_path
+		filename	custom_types
+	} {}
+	PSSL = struct {
+	/*	{
+			string[]	keywords = {
+			// Basic types
+				"void"						"bool"				"char"		"short"	"int"		"cint"		"long"		"uint"
+				"dword"						"fixed"				"half"		"float"	"cfloat"	"double"	"vector"	"matrix"
+				"signed"					"unsigned"			"string"
+				"compressed_16_float"		"compressed_16_int"	"compressed_16_snorm"	"compressed_16_uint"		"compressed_16_unorm"
+			// Sampler and Texture are used differently in PSSL/D3D10.
+				"sampler"					"sampler1D"			"sampler1DARRAY"	"sampler2D"			"sampler2DARRAY"
+				"sampler3D"					"samplerCUBE"		"samplerCUBEARRAY"	"samplerRECT"		"samplerBUF"
+				"isampler"					"isampler1D"		"isampler1DARRAY"	"isampler2D"		"isampler2DARRAY"
+				"isampler3D"				"isamplerCUBE"		"isamplerCUBEARRAY"	"isamplerRECT"		"isamplerBUF"
+				"usampler"					"usampler1D"		"usampler1DARRAY"	"usampler2D"		"usampler2DARRAY"
+				"usampler3D"				"usamplerCUBE"		"usamplerCUBEARRAY"	"usamplerRECT"		"usamplerBUF"
+				"texture"					"texture1D"			"texture2D"			"texture3D"			"textureCUBE"		"textureRECT"
+			// Texture Objects
+				"Texture1D"					"Texture1D_Array"			"Texture2D"			"Texture2D_Array"			"Texture3D"
+				"TextureCube"				"TextureCube_Array"
+				"RegularBuffer"				"ByteBuffer"				"DataBuffer"
+				"RW_Texture1D"				"RW_Texture1D_Array"		"RW_Texture2D"		"RW_Texture2D_Array"		"RW_Texture3D"
+				"RW_RegularBuffer"			"RW_ByteBuffer"				"RW_DataBuffer"	
+				"Sparse_Texture1D"			"Sparse_Texture1D_Array"	"Sparse_Texture2D"	"Sparse_Texture2D_Array"	"Sparse_Texture3D"
+				"Sparse_TextureCube"		"Sparse_TextureCube_Array"
+				"MS_Texture2D"				"MS_Texture2D_Array"
+				"MSTexture2D"				"MSTexture2D_Array"
+			// Sampler Types
+				"SamplerState"				"SamplerComparisonState"	"sample"
+				"Point"						"Line"						"Triangle"			"AdjacentLine"		"AdjacentTriangle"
+			//Buffer
+				"AppendRegularBuffer"		"ConsumeRegularBuffer"		"ConstantBuffer"	"TextureBuffer"
+				"PointBuffer"				"LineBuffer"				"TriangleBuffer"	"InputPatch"		"OutputPatch"
+			// Object
+				"class"						"enum"			"friend"			"interface"
+				"namespace"					"operator"		"private"			"protected"
+				"public"					"struct"		"this"				"union"	"virtual"
+				"delete"					"new"			"id"
+			// Qualifiers
+				"column_major"				"row_major"		"column"			"const"		"explicit"		"inline"		"major"		"mutable"
+				"packed"					"row"			"shared"			"volatile"	"in"			"out"			"inout"
+				"cached"					"uncached"		"linear"			"nointerp"	"nopersp"		"centroid"
+			// Bindings
+				"typedef"					"extern"		"auto"				"static"	"uniform"		"thread_group_memory"	"attribute"
+				"varying"					"packoffset"	"register"
+			// Casts
+				"const_cast"				"dynamic_cast"	"reinterpret_cast"	"static_cast"
+			// Constants
+				"false"						"true"
+			// Flow control
+				"break"						"case"			"continue"			"default"	"discard"		"do"			"else"			"for"
+				"goto"						"if"			"return"			"switch"	"while"			"catch"			"throw"			"try"
+			// CgFX
+				"compile"					"pass"			"technique"			"sampler_state"
+				"vertexfragment"			"vertexshader"	"pixelfragment"		"pixelshader"
+			// Misc
+				"asm"						"asm_fragment"	"decl"				"emit"		"get"			"sizeof"
+				"template"					"typeid"		"typename"			"using"
+			// Compiler Hints
+				"loop"						"unroll"		"branch"			"flatten"
+			// System Attributes
+				"NUM_THREADS"				"MAX_VERTEX_COUNT"		"FORCE_EARLY_DEPTH_STENCIL"	"INSTANCE"
+				"DOMAIN_PATCH_TYPE"			"MAX_TESS_FACTOR"		"OUTPUT_CONTROL_POINTS"		"OUTPUT_TOPOLOGY_TYPE"
+				"PARTITIONING_TYPE"			"PATCH_SIZE"			"PATCH_CONSTANT_FUNC"
+			}
+			string[]	semantics = {
+				"S_POSITION"				"S_TARGET_OUTPUT"		"S_DEPTH_OUTPUT"			"S_DEPTH_GE_OUTPUT"
+				"S_DEPTH_LE_OUTPUT"			"S_VERTEX_ID"			"S_INSTANCE_ID"				"S_POINT_SIZE"
+				"S_POINT_COORD"				"S_SAMPLE_INDEX"		"S_PRIMITIVE_ID"			"S_GSINSTANCE_ID"
+				"S_OUTPUT_CONTROL_POINT_ID"	"S_EDGE_TESS_FACTOR"	"S_INSIDE_TESS_FACTOR"		"S_DOMAIN_LOCATION"
+				"S_DISPATCH_THREAD_ID"		"S_GROUP_ID"			"S_GROUP_INDEX"				"S_GROUP_THREAD_ID"
+				"S_FRONT_FACE"				"S_COVERAGE"			"S_CLIP_DISTANCE"			"S_CULL_DISTANCE"
+				"S_RENDER_TARGET_INDEX"		"S_VIEWPORT_INDEX"
+			}
+			string[]	states = {
+				"AddressU"					"AddressV"				"AddressW"					"BorderColor"
+				"Filter"					"MaxAnisotropy"			"MaxLOD"					"MinLOD"
+				"MipLODBias"				"ComparisonFunc"		"ComparisonFilter"
+			}
+			string[]	functions = {
+				"abs"						"acos"					"all"						"any"
+				"asdouble"					"asfloat"				"asin"						"asint"
+				"asuint"					"atan"					"atan2"						"ceil"
+				"clamp"						"clip"					"cos"						"cosh"
+				"cross"						"ddx"					"ddx_fine"					"ddy"
+				"ddy_fine"					"degrees"				"determinant"				"distance"
+				"dot"						"dst"					"exp"						"exp2"
+				"f16tof32"					"f32tof16"				"faceforward"				"floatToIntBits"
+				"floatToRawIntBits"			"floor"					"fma"						"fmod"
+				"frac"						"frexp"					"fwidth"					"GetTessellationPartitioningType"
+				"intBitsToFloat"			"isfinite"				"isinf"						"isnan"
+				"ldexp"						"length"				"lerp"						"lit"
+				"log"						"log10"					"log2"						"mad"
+				"max"						"min"					"modf"						"mul"
+				"normalize"					"pow"					"radians"					"rcp"
+				"reflect"					"refract"				"round"						"rsqrt"
+				"saturate"					"sign"					"sin"						"sincos"
+				"sinh"						"smoothstep"			"sqrt"						"step"
+				"tan"						"tanh"					"transpose"					"trunc"
+ 
+				"max3"						"med3"					"min3"
+				"mul24"						"mul24_hi"				"mul_hi"
+				"msad"						"mqsad"					"qsad"						"sad"
+				"sad_hi"					"sad_u16"				"sad_u32"					"sad4"
+
+				"CndMask"					"ClassifyValue"
+				"GetShaderArrayID"			"GetThreadGroupID"		"GetTimer"					"GetQueueID"
+				"BitFieldExtract"			"BitFieldInsert"		"BitFieldMask"				"ByteAlign"				"CountSetBits"
+				"FirstSetBit_Hi"			"FirstSetBit_Hi"		"FirstSetBit_Hi_MSB"		"FirstSetBit_Hi_MSB"	"FirstSetBit_Lo"	"ReverseBits"
+				"UnpackByte0"				"UnpackByte1"			"UnpackByte2"				"UnpackByte3"
+				"PackFloatToByteOfUInt"		"PackInt2ToInt"			"PackUInt2ToUInt"			"PackedLerp"
+				"CubeMapMajorAxis"			"CubeMapSCoord"			"CubeMapTCoord"
+				"GetParameterP0"			"GetParameterP1"		"GetParameterP2"
+				"GetViVjPerspCentroid"		"GetViVjPerspCenter"	"GetViVjPerspSample"		"GetViVjV1PullModel"
+				"GetViVjLinearCentroid"		"GetViVjLinearCenter"	"GetViVjLinearSample"
+			}
+		} Keywords		*/
+		{
+			rgba8	comments		= {0 128 0}
+			rgba8	strings			= {192 0 0}
+			rgba8	preprocessor 	= {128 0 0}
+			rgba8	keywords		= {0 0 192}
+			rgba8	functions		= {128 64 0}
+			rgba8	operators		= {0 0 192}
+			rgba8	semantics		= {128 0 128}
+			rgba8	assembly		= {128 128 255}
+		} Colours
+		font	Font = "Courier New; 9"
+		int		Tabs = 21
+	} {}
+	Recent = filename[] {}
+	ExecCommand = ""
+	ExecDir = ""
+	PM4 = struct {
+		{
+			rgba8	batch 							= {64   0  64}
+			rgba8	dispatch 						= { 0  64  64}
+			rgba8	buffer 							= { 0   0  192}
+			rgba8	sampler 						= { 0  128  0}
+			rgba8	'buffers & samplers'			= {192 128  0}
+			rgba8	texture 						= { 0  192  0}
+			rgba8	'buffers & textures' 			= {192 128  0}
+			rgba8	'samplers & textures' 			= {192 128  0}
+			rgba8	'buffers, samplers & textures'	= {192 128  0}
+			rgba8	shader 							= {192  0   0}
+			rgba8	vertexbuffers 					= {128  0  128}
+		} Colours
+	} {}
+	DX11 = struct {
+		filename[]	Recent
+	} {}
+	DX12 = struct {
+		filename[]	Recent
+	} {}
+	X64 = struct {
+		filename[]	Recent
+	} {}
+}

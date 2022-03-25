@@ -1,0 +1,62 @@
+//	int
+//	int{[u|x]N}
+//	int{[[u]N] E0[=V0] E1[=V1] ... EN[=VN]}
+//
+//	float
+//	float{[u]N.E}
+//
+//	ARRAYS
+//	type[N]
+//
+//	STRUCTS
+//	[packed|bitpacked] {
+//		type0	name0
+//		type1	name1
+//		...
+//		typeN	nameN
+//	}
+//
+//	define type name
+
+define int{u8.8}	unorm8
+define int{u16.16}	unorm16
+define int{u32.32}	unorm32
+
+define int{8.7}		norm8
+define int{16.15}	norm16
+define int{32.31}	norm32
+
+define float{16.5}	float16
+
+define {
+	float16			x
+	float16			y
+} f16_16
+
+define {
+	float16			x
+	float16			y
+	float16			z
+} f16_16_16
+
+define {
+	float16			x
+	float16			y
+	float16			z
+	float16			w
+} f16_16_16_16
+
+define bitpacked {
+	float{u11.5}	x
+	float{u11.5}	y
+	float{u10.5}	z
+} f11_11_10
+
+define bitpacked {
+	float{u10.5}	x
+	float{u11.5}	y
+	float{u11.5}	z
+} f10_11_11
+
+define uint32[4]	uint32x4
+define xint32[4]	xint32x4

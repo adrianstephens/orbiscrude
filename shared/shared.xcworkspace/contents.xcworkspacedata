@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Workspace
+   version = "1.0">
+   <FileRef
+      location = "group:platforms/platforms.xcodeproj">
+   </FileRef>
+   <FileRef
+      location = "group:cgc/cgc.xcodeproj">
+   </FileRef>
+   <FileRef
+      location = "group:expression/expression.xcodeproj">
+   </FileRef>
+   <FileRef
+      location = "group:isoeditor/isoeditor.xcodeproj">
+   </FileRef>
+   <FileRef
+      location = "group:isopod.py">
+   </FileRef>
+   <FileRef
+      location = "group:isoview/isoview.xcodeproj">
+   </FileRef>
+   <FileRef
+      location = "group:isocmd/isocmd.xcodeproj">
+   </FileRef>
+</Workspace>

@@ -1,0 +1,352 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Common">
+      <UniqueIdentifier>67a20651-fb18-4e51-8c33-67ab72d73a72</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Assets">
+      <UniqueIdentifier>6f0aa099-d4b5-4cc4-9a03-384652fcbd8b</UniqueIdentifier>
+      <Extensions>bmp;fbx;gif;jpg;jpeg;tga;tiff;tif;png</Extensions>
+    </Filter>
+    <Filter Include="WinRT">
+      <UniqueIdentifier>{0f927a1f-821d-445e-bb3b-9e6dda7cbb20}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Devices">
+      <UniqueIdentifier>{8827d533-9a66-48c6-8d61-f03415b3efe8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Devices\DeviceIcons">
+      <UniqueIdentifier>{ddec7cbc-3b1b-4735-81fe-638216368bfb}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resources">
+      <UniqueIdentifier>{d8f41436-2f6d-4db4-970e-97c20c81e9a4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Common\iso">
+      <UniqueIdentifier>{07e8e816-cfa0-4fe9-9982-5fe68342bf87}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="FileTypes">
+      <UniqueIdentifier>{b6e55260-38cd-48c4-a266-09c58df507f8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="FileTypes\bitmap">
+      <UniqueIdentifier>{6a70900e-70f4-49ac-b379-9be4d76a8aa1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Viewers">
+      <UniqueIdentifier>{824a8608-7a44-4301-ba49-75b7ffc2093e}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="pch.cpp" />
+    <ClCompile Include="..\common\base\defs.cpp">
+      <Filter>WinRT</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\pc\platform.cpp">
+      <Filter>WinRT</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\pc\_thread.cpp">
+      <Filter>WinRT</Filter>
+    </ClCompile>
+    <ClCompile Include="devices\philips_hue.cpp">
+      <Filter>Devices</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\crc32.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\iso\iso.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\allocators\tlsf.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\pc\sockets.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\iso\iso_files.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\filename.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\comms\ip.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\comms\HTTP.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\comms\UPnP.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\extra\xml.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="devices\devices.cpp">
+      <Filter>Devices</Filter>
+    </ClCompile>
+    <ClCompile Include="devices\device_upnp.cpp">
+      <Filter>Devices</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\jobs.cpp">
+      <Filter>Common</Filter>
+    </ClCompile>
+    <ClCompile Include="isoeditor.cpp" />
+    <ClCompile Include="..\platforms\pc\winrt\window.cpp">
+      <Filter>WinRT</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\iso\iso_binary.cpp">
+      <Filter>Common\iso</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\iso\iso_convert.cpp">
+      <Filter>Common\iso</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\iso\iso_script.cpp">
+      <Filter>Common\iso</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\png.cpp">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bitmap\bitmap.cpp">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClCompile>
+    <ClCompile Include="viewers\viewbitmap.xaml.cpp" />
+    <ClCompile Include="main.uwp.cpp" />
+    <ClCompile Include="..\platforms\pc\winrt\UIHelper.cpp">
+      <Filter>WinRT</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\ib.cpp">
+      <Filter>FileTypes</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\bin.cpp">
+      <Filter>FileTypes</Filter>
+    </ClCompile>
+    <ClCompile Include="viewers\viewbin.xaml.cpp" />
+    <ClCompile Include="TreeViewTest.xaml.cpp" />
+    <ClCompile Include="viewers\viewbitmap.cpp">
+      <Filter>Viewers</Filter>
+    </ClCompile>
+    <ClCompile Include="viewers\viewbin.cpp">
+      <Filter>Viewers</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="pch.h" />
+    <ClInclude Include="..\common\base\defs.h">
+      <Filter>WinRT</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\base\defs_base.h">
+      <Filter>WinRT</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\winrt\Binding.h">
+      <Filter>WinRT</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\winrt\pre_include.h">
+      <Filter>WinRT</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\winrt\UIHelper.h">
+      <Filter>WinRT</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\crc32.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\jobs.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\winrt\base.h">
+      <Filter>WinRT</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\winrt\coroutine.h">
+      <Filter>WinRT</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\iso\iso.h">
+      <Filter>Common\iso</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\iso\iso_binary.h">
+      <Filter>Common\iso</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\iso\iso_convert.h">
+      <Filter>Common\iso</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\iso\iso_custominit.h">
+      <Filter>Common\iso</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\iso\iso_files.h">
+      <Filter>Common\iso</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\iso\iso_script.h">
+      <Filter>Common\iso</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\bitmap\bitmap.h">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\bitmap\bitmapfile.h">
+      <Filter>FileTypes\bitmap</Filter>
+    </ClInclude>
+    <ClInclude Include="devices\device.h">
+      <Filter>Devices</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\stream.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\platforms\pc\winrt\window.h">
+      <Filter>WinRT</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="devices\icons\Clipboard.png">
+      <Filter>Devices\DeviceIcons</Filter>
+    </Image>
+    <Image Include="devices\icons\Code.png">
+      <Filter>Devices\DeviceIcons</Filter>
+    </Image>
+    <Image Include="devices\icons\Console.png">
+      <Filter>Devices\DeviceIcons</Filter>
+    </Image>
+    <Image Include="devices\icons\FILE.png">
+      <Filter>Devices\DeviceIcons</Filter>
+    </Image>
+    <Image Include="devices\icons\FOLDER.png">
+      <Filter>Devices\DeviceIcons</Filter>
+    </Image>
+    <Image Include="devices\icons\Fonts.png">
+      <Filter>Devices\DeviceIcons</Filter>
+    </Image>
+    <Image Include="devices\icons\Harddrive.png">
+      <Filter>Devices\DeviceIcons</Filter>
+    </Image>
+    <Image Include="devices\icons\HUE.png">
+      <Filter>Devices\DeviceIcons</Filter>
+    </Image>
+    <Image Include="devices\icons\PlayStation.png">
+      <Filter>Devices\DeviceIcons</Filter>
+    </Image>
+    <Image Include="devices\icons\Processes.png">
+      <Filter>Devices\DeviceIcons</Filter>
+    </Image>
+    <Image Include="devices\icons\Registry Editor.png">
+      <Filter>Devices\DeviceIcons</Filter>
+    </Image>
+    <Image Include="devices\icons\Settings.png">
+      <Filter>Devices\DeviceIcons</Filter>
+    </Image>
+    <Image Include="devices\icons\svn.png">
+      <Filter>Devices\DeviceIcons</Filter>
+    </Image>
+    <Image Include="devices\icons\UPNP.png">
+      <Filter>Devices\DeviceIcons</Filter>
+    </Image>
+    <Image Include="devices\icons\URL.png">
+      <Filter>Devices\DeviceIcons</Filter>
+    </Image>
+    <Image Include="devices\icons\VideoCap.png">
+      <Filter>Devices\DeviceIcons</Filter>
+    </Image>
+    <Image Include="devices\icons\Windows.png">
+      <Filter>Devices\DeviceIcons</Filter>
+    </Image>
+    <Image Include="devices\icons\Xbox.png">
+      <Filter>Devices\DeviceIcons</Filter>
+    </Image>
+    <Image Include="Assets\IDB_DEVICE_CLIPBOARD.png">
+      <Filter>Assets</Filter>
+    </Image>
+    <Image Include="Assets\IDB_DEVICE_CODE.png">
+      <Filter>Assets</Filter>
+    </Image>
+    <Image Include="Assets\IDB_DEVICE_CONSOLE.png">
+      <Filter>Assets</Filter>
+    </Image>
+    <Image Include="Assets\IDB_DEVICE_FILE.png">
+      <Filter>Assets</Filter>
+    </Image>
+    <Image Include="Assets\IDB_DEVICE_FOLDER.png">
+      <Filter>Assets</Filter>
+    </Image>
+    <Image Include="Assets\IDB_DEVICE_FONTS.png">
+      <Filter>Assets</Filter>
+    </Image>
+    <Image Include="Assets\IDB_DEVICE_HARDDRIVE.png">
+      <Filter>Assets</Filter>
+    </Image>
+    <Image Include="Assets\IDB_DEVICE_HUE.png">
+      <Filter>Assets</Filter>
+    </Image>
+    <Image Include="Assets\IDB_DEVICE_LANDSCAPE.png">
+      <Filter>Assets</Filter>
+    </Image>
+    <Image Include="Assets\IDB_DEVICE_PLAYSTATION.png">
+      <Filter>Assets</Filter>
+    </Image>
+    <Image Include="Assets\IDB_DEVICE_PROCESSES.png">
+      <Filter>Assets</Filter>
+    </Image>
+    <Image Include="Assets\IDB_DEVICE_REGISTRY.png">
+      <Filter>Assets</Filter>
+    </Image>
+    <Image Include="Assets\IDB_DEVICE_SERIALPORT.png">
+      <Filter>Assets</Filter>
+    </Image>
+    <Image Include="Assets\IDB_DEVICE_SETTINGS.png">
+      <Filter>Assets</Filter>
+    </Image>
+    <Image Include="Assets\IDB_DEVICE_SVN.png">
+      <Filter>Assets</Filter>
+    </Image>
+    <Image Include="Assets\IDB_DEVICE_UPNP.png">
+      <Filter>Assets</Filter>
+    </Image>
+    <Image Include="Assets\IDB_DEVICE_URL.png">
+      <Filter>Assets</Filter>
+    </Image>
+    <Image Include="Assets\IDB_DEVICE_VIDEOCAP.png">
+      <Filter>Assets</Filter>
+    </Image>
+    <Image Include="Assets\IDB_DEVICE_WINDOWS.png">
+      <Filter>Assets</Filter>
+    </Image>
+    <Image Include="Assets\IDB_DEVICE_XBOX.png">
+      <Filter>Assets</Filter>
+    </Image>
+    <Image Include="Assets\tile300x300.png">
+      <Filter>Assets</Filter>
+    </Image>
+    <Image Include="Assets\icon88x88.png">
+      <Filter>Assets</Filter>
+    </Image>
+    <Image Include="Assets\tile620x300.png">
+      <Filter>Assets</Filter>
+    </Image>
+    <Image Include="Assets\spash1240x600.png">
+      <Filter>Assets</Filter>
+    </Image>
+    <Image Include="Assets\IDB_DEVICE_ROOT.png">
+      <Filter>Assets</Filter>
+    </Image>
+    <Image Include="Assets\storelogo50x50.png">
+      <Filter>Assets</Filter>
+    </Image>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="UWP_TemporaryKey.pfx" />
+    <None Include="devices\icons\dot.psd">
+      <Filter>Devices\DeviceIcons</Filter>
+    </None>
+    <None Include="viewers\viewbitmap.xaml">
+      <Filter>Viewers</Filter>
+    </None>
+    <None Include="viewers\viewbin.xaml">
+      <Filter>Viewers</Filter>
+    </None>
+    <None Include="IsoEditor.xaml" />
+    <None Include="TreeViewTest.xaml">
+      <Filter>Viewers</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <AppxManifest Include="IsoEditor.appxmanifest" />
+  </ItemGroup>
+  <ItemGroup>
+    <Midl Include="isoeditor.uwp.idl" />
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="..\isopod.psd">
+      <Filter>Resources</Filter>
+    </CustomBuild>
+  </ItemGroup>
+</Project>

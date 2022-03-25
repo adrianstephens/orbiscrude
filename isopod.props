@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ImportGroup Label="PropertySheets" />
+  <PropertyGroup Label="UserMacros">
+    <SDK>$(SolutionDir)sdk\</SDK>
+    <SharedDir>$(SolutionDir)shared\</SharedDir>
+    <BinDir>$(SharedDir)bin\</BinDir>
+    <BuildDir>$(SolutionDir)out\</BuildDir>
+    <AssetsDir>$(SharedDir)\assets\</AssetsDir>
+	<xedk>$(SDK)Microsoft Xbox 360 SDK</xedk>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <PreprocessorDefinitions>USE_ZLIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalOptions Condition="'$(Platform)'=='x64'">/Zc:threadSafeInit- %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <Import Project="$(SharedDir)shared.props" />
+</Project>

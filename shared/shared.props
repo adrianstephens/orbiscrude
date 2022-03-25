@@ -1,0 +1,136 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ImportGroup Label="ExtensionSettings">
+    <Import Project="$(SharedDir)isocmd.props" />
+  </ImportGroup>
+  <ImportGroup Label="ExtensionTargets">
+    <Import Project="$(SharedDir)isocmd.targets" />
+  </ImportGroup>
+  
+  <PropertyGroup>
+    <OutputFile>$(TargetPath)</OutputFile>
+    <PlatformTag Condition="'$(Keyword)'=='Android'">android</PlatformTag>
+    <PlatformTag Condition="'$(Keyword)'=='Hololens'">dx11</PlatformTag>
+    <PlatformTag Condition="'$(Platform)'=='ORBIS'">ps4</PlatformTag>
+    <PlatformTag Condition="'$(Platform)'=='PS3'">ps3</PlatformTag>
+    <PlatformTag Condition="'$(Platform)'=='Durango'">xone</PlatformTag>
+    <PlatformTag Condition="'$(Platform)'=='Xbox 360'">x360</PlatformTag>
+    <PlatformTag Condition="'$(Configuration.IndexOf(DX11))'!='-1'">dx11</PlatformTag>
+    <PlatformTag Condition="'$(Configuration.IndexOf(DX12))'!='-1'">dx12</PlatformTag>
+    <PlatformTag Condition="'$(PlatformTag)'=='' AND ('$(Platform)'=='Win32' OR '$(Platform)'=='x64')">dx9</PlatformTag>
+    <BaseConfiguration Condition="'$(Configuration.IndexOf(Debug))'!='-1'">Debug</BaseConfiguration>
+    <BaseConfiguration Condition="'$(Configuration.IndexOf(Release))'!='-1'">Release</BaseConfiguration>
+    <OutDir>$(BuildDir)$(Configuration)\</OutDir>
+    <IntDir>$(BuildDir)$(ProjectName)\$(Configuration)_$(Platform)\</IntDir>
+    <AssetsDir>$([System.IO.Path]::GetFullPath($(AssetsDir)))</AssetsDir>
+    <Clang Condition="'$(Configuration.IndexOf(-clang))'!='-1' or '$(Platform)'=='ORBIS' or '$(PlatformTag)'=='android'">true</Clang>
+    <Msvc Condition="'$(Configuration.IndexOf(-clang))'=='-1' and ('$(Platform)'=='Win32' or '$(Platform)'=='x64' or '$(Platform)'=='Xbox 360' or '$(Platform)'=='Durango' or '$(Keyword)'=='Hololens')">true</Msvc>
+    <UseMultiToolTask>true</UseMultiToolTask>
+    <EnforceProcessCountAcrossBuilds>true</EnforceProcessCountAcrossBuilds>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(LibConfiguration)'==''">
+    <LibConfiguration Condition="'$(Configuration.IndexOf(Debug))'!='-1'">Debug</LibConfiguration>
+    <LibConfiguration Condition="'$(Configuration.IndexOf(Release))'!='-1'">Release</LibConfiguration>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(LibConfiguration)'=='Debug'">
+    <UseDebugLibraries>true</UseDebugLibraries>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Platform)'=='Durango'">
+    <ReferencePath>$(Console_SdkLibPath);$(Console_SdkWindowsMetadataPath)</ReferencePath>
+    <LibraryPath>$(Console_SdkLibPath)</LibraryPath>
+    <LibraryWPath>$(Console_SdkLibPath);$(Console_SdkWindowsMetadataPath)</LibraryWPath>
+    <IncludePath>$(Console_SdkIncludeRoot)</IncludePath>
+    <ExecutablePath>$(Console_SdkRoot)bin;$(VCInstallDir)bin\x86_amd64;$(VCInstallDir)bin;$(WindowsSDK_ExecutablePath_x86);$(VSInstallDir)Common7\Tools\bin;$(VSInstallDir)Common7\tools;$(VSInstallDir)Common7\ide;$(ProgramFiles)\HTML Help Workshop;$(MSBuildToolsPath32);$(FxCopDir);$(PATH);</ExecutablePath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Platform)'=='ARM'">
+    <OutDir>$(BuildDir)$(ProjectName)\lib\armeabi-v7a\</OutDir>
+  </PropertyGroup>
+
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(SharedDir);$(SharedDir)common;$(SharedDir)filetypes;$(SharedDir)systems;$(IntDir);$(SDK);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories Condition="'$(Clang)'=='true'">$(SharedDir)platforms\clang;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories Condition="'$(Msvc)'=='true'">$(SharedDir)platforms\msvc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories Condition="'$(Platform)'=='Win32' or '$(Platform)'=='x64' or '$(Keyword)'=='Hololens'">$(SharedDir)platforms\pc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories Condition="'$(Platform)'=='Win32'">$(SharedDir)platforms\pc\x86;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories Condition="'$(Platform)'=='x64'">$(SharedDir)platforms\pc\x64;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories Condition="'$(PlatformTag)'=='dx9'">$(SharedDir)platforms\pc\dx9;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories Condition="'$(PlatformTag)'=='dx11'">$(SharedDir)platforms\pc\dx11;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories Condition="'$(PlatformTag)'=='dx12'">$(SharedDir)platforms\pc\dx12;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories Condition="'$(Platform)'=='ORBIS'">$(SharedDir)platforms/ps4;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories Condition="'$(Platform)'=='PS3'">$(SharedDir)platforms/ps3;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories Condition="'$(Platform)'=='Durango'">$(SharedDir)platforms/xone;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories Condition="'$(Platform)'=='Xbox 360'">$(SharedDir)platforms/x360;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories Condition="'$(PlatformTag)'=='android'">$(SharedDir)platforms/opengl;$(SharedDir)platforms/android;$(VS_NdkRoot)\sysroot\usr\include;$(VS_NdkRoot)\sysroot\usr\include\$(ToolchainName);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions Condition="'$(BaseConfiguration)'=='Debug'">_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions Condition="'$(BaseConfiguration)'!='Debug'">NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions Condition="'$(Platform)'=='Win32'">WIN32;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions Condition="'$(Keyword)'=='WinRT' or '$(Keyword)'=='Hololens'">PLAT_WINRT;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalOptions>/Zc:threadSafeInit- %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <Link Condition="'$(Platform)'=='Win32' or '$(Platform)'=='x64' or '$(Platform)'=='Durango'">
+      <SubSystem>Windows</SubSystem>
+    </Link>
+    <Link Condition="'$(Platform)'=='Durango'">
+      <AdditionalDependencies>pixEvt.lib;d3d11_x.lib;xaudio2.lib;combase.lib;kernelx.lib;uuid.lib;%(XboxExtensionsDependencies);</AdditionalDependencies>
+    </Link>
+    <Link Condition="'$(Platform)'=='ORBIS'">
+      <AdditionalDependencies>-lScePosix_stub_weak;-lSceGnm;-lSceGpuAddress;-lSceGnmx;-lSceGnmDriver_stub_weak;-lSceVideoOut_stub_weak;-lSceAudioOut_stub_weak;-lSceUserService_stub_weak;-lSceSystemService_stub_weak;-lSceSysmodule_stub_weak;-lSceCommonDialog_stub_weak;-lScePad_stub_weak;-lSceMove_stub_weak;-lSceNet_stub_weak;-lSceHmd_stub_weak;-lSceCamera_stub_weak;-lSceNgs2_stub_weak;-lSceVrTracker_stub_weak;-lSceHmdSetupDialog_stub_weak;-lSceSocialScreen_stub_weak;-lSceAvPlayer_stub_weak;D:\dev\orbiscrude\lib\$(BaseConfiguration)\liborbiscrude.a</AdditionalDependencies>
+      <AdditionalLibraryDirectories>"$(SCE_ORBIS_SDK_DIR)\target\lib\"</AdditionalLibraryDirectories>
+      <Addressing>NonAslr</Addressing>
+    </Link>
+    <Link Condition="'$(Platform)'=='Xbox 360'">
+      <AdditionalDependencies Condition="'$(BaseConfiguration)'=='Debug'">xapilibd.lib;d3d9d.lib;d3dx9d.lib;xgraphicsd.lib;xboxkrnl.lib;xnetd.lib;xmcored.lib;xaudiod2.lib;x3daudiod.lib;xbdm.lib;xffb.lib</AdditionalDependencies>
+      <AdditionalDependencies Condition="'$(BaseConfiguration)'!='Debug'">xapilib.lib;d3d9.lib;d3dx9.lib;xgraphics.lib;xboxkrnl.lib;xnet.lib;xaudio2.lib;x3daudio.lib;xbdm.lib;xmcore.lib;xffb.lib</AdditionalDependencies>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <ShowProgress>NotSet</ShowProgress>
+    </Link>
+    <Link Condition="'$(Platform)'=='PS3'">
+      <AdditionalDependencies>libsn.a;libm.a;libgcm_cmd.a;libmstreamSPURSMP3.a;libgcm_sys_stub.a;libio_stub.a;libfs_stub.a;libspurs_stub.a;libspurs_jq_stub.a;libaudio_stub.a;libsysutil_stub.a;libsysutil_game_stub.a;libsysmodule_stub.a;libnet_stub.a;libnetctl_stub.a</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SN_PS3_PATH)\ppu\lib\sn;$(SCE_PS3_ROOT)\target\ppu\lib</AdditionalLibraryDirectories>
+    </Link>
+    <Link Condition="'$(Keyword)'=='WinRT' or '$(Keyword)'=='Hololens'">
+      <AdditionalDependencies>WindowsApp.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <IsoCmd>
+      <OutDir>$(OutDir)data\</OutDir>
+      <OutDir Condition="'$(Keyword)'=='Android'">$(OutDir)assets\data\</OutDir>
+      <OutDir Condition="'$(Keyword)'!='WinRT' and ('$(Platform)'=='x64' or '$(Platform)'=='Win32')">$(IntDir)</OutDir>
+      <Use64Bit>true</Use64Bit>
+      <Use64Bit Condition="'$(Platform)'=='PS3' or '$(Platform)'=='Xbox 360'">false</Use64Bit>
+      <Variables>exportfor=$(PlatformTag) %(Variables)</Variables>
+      <Variables Condition="'$(Platform)'=='ORBIS'">debuginfo=$(BuildDir)SDB %(Variables)</Variables>
+      <Variables Condition="'$(Platform)'=='Durango'">debuginfo=$(BuildDir)SPDB %(Variables)</Variables>
+    </IsoCmd>
+  </ItemDefinitionGroup>
+  
+  <ItemGroup>
+    <BuildMacro Include="MakeProcesses">
+      <Value>$(MakeProcesses)</Value>
+      <EnvironmentVariable>true</EnvironmentVariable>
+    </BuildMacro>
+    <BuildMacro Include="SDK">
+      <Value>$(SDK)</Value>
+      <EnvironmentVariable>true</EnvironmentVariable>
+    </BuildMacro>
+    <BuildMacro Include="SharedDir">
+      <Value>$(SharedDir)</Value>
+    </BuildMacro>
+    <BuildMacro Include="AssetsDir">
+      <Value>$(AssetsDir)</Value>
+      <EnvironmentVariable>true</EnvironmentVariable>
+    </BuildMacro>
+    <BuildMacro Include="BuildDir">
+      <Value>$(BuildDir)</Value>
+      <EnvironmentVariable>true</EnvironmentVariable>
+    </BuildMacro>
+    <BuildMacro Include="BinDir">
+      <Value>$(BinDir)</Value>
+    </BuildMacro>
+  </ItemGroup>
+</Project>

@@ -1,0 +1,5 @@
+Combine { Combine {
+	external "toolbar_start.psd"
+	external "shared\isoeditor\toolbar_nav.psd"
+}	external "shared\isoeditor\viewers\ps4\toolbar_ps4gpu.psd"
+}

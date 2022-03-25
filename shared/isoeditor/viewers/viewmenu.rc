@@ -1,0 +1,106 @@
+// Microsoft Visual C++ generated resource script.
+//
+#include "viewmenu.rc.h"
+
+#define APSTUDIO_READONLY_SYMBOLS
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 2 resource.
+//
+#include "windows\common.rc.h"
+#include "winres.h"
+
+/////////////////////////////////////////////////////////////////////////////
+#undef APSTUDIO_READONLY_SYMBOLS
+
+/////////////////////////////////////////////////////////////////////////////
+// English (United States) resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+#pragma code_page(1252)
+
+#ifdef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// TEXTINCLUDE
+//
+
+1 TEXTINCLUDE 
+BEGIN
+    "viewmenu.rc.h\0"
+END
+
+2 TEXTINCLUDE 
+BEGIN
+	"#include ""windows\\common.rc.h""\r\n"
+    "#include ""winres.h""\r\n"
+    "\0"
+END
+
+3 TEXTINCLUDE 
+BEGIN
+    "\r\n"
+    "\0"
+END
+
+#endif    // APSTUDIO_INVOKED
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Menu
+//
+IDR_MENU_MENU MENU
+BEGIN
+    POPUP "Set Coordinate System"
+    BEGIN
+        MENUITEM "1280x720",                    ID_MENU_SETCOORDINATESYSTEM_1280X720
+        MENUITEM "960x720",                     ID_MENU_SETCOORDINATESYSTEM_960X720
+        MENUITEM "1920x1080",                   ID_MENU_SETCOORDINATESYSTEM_1920X1080
+        MENUITEM "1440x1080",                   ID_MENU_SETCOORDINATESYSTEM_1440X1080
+        MENUITEM "window",                      ID_MENU_SETCOORDINATESYSTEM_WINDOW
+    END
+    POPUP "Set Speed"
+    BEGIN
+        MENUITEM "stop",                        ID_MENU_SETSPEED_STOP
+        MENUITEM "normal",                      ID_MENU_SETSPEED_NORMAL
+        MENUITEM "fast x 10",                   ID_MENU_SETSPEED_FASTX10
+        MENUITEM "slow x 10",                   ID_MENU_SETSPEED_SLOWX10
+        MENUITEM "slow x 100",                  ID_MENU_SETSPEED_SLOWX100
+    END
+    POPUP "Options"
+    BEGIN
+        MENUITEM "Set text lookup",             ID_MENU_SETTEXTLOOKUP
+        MENUITEM "Anaglyph",                    ID_MENU_ANAGLYPH
+        MENUITEM "Set overlay bm",              ID_MENU_SETOVERLAYBITMAP
+        MENUITEM "Pointer Selection",           ID_MENU_POINTERSELECTION
+        MENUITEM SEPARATOR
+        MENUITEM "Copy",                        ID_EDIT_COPY
+    END
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// ISOPOD
+//
+
+POST.IB                 ISOPOD                  "..\\post.ib"
+MENU.IB                 ISOPOD                  "..\\menu.ib"
+TEMPORARY.PNG           ISOPOD                  "..\\temporary.png"
+
+#endif    // English (United States) resources
+/////////////////////////////////////////////////////////////////////////////
+
+
+
+#ifndef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 3 resource.
+//
+
+
+/////////////////////////////////////////////////////////////////////////////
+#endif    // not APSTUDIO_INVOKED
+
