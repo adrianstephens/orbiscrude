@@ -1,6 +1,7 @@
 #include "rar.h"
 #include "base/bits.h"
 #include "branch.h"
+#include "utilities.h"
 
 using namespace iso;
 using namespace iso::rar;
@@ -24,10 +25,10 @@ void FilterRGB(memory_block mem, uint8 *dst, uint32 Width, uint32 PosR) {
 	uint8 *SrcData	= mem, *DestData = dst;
 	for (uint32 CurChannel = 0; CurChannel < 3; CurChannel++) {
 		uint32 PrevByte = 0;
-		for (uint32 I = CurChannel; I < DataSize; I += 3) {
+		for (uint32 i = CurChannel; i < DataSize; i += 3) {
 			uint32 Predicted;
-			if (I >= Width + 3) {
-				uint8* UpperData	 = DestData + I - Width;
+			if (i >= Width + 3) {
+				uint8* UpperData	 = DestData + i - Width;
 				uint32 UpperByte	 = *UpperData;
 				uint32 UpperLeftByte = UpperData[-3];
 				Predicted			 = PrevByte + UpperByte - UpperLeftByte;
@@ -38,13 +39,13 @@ void FilterRGB(memory_block mem, uint8 *dst, uint32 Width, uint32 PosR) {
 			} else {
 				Predicted = PrevByte;
 			}
-			DestData[I] = PrevByte = uint8(Predicted - *SrcData++);
+			DestData[i] = PrevByte = uint8(Predicted - *SrcData++);
 		}
 	}
-	for (uint32 I = PosR, Border = DataSize - 2; I < Border; I += 3) {
-		uint8 G = DestData[I + 1];
-		DestData[I] += G;
-		DestData[I + 2] += G;
+	for (uint32 i = PosR, Border = DataSize - 2; i < Border; i += 3) {
+		uint8 G = DestData[i + 1];
+		DestData[i] += G;
+		DestData[i + 2] += G;
 	}
 }
 
@@ -57,14 +58,14 @@ void FilterAudio(memory_block mem, uint8 *dst, uint32 Channels) {
 		int	   K1 = 0, K2 = 0, K3 = 0;
 		clear(Dif);
 
-		for (uint32 I = CurChannel, ByteCount = 0; I < DataSize; I += Channels, ByteCount++) {
+		for (uint32 i = CurChannel, ByteCount = 0; i < DataSize; i += Channels, ByteCount++) {
 			int D3 = D2;
 			D2	   = PrevDelta - D1;
 			D1	   = PrevDelta;
 
 			uint32 CurByte	 = *SrcData++;
 			uint32 Predicted = (((8 * PrevByte + K1 * D1 + K2 * D2 + K3 * D3) >> 3) & 0xff) - CurByte;
-			DestData[I]		 = Predicted;
+			DestData[i]		 = Predicted;
 			PrevDelta		 = int8(Predicted - PrevByte);
 			PrevByte		 = Predicted;
 
@@ -88,30 +89,12 @@ void FilterAudio(memory_block mem, uint8 *dst, uint32 Channels) {
 					j = 0;
 				}
 				switch (NumMinDif) {
-					case 1:
-						if (K1 >= -16)
-							K1--;
-						break;
-					case 2:
-						if (K1 < 16)
-							K1++;
-						break;
-					case 3:
-						if (K2 >= -16)
-							K2--;
-						break;
-					case 4:
-						if (K2 < 16)
-							K2++;
-						break;
-					case 5:
-						if (K3 >= -16)
-							K3--;
-						break;
-					case 6:
-						if (K3 < 16)
-							K3++;
-						break;
+					case 1:	if (K1 >= -16)	--K1; break;
+					case 2:	if (K1 < 16)	++K1; break;
+					case 3:	if (K2 >= -16)	--K2; break;
+					case 4:	if (K2 < 16)	++K2; break;
+					case 5:	if (K3 >= -16)	--K3; break;
+					case 6:	if (K3 < 16)	++K3; break;
 				}
 			}
 		}
@@ -131,8 +114,8 @@ void DecodeTable::Init(uint8* LengthTable, uint32 Size, uint32 Quick) {
 	// Calculate how many entries for every bit length in LengthTable we have.
 	uint32 LengthCount[16];
 	memset(LengthCount, 0, sizeof(LengthCount));
-	for (size_t I = 0; I < Size; I++)
-		LengthCount[LengthTable[I] & 0xf]++;
+	for (size_t i = 0; i < Size; i++)
+		LengthCount[LengthTable[i] & 0xf]++;
 
 	// We must not calculate the number of zero length codes.
 	LengthCount[0] = 0;
@@ -144,12 +127,12 @@ void DecodeTable::Init(uint8* LengthTable, uint32 Size, uint32 Quick) {
 	// Right aligned upper limit code for current bit length.
 	uint32 UpperLimit = 0;
 
-	for (size_t I = 1; I < 16; I++) {
-		UpperLimit += LengthCount[I];				  // Adjust the upper limit code.
-		uint32 LeftAligned = UpperLimit << (16 - I);  // Left aligned upper limit code.
+	for (size_t i = 1; i < 16; i++) {
+		UpperLimit += LengthCount[i];				  // Adjust the upper limit code.
+		uint32 LeftAligned = UpperLimit << (16 - i);  // Left aligned upper limit code.
 		UpperLimit *= 2;							  // Prepare the upper limit code for next bit length.
-		DecodeLen[I] = (uint32)LeftAligned;			  // Store the left aligned upper limit code.
-		DecodePos[I] = DecodePos[I - 1] + LengthCount[I - 1];
+		DecodeLen[i] = (uint32)LeftAligned;			  // Store the left aligned upper limit code.
+		DecodePos[i] = DecodePos[i - 1] + LengthCount[i - 1];
 	}
 
 	// Prepare the copy of DecodePos. We'll modify this copy below, so we cannot use the original DecodePos
@@ -157,15 +140,15 @@ void DecodeTable::Init(uint8* LengthTable, uint32 Size, uint32 Quick) {
 	memcpy(CopyDecodePos, DecodePos, sizeof(CopyDecodePos));
 
 	// For every bit length in the bit length table and so for every item of alphabet.
-	for (uint32 I = 0; I < Size; I++) {
+	for (uint32 i = 0; i < Size; i++) {
 		// Get the current bit length.
-		uint8 CurBitLength = LengthTable[I] & 0xf;
+		uint8 CurBitLength = LengthTable[i] & 0xf;
 
 		if (CurBitLength != 0) {
 			// Last position in code list for current bit length.
 			uint32 LastPos = CopyDecodePos[CurBitLength];
 			// Prepare the decode table, so this position in code list will be decoded to current alphabet item number.
-			DecodeNum[LastPos] = (uint16)I;
+			DecodeNum[LastPos] = (uint16)i;
 			// We'll use next position number for this bit length next time. So we pass through the entire range of positions available for every bit length.
 			CopyDecodePos[CurBitLength]++;
 		}
@@ -217,9 +200,9 @@ uint32 DecodeTable::DecodeNumber(BitInput &Inp) {
 	}
 
 	uint32 Bits = 15;
-	for (uint32 I = QuickBits + 1; I < 15; I++) {
-		if (BitField < DecodeLen[I]) {
-			Bits = I;
+	for (uint32 i = QuickBits + 1; i < 15; i++) {
+		if (BitField < DecodeLen[i]) {
+			Bits = i;
 			break;
 		}
 	}
@@ -605,13 +588,14 @@ void Unpack20::process(istream_ref file, bool Solid) {
 			if (AudioNumber == 256) {
 				if (!ReadTables(Inp))
 					break;
-				continue;
+
+			} else {
+				Window[UnpPtr++]	= AudV[UnpCurChannel].Decode((int)AudioNumber, UnpChannelDelta);
+				UnpChannelDelta		= AudV[UnpCurChannel].LastDelta;
+				if (++UnpCurChannel == UnpChannels)
+					UnpCurChannel = 0;
+				--DestUnpSize;
 			}
-			Window[UnpPtr++]	= AudV[UnpCurChannel].Decode((int)AudioNumber, UnpChannelDelta);
-			UnpChannelDelta		= AudV[UnpCurChannel].LastDelta;
-			if (++UnpCurChannel == UnpChannels)
-				UnpCurChannel = 0;
-			--DestUnpSize;
 			continue;
 		}
 
@@ -619,60 +603,43 @@ void Unpack20::process(istream_ref file, bool Solid) {
 		if (Number < 256) {
 			Window[UnpPtr++] = (uint8)Number;
 			--DestUnpSize;
-			continue;
-		}
-		if (Number > 269) {
+
+		} else if (Number >= 270) {
 			uint32 Length = LDecode[Number -= 270] + 3;
 			if (uint32 Bits = LBits[Number])
 				Length += Inp.get(Bits);
 
 			uint32 DistNumber = BlockTables.DD.DecodeNumber(Inp);
 			uint32 Distance	  = DDecode[DistNumber] + 1;
+
 			if (uint32 Bits = DBits[DistNumber])
 				Distance += Inp.get(Bits);
 
-			if (Distance >= 0x2000) {
-				Length++;
-				if (Distance >= 0x40000L)
-					Length++;
-			}
-
+			Length += uint32(Distance >= 0x2000) + uint32(Distance >= 0x40000);
 			CopyString(Length, Distance);
-			continue;
-		}
-		if (Number == 269) {
+
+		} else if (Number == 269) {
 			if (!ReadTables(Inp))
 				break;
-			continue;
-		}
-		if (Number == 256) {
+
+		} else if (Number == 256) {
 			CopyString(LastLength, LastDist);
-			continue;
-		}
-		if (Number < 261) {
+
+		} else if (Number < 261) {
 			uint32 Distance		= OldDist[(OldDistPtr - (Number - 256)) & 3];
 			uint32 LengthNumber = BlockTables.RD.DecodeNumber(Inp);
 			uint32 Length		= LDecode[LengthNumber] + 2;
 			if (uint32 Bits = LBits[LengthNumber])
 				Length += Inp.get(Bits);
 
-			if (Distance >= 0x101) {
-				Length++;
-				if (Distance >= 0x2000) {
-					Length++;
-					if (Distance >= 0x40000)
-						Length++;
-				}
-			}
+			Length += uint32(Distance >= 0x101) + uint32(Distance >= 0x2000) + uint32(Distance >= 0x40000);
 			CopyString(Length, Distance);
-			continue;
-		}
-		if (Number < 270) {
+
+		} else {//if (Number < 270) {
 			uint32 Distance = SDDecode[Number -= 261] + 1;
 			if (uint32 Bits = SDBits[Number])
 				Distance += Inp.get(Bits);
 			CopyString(2, Distance);
-			continue;
 		}
 	}
 	ReadLastTables(Inp);
@@ -697,33 +664,36 @@ bool Unpack20::ReadTables(BitInput &Inp) {
 
 	uint8 BitLength[BC20];
 	uint8 Table[MC20 * 4];
-	for (uint32 I = 0; I < BC20; I++)
-		BitLength[I] = Inp.get(4);
+	for (uint32 i = 0; i < BC20; i++)
+		BitLength[i] = Inp.get(4);
 
 	BlockTables.BD.Init(BitLength, BC20);
-	for (uint32 I = 0; I < TableSize;) {
+	for (uint32 i = 0; i < TableSize;) {
 		uint32 Number = BlockTables.BD.DecodeNumber(Inp);
 		if (Number < 16) {
-			Table[I] = (Number + UnpOldTable20[I]) & 0xf;
-			I++;
+			Table[i] = (Number + UnpOldTable20[i]) & 0xf;
+			i++;
+
 		} else if (Number == 16) {
-			uint32 N = Inp.get(2) + 3;
-			if (I == 0)
+			uint32 n = Inp.get(2) + 3;
+			if (i == 0)
 				return false;  // We cannot have "repeat previous" code at the first position.
 
-			while (N-- > 0 && I < TableSize) {
-				Table[I] = Table[I - 1];
-				I++;
+			while (n-- > 0 && i < TableSize) {
+				Table[i] = Table[i - 1];
+				i++;
 			}
+
 		} else {
-			uint32 N = Number == 17 ? Inp.get(3) + 3 : Inp.get(7) + 11;
-			while (N-- > 0 && I < TableSize)
-				Table[I++] = 0;
+			uint32 n = Number == 17 ? Inp.get(3) + 3 : Inp.get(7) + 11;
+			while (n-- > 0 && i < TableSize)
+				Table[i++] = 0;
 		}
 	}
 	if (UnpAudioBlock) {
-		for (uint32 I = 0; I < UnpChannels; I++)
-			MD[I].Init(&Table[I * MC20], MC20);
+		for (uint32 i = 0; i < UnpChannels; i++)
+			MD[i].Init(&Table[i * MC20], MC20);
+
 	} else {
 		BlockTables.LD.Init(&Table[0], NC20);
 		BlockTables.DD.Init(&Table[NC20], DC20);
@@ -769,54 +739,24 @@ uint8 Unpack20::AudioVariables::Decode(int Delta, int ChannelDelta) {
 	if ((ByteCount & 0x1F) == 0) {
 		uint32 MinDif	= Dif[0], NumMinDif = 0;
 		Dif[0]			= 0;
-		for (uint32 I = 1; I < num_elements(Dif); I++) {
-			if (Dif[I] < MinDif) {
-				MinDif	  = Dif[I];
-				NumMinDif = I;
+		for (uint32 i = 1; i < num_elements(Dif); i++) {
+			if (Dif[i] < MinDif) {
+				MinDif	  = Dif[i];
+				NumMinDif = i;
 			}
-			Dif[I] = 0;
+			Dif[i] = 0;
 		}
 		switch (NumMinDif) {
-			case 1:
-				if (K1 >= -16)
-					K1--;
-				break;
-			case 2:
-				if (K1 < 16)
-					K1++;
-				break;
-			case 3:
-				if (K2 >= -16)
-					K2--;
-				break;
-			case 4:
-				if (K2 < 16)
-					K2++;
-				break;
-			case 5:
-				if (K3 >= -16)
-					K3--;
-				break;
-			case 6:
-				if (K3 < 16)
-					K3++;
-				break;
-			case 7:
-				if (K4 >= -16)
-					K4--;
-				break;
-			case 8:
-				if (K4 < 16)
-					K4++;
-				break;
-			case 9:
-				if (K5 >= -16)
-					K5--;
-				break;
-			case 10:
-				if (K5 < 16)
-					K5++;
-				break;
+			case 1:		if (K1 >= -16)	--K1; break;
+			case 2:		if (K1 < 16)	++K1; break;
+			case 3:		if (K2 >= -16)	--K2; break;
+			case 4:		if (K2 < 16)	++K2; break;
+			case 5:		if (K3 >= -16)	--K3; break;
+			case 6:		if (K3 < 16)	++K3; break;
+			case 7:		if (K4 >= -16)	--K4; break;
+			case 8:		if (K4 < 16)	++K4; break;
+			case 9:		if (K5 >= -16)	--K5; break;
+			case 10:	if (K5 < 16)	++K5; break;
 		}
 	}
 	return (uint8)Ch;
@@ -838,8 +778,8 @@ void Unpack30::process(istream_ref file, bool Solid) {
 
 	if (DDecode[1] == 0) {
 		int Dist = 0, BitLength = 0, Slot = 0;
-		for (auto I : DBitLengthCounts) {
-			for (int J = 0; J < I; J++, Slot++, Dist += (1 << BitLength)) {
+		for (auto i : DBitLengthCounts) {
+			for (int j = 0; j < i; j++, Slot++, Dist += (1 << BitLength)) {
 				DDecode[Slot] = Dist;
 				DBits[Slot]	  = BitLength;
 			}
@@ -848,9 +788,9 @@ void Unpack30::process(istream_ref file, bool Solid) {
 	}
 
 	if (!Solid) {
-		TablesRead3			= false;
+		TablesRead3	= false;
 		clear(LZS.UnpOldTable);
-		PPMEscChar			= 2;
+		PPMEscChar	= 2;
 		UsePPM		= false;
 	}
 	InitFilters(Solid);
@@ -879,10 +819,10 @@ void Unpack30::process(istream_ref file, bool Solid) {
 					return;
 
 			} else {
-				UsePPM	= false;
+				UsePPM		= false;
 				if (!LZS.ReadTables(Inp))
 					return;
-				TablesRead3 = true;
+				TablesRead3	= true;
 			}
 		}
 
@@ -920,7 +860,7 @@ void Unpack30::process(istream_ref file, bool Solid) {
 						}
 
 						if (Length) {
-							malloc_block VMCode(Length);
+							temp_block VMCode(Length);
 							for (uint8 *p = VMCode; !PPMFailed && p < VMCode.end(); ++p)
 								*p = PPMDecodeChar(file);
 							if (!PPMFailed && AddVMCode(FirstByte, VMCode))
@@ -931,9 +871,9 @@ void Unpack30::process(istream_ref file, bool Solid) {
 
 					if (NextCh == 4) { // LZ inside of PPM
 						uint32	Distance = 0, Length;
-						for (int I = 0; I < 4; I++) {
+						for (int i = 0; i < 4; i++) {
 							int Ch = PPMDecodeChar(file);
-							if (I == 3)
+							if (i == 3)
 								Length = (uint8)Ch;
 							else
 								Distance = (Distance << 8) + (uint8)Ch;
@@ -981,6 +921,7 @@ void Unpack30::process(istream_ref file, bool Solid) {
 
 					uint32 DistNumber	= LZS.DD.DecodeNumber(Inp);
 					uint32 Distance		= DDecode[DistNumber] + 1;
+
 					if (uint32 Bits = DBits[DistNumber]) {
 						if (DistNumber > 9) {
 							if (Bits > 4)
@@ -1025,13 +966,12 @@ void Unpack30::process(istream_ref file, bool Solid) {
 
 				} else if (Number == 257) {
 					uint32 FirstByte	= Inp.get(8);
-					uint32 Length
-						= (FirstByte & 7) == 6 ? Inp.get(8) + 7
-						: (FirstByte & 7) == 7 ? Inp.get(16)
-						: (FirstByte & 7) + 1;
+					uint32 Length		= (FirstByte & 7) == 6 ? Inp.get(8) + 7
+										: (FirstByte & 7) == 7 ? Inp.get(16)
+										: (FirstByte & 7) + 1;
 
 					if (Length) {
-						malloc_block VMCode(Length);
+						temp_block VMCode(Length);
 						for (uint8 *p = VMCode; p < VMCode.end(); ++p)
 							*p = Inp.get(8);
 						if (!AddVMCode(FirstByte, VMCode))
@@ -1045,8 +985,8 @@ void Unpack30::process(istream_ref file, bool Solid) {
 				} else if (Number < 263) {
 					uint32 DistNum  = Number - 259;
 					uint32 Distance = OldDist[DistNum];
-					for (uint32 I = DistNum; I > 0; I--)
-						OldDist[I] = OldDist[I - 1];
+					for (uint32 i = DistNum; i > 0; i--)
+						OldDist[i] = OldDist[i - 1];
 					OldDist[0] = Distance;
 
 					uint32 LengthNumber = LZS.RD.DecodeNumber(Inp);
@@ -1106,12 +1046,12 @@ bool Unpack30::AddVMCode(uint32 FirstByte, const_memory_block code) {
 	}
 
 	uint32 EmptyCount = 0;
-	for (uint32 I = 0; I < PrgStack.size(); I++) {
-		PrgStack[I - EmptyCount] = PrgStack[I];
-		if (!PrgStack[I])
+	for (uint32 i = 0; i < PrgStack.size(); i++) {
+		PrgStack[i - EmptyCount] = PrgStack[i];
+		if (!PrgStack[i])
 			EmptyCount++;
 		if (EmptyCount > 0)
-			PrgStack[I] = NULL;
+			PrgStack[i] = NULL;
 	}
 	if (EmptyCount)
 		PrgStack.resize(PrgStack.size() - EmptyCount);
@@ -1147,7 +1087,7 @@ bool Unpack30::AddVMCode(uint32 FirstByte, const_memory_block code) {
 		uint32 VMCodeSize = VMCodeInp.get32();
 		if (VMCodeSize >= 0x10000 || VMCodeSize == 0/* || VMCodeInp.InAddr + VMCodeSize > code.length()*/)
 			return false;
-		malloc_block	VMCode(VMCodeSize);
+		temp_block	VMCode(VMCodeSize);
 		for (uint8 *p = VMCode; p < VMCode.end(); p++)
 			*p = VMCodeInp.get(8);
 		vm.Prepare(VMCode, prog);
@@ -1160,8 +1100,8 @@ void Unpack30::WriteBuf() {
 	uint32 WrittenBorder	= (uint32)WrPtr;
 	uint32 WriteSize		= (uint32)((UnpPtr - WrittenBorder) & WinMask);
 
-	for (size_t I = 0; I < PrgStack.size(); I++) {
-		if (Filter* flt = PrgStack[I]) {
+	for (size_t i = 0; i < PrgStack.size(); i++) {
+		if (Filter* flt = PrgStack[i]) {
 			if (flt->NextWindow) {
 				flt->NextWindow = false;
 
@@ -1189,11 +1129,11 @@ void Unpack30::WriteBuf() {
 						vm.Execute(flt);
 						auto	FilteredData	= vm.GetMemory(vm.GetGlobal(vm.GLOBAL_NEWPOS)  & (vm.MEMSIZE - 1), vm.GetGlobal(vm.GLOBAL_NEWSIZE) & (vm.MEMSIZE - 1));
 
-						delete PrgStack[I];
-						PrgStack[I] = NULL;
+						delete PrgStack[i];
+						PrgStack[i] = NULL;
 
-						while (I + 1 < PrgStack.size()) {
-							Filter* NextFilter = PrgStack[I + 1];
+						while (i + 1 < PrgStack.size()) {
+							Filter* NextFilter = PrgStack[i + 1];
 							if (!NextFilter || NextFilter->BlockStart != BlockStart || NextFilter->BlockLength != FilteredData.length() || NextFilter->NextWindow)
 								break;
 
@@ -1204,9 +1144,9 @@ void Unpack30::WriteBuf() {
 							vm.Execute(NextFilter);
 							auto	FilteredData	= vm.GetMemory(vm.GetGlobal(vm.GLOBAL_NEWPOS)  & (vm.MEMSIZE - 1), vm.GetGlobal(vm.GLOBAL_NEWSIZE) & (vm.MEMSIZE - 1));
 
-							I++;
-							delete PrgStack[I];
-							PrgStack[I] = NULL;
+							i++;
+							delete PrgStack[i];
+							PrgStack[i] = NULL;
 						}
 
 						Write(FilteredData, FilteredData.length());
@@ -1216,8 +1156,8 @@ void Unpack30::WriteBuf() {
 
 					} else {
 						// Current filter intersects the window write border, so we adjust the window border to process this filter next time, not now.
-						for (size_t J = I; J < PrgStack.size(); J++) {
-							Filter* flt = PrgStack[J];
+						for (size_t j = i; j < PrgStack.size(); j++) {
+							Filter* flt = PrgStack[j];
 							if (flt && flt->NextWindow)
 								flt->NextWindow = false;
 						}
@@ -1243,44 +1183,44 @@ bool Unpack30::ModelLZS::ReadTables(BitInput &Inp) {
 	if (Inp.get(2) == 0)
 		clear(UnpOldTable);
 
-	for (uint32 I = 0; I < BC; I++) {
+	for (uint32 i = 0; i < BC; i++) {
 		uint32 Length = Inp.get(4);
 		if (Length == 15) {
 			uint32 ZeroCount = Inp.get(4);
 			if (ZeroCount == 0) {
-				BitLength[I] = 15;
+				BitLength[i] = 15;
 			} else {
 				ZeroCount += 2;
-				while (ZeroCount-- > 0 && I < BC)
-					BitLength[I++] = 0;
-				I--;
+				while (ZeroCount-- > 0 && i < BC)
+					BitLength[i++] = 0;
+				i--;
 			}
 		} else {
-			BitLength[I] = Length;
+			BitLength[i] = Length;
 		}
 	}
 
 	BD.Init(BitLength, BC);
 
 	const uint32 TableSize = HUFF_TABLE_SIZE;
-	for (uint32 I = 0; I < TableSize;) {
+	for (uint32 i = 0; i < TableSize;) {
 		uint32 Number = BD.DecodeNumber(Inp);
 		if (Number < 16) {
-			Table[I] = (Number + UnpOldTable[I]) & 0xf;
-			I++;
+			Table[i] = (Number + UnpOldTable[i]) & 0xf;
+			i++;
 		} else if (Number < 18) {
-			uint32 N = Number == 16 ? Inp.get(3) + 3 : Inp.get(7) + 11;
-			if (I == 0)
+			uint32 n = Number == 16 ? Inp.get(3) + 3 : Inp.get(7) + 11;
+			if (i == 0)
 				return false;  // We cannot have "repeat previous" code at the first position.
 
-			while (N-- > 0 && I < TableSize) {
-				Table[I] = Table[I - 1];
-				I++;
+			while (n-- > 0 && i < TableSize) {
+				Table[i] = Table[i - 1];
+				i++;
 			}
 		} else {
-			uint32 N = Number == 18 ? Inp.get(3) + 3 : Inp.get(7) + 11;
-			while (N-- > 0 && I < TableSize)
-				Table[I++] = 0;
+			uint32 n = Number == 18 ? Inp.get(3) + 3 : Inp.get(7) + 11;
+			while (n-- > 0 && i < TableSize)
+				Table[i++] = 0;
 		}
 	}
 
@@ -1496,9 +1436,9 @@ bool VM::ExecuteCode(Command* Code, uint32 CodeSize, uint32 InitR[8]) {
 		uint32* Op2 = GetOperand(Cmd->Op2);
 
 		switch (Cmd->OpCode) {
-			case MOV: SetValue(Cmd->ByteMode, Op1, GetValue(Cmd->ByteMode, Op2)); break;
-			case MOVB: SetValue(true, Op1, GetValue(true, Op2)); break;
-			case MOVD: SetValue(false, Op1, GetValue(false, Op2)); break;
+			case MOV:	SetValue(Cmd->ByteMode, Op1, GetValue(Cmd->ByteMode, Op2)); break;
+			case MOVB:	SetValue(true, Op1, GetValue(true, Op2)); break;
+			case MOVD:	SetValue(false, Op1, GetValue(false, Op2)); break;
 			case CMP: {
 				uint32 Value1 = GetValue(Cmd->ByteMode, Op1);
 				uint32 Result = (Value1 - GetValue(Cmd->ByteMode, Op2));
@@ -1529,8 +1469,8 @@ bool VM::ExecuteCode(Command* Code, uint32 CodeSize, uint32 InitR[8]) {
 				SetValue(Cmd->ByteMode, Op1, Result);
 				break;
 			}
-			case ADDB: SetValue(true, Op1, GetValue(true, Op1) + GetValue(true, Op2)); break;
-			case ADDD: SetValue(false, Op1, GetValue(false, Op1) + GetValue(false, Op2)); break;
+			case ADDB:	SetValue(true, Op1, GetValue(true, Op1) + GetValue(true, Op2)); break;
+			case ADDD:	SetValue(false, Op1, GetValue(false, Op1) + GetValue(false, Op2)); break;
 			case SUB: {
 				uint32 Value1 = GetValue(Cmd->ByteMode, Op1);
 				uint32 Result = (Value1 - GetValue(Cmd->ByteMode, Op2));
@@ -1538,8 +1478,8 @@ bool VM::ExecuteCode(Command* Code, uint32 CodeSize, uint32 InitR[8]) {
 				SetValue(Cmd->ByteMode, Op1, Result);
 				break;
 			}
-			case SUBB: SetValue(true, Op1, GetValue(true, Op1) - GetValue(true, Op2)); break;
-			case SUBD: SetValue(false, Op1, GetValue(false, Op1) - GetValue(false, Op2)); break;
+			case SUBB:	SetValue(true, Op1, GetValue(true, Op1) - GetValue(true, Op2)); break;
+			case SUBD:	SetValue(false, Op1, GetValue(false, Op1) - GetValue(false, Op2)); break;
 			case JZ:
 				if (Flags & FZ)
 					SET_IP(GetValue(false, Op1));
@@ -1556,16 +1496,16 @@ bool VM::ExecuteCode(Command* Code, uint32 CodeSize, uint32 InitR[8]) {
 				Flags = Result == 0 ? FZ : Result & FS;
 				break;
 			}
-			case INCB: SetValue(true, Op1, GetValue(true, Op1) + 1); break;
-			case INCD: SetValue(false, Op1, GetValue(false, Op1) + 1); break;
+			case INCB:	SetValue(true, Op1, GetValue(true, Op1) + 1); break;
+			case INCD:	SetValue(false, Op1, GetValue(false, Op1) + 1); break;
 			case DEC: {
 				uint32 Result = GetValue(Cmd->ByteMode, Op1) - 1;
 				SetValue(Cmd->ByteMode, Op1, Result);
 				Flags = Result == 0 ? FZ : Result & FS;
 				break;
 			}
-			case DECB: SetValue(true, Op1, GetValue(true, Op1) - 1); break;
-			case DECD: SetValue(false, Op1, GetValue(false, Op1) - 1); break;
+			case DECB:	SetValue(true, Op1, GetValue(true, Op1) - 1); break;
+			case DECD:	SetValue(false, Op1, GetValue(false, Op1) - 1); break;
 			case JMP: SET_IP(GetValue(false, Op1)); break;
 			case XOR: {
 				uint32 Result = GetValue(Cmd->ByteMode, Op1) ^ GetValue(Cmd->ByteMode, Op2);
@@ -1660,13 +1600,13 @@ bool VM::ExecuteCode(Command* Code, uint32 CodeSize, uint32 InitR[8]) {
 			case NEGB: SetValue(true, Op1, 0 - GetValue(true, Op1)); break;
 			case NEGD: SetValue(false, Op1, 0 - GetValue(false, Op1)); break;
 			case PUSHA:
-				for (int I = 0, SP = R[7] - 4; I < 8; I++, SP -= 4)
-					SetValue(false, GetMem(SP), R[I]);
+				for (int i = 0, SP = R[7] - 4; i < 8; i++, SP -= 4)
+					SetValue(false, GetMem(SP), R[i]);
 				R[7] -= 8 * 4;
 				break;
 			case POPA:
-				for (uint32 I = 0, SP = R[7]; I < 8; I++, SP += 4)
-					R[7 - I] = GetValue(false, GetMem(SP));
+				for (uint32 i = 0, SP = R[7]; i < 8; i++, SP += 4)
+					R[7 - i] = GetValue(false, GetMem(SP));
 				break;
 			case PUSHF:
 				SetValue(false, GetMem(R[7] -= 4), Flags);
@@ -1675,8 +1615,8 @@ bool VM::ExecuteCode(Command* Code, uint32 CodeSize, uint32 InitR[8]) {
 				Flags = GetValue(false, GetMem(R[7]));
 				R[7] += 4;
 				break;
-			case MOVZX: SetValue(false, Op1, GetValue(true, Op2)); break;
-			case MOVSX: SetValue(false, Op1, (signed char)GetValue(true, Op2)); break;
+			case MOVZX:	SetValue(false, Op1, GetValue(true, Op2)); break;
+			case MOVSX:	SetValue(false, Op1, (signed char)GetValue(true, Op2)); break;
 			case XCHG: {
 				uint32 Value1 = GetValue(Cmd->ByteMode, Op1);
 				SetValue(Cmd->ByteMode, Op1, GetValue(Cmd->ByteMode, Op2));
@@ -1720,12 +1660,12 @@ bool VM::ExecuteCode(Command* Code, uint32 CodeSize, uint32 InitR[8]) {
 				break;
 			case STANDARD:
 				switch (Cmd->Op1.Data) {
-					case E8:		branch::X86_Convert(mem.slice_to(R[4]), R[6], 0xff, false);	SetGlobal(GLOBAL_NEWPOS, 0); break;
-					case E8E9:		branch::X86_Convert(mem.slice_to(R[4]), R[6], 0xfe, false);	SetGlobal(GLOBAL_NEWPOS, 0); break;
+					case E8:		branch::X86_Convert(mem.slice_to(R[4]), R[6], 0xff, false);		SetGlobal(GLOBAL_NEWPOS, 0); break;
+					case E8E9:		branch::X86_Convert(mem.slice_to(R[4]), R[6], 0xfe, false);		SetGlobal(GLOBAL_NEWPOS, 0); break;
 					case ITANIUM:	branch::Itanium_Convert(mem.slice_to(R[4]), R[6] >> 4, false);	SetGlobal(GLOBAL_NEWPOS, 0); break;
-					case DELTA:		FilterDelta(mem.slice_to(R[4]), mem + R[4], R[0]);			SetGlobal(GLOBAL_NEWPOS, R[4]); break;
-					case RGB:		FilterRGB(mem.slice_to(R[4]), mem + R[4], R[0], R[1]);		SetGlobal(GLOBAL_NEWPOS, R[4]); break;
-					case AUDIO:		FilterAudio(mem.slice_to(R[4]), mem + R[4], R[0]);			SetGlobal(GLOBAL_NEWPOS, R[4]); break;
+					case DELTA:		FilterDelta(mem.slice_to(R[4]), mem + R[4], R[0]);				SetGlobal(GLOBAL_NEWPOS, R[4]); break;
+					case RGB:		FilterRGB(mem.slice_to(R[4]), mem + R[4], R[0], R[1]);			SetGlobal(GLOBAL_NEWPOS, R[4]); break;
+					case AUDIO:		FilterAudio(mem.slice_to(R[4]), mem + R[4], R[0]);				SetGlobal(GLOBAL_NEWPOS, R[4]); break;
 				}
 				SetGlobal(GLOBAL_NEWSIZE, R[4]);
 				break;
@@ -1843,8 +1783,8 @@ void Unpack50::process(istream_ref file, bool Solid) {
 		} else {//	if (MainSlot < 262) {
 			uint32 DistNum	= MainSlot - 258;
 			uint32 Distance = OldDist[DistNum];
-			for (uint32 I = DistNum; I > 0; I--)
-				OldDist[I] = OldDist[I - 1];
+			for (uint32 i = DistNum; i > 0; i--)
+				OldDist[i] = OldDist[i - 1];
 			OldDist[0] = Distance;
 
 			uint32 LengthSlot = BlockTables.RD.DecodeNumber(Inp);
@@ -1924,10 +1864,10 @@ void Unpack50::WriteBuf() {
 
 	// Remove processed filters from queue
 	size_t EmptyCount = 0;
-	for (size_t I = 0; I < Filters.size(); I++) {
+	for (size_t i = 0; i < Filters.size(); i++) {
 		if (EmptyCount > 0)
-			Filters[I - EmptyCount] = Filters[I];
-		if (Filters[I].Type == Filter::NONE)
+			Filters[i - EmptyCount] = Filters[i];
+		if (Filters[i].Type == Filter::NONE)
 			EmptyCount++;
 	}
 	if (EmptyCount > 0)
@@ -1963,8 +1903,8 @@ bool Unpack50::ReadBlockHeader(istream_ref file, UnpackBlockHeader& Header) {
 	uint8 SavedCheckSum = file.getc();
 
 	int BlockSize = 0;
-	for (uint32 I = 0; I < ByteCount; I++)
-		BlockSize += file.getc() << (I * 8);
+	for (uint32 i = 0; i < ByteCount; i++)
+		BlockSize += file.getc() << (i * 8);
 
 	Header.BlockSize = BlockSize;
 	uint8 CheckSum	 = uint8(0x5a ^ BlockFlags ^ BlockSize ^ (BlockSize >> 8) ^ (BlockSize >> 16));
@@ -1982,20 +1922,20 @@ bool Unpack50::ReadTables(BitInput& Inp, UnpackBlockHeader& Header, UnpackBlockT
 		return true;
 
 	uint8 BitLength[BC];
-	for (uint32 I = 0; I < BC; I++) {
+	for (uint32 i = 0; i < BC; i++) {
 		uint32 Length = Inp.get(4);
 		if (Length == 15) {
 			uint32 ZeroCount = Inp.get(4);
 			if (ZeroCount == 0)
-				BitLength[I] = 15;
+				BitLength[i] = 15;
 			else {
 				ZeroCount += 2;
-				while (ZeroCount-- > 0 && I < BC)
-					BitLength[I++] = 0;
-				I--;
+				while (ZeroCount-- > 0 && i < BC)
+					BitLength[i++] = 0;
+				i--;
 			}
 		} else {
-			BitLength[I] = Length;
+			BitLength[i] = Length;
 		}
 	}
 
@@ -2003,23 +1943,23 @@ bool Unpack50::ReadTables(BitInput& Inp, UnpackBlockHeader& Header, UnpackBlockT
 
 	uint8		 Table[HUFF_TABLE_SIZE];
 	const uint32 TableSize = HUFF_TABLE_SIZE;
-	for (uint32 I = 0; I < TableSize;) {
+	for (uint32 i = 0; i < TableSize;) {
 		uint32 Number = Tables.BD.DecodeNumber(Inp);
 		if (Number < 16) {
-			Table[I] = Number;
-			I++;
+			Table[i] = Number;
+			i++;
 		} else if (Number < 18) {
-			uint32 N = Number == 16 ? Inp.get(3) + 3 :Inp.get(7) + 11;
-			if (I == 0)
+			uint32 n = Number == 16 ? Inp.get(3) + 3 :Inp.get(7) + 11;
+			if (i == 0)
 				return false;
-			while (N-- > 0 && I < TableSize) {
-				Table[I] = Table[I - 1];
-				I++;
+			while (n-- > 0 && i < TableSize) {
+				Table[i] = Table[i - 1];
+				i++;
 			}
 		} else {
-			uint32 N = Number == 18 ? Inp.get(3) + 3 : Inp.get(7) + 11;
-			while (N-- > 0 && I < TableSize)
-				Table[I++] = 0;
+			uint32 n = Number == 18 ? Inp.get(3) + 3 : Inp.get(7) + 11;
+			while (n-- > 0 && i < TableSize)
+				Table[i++] = 0;
 		}
 	}
 	Tables.LD.Init(Table + 0,				NC);

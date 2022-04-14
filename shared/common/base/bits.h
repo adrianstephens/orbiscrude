@@ -707,6 +707,7 @@ template<int S, typename T>		struct bitfields0<S, T> : bitfield<T, S, BIT_COUNT<
 template<int S, typename...T>	struct bitfields0<S, type_list<T...>> : bitfields0<S, T...> {};
 template<typename... TT>		using bitfields = bitfields0<0, TT...>;
 
+template<>								static constexpr uint32 BIT_COUNT<type_list<>> = 0;
 template<typename T0, typename... T>	static constexpr uint32 BIT_COUNT<type_list<T0, T...>> = BIT_COUNT<T0> + BIT_COUNT<type_list<T...>>;
 
 

@@ -31,13 +31,6 @@ namespace iso {
 
 typedef int64		streamptr;
 
-template<typename T> struct T_terminated : T_inheritable<T>::type {
-	template<typename T2> T_terminated(const T2 &t2) : T_inheritable<T>::type(t2)	{}
-	friend const T& get(const T_terminated<T> &t) { return t; }
-	template<typename W>	bool	write(W w)		{ w.template write<T>(*this); w.putc(0); }
-};
-template<typename T> inline T_terminated<T> terminated(const T &t) { return t; }
-
 //-----------------------------------------------------------------------------
 //	defaults
 //-----------------------------------------------------------------------------
@@ -70,8 +63,15 @@ template<typename S> struct stream_defaults<const S> {
 
 template<class R, typename T>	inline bool read(R &r, T &t);
 template<class R, typename T, typename... TT> bool read(R &r, T &t, TT&... tt) {
-	return read(r, t) && read(r, tt...);
+	bool	b = read(r, t), unused[] = {(b = b && read(r, tt))...};
+	return b;
 }
+
+template<class R, typename... TT> bool discard_stream(R &r) {
+	bool b = true, unused[] = {(b = b && read(r, lvalue(TT())))...};
+	return b;
+}
+
 template<class R> inline bool check_readbuff(R &r, void *buffer, size_t size) {
 	return r.readbuff(buffer, size) == size;
 }
@@ -112,8 +112,12 @@ template<>	struct read_s<3> {
 
 template<class R, typename T>			inline bool	read(R &r, T &t)				{ return read_s<read_type_v<R,T>>::f(r, t);		}
 template<class R, typename T, int N>	inline bool	read(R &r, T (&t)[N])			{ return read_s<read_type_v<R,T>>::f(r, t, N);	}
+template<class R, class A, class T>		inline bool read(R &r, _read_as<A,T> &t)	{ A a; if (read(r, a)) { t.t = a; return true; } return false; }
+template<class R, typename T>			inline bool read(R &r, optional<T&> &t)		{ return !t.exists() || read(r, get(t)); }
+
 template<class R, typename T>			inline bool	readn(R &r, T *t, size_t n)		{ return read_s<read_type_v<R,T>>::f(r, t, n);	}
 template<class R, typename T>			inline bool	readnx1(R &r, T *t, size_t n)	{ bool ret = true; while (n-- && (ret = read(r, *t++))) {}; return ret; }
+
 
 template<class R, typename T> inline enable_if_t< is_trivially_destructible_v<T>, bool>	read_new_n(R &r, T *t, size_t n)	{ return read_s<read_type_v<R,T>>::f(r, t, n);	}
 template<class R, typename T> inline enable_if_t<!is_trivially_destructible_v<T>, bool>	read_new_n(R &r, T *t, size_t n)	{ fill_new_n(t, n); return read_s<read_type_v<R,T>>::f(r, t, n); }
@@ -134,24 +138,26 @@ template<typename T, typename U> size_t num_elements(const range<reader_iterator
 
 template<class S> struct reader {
 	S&							me()			{ return *static_cast<S*>(this); }
-	template<typename T>bool	read(T &t)		{ using iso::read; return read(me(), t); }
+	template<typename...T> bool read(T&&...t)	{ return iso::read(me(), t...); }
 	template<typename T>T		get()			{ T t; ISO_VERIFY(read(t)); return t; }
 	getter<reader>				get()			{ return *this;	}
 	void						align(int a)	{ me().seek((me().tell() + a - 1) / a * a);	}
 	uint32						tell32()		{ return uint32(me().tell()); }
 	uint32						size32()		{ return uint32(me().length()); }
 	size_t						remaining()		{ return me().length() - me().tell(); }
+	template<typename... TT> bool discard()		{ return discard_stream<S, TT...>(me()); }
 };
 
 template<class S> struct reader<const S> {
-	const S&					me()		const { return *static_cast<const S*>(this); }
-	template<typename T>bool	read(T &t)	const { using iso::read; return read(me(), t); }
-	template<typename T>T		get()		const { T t; ISO_VERIFY(read(t)); return t; }
-	getter<const reader>		get()		const { return *this; }
-	void						align(int a)const { me().seek((me().tell() + a - 1) / a * a); }
-	uint32						tell32()	const { return uint32(me().tell()); }
-	uint32						size32()	const { return uint32(me().length()); }
-	size_t						remaining()	const { return me().length() - me().tell(); }
+	const S&					me()			const { return *static_cast<const S*>(this); }
+	template<typename...T> bool read(T&&...t)	const { return iso::read(me(), t...); }
+	template<typename T>T		get()			const { T t; ISO_VERIFY(read(t)); return t; }
+	getter<const reader>		get()			const { return *this; }
+	void						align(int a)	const { me().seek((me().tell() + a - 1) / a * a); }
+	uint32						tell32()		const { return uint32(me().tell()); }
+	uint32						size32()		const { return uint32(me().length()); }
+	size_t						remaining()		const { return me().length() - me().tell(); }
+	template<typename... TT> bool discard()		const { return discard_stream<const S, TT...>(me()); }
 };
 
 template<class S> struct reader_mixin : reader<S>, stream_defaults<S> {
@@ -323,7 +329,9 @@ template<class R, typename T> bool read(R &r, const T *&t) { t = readp<T>(r); re
 //-----------------------------------------------------------------------------
 
 template<typename T, typename I = uint32> struct with_size : T {
-	with_size() {}
+	using T::T;
+	using T::operator=;
+//	with_size() {}
 	with_size(T&& t) : T(move(t)) {}
 	template<typename R>	bool read(R &&r)		{ return T::read(r, r.template get<I>()); }
 	template<typename W>	bool write(W &&w) const	{ return w.write((I)T::size()) && T::write(w); }

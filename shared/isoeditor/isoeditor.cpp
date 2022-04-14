@@ -192,7 +192,7 @@ void WriteFile(const filename &fn, const ISO::Browser2 &b) {
 
 			FileOutput			file(fn);
 			ISO::ScriptWriter	writer(file);
-			writer.SetFlags(ISO::SCRIPT_VIRTUALS);
+			writer.SetFlags(ISO::SCRIPT_IGNORE_DEFER);
 			writer.DumpDefs(b);
 			writer.DumpData(b);
 			//ISO::ScriptWriter(FileOutput(fn).me()).SetFlags(ISO::SCRIPT_VIRTUALS).DumpData(b);

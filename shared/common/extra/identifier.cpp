@@ -218,7 +218,9 @@ const field_value *BiggestFactor(const field_value *vals, uint32 v) {
 string_accum &PutConst(string_accum &a, IDFMT fmt, const char *const *names, uint32 val, uint8 mode) {
 	if (mode & field::MODE_PREFIX) {
 		field_prefix<const char*>	*p = (field_prefix<const char*>*)names;
-		a << p->prefix;
+		if (!(fmt & IDFMT_NOPREFIX))
+			a << p->prefix;
+
 		names	= p->names;
 		mode	&= ~field::MODE_PREFIX;
 	}
@@ -413,7 +415,7 @@ void	FieldPutter::AddField(const field *pf, const uint32 *p, uint32 addr, uint32
 					Open(ba, addr);
 					if (format & IDFMT_FOLLOWPTR) {
 						if (pf->shift)
-							AddArray((const field*)pf->values, p2, pf->get_companion_value(p, offset), 0);
+							AddArray((const field*)pf->values, p2, 0, pf->get_companion_value(p, offset));
 						else
 							AddFields((const field*)pf->values, p2, 0, 0);
 					}

@@ -151,7 +151,7 @@ struct ip_memory_interface : iso::memory_interface {
 	static const int INTF_GetMemory = 0;
 	ip_memory_interface(IP4::socket_addr addr) : addr(addr) {}
 	bool	_get(void *buffer, uint64 size, uint64 address) {
-		Socket	sock = addr.socket();
+		SocketWait	sock = addr.socket();
 		SocketCallRPC<void>(sock, INTF_GetMemory, address, size);
 		return readbuff_all(sock, buffer, size) == size;
 	}

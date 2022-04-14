@@ -1400,7 +1400,7 @@ void IsoEditor2::LeftClick(HTREEITEM h) {
 		} else {
 			temp_output			t(a);
 			ISO::ScriptWriter	s(t);
-			s.SetFlags(ISO::SCRIPT_VIRTUALS);
+			s.SetFlags(ISO::SCRIPT_IGNORE_DEFER);
 
 			if (!imm) {
 				s.DumpType(b);
@@ -1662,7 +1662,7 @@ LRESULT IsoEditor2::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 			switch (wParam) {
 				case CF_TEXT: {
 					dynamic_memory_writer	file;
-					ISO::ScriptWriter(file).SetFlags(ISO::SCRIPT_VIRTUALS).DumpData(clipdata.Duplicate());
+					ISO::ScriptWriter(file).SetFlags(ISO::SCRIPT_IGNORE_DEFER).DumpData(clipdata.Duplicate());
 					file.putc(0);
 					Clipboard::Set(CF_ISOPOD, file.data());
 					return 0;
@@ -2051,7 +2051,7 @@ LRESULT IsoEditor2::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 						if (fn.ext() == ".ix") {
 							FileOutput			file(fn);
 							ISO::ScriptWriter	writer(file);
-							writer.SetFlags(ISO::SCRIPT_VIRTUALS);
+							writer.SetFlags(ISO::SCRIPT_IGNORE_DEFER);
 							writer.DumpDefs(b);
 							writer.DumpType(b.GetTypeDef());
 							writer.putc(' ');

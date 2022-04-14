@@ -1,6 +1,7 @@
 #include "hook_com.h"
 #include "hook_stack.h"
 #include "base/list.h"
+#include "base/sparse_array.h"
 #include "thread.h"
 #include "dx12_record.h"
 #include "dxgi_record.h"
@@ -36,12 +37,15 @@ struct RecObjectLink : e_link<RecObjectLink>, RecObject {
 	}
 
 	void	init(Wrap<ID3D12DeviceLatest> *_device);
-	virtual	const_memory_block	get_info()	{ return none; }
+	virtual	malloc_block	get_info()	{ return none; }
 };
 
 struct RecDescriptorHeapLink : e_link<RecDescriptorHeapLink> {
 	malloc_block	heap;
+	sparse_array<DESCRIPTOR, uint32, uint32>	original;
+
 	RecDescriptorHeap	*operator->() { return heap; }
+
 	void init(
 		D3D12_DESCRIPTOR_HEAP_TYPE	type, uint32 count, uint32 stride,
 		D3D12_CPU_DESCRIPTOR_HANDLE	cpu, D3D12_GPU_DESCRIPTOR_HANDLE	gpu
@@ -55,6 +59,27 @@ struct RecDescriptorHeapLink : e_link<RecDescriptorHeapLink> {
 
 		fill_new_n(dh->descriptors, count);
 	}
+
+	void modify(uint32 i, uint32 n, const DESCRIPTOR *d) {
+		while (n--) {
+			if (!original[i].exists())
+				original[i] = *d;
+			++i;
+			++d;
+		}
+	}
+	malloc_block original_data() {
+		if (original.empty())
+			return heap;
+
+		auto	heap2 = heap;
+		RecDescriptorHeap	*hd = heap2;
+		for (auto &i : original)
+			hd->descriptors[i.index()] = *i;
+		original.clear();
+		return heap2;
+	}
+
 };
 
 Mutex					RecObjectLink::orphan_mutex;
@@ -140,7 +165,7 @@ struct Capture {
 			Socket listener = IP4::socket_addr(PORT(4567)).listener();
 			if (listener.exists()) for (;;) {
 				IP4::socket_addr	addr;
-				Socket				sock = addr.accept(listener);
+				SocketWait			sock = addr.accept(listener);
 
 				switch (sock.getc()) {
 					case INTF_GetMemory:		SocketRPC(sock, [this](uint64 address, uint64 size) {
@@ -358,11 +383,12 @@ public:
 		set_recording(capture.Update());
 	}
 
-	virtual	const_memory_block	get_info()	{
+	virtual	malloc_block	get_info()	{
 		return recording.get_buffer_reset();
 	}
 
 	DESCRIPTOR*		find_descriptor(D3D12_CPU_DESCRIPTOR_HANDLE h);
+	DESCRIPTOR*		modify_descriptors(D3D12_CPU_DESCRIPTOR_HANDLE h, uint32 n = 1);
 	void			set_recording(bool enable);
 
 	void			RecordCallStack(const context &ctx) {
@@ -509,27 +535,36 @@ public:
 		Wrap2<ID3D12RootSignature, ID3D12DeviceChild>::init(_device);
 		blob = memory_block(unconst(pBlobWithRootSignature), blobLengthInBytes);
 	}
-	virtual	const_memory_block	get_info()	{ return blob; }
+	virtual	malloc_block	get_info()	{ return blob; }
 };
 
 template<> class Wrap<ID3D12Heap> : public Wrap2<ID3D12Heap, ID3D12Pageable>, public RecHeap {
+	static uint64	fake_gpu;
+
 public:
 	Wrap() { type = Heap; }
 	void	init(Wrap<ID3D12DeviceLatest> *_device, const D3D12_HEAP_DESC *desc, ID3D12ProtectedResourceSession* pProtectedSession = nullptr) {
 		RecObjectLink::init(_device);
 		RecHeap::init(*desc);
+		gpu	= fake_gpu;
+		fake_gpu += SizeInBytes;
 	}
 	void	init(Wrap<ID3D12DeviceLatest> *_device, HANDLE handle) {
 		RecObjectLink::init(_device);
 		RecHeap::init(orig->GetDesc());
+		gpu	= fake_gpu;
+		fake_gpu += SizeInBytes;
 	}
 	void	init(Wrap<ID3D12DeviceLatest> *_device, const void* pAddress) {
 		RecObjectLink::init(_device);
 		RecHeap::init(orig->GetDesc());
+		gpu	= (uint64)pAddress;	//?
 	}
-	virtual	const_memory_block	get_info()			{ return static_cast<RecHeap*>(this); }
+	virtual	malloc_block	get_info()			{ return memory_block(static_cast<RecHeap*>(this)); }
 	D3D12_HEAP_DESC STDMETHODCALLTYPE GetDesc()	{ return orig->GetDesc(); }
 };
+
+uint64	Wrap<ID3D12Heap>::fake_gpu = 0x8000000000000000ull;
 
 //-----------------------------------------------------------------------------
 //	Wrap<ID3D12Resource>
@@ -548,10 +583,10 @@ struct Waiter {
 	~Waiter() {
 		CloseHandle(fence_event);
 	}
-	void	Wait(ID3D12CommandQueue *q) {
+	bool	Wait(ID3D12CommandQueue *q) {
 		q->Signal(fence, ++fence_value);
 		fence->SetEventOnCompletion(fence_value, fence_event);
-		WaitForSingleObject(fence_event, INFINITE);
+		return WaitForSingleObject(fence_event, INFINITE) == WAIT_OBJECT_0;
 	}
 };
 
@@ -564,9 +599,9 @@ struct Transferer : Waiter {
 	Transferer(ID3D12Device *_device) : Waiter(_device), device(_device) {
 		D3D12_COMMAND_QUEUE_DESC	qdesc = {D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_COMMAND_QUEUE_PRIORITY_NORMAL, D3D12_COMMAND_QUEUE_FLAG_NONE, 1};
 
-		device->CreateCommandQueue(&qdesc, __uuidof(ID3D12CommandQueue), (void**)&cmd_queue);
-		device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), (void**)&cmd_alloc);
-		device->CreateCommandList(1, D3D12_COMMAND_LIST_TYPE_DIRECT, cmd_alloc, 0, __uuidof(ID3D12GraphicsCommandList), (void**)&cmd_list);
+		ISO_VERIFY(SUCCEEDED(device->CreateCommandQueue(&qdesc, __uuidof(ID3D12CommandQueue), (void**)&cmd_queue)));
+		ISO_VERIFY(SUCCEEDED(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), (void**)&cmd_alloc)));
+		ISO_VERIFY(SUCCEEDED(device->CreateCommandList(1, D3D12_COMMAND_LIST_TYPE_DIRECT, cmd_alloc, 0, __uuidof(ID3D12GraphicsCommandList), (void**)&cmd_list)));
 	}
 
 	void Transition(ID3D12Resource *res, D3D12_RESOURCE_STATES from, D3D12_RESOURCE_STATES to) {
@@ -578,12 +613,12 @@ struct Transferer : Waiter {
 			b.Transition.StateBefore	= from;
 			b.Transition.StateAfter		= to;
 			b.Transition.Subresource	= D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-			cmd_list->ResourceBarrier(1, &b);
+ 			cmd_list->ResourceBarrier(1, &b);
 		}
 	}
 
 	ID3D12Resource* Transfer(ID3D12Resource *res, D3D12_RESOURCE_STATES state, uint64 *total_size);
-	void			Wait() { Waiter::Wait(cmd_queue); }
+	bool			Wait() { return Waiter::Wait(cmd_queue); }
 };
 
 ID3D12Resource* Transferer::Transfer(ID3D12Resource *res, D3D12_RESOURCE_STATES state, uint64 *total_size) {
@@ -644,7 +679,7 @@ ID3D12Resource* Transferer::Transfer(ID3D12Resource *res, D3D12_RESOURCE_STATES 
 	ID3D12CommandList	*cmd_list0 = cmd_list;
 	cmd_queue->ExecuteCommandLists(1, &cmd_list0);
 
-	Wait();
+	ISO_VERIFY(Wait());
 	return res2;
 }
 
@@ -681,13 +716,13 @@ public:
 		RecObjectLink::init(_device);
 		RecResource::init(_device->orig, Placed, *desc);
 		state	= InitialState;
-		gpu		= HeapOffset;
+		gpu		= ((Wrap<ID3D12Heap>*)pHeap)->gpu + HeapOffset;
 	}
 	void	init(Wrap<ID3D12DeviceLatest> *_device, ID3D12Heap* pHeap, UINT64 HeapOffset, const D3D12_RESOURCE_DESC1* desc, D3D12_RESOURCE_STATES InitialState, const D3D12_CLEAR_VALUE* pOptimizedClearValue) {
 		RecObjectLink::init(_device);
 		RecResource::init(_device->orig, Committed, *desc);
 		state	= InitialState;
-		gpu		= HeapOffset;
+		gpu		= ((Wrap<ID3D12Heap>*)pHeap)->gpu + HeapOffset;
 	}
 	void	init(Wrap<ID3D12DeviceLatest> *_device, const D3D12_RESOURCE_DESC *desc, D3D12_RESOURCE_STATES InitialState, const D3D12_CLEAR_VALUE *pOptimizedClearValue, ID3D12ProtectedResourceSession* pProtectedSession = nullptr) {
 		RecObjectLink::init(_device);
@@ -705,8 +740,8 @@ public:
 		state = _state;
 	};
 
-	virtual	const_memory_block get_info() {
-		return static_cast<RecResource*>(this);
+	virtual	malloc_block get_info() {
+		return memory_block(static_cast<RecResource*>(this));
 	}
 
 	HRESULT						STDMETHODCALLTYPE Map(UINT sub, const D3D12_RANGE *read, void **data)	{ return orig->Map(sub, read, data); }
@@ -746,7 +781,7 @@ public:
 		DEVICE_RECORDCALLSTACK;
 		return device->recording.WithObject(this).RunRecord2(this, &ID3D12CommandAllocator::Reset, RecDevice::tag_CommandAllocatorReset);
 	}
-	virtual	const_memory_block	get_info()	{ return &list_type; }
+	virtual	malloc_block	get_info()	{ return memory_block(&list_type); }
 };
 
 //-----------------------------------------------------------------------------
@@ -764,7 +799,7 @@ public:
 	void	init(Wrap<ID3D12DeviceLatest> *_device, HANDLE handle) {
 		RecObjectLink::init(_device);
 	}
-	virtual	const_memory_block	get_info()	{ return &current_value; }
+	virtual	malloc_block	get_info()	{ return memory_block(&current_value); }
 
 	//ID3D12Fence
 	UINT64	STDMETHODCALLTYPE GetCompletedValue() { return orig->GetCompletedValue(); }
@@ -807,7 +842,7 @@ public:
 		blob = map_struct<RTM>(make_tuple(2, *desc));
 	}
 
-	virtual	const_memory_block	get_info() { return blob; }
+	virtual	malloc_block	get_info() { return blob; }
 	HRESULT	STDMETHODCALLTYPE GetCachedBlob(ID3DBlob **pp) { return orig->GetCachedBlob(pp); }
 };
 
@@ -830,7 +865,10 @@ public:
 		);
 		_device->descriptor_heaps.push_back(this);
 	}
-	virtual	const_memory_block	get_info() { return heap; }
+	virtual	malloc_block	get_info() {
+		return original_data();
+		//return heap;
+	}
 	D3D12_DESCRIPTOR_HEAP_DESC	STDMETHODCALLTYPE GetDesc() { return orig->GetDesc(); }
 	D3D12_CPU_DESCRIPTOR_HANDLE	STDMETHODCALLTYPE GetCPUDescriptorHandleForHeapStart() { return orig->GetCPUDescriptorHandleForHeapStart(); }
 	D3D12_GPU_DESCRIPTOR_HANDLE	STDMETHODCALLTYPE GetGPUDescriptorHandleForHeapStart() { return orig->GetGPUDescriptorHandleForHeapStart(); }
@@ -841,11 +879,14 @@ public:
 //-----------------------------------------------------------------------------
 
 template<> class Wrap<ID3D12QueryHeap> : public Wrap2<ID3D12QueryHeap, ID3D12Pageable> {
+	D3D12_QUERY_HEAP_DESC desc;
 public:
 	Wrap() { type = QueryHeap; }
 	void	init(Wrap<ID3D12DeviceLatest> *_device, const D3D12_QUERY_HEAP_DESC *desc) {
 		RecObjectLink::init(_device);
+		this->desc = *desc;
 	}
+	virtual	malloc_block	get_info() { return const_memory_block(&desc); }
 };
 
 //-----------------------------------------------------------------------------
@@ -860,7 +901,7 @@ public:
 		blob = map_struct<RTM>(*desc);
 		RecObjectLink::init(_device);
 	}
-	virtual	const_memory_block	get_info() { return blob; }
+	virtual	malloc_block	get_info() { return blob; }
 };
 
 //-----------------------------------------------------------------------------
@@ -896,10 +937,10 @@ public:
 		RecCommandList::init(nodeMask, type, flags);
 		Wrap2<ID3D12GraphicsCommandListLatest, ID3D12CommandList>::init(_device);
 	}
-	virtual	const_memory_block	get_info() {
+	virtual	malloc_block	get_info() {
 		buffer	= recording.get_buffer_reset();
 		recording.start = 0;
-		return (RecCommandList*)this;
+		return memory_block((RecCommandList*)this);
 	}
 
 	//ID3D12GraphicsCommandList
@@ -1203,7 +1244,7 @@ public:
 		RecObjectLink::init(_device);
 		*(D3D12_COMMAND_QUEUE_DESC*)this = *desc;
 	}
-	virtual	const_memory_block	get_info() { return static_cast<D3D12_COMMAND_QUEUE_DESC*>(this); }
+	virtual	malloc_block	get_info() { return memory_block(static_cast<D3D12_COMMAND_QUEUE_DESC*>(this)); }
 
 	HRESULT	STDMETHODCALLTYPE QueryInterface(REFIID riid, void **pp) {
 		if (riid == __uuidof(PresentDevice)) {
@@ -1327,6 +1368,17 @@ DESCRIPTOR *Wrap<ID3D12DeviceLatest>::find_descriptor(D3D12_CPU_DESCRIPTOR_HANDL
 	return 0;
 }
 
+DESCRIPTOR *Wrap<ID3D12DeviceLatest>::modify_descriptors(D3D12_CPU_DESCRIPTOR_HANDLE h, uint32 n) {
+	for (auto &i : descriptor_heaps) {
+		if (const DESCRIPTOR* d = i->holds(h)) {
+			if (recording.enable)
+				i.modify(i->index(h), n, d);
+			return unconst(d);
+		}
+	}
+	return 0;
+}
+
 void Wrap<ID3D12DeviceLatest>::set_recording(bool enable) {
 	capture.device		= enable ? this : nullptr;
 	recording.enable	= enable;
@@ -1368,14 +1420,14 @@ HRESULT	Wrap<ID3D12DeviceLatest>::CreateRootSignature(UINT nodeMask, const void 
 void	Wrap<ID3D12DeviceLatest>::CreateConstantBufferView(const D3D12_CONSTANT_BUFFER_VIEW_DESC *desc, D3D12_CPU_DESCRIPTOR_HANDLE dest) {
 	RECORDCALLSTACK;
 	recording.RunRecord2(this, &ID3D12Device::CreateConstantBufferView, tag_CreateConstantBufferView, desc, dest);
-	DESCRIPTOR *d = find_descriptor(dest);
+	DESCRIPTOR *d = modify_descriptors(dest);
 	d->set(desc);
 }
 void	Wrap<ID3D12DeviceLatest>::CreateShaderResourceView(ID3D12Resource *pResource, const D3D12_SHADER_RESOURCE_VIEW_DESC *desc, D3D12_CPU_DESCRIPTOR_HANDLE dest) {
 	RECORDCALLSTACK;
 	recording.RunRecord2(this, &ID3D12Device::CreateShaderResourceView, tag_CreateShaderResourceView, pResource, desc, dest);
 	if (pResource) {
-		DESCRIPTOR *d	= find_descriptor(dest);
+		DESCRIPTOR *d	= modify_descriptors(dest);
 		d->set(pResource, desc);
 	}
 }
@@ -1384,7 +1436,7 @@ void	Wrap<ID3D12DeviceLatest>::CreateUnorderedAccessView(ID3D12Resource *pResour
 	RECORDCALLSTACK;
 	recording.RunRecord2(this, &ID3D12Device::CreateUnorderedAccessView, tag_CreateUnorderedAccessView, pResource, pCounterResource, desc, dest);
 	if (pResource) {
-		DESCRIPTOR *d	= find_descriptor(dest);
+		DESCRIPTOR *d	= modify_descriptors(dest);
 		d->set(pResource, desc);
 	}
 }
@@ -1393,7 +1445,7 @@ void	Wrap<ID3D12DeviceLatest>::CreateRenderTargetView(ID3D12Resource *pResource,
 	RECORDCALLSTACK;
 	recording.RunRecord2(this, &ID3D12Device::CreateRenderTargetView, tag_CreateRenderTargetView, pResource, desc, dest);
 	if (pResource) {
-		DESCRIPTOR	*d	= find_descriptor(dest);
+		DESCRIPTOR	*d	= modify_descriptors(dest);
 		d->set(pResource, desc, pResource->GetDesc());
 	}
 }
@@ -1401,14 +1453,14 @@ void	Wrap<ID3D12DeviceLatest>::CreateDepthStencilView(ID3D12Resource *pResource,
 	RECORDCALLSTACK;
 	recording.RunRecord2(this, &ID3D12Device::CreateDepthStencilView, tag_CreateDepthStencilView, pResource, desc, dest);
 	if (pResource) {
-		DESCRIPTOR	*d	= find_descriptor(dest);
+		DESCRIPTOR	*d	= modify_descriptors(dest);
 		d->set(pResource, desc, pResource->GetDesc());
 	}
 }
 void	Wrap<ID3D12DeviceLatest>::CreateSampler(const D3D12_SAMPLER_DESC *desc, D3D12_CPU_DESCRIPTOR_HANDLE dest) {
 	RECORDCALLSTACK;
 	recording.RunRecord2(this, &ID3D12Device::CreateSampler, tag_CreateSampler, desc, dest);
-	DESCRIPTOR *d	= find_descriptor(dest);
+	DESCRIPTOR *d	= modify_descriptors(dest);
 	d->type			= DESCRIPTOR::SMP;
 	d->smp			= *desc;
 }
@@ -1423,16 +1475,17 @@ void	Wrap<ID3D12DeviceLatest>::CopyDescriptors(UINT dest_num, const D3D12_CPU_DE
 	DESCRIPTOR	*sdesc;
 
 	for (UINT s = 0, d = 0; d < dest_num; d++) {
-		UINT		dsize	= dest_sizes[d];
-		DESCRIPTOR	*ddesc	= find_descriptor(dest_starts[d]);
+		UINT		dsize	= dest_sizes ? dest_sizes[d] : 1;
+		DESCRIPTOR	*ddesc	= modify_descriptors(dest_starts[d], dsize);
 		while (dsize) {
 			if (ssize == 0) {
 				sdesc	= find_descriptor(srce_starts[s]);
-				ssize	= srce_sizes ? srce_sizes[s] : dsize;
+				ssize	= srce_sizes ? srce_sizes[s] : 1;
 				s++;
 			}
 			UINT	num = min(ssize, dsize);
-			memcpy(ddesc, sdesc, sizeof(DESCRIPTOR) * num);
+			copy_n(sdesc, ddesc, num);
+			sdesc += num;
 			ddesc += num;
 			ssize -= num;
 			dsize -= num;
@@ -1444,7 +1497,7 @@ void	Wrap<ID3D12DeviceLatest>::CopyDescriptorsSimple(UINT num, D3D12_CPU_DESCRIP
 	recording.RunRecord2(this, &ID3D12Device::CopyDescriptorsSimple, tag_CopyDescriptorsSimple,
 		num, dest_start, srce_start, type
 	);
-	memcpy(find_descriptor(dest_start), find_descriptor(srce_start), sizeof(DESCRIPTOR) * num);
+	copy_n(find_descriptor(srce_start), modify_descriptors(dest_start, num), num);
 }
 HRESULT	Wrap<ID3D12DeviceLatest>::CreateCommittedResource(const D3D12_HEAP_PROPERTIES *pHeapProperties, D3D12_HEAP_FLAGS HeapFlags, const D3D12_RESOURCE_DESC *desc, D3D12_RESOURCE_STATES InitialResourceState, const D3D12_CLEAR_VALUE *pOptimizedClearValue, REFIID riidResource, void **pp) {
 	RECORDCALLSTACK;
@@ -1666,12 +1719,14 @@ with_size<dynamic_array<RecObject2>> Capture::GetObjects() {
 	dynamic_array<RecObject2>	r;
 	for (auto &i : RecObjectLink::orphans) {
 		auto	*obj	= static_cast<Wrap<ID3D12DeviceChild>*>(&i);
-		r.emplace_back(i, obj, i.get_info());
+		auto	&rec	= r.emplace_back(i, obj);
+		rec.info = i.get_info();
 	}
 
 	for (auto &i : device->objects) {
 		auto	*obj	= static_cast<Wrap<ID3D12DeviceChild>*>(&i);
-		auto	&rec	= r.emplace_back(i, obj, i.get_info());
+		auto	&rec	= r.emplace_back(i, obj);
+		rec.info = i.get_info();
 		if (obj->is_orig_dead())
 			rec.type = RecObject::TYPE(rec.type | RecObject::DEAD);
 	}

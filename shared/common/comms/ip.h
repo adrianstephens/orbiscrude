@@ -427,8 +427,8 @@ struct Socket : readwriter_mixin<const Socket> {
 
 	bool		exists()								const	{ return s != INVALID_SOCKET;	}
 	bool		eof()									const	{ return false; }
-	size_t	readbuff(void *buffer, size_t size)			const	{ return int(socket_receive(s, buffer, size)); }
-	size_t	writebuff(const void *buffer, size_t size)	const	{ return int(socket_send(s, buffer, size)); }
+	size_t	readbuff(void *buffer, size_t size)			const	{ return socket_receive(s, buffer, size); }
+	size_t	writebuff(const void *buffer, size_t size)	const	{ return socket_send(s, buffer, size); }
 	SOCKET	_clone()	const { return INVALID_SOCKET; }
 };
 

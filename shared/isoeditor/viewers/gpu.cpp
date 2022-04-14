@@ -2191,6 +2191,8 @@ MeshWindow::MeshWindow(const WindowPos &wpos, ID id) {
 }
 
 MeshWindow *app::MakeMeshView(const WindowPos &wpos, Topology2 topology, const TypedBuffer &vb, const indices &ix, param(float3x2) viewport, BackFaceCull cull, MeshWindow::MODE mode) {
+	graphics.Init();
+
 	MeshWindow	*c			= new MeshWindow;
 	cuboid		ext			= empty;
 	bool		use_w		= mode != MeshWindow::PERSPECTIVE;
@@ -2558,7 +2560,7 @@ void ComputeGrid::Paint() const {
 
 		if (zoom < 4) {
 #if 1
-			auto	transform2	= transform * translate((float2)zrect.TopLeft() + slack * 2);
+			auto	transform2	= transform * translate(zrect.TopLeft() + slack * 2);
 			float	a			= min(2 / zoom, 1);
 			SetTransform(identity);
 			DrawImage(

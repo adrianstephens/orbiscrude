@@ -73,7 +73,7 @@ struct Capture {
 			Socket listener = IP4::socket_addr(PORT(4567)).listener();
 			if (listener.exists()) for (;;) {
 				IP4::socket_addr	addr;
-				Socket				sock = addr.accept(listener);
+				SocketWait			sock = addr.accept(listener);
 				switch (sock.getc()) {
 					case INTF_Pause:			SocketRPC(sock, [this]() { Pause(); }); break;
 					case INTF_Continue:			SocketRPC(sock, [this]() { Continue(); }); break;

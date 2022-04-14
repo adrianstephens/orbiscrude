@@ -333,6 +333,15 @@ void throw_hresult(HRESULT hr) {
 //	misc
 //-----------------------------------------------------------------------------
 
+bool IsProcessElevated() {
+	Win32Handle		h;
+	TOKEN_ELEVATION	elevation;
+	DWORD			size;
+	return OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &h)
+		&& GetTokenInformation(h, TokenElevation, &elevation, sizeof(elevation), &size)
+		&& elevation.TokenIsElevated;
+}
+
 uint64	random_seed()	{
 	FILETIME t;
 	GetSystemTimeAsFileTime(&t);

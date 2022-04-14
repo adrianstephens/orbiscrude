@@ -533,7 +533,7 @@ LRESULT SettingsWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 								m.write((const char*)s);
 							}
 						} else {
-							ISO::ScriptWriter(m).SetFlags(ISO::SCRIPT_ONLYNAMES|ISO::SCRIPT_VIRTUALS).DumpData(b);
+							ISO::ScriptWriter(m).SetFlags(ISO::SCRIPT_ONLYNAMES).DumpData(b);
 						}
 						m.putc(0);
 					} catch (const char *s) {
@@ -572,7 +572,6 @@ void SettingsWindow::EditItem(HTREEITEM h) {
 		case ISO::INT:
 		case ISO::FLOAT: {
 			ISO::ScriptWriter	s(m);
-			s.SetFlags(ISO::SCRIPT_VIRTUALS);
 			s.DumpData(b);
 			break;
 		}

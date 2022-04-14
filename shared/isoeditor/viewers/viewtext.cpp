@@ -284,7 +284,7 @@ public:
 			writing	= true;
 	//		EnableInput(false);
 			ISO::ScriptWriter	ix(mb);
-			ix.SetFlags(ISO::SCRIPT_VIRTUALS).SetMaxDepth(16).DumpData(b);
+			ix.SetFlags(ISO::SCRIPT_IGNORE_DEFER).SetMaxDepth(16).DumpData(b);
 	//		EnableInput(true);
 			writing	= false;
 			release();

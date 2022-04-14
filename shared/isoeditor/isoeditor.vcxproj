@@ -1548,6 +1548,7 @@
     <ClInclude Include="viewers\viewbitmap.h" />
     <ClInclude Include="viewers\viewbitmap.rc.h" />
     <ClInclude Include="viewers\viewer.h" />
+    <ClInclude Include="viewers\viewer2d.h" />
     <ClInclude Include="viewers\viewer_identifier.h" />
     <ClInclude Include="viewers\viewmenu.rc.h" />
     <ClInclude Include="viewers\viewmesh.rc.h" />

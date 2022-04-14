@@ -16,7 +16,7 @@ template<typename D, int N> const void* copy_slices(const block<D, 3> &dest, con
 	return (const uint8*)srce + s2 * h;//s3 * d;
 }
 
-template<> const void *copy_slices(const block<ISO_rgba, 3> &dest, const void *srce, DXGI_COMPONENTS::LAYOUT layout, uint64 depth_stride) {
+template<> const void *copy_slices(const block<ISO_rgba, 3> &dest, const void *srce, DXGI_COMPONENTS::LAYOUT layout, DXGI_COMPONENTS::TYPE type, uint64 depth_stride) {
 	switch (layout) {
 		//LDR
 		case DXGI_COMPONENTS::R8G8B8A8:		return copy_slices(dest, (Texel<TexelFormat<32,0,8,8,8,16,8,24,8>	>*)srce, depth_stride);
@@ -35,22 +35,76 @@ template<> const void *copy_slices(const block<ISO_rgba, 3> &dest, const void *s
 	}
 }
 
-template<> const void *copy_slices(const block<HDRpixel, 3> &dest, const void *srce, DXGI_COMPONENTS::LAYOUT layout, uint64 depth_stride) {
-	switch (layout) {
-		//HDR
-		case DXGI_COMPONENTS::R32G32B32A32:	return copy_slices(dest, (array_vec< float32,4>	*)srce, depth_stride);
-		case DXGI_COMPONENTS::R32G32B32:	return copy_slices(dest, (array_vec< float32,3>	*)srce, depth_stride);
-		case DXGI_COMPONENTS::R16G16B16A16:	return copy_slices(dest, (array_vec< float16,4>	*)srce, depth_stride);
-		case DXGI_COMPONENTS::R32G32:		return copy_slices(dest, (array_vec< float32,2>	*)srce, depth_stride);
-		case DXGI_COMPONENTS::R10G10B10A2:	return copy_slices(dest, (unorm4_10_10_10_2			*)srce, depth_stride);
-		case DXGI_COMPONENTS::R11G11B10:	return copy_slices(dest, (unorm3_11_11_10			*)srce, depth_stride);
-		case DXGI_COMPONENTS::R16G16:		return copy_slices(dest, (array_vec< float16,2>	*)srce, depth_stride);
-		case DXGI_COMPONENTS::R32:			return copy_slices(dest, (float						*)srce, depth_stride);
-		case DXGI_COMPONENTS::R16:			return copy_slices(dest, (float16					*)srce, depth_stride);
-		case DXGI_COMPONENTS::BC6:			return copy_slices(dest, (const BC<6>				*)srce, depth_stride);
-		case DXGI_COMPONENTS::R24G8:		return copy_slices(dest, (Texel<TexelFormat<32,0,24,24,8,0,0>>*)srce, depth_stride);
+template<> const void *copy_slices(const block<HDRpixel, 3> &dest, const void *srce, DXGI_COMPONENTS::LAYOUT layout, DXGI_COMPONENTS::TYPE type, uint64 depth_stride) {
+	switch (type) {
+		case DXGI_COMPONENTS::FLOAT:
+			switch (layout) {
+				//HDR
+				case DXGI_COMPONENTS::R32G32B32A32:	return copy_slices(dest, (array_vec<float32,4>	*)srce, depth_stride);
+				case DXGI_COMPONENTS::R32G32B32:	return copy_slices(dest, (array_vec<float32,3>	*)srce, depth_stride);
+				case DXGI_COMPONENTS::R16G16B16A16:	return copy_slices(dest, (array_vec<float16,4>	*)srce, depth_stride);
+				case DXGI_COMPONENTS::R32G32:		return copy_slices(dest, (array_vec<float32,2>	*)srce, depth_stride);
+				case DXGI_COMPONENTS::R16G16:		return copy_slices(dest, (array_vec<float16,2>	*)srce, depth_stride);
+				case DXGI_COMPONENTS::R32:			return copy_slices(dest, (float					*)srce, depth_stride);
+				case DXGI_COMPONENTS::R16:			return copy_slices(dest, (float16				*)srce, depth_stride);
+				case DXGI_COMPONENTS::BC6:			return copy_slices(dest, (const BC<-6>			*)srce, depth_stride);
+				default:			return 0;
+			}
+		case DXGI_COMPONENTS::UFLOAT:
+			switch (layout) {
+				//HDR
+				case DXGI_COMPONENTS::R11G11B10:	return copy_slices(dest, (float3_11_11_10		*)srce, depth_stride);
+				case DXGI_COMPONENTS::BC6:			return copy_slices(dest, (const BC<6>			*)srce, depth_stride);
+				default:			return 0;
+			}
+		case DXGI_COMPONENTS::SINT:
+			switch (layout) {
+				//HDR
+				case DXGI_COMPONENTS::R32G32B32A32:	return copy_slices(dest, (array_vec<int32,4>	*)srce, depth_stride);
+				case DXGI_COMPONENTS::R32G32B32:	return copy_slices(dest, (array_vec<int32,3>	*)srce, depth_stride);
+				case DXGI_COMPONENTS::R16G16B16A16:	return copy_slices(dest, (array_vec<int16,4>	*)srce, depth_stride);
+				case DXGI_COMPONENTS::R32G32:		return copy_slices(dest, (array_vec<int32,2>	*)srce, depth_stride);
+				case DXGI_COMPONENTS::R16G16:		return copy_slices(dest, (array_vec<int16,2>	*)srce, depth_stride);
+				case DXGI_COMPONENTS::R32:			return copy_slices(dest, (int32					*)srce, depth_stride);
+				case DXGI_COMPONENTS::R16:			return copy_slices(dest, (int16					*)srce, depth_stride);
+				case DXGI_COMPONENTS::BC6:			return copy_slices(dest, (const BC<6>			*)srce, depth_stride);
+				default:			return 0;
+			}
+		default:
+		case DXGI_COMPONENTS::UINT:
+			switch (layout) {
+				//HDR
+				case DXGI_COMPONENTS::R32G32B32A32:	return copy_slices(dest, (array_vec<uint32,4>	*)srce, depth_stride);
+				case DXGI_COMPONENTS::R32G32B32:	return copy_slices(dest, (array_vec<uint32,3>	*)srce, depth_stride);
+				case DXGI_COMPONENTS::R16G16B16A16:	return copy_slices(dest, (array_vec<uint16,4>	*)srce, depth_stride);
+				case DXGI_COMPONENTS::R32G32:		return copy_slices(dest, (array_vec<uint32,2>	*)srce, depth_stride);
+				case DXGI_COMPONENTS::R10G10B10A2:	return copy_slices(dest, (uint4_10_10_10_2		*)srce, depth_stride);
+				case DXGI_COMPONENTS::R11G11B10:	return copy_slices(dest, (uint3_11_11_10		*)srce, depth_stride);
+				case DXGI_COMPONENTS::R16G16:		return copy_slices(dest, (array_vec<uint16,2>	*)srce, depth_stride);
+				case DXGI_COMPONENTS::R32:			return copy_slices(dest, (uint32				*)srce, depth_stride);
+				case DXGI_COMPONENTS::R16:			return copy_slices(dest, (uint16				*)srce, depth_stride);
+				case DXGI_COMPONENTS::R24G8:		return copy_slices(dest, (Texel<TexelFormat<32,0,24,24,8,0,0>>*)srce, depth_stride);
+				default:			return 0;
+			}
+		case DXGI_COMPONENTS::UNORM:
+			switch (layout) {
+				//HDR
+				case DXGI_COMPONENTS::R16G16B16A16:	return copy_slices(dest, (array_vec<unorm16,4>	*)srce, depth_stride);
+				case DXGI_COMPONENTS::R10G10B10A2:	return copy_slices(dest, (unorm4_10_10_10_2		*)srce, depth_stride);
+				case DXGI_COMPONENTS::R11G11B10:	return copy_slices(dest, (unorm3_11_11_10		*)srce, depth_stride);
+				case DXGI_COMPONENTS::R16G16:		return copy_slices(dest, (array_vec<unorm16,2>	*)srce, depth_stride);
+				case DXGI_COMPONENTS::R16:			return copy_slices(dest, (unorm16				*)srce, depth_stride);
+				default:			return 0;
+			}
+		case DXGI_COMPONENTS::SNORM:
+			switch (layout) {
+				//HDR
+				case DXGI_COMPONENTS::R16G16B16A16:	return copy_slices(dest, (array_vec<norm16,4>	*)srce, depth_stride);
+				case DXGI_COMPONENTS::R16G16:		return copy_slices(dest, (array_vec<unorm16,2>	*)srce, depth_stride);
+				case DXGI_COMPONENTS::R16:			return copy_slices(dest, (unorm16				*)srce, depth_stride);
+				default:			return 0;
+			}
 
-		default:			return 0;
 	}
 }
 

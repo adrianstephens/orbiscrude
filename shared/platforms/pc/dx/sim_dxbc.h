@@ -150,12 +150,11 @@ public:
 		memory_block	data()	const			{ return *this; }
 	};
 	struct Resource : Buffer {
-		ResourceDimension	dim;
+		ResourceDimension	dim	= RESOURCE_DIMENSION_UNKNOWN;
 //		ResourceReturnType	type;
 		DXGI_COMPONENTS		format;
-		uint32				width, height, depth, mips;
-		uint32				counter;
-		Resource() : width(1), height(1), depth(1), mips(1), counter(0) {}
+		uint32				width = 1, height = 1, depth = 1, mips = 1;
+		uint32				counter	= 0;
 		void		init(ResourceDimension _dim, DXGI_COMPONENTS _format, uint32 _width, uint32 _height, uint32 _depth = 0, uint32 _mips = 0);
 		void		offset(size_t o)					{ p = (uint8*)p + o; }
 		void		set_slices(uint32 first, uint32 num);

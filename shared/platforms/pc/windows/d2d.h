@@ -351,6 +351,7 @@ struct Target {
 			(*path)->Open(sink);
 	}
 
+
 #ifdef _D2D1_1_H_
 	//-------------
 	// effect
@@ -544,6 +545,13 @@ struct Geometry : com_ptr<ID2D1Geometry> {
 		Sink(Sink &&s) = default;
 		~Sink() { get()->Close(); }
 	};
+
+	Geometry(ID2D1Factory *factory, ID2D1Geometry *geom, const d2d::matrix &transform) {
+		factory->CreateTransformedGeometry(geom, transform, (ID2D1TransformedGeometry**)get_addr());
+	}
+	Geometry(ID2D1Factory *factory, ID2D1Geometry **geoms, uint32 num, bool alternate = true) {
+		factory->CreateGeometryGroup(alternate ? D2D1_FILL_MODE_ALTERNATE : D2D1_FILL_MODE_WINDING, geoms, num, (ID2D1GeometryGroup**)get_addr());
+	}
 	Geometry(ID2D1Factory *factory) {
 		factory->CreatePathGeometry((ID2D1PathGeometry**)get_addr());
 	}
@@ -951,7 +959,7 @@ struct WinRT : Target {
 		native.clear();
 		Target::DeInit();
 	}
-//	bool	Occluded()						const	{ return !!(device.query<ID2D1HwndRenderTarget>()->CheckWindowState() & D2D1_WINDOW_STATE_OCCLUDED); }
+//	bool	Occluded() const	{ return !!(device.query<ID2D1HwndRenderTarget>()->CheckWindowState() & D2D1_WINDOW_STATE_OCCLUDED); }
 };
 #endif
 

@@ -442,7 +442,8 @@ svn commit $(OutputPath) --non-interactive --message build</Command>
     </Link>
     <PostBuildEvent>
       <Command>$(BinDir)isocmd_x64 {AESencrypt {LoadAs {"$(TargetPath)" "bin"} "use - ORBIScrude"} } $(TargetDir)$(TargetName).bin
-svn commit $(OutputPath) --non-interactive --message build</Command>
+svn commit $(OutputPath) --non-interactive --message build
+copy "$(TargetPath)" bin\</Command>
     </PostBuildEvent>
     <PostBuildEvent>
       <Message>Encrypt Executable + check in exe+pdb</Message>
@@ -659,6 +660,7 @@ svn commit $(OutputPath) --non-interactive --message build</Command>
     <ClInclude Include="shared\common\base\maths.h" />
     <ClInclude Include="shared\common\base\pointer.h" />
     <ClInclude Include="shared\common\base\soft_float.h" />
+    <ClInclude Include="shared\common\base\sparse_array.h" />
     <ClInclude Include="shared\common\base\strings.h" />
     <ClInclude Include="shared\common\base\tree.h" />
     <ClInclude Include="shared\common\base\tuple.h" />
@@ -782,18 +784,6 @@ svn commit $(OutputPath) --non-interactive --message build</Command>
     </ProjectReference>
     <ProjectReference Include="shared\isoeditor\viewers\dx_shared\dx_shared.vcxproj">
       <Project>{46314fdc-1f1b-4ee2-acd2-621a4e4891fe}</Project>
-      <LinkLibraryDependencies>true</LinkLibraryDependencies>
-    </ProjectReference>
-    <ProjectReference Include="shared\isoeditor\viewers\ps3\ps3_view.vcxproj">
-      <Project>{1cc0e985-04e9-4e40-9772-78d78bfe3686}</Project>
-      <LinkLibraryDependencies>true</LinkLibraryDependencies>
-    </ProjectReference>
-    <ProjectReference Include="shared\isoeditor\viewers\ps4\ps4_view.vcxproj">
-      <Project>{a9fbee41-cdd8-454e-bbfa-56fe3baed8db}</Project>
-      <LinkLibraryDependencies>true</LinkLibraryDependencies>
-    </ProjectReference>
-    <ProjectReference Include="shared\isoeditor\viewers\wii\view_wii.vcxproj">
-      <Project>{0a522767-a189-4bdc-9d61-ba30c32c2353}</Project>
       <LinkLibraryDependencies>true</LinkLibraryDependencies>
     </ProjectReference>
     <ProjectReference Include="shared\isoeditor\viewers\x64\view_x64.vcxproj">

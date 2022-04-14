@@ -168,7 +168,7 @@ public:
 	T**			operator&()							{ this->clear(); return &this->t; }
 	com_ptr2&	operator=(T *p)						{ this->set(p); return *this; }
 	com_ptr2&	operator=(const com_ptr2 &p)		{ this->set(p.t); return *this; }
-	com_ptr2&	operator=(com_ptr<T> &&p)			{ swap(this->t, p.t); return *this; }
+	com_ptr2&	operator=(com_ptr<T> &&p)			{ if (this->t) this->t->Release(); this->t = p.detach(); return *this; }
 
 	using _com_ptr<T>::query;
 	template<typename T2> com_ptr<T2> query() const	{ T2 *p = 0; query(&p); return p; }

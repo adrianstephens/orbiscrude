@@ -75,8 +75,16 @@
 #define STRINGIFY(c)		#c
 #define STRINGIFY2(c)		STRINGIFY(c)
 #define LSTRINGIFY(c)		L""#c
-#define NO_PARENTHESES(...) __VA_ARGS__
 #define EXPAND(X)			X
+
+
+#define NO_PARENTHESES(...) __VA_ARGS__
+
+#define DEPAREN(X)	ESC(ISH X)
+#define ISH(...)	ISH __VA_ARGS__
+#define ESC(...)	ESC_(__VA_ARGS__)
+#define ESC_(...)	VAN ## __VA_ARGS__
+#define VANISH
 
 #define VA_N(_1,_2,_3,_4,_5,_6,_7,_8,_9,_10,_11,_12,_13,_14,_15,_16,_17,_18,_19,_20,_21,_22,_23,_24,_25,_26,_27,_28,_29,_30,_31,_32,_33,_34,_35,_36,_37,_38,_39,_40,_41,_42,_43,_44,_45,_46,_47,_48,_49,_50,_51,_52,_53,_54,_55,_56,_57,_58,_59,_60,_61,_62,_63,_64,N,...) N
 
@@ -846,7 +854,7 @@ template<typename T> force_inline T _iso_cheapverify(T t) {
 		_iso_break();
 	return t;
 }
-template<typename T> force_inline T _iso_verify(T t, const char *filename, int line, const char *expr) {
+template<typename T> force_inline T _iso_verify(T &&t, const char *filename, int line, const char *expr) {
 	if (!t) {
 		_iso_assert_msg(filename, line, expr);
 		_iso_break();
@@ -1217,7 +1225,7 @@ template<class T0> struct T_test_overload<T0> {
 	static T0 f(T0);
 };
 
-template<class X, class... T> using best_match_t = decltype(T_test_overload<T...>::f(declval<X&&>()));
+template<class X, class... T> using best_match_t = decltype(T_test_overload<T...>::f(declval<X>()));
 
 #ifdef __OBJC__
 template<class T> constexpr bool is_objc = T_is_base_of<id, T>::value;
@@ -1370,6 +1378,7 @@ template<typename T>		using return_holder_t = typename T_return_holder<T>::type;
 
 template<typename T>		struct T_param_holder						: T_type<T> {};
 template<typename T>		struct T_param_holder<T*&>					: T_type<T*> {};
+template<typename T>		struct T_param_holder<T* const&>			: T_type<T*> {};
 template<typename T>		struct T_param_holder<const T*&>			: T_type<const T*> {};
 template<typename T>		struct T_param_holder<const T* const&>		: T_type<const T*> {};
 template<typename T>		struct T_param_holder<T&&>					: T_type<T> {};

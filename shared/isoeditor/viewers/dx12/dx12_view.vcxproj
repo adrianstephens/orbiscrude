@@ -40,6 +40,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\platforms\pc\dx12\dx12_record.h" />
+    <ClInclude Include="dx12_fields.h" />
     <ClInclude Include="view_dx12gpu.rc.h" />
   </ItemGroup>
   <ItemGroup>

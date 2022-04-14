@@ -25,7 +25,7 @@ class IXFileHandler : public FileHandler {
 	bool			Write(ISO_ptr<void> p, ostream_ref file) override {
 		if (p) {
 			ISO::ScriptWriter	is(file);
-			is.SetFlags(ISO::SCRIPT_VIRTUALS);
+			is.SetFlags(ISO::SCRIPT_IGNORE_DEFER);
 			is.DumpType(p.GetType());
 			is.putc(' ');
 			if (p.IsExternal()) {

@@ -61,6 +61,21 @@ no_inline size_t wcslen(const wchar_t *s) {
 }
 #endif
 
+const void *memmem(const void *l, size_t l_len, const void *s, size_t s_len) {
+	if (l_len == 0 || s_len == 0 || l_len < s_len)
+		return nullptr;
+
+	char	first	= *(const char*)s;
+	if (s_len == 1)
+		return memchr(l, first, l_len);
+
+	for (auto i = (const char*)l, end = i + (l_len - s_len); i <= end; ++i)
+		if (*i == first && memcmp(i, s, s_len) == 0)
+			return i;
+
+	return nullptr;
+}
+
 namespace iso {
 
 int64	hash_put_misses	= 0, hash_put_count	= 0;

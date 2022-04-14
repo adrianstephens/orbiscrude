@@ -13,6 +13,8 @@
 
 #undef NAN
 
+const void *memmem(const void *l, size_t l_len, const void *s, size_t s_len);
+
 #define alloc_auto(T,N)	(T*)alloca((N) * sizeof(T))
 
 #ifndef _WIN32
@@ -264,6 +266,11 @@ template<typename T, typename TAG> struct tagged : holder<T> {
 template<typename T> struct T_hold_ref		: T_type<T> {};
 template<typename T> struct T_hold_ref<T&>	: T_type<holder<T&>> {};
 template<typename T>	using hold_ref_t	= typename T_hold_ref<T>::type;
+
+template<typename R, typename T> struct _read_as : holder<T> {
+	using holder<T>::holder;
+	friend const T&	get(const _read_as &p)	{ return p; }
+};
 
 //-----------------------------------------------------------------------------
 //	constexpr
@@ -673,7 +680,7 @@ template<typename T> struct optional<T&> {
 	T		*t;
 	optional()				: t((T*)0)				{}
 	optional(const _none&)	: t((T*)0)				{}
-	optional(T &x)			: t(&x)					{}
+	optional(T &x)			: t(__builtin_addressof(x)) {}
 	explicit optional(T *x)	: t(x)					{}
 	T&				operator=(const T &x)			{ ISO_ASSERT(exists()); return *t = x; }
 	T*				operator->()					{ ISO_ASSERT(exists()); return t; }
@@ -696,6 +703,10 @@ template<typename T> struct optional<return_holder<T>&> : optional<T&> {
 	using optional<T&>::optional;
 };
 
+template<typename T> optional<T> onlyif(bool b, T&& t) {
+	return b ? optional<T>(forward<T>(t)) : none;
+}
+
 //template<typename C> constexpr decltype(begin(declval<C>()))		begin(optional<C> &c)		{ return begin(c.or_default());	}
 //template<typename C> constexpr decltype(end(declval<C>()))			end(optional<C> &c)			{ return end(c.or_default());	}
 template<typename C> constexpr decltype(begin(declval<const C>()))	begin(const optional<C> &c)	{ return begin(c.or_default());	}
@@ -705,9 +716,9 @@ template<typename C> constexpr decltype(end(declval<const C>()))	end(const optio
 //	more templated functions
 //-----------------------------------------------------------------------------
 
-template<typename T>				constexpr	const T*	get_ptr(const T &t)				{ return &t; }
-template<typename T>				constexpr	T*			get_ptr(T &t)					{ return &t; }
-template<typename T>				constexpr	T*			get_ptr(T &&t)					{ return &t; }
+template<typename T>				constexpr	const T*	get_ptr(const T &t)				{ return __builtin_addressof(t); }
+template<typename T>				constexpr	T*			get_ptr(T &t)					{ return __builtin_addressof(t); }
+template<typename T>				constexpr	T*			get_ptr(T &&t)					{ return __builtin_addressof(t); }
 template<typename T>				constexpr	T*			get_ptr(T *t)					{ return t; }
 
 template<typename P, typename=enable_if_t< T_has_arrow<P>::value>>	constexpr	decltype(auto)	get_ptr1(P &t)		{ return t; }
@@ -1178,6 +1189,8 @@ struct memory_block {
 	void				clear_contents()				const	{ memset(p, 0, n); }
 	size_t				copy_to(void *dest)				const	{ memcpy(dest, p, n); return n; }
 	size_t				move_to(void *dest)				const	{ memmove(dest, p, n); return n; }
+	void*				find(struct const_memory_block data)	const;
+
 	size_t				copy_from(const void *srce)		const	{ memcpy(p, srce, n); return n; }
 	void				shift_down(size_t i)			const	{ if (i && i < n) memmove(p, (uint8*)p + i, n - i); }
 	void				shift_up(size_t i)				const	{ if (i && i < n) memmove((uint8*)p + i, p, n - i); }
@@ -1229,6 +1242,7 @@ struct const_memory_block {
 
 	size_t				copy_to(void *dest)					const	{ memcpy(dest, p, n); return n; }
 	size_t				move_to(void *dest)					const	{ memmove(dest, p, n); return n; }
+	const void*			find(const_memory_block data)		const	{ return memmem(p, n, data.p, data.n); }
 
 	const_memory_block	begin(size_t i)						const	{ return i < n ? const_memory_block((const char*)p, i) : *this; }
 	const_memory_block	end(size_t i)						const	{ return i < n ? const_memory_block((const char*)p + n - i, i) : *this; }
@@ -1245,6 +1259,9 @@ struct const_memory_block {
 
 	friend constexpr memory_block unconst(const const_memory_block &b)	{ return memory_block((void*)b.p, b.n); }
 };
+
+inline void* memory_block::find(struct const_memory_block data)	const	{ return (void*)memmem(p, n, data.p, data.n); }
+
 
 template<typename T> inline void	write_bytes(const memory_block &b, T x)		{ write_bytes<T>(b, x, b.size32()); }
 template<typename T> inline T		read_bytes(const const_memory_block &b)		{ return read_bytes<T>(b, b.size32()); }

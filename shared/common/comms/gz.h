@@ -64,7 +64,7 @@ struct GZheader {
 			gm.flag |= GZmember::HCRC;
 
 		return file.write(gm)
-			&& (!(gm.flag & GZmember::NAME) || file.write(terminated(name)))
+			&& (!(gm.flag & GZmember::NAME) || file.writebuff(name, name.length() + 1))
 			&& (!(gm.flag & GZmember::HCRC)	|| file.write(crc16));
 	}
 };

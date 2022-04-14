@@ -877,7 +877,7 @@ public:
 	auto						slice(int s, int n)					{ return string_slice(s, n, begin(), traits::terminator(p)); }
 	constexpr auto				slice(int s, int n)			const	{ return string_slice(s, n, begin(), traits::terminator(p)); }
 	constexpr auto				slice(const_iterator s)		const	{ return str(range<const_iterator>(s, end())); }
-	constexpr auto				slice_to(const_iterator e)	const	{ return str(range<const_iterator>(begin(), e)); }
+	constexpr auto				slice_to(const_iterator e)	const	{ return str(range<const_iterator>(begin(), e ? e : end())); }
 	template<typename S> auto	slice_to_find(const S &s)	const	{ return slice_to(find(s)); }
 
 	bool						check(const char_set &set)				const	{ return string_check(begin(), set, const_traits::terminator(p)); }
@@ -1219,6 +1219,8 @@ public:
 		using iso::begin; using iso::end;
 		init(begin(c), end(c));
 	}
+//	template<typename R> static alloc_string get(R &r, size_t n)			{ alloc_string s(n); r.readbuff(s.p, n * sizeof(C)); return s; }
+	template<typename R, typename=is_reader_t<R>>				alloc_string(R &&r, size_t n)	: alloc_string(n)	{  r.readbuff(p, n * sizeof(C)); }
 
 	~alloc_string()												{ free(p); }
 
@@ -1969,9 +1971,9 @@ template<typename... PP> inline auto formati(const char *fmt, PP... pp) {
 //	onlyif, ifelse
 //-----------------------------------------------------------------------------
 
-template<typename T> inline auto onlyif(bool b, const T &t)	{
-	return [b, &t](string_accum &sa) { if (b) sa << t; };
-}
+//template<typename T> inline auto onlyif(bool b, const T &t)	{
+//	return [b, &t](string_accum &sa) { if (b) sa << t; };
+//}
 template<typename T1, typename T2> inline auto ifelse(bool b, const T1 &t1, const T2 &t2) {
 	return [b, &t1, &t2](string_accum &sa) { if (b) sa << t1; else sa << t2; };
 }
@@ -2240,10 +2242,6 @@ template<typename C, int B, typename T> inline size_t	from_string(const C *s, co
 	return s ? get_num_base<B, T>(skip_whitespace(s, e), e, i.i) - s : 0;
 }
 
-template<typename R, typename T>	struct _read_as	: holder<T> {
-	using holder<T>::holder;
-	friend const T&	get(const _read_as &p)	{ return p; }
-};
 template<typename R, typename T>	_read_as<R, T>	read_as(T p)	{ return p; }
 //template<typename R, typename B, typename T>	struct _read_as<R,T B::*>	{ T B::* p; _read_as(T B::* p) : p(p) {} };
 //template<typename R, typename B, typename T>	_read_as<R,T B::*>	read_as(T B::* p)	{ return p; }
@@ -2323,6 +2321,7 @@ public:
 	C					check(const char_set &set)		{ if (begins(set))	{ ++p; return true; } return false; }
 
 	C					getc()							{ return p < endp ? *p++ : 0; }
+	count_string		get_raw(const char_set &set)	{ const C *s = p; while (p < endp && set.test(*p)) ++p; return str(s, p); }
 	count_string		get_token()						{ const C *s = skip_whitespace().getp(); while (p < endp && !is_whitespace(*p)) ++p; return str(s, p); }
 	count_string		get_token(const char_set &set)	{ const C *s = skip_whitespace().getp(); while (p < endp && set.test(*p)) ++p; return str(s, p); }
 	count_string		get_token(const char_set &first, const char_set &set) { const C *s = skip_whitespace().getp(); if (first.test(*s)) while (++p < endp && set.test(*p)); return str(s, p); }

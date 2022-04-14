@@ -224,8 +224,8 @@ bool ScriptWriter::DumpData(const Browser2 &_b) {
 			}
 			return puts("nil");
 
-		case VIRTUAL:
-			if (flags & SCRIPT_VIRTUALS) {
+		case VIRTUAL: {
+			if ((flags & SCRIPT_IGNORE_DEFER) || !(b.GetTypeDef()->flags & Virtual::DEFER)) {
 				while (Browser2 b2 = *b) {
 					if (const char	*ext = b2.External())
 						return format("external \"%s\"", ext);
@@ -254,6 +254,7 @@ bool ScriptWriter::DumpData(const Browser2 &_b) {
 				return NewLine() && putc('}');
 			}
 			return puts("virtual");
+		}
 
 		case COMPOSITE:
 			if (putc('{') && Indent(+1)) {

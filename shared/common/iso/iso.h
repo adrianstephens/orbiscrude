@@ -266,9 +266,9 @@ template<typename T>	tag2	__GetKeyName(const T& t, void_t<decltype(tag2(declval<
 template<typename T>	tag2	__GetKeyName(const T& t,...)					{ return tag2(); }
 
 template<typename T>	tag2	_GetName(const T& t)							{ return __GetName(t, 0); }
-template<typename T>	tag2	_GetIteratorName(const T& t, void_t<decltype(declval<T>().key())> *dummy = 0) { return __GetKeyName(t.key(), 0); }
-template<typename T>	tag2	_GetIteratorName(const T& t, ...)				{ return _GetName(*t); }
-template<typename T>	tag2	_GetIteratorName(const cached_iterator<T>& t)	{ return _GetIteratorName(t.iterator(), 0); }
+template<typename T>	tag2	_GetIteratorName(T&& t, void_t<decltype(declval<T>().key())> *dummy = 0) { return __GetKeyName(t.key(), 0); }
+template<typename T>	tag2	_GetIteratorName(T&& t, ...)					{ return _GetName(*t); }
+template<typename T>	tag2	_GetIteratorName(cached_iterator<T>&& t)		{ return _GetIteratorName(t.iterator(), 0); }
 //template<typename T>	tag2	_GetName(const cached_iterator<T>& t)			{ return _GetIteratorName(t.iterator(), 0); }
 
 //template<typename T> enable_if_t< T_has_add<decltype(begin(declval<T>())), int>::value, tag2>	_GetIndexName(const T& t, int i)	{ return _GetIteratorName(begin(t) + i); }
@@ -1676,7 +1676,7 @@ template<class T> inline bool CompareData(const T* data1, const T* data2, int fl
 #define ISO_DEFCOMPTP(S, T, P, N)			ISO_DEFCOMPPTF(S, T, P, N, NONE)
 
 // header for user-composite def
-#define _ISO_DEFUSERCOMP(S, N, n, F)		struct ISO::def<S> : public ISO::TypeUserCompN<N> { typedef S _S, _T; def() : TypeUserCompN<N>(n, F, log2alignment<_S>)
+#define _ISO_DEFUSERCOMP(S, N, n, F)		struct ISO::def<DEPAREN(S)> : public ISO::TypeUserCompN<N> { typedef DEPAREN(S) _S, _T; def() : TypeUserCompN<N>(n, F, log2alignment<_S>)
 #define ISO_DEFUSERCOMPXF(S, N, n, F)		template<> _ISO_DEFUSERCOMP(S, N, n, F)
 #define ISO_DEFUSERCOMPX(S, N, n)			ISO_DEFUSERCOMPXF(S, N, n, NONE)
 #define ISO_DEFUSERCOMPF(S, N, F)			ISO_DEFUSERCOMPXF(S, N, #S, F)
@@ -1746,6 +1746,12 @@ template<class T> inline bool CompareData(const T* data1, const T* data2, int fl
 #define ISO_DEFCOMPBVT(S, T, B, ...)	ISO_DEFCOMPT(S, T, VA_NUM(__VA_ARGS__)+1)		{ ISO_SETBASE(0, B); ISO_SETFIELDS(1, __VA_ARGS__); } }
 
 #define ISO_DEFUSERCOMPVT(S, T, ...)	ISO_DEFUSERCOMPT(S, T, VA_NUM(__VA_ARGS__))		{ ISO_SETFIELDS(0, __VA_ARGS__); } }
+#define ISO_DEFUSERCOMPXVT(S, n, ...)	_ISO_DEFUSERCOMP(S, VA_NUM(__VA_ARGS__), n, NONE)		{ ISO_SETFIELDS(0, __VA_ARGS__); } }
+
+// param element variadic
+#define ISO_DEFUSERCOMPPV(S, P, ...)	ISO_DEFUSERCOMPP(S, P, VA_NUM(__VA_ARGS__))		{ ISO_SETFIELDS(0, __VA_ARGS__); } }
+#define ISO_DEFUSERCOMPPXV(S, P, n,...)	ISO_DEFUSERCOMPPX(S, P, VA_NUM(__VA_ARGS__), n)	{ ISO_SETFIELDS(0, __VA_ARGS__); } }
+
 #define ISO_DEFUSERCOMPV(S, ...)		ISO_DEFUSERCOMP(S, VA_NUM(__VA_ARGS__))			{ ISO_SETFIELDS(0, __VA_ARGS__); } }
 #define ISO_DEFUSERCOMPXV(S, n,...)		ISO_DEFUSERCOMPX(S, VA_NUM(__VA_ARGS__), n)		{ ISO_SETFIELDS(0, __VA_ARGS__); } }
 #define ISO_DEFUSERCOMPFV(S, F, ...)	ISO_DEFUSERCOMPF(S, VA_NUM(__VA_ARGS__), F)		{ ISO_SETFIELDS(0, __VA_ARGS__); } }
@@ -1765,7 +1771,7 @@ template<class T> inline bool CompareData(const T* data1, const T* data2, int fl
 #define ISO_DEFUSERENUMXF(S, N, n, B, F) template<> struct ISO::def<S> : public ISO::TypeUserEnumN<N, B> { typedef S _S; def() : TypeUserEnumN<N, B>(n, F)
 #define ISO_DEFUSERENUMX(S, N, n) ISO_DEFUSERENUMXF(S, N, n, 32, NONE)
 #define ISO_DEFUSERENUMF(S, N, B, F) ISO_DEFUSERENUMXF(S, N, #S, B, F)
-#define ISO_DEFUSERENUM(S, N) ISO_DEFUSERENUMXF(S, N, #S, 32, NONE)
+#define ISO_DEFUSERENUM(S, N) ISO_DEFUSERENUMXF(S, N, #S, BIT_COUNT<S>, NONE)
 #define ISO_SETENUMX(i, e, n) enums[i].set(n, e)
 
 #define ISO_ENUM(x)	, #x, x
@@ -2475,7 +2481,7 @@ template<typename T> struct def<range<T>>					: TISO_virtualarray<range<T>>			{}
 template<typename T> struct def<cached_range<T>>			: TISO_virtualarray<cached_range<T>>	{};
 template<typename T, int N> struct def<split_range<T, N>>	: TISO_virtualarray<split_range<T, N>>	{};
 
-template<typename T, typename I>	tag2	_GetName(const sparse_element<T, I>& t)	{ return _GetName(t.t); }
+template<typename T, typename I>	tag2	_GetName(const sparse_element<T, I>& t)	{ return _GetName(*t); }
 template<typename T, typename I, typename S> struct def<sparse_array<T, I, S>>	: TISO_virtualarray<dynamic_array<sparse_element<T, I>>>	{};
 
 // uses cached_range to provide operator[]

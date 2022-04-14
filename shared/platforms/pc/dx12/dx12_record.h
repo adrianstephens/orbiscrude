@@ -127,28 +127,42 @@ template<template<class> class M> struct meta::map<M, D3D12_RESOURCE_BARRIER>			
 template<template<class> class M> struct meta::map<M, D3D12_TEXTURE_COPY_LOCATION>			: T_type<map_t<M, as_tuple<D3D12_TEXTURE_COPY_LOCATION>>> {};
 template<template<class> class M> struct meta::map<M, D3D12_PIPELINE_STATE_STREAM_DESC>		: T_type<map_t<M, as_tuple<D3D12_PIPELINE_STATE_STREAM_DESC>>> {};
 
-template<> struct PM<D3D12_SHADER_BYTECODE>						{ struct type { const void *pShaderBytecode; SIZE_T BytecodeLength; }; };
-template<> struct PM<D3D12_CPU_DESCRIPTOR_HANDLE>				: T_type<lookup<D3D12_CPU_DESCRIPTOR_HANDLE>> {};
-template<> struct PM<D3D12_GPU_DESCRIPTOR_HANDLE>				: T_type<lookup<D3D12_GPU_DESCRIPTOR_HANDLE>> {};
-template<> struct PM<D3D12_INDEX_BUFFER_VIEW>					: T_type<lookup<D3D12_INDEX_BUFFER_VIEW>> {};
-template<> struct PM<D3D12_VERTEX_BUFFER_VIEW>					: T_type<lookup<D3D12_VERTEX_BUFFER_VIEW>> {};
-template<> struct PM<D3D12_CONSTANT_BUFFER_VIEW_DESC>			: T_type<lookup<D3D12_CONSTANT_BUFFER_VIEW_DESC>> {};
 template<> struct RTM<ID3D12CommandList*>						: T_type<CommandRange> {};
 
-//template<class A>	void allocate(A &a, const PM<D3D12_SHADER_BYTECODE>::type &t0, D3D12_SHADER_BYTECODE *t1) {}
-template<class A>	void transfer(A &a, const PM<D3D12_SHADER_BYTECODE>::type &t0, D3D12_SHADER_BYTECODE &t1) {
-	t1.pShaderBytecode	= t0.pShaderBytecode ? a->lookup_shader(t0.pShaderBytecode) : t0.pShaderBytecode;
-	t1.BytecodeLength	= t0.BytecodeLength;
+
+// modify D3D12_GPU_VIRTUAL_ADDRESS
+
+template<> struct PM<D3D12_SHADER_BYTECODE>				: T_type<lookup<D3D12_SHADER_BYTECODE>> {};
+template<> struct PM<D3D12_CPU_DESCRIPTOR_HANDLE>							: T_type<lookup<D3D12_CPU_DESCRIPTOR_HANDLE>> {};
+template<> struct PM<D3D12_GPU_DESCRIPTOR_HANDLE>							: T_type<lookup<D3D12_GPU_DESCRIPTOR_HANDLE>> {};
+template<> struct PM<D3D12_INDEX_BUFFER_VIEW>								: T_type<lookup<D3D12_INDEX_BUFFER_VIEW>> {};
+template<> struct PM<D3D12_VERTEX_BUFFER_VIEW>								: T_type<lookup<D3D12_VERTEX_BUFFER_VIEW>> {};
+template<> struct PM<D3D12_CONSTANT_BUFFER_VIEW_DESC>						: T_type<lookup<D3D12_CONSTANT_BUFFER_VIEW_DESC>> {};
+template<> struct PM<D3D12_STREAM_OUTPUT_BUFFER_VIEW>						: T_type<lookup<D3D12_STREAM_OUTPUT_BUFFER_VIEW>> {};
+template<> struct PM<D3D12_WRITEBUFFERIMMEDIATE_PARAMETER>					: T_type<lookup<D3D12_WRITEBUFFERIMMEDIATE_PARAMETER>> {};
+template<> struct PM<D3D12_GPU_VIRTUAL_ADDRESS_AND_STRIDE>					: T_type<lookup<D3D12_GPU_VIRTUAL_ADDRESS_AND_STRIDE>> {};
+template<> struct PM<D3D12_GPU_VIRTUAL_ADDRESS_RANGE>						: T_type<lookup<D3D12_GPU_VIRTUAL_ADDRESS_RANGE>> {};
+template<> struct PM<D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE>			: T_type<lookup<D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE>> {};
+template<> struct PM<D3D12_RAYTRACING_ACCELERATION_STRUCTURE_SRV>			: T_type<lookup<D3D12_RAYTRACING_ACCELERATION_STRUCTURE_SRV>> {};
+template<> struct PM<D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC>				: T_type<lookup<D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC>> {};
+template<> struct PM<D3D12_RAYTRACING_GEOMETRY_AABBS_DESC>					: T_type<lookup<D3D12_RAYTRACING_GEOMETRY_AABBS_DESC>> {};
+template<> struct PM<D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC>	: T_type<lookup<D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC>> {};
+template<> struct PM<D3D12_RAYTRACING_INSTANCE_DESC>						: T_type<lookup<D3D12_RAYTRACING_INSTANCE_DESC>> {};
+template<> struct PM<D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS>	: T_type<lookup<D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS>> {};
+template<> struct PM<D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC>	: T_type<lookup<D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC>> {};
+template<> struct PM<D3D12_DISPATCH_RAYS_DESC>								: T_type<lookup<D3D12_DISPATCH_RAYS_DESC>> {};
+
+template<class A>	void transfer(A &a, const lookup<D3D12_SHADER_BYTECODE> &t0, D3D12_SHADER_BYTECODE &t1) {
+	t1.pShaderBytecode	= t0.t.pShaderBytecode ? a->lookup_shader(t0.t.pShaderBytecode) : t0.t.pShaderBytecode;
+	t1.BytecodeLength	= t0.t.BytecodeLength;
 }
 
-//template<class A>	void allocate(A &a, const lookup<D3D12_INDEX_BUFFER_VIEW> &t0, D3D12_INDEX_BUFFER_VIEW *t1) {}
 template<class A>	void transfer(A &a, const lookup<D3D12_INDEX_BUFFER_VIEW> &t0, D3D12_INDEX_BUFFER_VIEW &t1) {
 	t1.SizeInBytes		= t0.t.SizeInBytes;
 	t1.Format			= t0.t.Format;
     t1.BufferLocation	= a->lookup(t0.t.BufferLocation, t1.SizeInBytes);
 }
 
-//template<class A>	void allocate(A &a, const lookup<D3D12_VERTEX_BUFFER_VIEW> &t0, D3D12_VERTEX_BUFFER_VIEW *t1) {}
 template<class A>	void transfer(A &a, const lookup<D3D12_VERTEX_BUFFER_VIEW> &t0, D3D12_VERTEX_BUFFER_VIEW &t1) {
 	t1.SizeInBytes		= t0.t.SizeInBytes;
 	t1.StrideInBytes	= t0.t.StrideInBytes;
@@ -158,6 +172,27 @@ template<class A>	void transfer(A &a, const lookup<D3D12_CONSTANT_BUFFER_VIEW_DE
 	t1.SizeInBytes		= t0.t.SizeInBytes;
     t1.BufferLocation	= a->lookup(t0.t.BufferLocation, t1.SizeInBytes);
 }
+
+template<class A>	void transfer(A &a, const lookup<D3D12_STREAM_OUTPUT_BUFFER_VIEW> &t0, D3D12_STREAM_OUTPUT_BUFFER_VIEW &t1) { t1 = t0.t; }
+
+template<class A>	void transfer(A &a, const lookup<D3D12_WRITEBUFFERIMMEDIATE_PARAMETER> &t0, D3D12_WRITEBUFFERIMMEDIATE_PARAMETER &t1) {
+	t1.Dest				= a->lookup(t0.t.Dest, 4);
+	t1.Value			= t0.t.Value;
+}
+
+template<class A>	void transfer(A &a, const lookup<D3D12_GPU_VIRTUAL_ADDRESS_AND_STRIDE> &t0, D3D12_GPU_VIRTUAL_ADDRESS_AND_STRIDE &t1) { t1 = t0.t; }
+template<class A>	void transfer(A &a, const lookup<D3D12_GPU_VIRTUAL_ADDRESS_RANGE> &t0, D3D12_GPU_VIRTUAL_ADDRESS_RANGE &t1) { t1 = t0.t; }
+template<class A>	void transfer(A &a, const lookup<D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE> &t0, D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE &t1) { t1 = t0.t; }
+template<class A>	void transfer(A &a, const lookup<D3D12_RAYTRACING_ACCELERATION_STRUCTURE_SRV> &t0, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_SRV &t1) { t1 = t0.t; }
+template<class A>	void transfer(A &a, const lookup<D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC> &t0, D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC &t1) { t1 = t0.t; }
+template<class A>	void transfer(A &a, const lookup<D3D12_RAYTRACING_GEOMETRY_AABBS_DESC> &t0, D3D12_RAYTRACING_GEOMETRY_AABBS_DESC &t1) { t1 = t0.t; }
+template<class A>	void transfer(A &a, const lookup<D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC> &t0, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC &t1) { t1 = t0.t; }
+template<class A>	void transfer(A &a, const lookup<D3D12_RAYTRACING_INSTANCE_DESC> &t0, D3D12_RAYTRACING_INSTANCE_DESC &t1) { t1 = t0.t; }
+template<class A>	void transfer(A &a, const lookup<D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS> &t0, D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS &t1) { t1 = t0.t; }
+template<class A>	void transfer(A &a, const lookup<D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC> &t0, D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC &t1) { t1 = t0.t; }
+template<class A>	void transfer(A &a, const lookup<D3D12_DISPATCH_RAYS_DESC> &t0, D3D12_DISPATCH_RAYS_DESC &t1) { t1 = t0.t; }
+
+
 }
 
 namespace dx12 {
@@ -211,16 +246,13 @@ struct RecObject2 : RecObject {
 	malloc_block	info;
 	RecObject2()	{}
 	RecObject2(HANDLE h) : RecObject(Handle), obj(h) {}
-	RecObject2(RecObject &rec, ID3D12Object *obj, malloc_block &&info) : RecObject(rec), obj(obj), info(move(info)) {}
+	RecObject2(RecObject &rec, ID3D12Object *obj) : RecObject(rec), obj(obj) {}
 	RecObject2(RecObject::TYPE type, string16 &&name, void *obj) : RecObject(type, move(name)), obj(obj) {}
 
 	template<typename R>	bool read(R &&r) {
 		iso::read(r, type, name, obj);
 		auto	size = r.template get<uint32>();
-		malloc_block	b(size);
-		ISO_ASSERT(readbuff_all(r, b, size) == size);
-		info = b.detach();
-		return true;
+		return info.read(r, size);
 	}
 	template<typename W>	bool write(W &&w) const	{
 		return iso::write(w, type, name, obj, info.size32(), info);
@@ -537,6 +569,8 @@ struct RecCommandList {
 		tag_RSSetShadingRateImage,
 	//ID3D12GraphicsCommandList6
 		tag_DispatchMesh,
+
+		tag_NUM
 	};
 	UINT					node_mask;
 	D3D12_COMMAND_LIST_FLAGS flags;
@@ -642,6 +676,8 @@ struct RecDevice {
 		//ID3D12GraphicsCommandList
 		tag_GraphicsCommandListClose,
 		tag_GraphicsCommandListReset,
+
+		tag_NUM,
 	};
 };
 
@@ -651,6 +687,7 @@ struct DESCRIPTOR {
 		SSMP,
 		PCBV, PSRV, PUAV,
 		IMM, VBV, IBV,
+		DESCH,
 		_NUM
 	} type;
 	ID3D12Resource *res;
@@ -665,6 +702,7 @@ struct DESCRIPTOR {
 		D3D12_VERTEX_BUFFER_VIEW			vbv;
 		D3D12_INDEX_BUFFER_VIEW				ibv;
 		D3D12_GPU_VIRTUAL_ADDRESS			ptr;
+		D3D12_GPU_DESCRIPTOR_HANDLE			h;
 		const void							*imm;
 	};
 	DESCRIPTOR(TYPE _type = NONE) : type(_type), res(0) {}
@@ -792,15 +830,21 @@ struct RecDescriptorHeap {
 	D3D12_GPU_DESCRIPTOR_HANDLE	gpu;
 	DESCRIPTOR					descriptors[1];
 
-	int			index(const DESCRIPTOR *d)				const { return d - descriptors; }
-	int			index(D3D12_CPU_DESCRIPTOR_HANDLE h)	const { return (h.ptr - cpu.ptr) / stride; }
-	int			index(D3D12_GPU_DESCRIPTOR_HANDLE h)	const { return (h.ptr - gpu.ptr) / stride; }
+	int		index(const DESCRIPTOR *d)				const { return d - descriptors; }
+	int		index(D3D12_CPU_DESCRIPTOR_HANDLE h)	const { return (h.ptr - cpu.ptr) / stride; }
+	int		index(D3D12_GPU_DESCRIPTOR_HANDLE h)	const { return (h.ptr - gpu.ptr) / stride; }
 
+	D3D12_CPU_DESCRIPTOR_HANDLE	get_cpu(int i)		const { return {cpu.ptr + i * stride}; }
+	D3D12_GPU_DESCRIPTOR_HANDLE	get_gpu(int i)		const { return {gpu.ptr + i * stride}; }
+
+	bool	holds(const DESCRIPTOR *d) const {
+		return d >= descriptors && d < descriptors + count;
+	}
 	const DESCRIPTOR*	holds(D3D12_CPU_DESCRIPTOR_HANDLE h) const {
-		return h.ptr >= cpu.ptr && h.ptr < cpu.ptr + stride * count ? descriptors + index(h) : 0;
+		return h.ptr >= cpu.ptr && h.ptr < cpu.ptr + stride * count && (h.ptr - cpu.ptr) % stride == 0 ? descriptors + index(h) : 0;
 	}
 	const DESCRIPTOR*	holds(D3D12_GPU_DESCRIPTOR_HANDLE h) const {
-		return h.ptr >= gpu.ptr && h.ptr < gpu.ptr + stride * count ? descriptors + index(h) : 0;
+		return h.ptr >= gpu.ptr && h.ptr < gpu.ptr + stride * count && (h.ptr - gpu.ptr) % stride == 0 ? descriptors + index(h) : 0;
 	}
 };
 

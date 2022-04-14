@@ -1567,39 +1567,62 @@ template<typename F> struct RPC {
 #define EXT_RPC(f)	extern "C" { __declspec(dllexport) DWORD RPC_##f(void *p) { return T_get_class<RPC>(f)->thread_fn<f>(p); } }
 #endif
 
+
+struct SocketWait : Socket {
+	using Socket::Socket;
+	size_t	readbuff(void *buffer, size_t size) const {
+		char *p = (char*)buffer;
+		while (size) {
+			size_t	result = Socket::readbuff(p, size);
+			size	-= result;
+			p		+= result;
+			if (size && !select(1))
+				break;
+		}
+
+		return p - (char*)buffer;
+	}
+	template<typename T>T		get()			const	{ T t; read(t); return t; }
+	template<typename...T> bool read(T&&...t)	const	{ return iso::read(*this, t...); }
+};
+
+#if 1
+typedef with_size<malloc_block> malloc_block_all;
+#else
 struct malloc_block_all : malloc_block {
 	using malloc_block::malloc_block;
 	using malloc_block::operator=;
 	template<typename R>	bool	read(R&& r) {
 		auto	size = r.template get<uint32>();
-		return readbuff_all(r, resize(size), size) == size;
+		return malloc_block::read(r, size);
 	}
 	template<typename W>	bool	write(W&& w) const {
 		return w.write(size32()) && malloc_block::write(w);
 	}
 };
+#endif
 
-template<typename F> enable_if_t<!same_v<typename function<F>::R, void>> SocketRPC(Socket &sock, F f) {
+template<typename F> enable_if_t<!same_v<typename function<F>::R, void>> SocketRPC(SocketWait &sock, F f) {
 	TL_tuple<typename function<F>::P>	params;
 	params.read(sock);
 	sock.write(call(f, params));
 
 }
 
-template<typename F> enable_if_t<same_v<typename function<F>::R, void>> SocketRPC(Socket &sock, F f) {
+template<typename F> enable_if_t<same_v<typename function<F>::R, void>> SocketRPC(SocketWait &sock, F f) {
 	TL_tuple<typename function<F>::P>	params;
 	params.read(sock);
 	call(f, params);
 }
 
-template<typename R, typename...P> enable_if_t<!same_v<R, void>, R> SocketCallRPC(const Socket &sock, int func, const P&...p) {
+template<typename R, typename...P> enable_if_t<!same_v<R, void>, R> SocketCallRPC(const SocketWait &sock, int func, const P&...p) {
 	sock.putc(func);
 	tuple<P...>(p...).write(sock);
 	sock.select(1);	// wait up to 1 sec
 	return sock.get<R>();
 }
 
-template<typename R, typename...P> enable_if_t<same_v<R, void>> SocketCallRPC(const Socket &sock, int func, const P&...p) {
+template<typename R, typename...P> enable_if_t<same_v<R, void>> SocketCallRPC(const SocketWait &sock, int func, const P&...p) {
 	sock.putc(func);
 	tuple<P...>(p...).write(sock);
 }

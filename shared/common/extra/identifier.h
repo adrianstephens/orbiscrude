@@ -4,13 +4,44 @@
 #include "base/defs.h"
 
 namespace iso {
-template<typename T> inline enable_if_t<is_enum<T>, size_t> from_string(const char *s, T &t);
+template<typename T> inline enable_if_t<is_enum<T>, size_t>			from_string(const char *s, T &t);
+template<typename T> inline enable_if_t<is_enum<T>, const char*>	to_string(const T &t);
 }
 
 #include "base/strings.h"
 #include "base/pointer.h"
 #include "base/bits.h"
 #include "base/functions.h"
+
+#define	_MAKE_FIELD(S,X)				field::make<S>(#X, &S::X),
+#define	_MAKE_FIELDS(S, ...)			VA_APPLYP(_MAKE_FIELD, S, __VA_ARGS__)
+#define	MAKE_FIELDS(S, ...)				template<> field fields<S>::f[] = { _MAKE_FIELDS(S, __VA_ARGS__) field::terminator<S>() }
+
+#define	DECLARE_VALUE_FIELD(S)			template<> struct fields<S> : value_field<S>	{};
+
+#define	_MAKE_ENUM(S,X)					#X,
+#define	_MAKE_ENUMS(S, ...)				VA_APPLYP(_MAKE_ENUM, S, __VA_ARGS__)
+#define	_MAKE_VALUE(S,X)				{#X, X},
+#define	_MAKE_VALUES(S, ...)			VA_APPLYP(_MAKE_VALUE, S, __VA_ARGS__)
+#define	_MAKE_PREFIXED_VALUE(P,X)		{#X, P##X},
+#define	_MAKE_PREFIXED_VALUES(P, ...)	VA_APPLYP(_MAKE_PREFIXED_VALUE, P, __VA_ARGS__)
+
+#define	MAKE_ENUMS(S, ...)				template<> const char *field_names<S>::s[]	= { _MAKE_ENUMS(S, __VA_ARGS__) }
+
+#define	DECLARE_VALUE_ENUMS(S)			template<> struct field_names<S> { static field_value s[]; };
+#define	MAKE_VALUE_ENUMS(S, ...)		field_value field_names<S>::s[] = { _MAKE_VALUES(S, __VA_ARGS__) 0 }
+
+#define	DECLARE_BIT_ENUMS(S)			template<> struct field_names<S> { static field_bit s[]; };
+#define	MAKE_BIT_ENUMS(S, ...)			field_bit field_names<S>::s[] =	{ _MAKE_VALUES(S, __VA_ARGS__) 0 }
+
+#define	DECLARE_PREFIXED_ENUMS(S)		template<> struct field_names<S> { static field_prefix<const char*> s; };
+#define	MAKE_PREFIXED_ENUMS(S, P, ...)	field_prefix<const char*>	field_names<S>::s	= { #P, (const char*[]) {_MAKE_ENUMS(S, __VA_ARGS__) }}
+
+#define	DECLARE_PREFIXED_VALUE_ENUMS(S)		template<> struct field_names<S> { static field_prefix<field_value> s; };
+#define	MAKE_PREFIXED_VALUE_ENUMS(S, P, ...) field_prefix<field_value>	field_names<S>::s	= { #P, (field_value[]) {_MAKE_PREFIXED_VALUES(P, __VA_ARGS__) 0}}
+
+#define	DECLARE_PREFIXED_BIT_ENUMS(S)		template<> struct field_names<S> { static field_prefix<field_bit> s; };
+#define	MAKE_PREFIXED_BIT_ENUMS(S, P, ...)	field_prefix<field_bit>	field_names<S>::s	= { #P, (field_bit[]) {_MAKE_PREFIXED_VALUES(P, __VA_ARGS__) 0}}
 
 namespace iso {
 
@@ -30,12 +61,13 @@ enum IDFMT {
 	IDFMT_CONSTNUMS			= 1 << 8,
 	IDFMT_NONAMES			= 1 << 9,
 	IDFMT_NOSPACES			= 1 << 10,
-	IDFMT_FIELDNAME_AFTER_UNION = 1 << 11,
+	IDFMT_NOPREFIX			= 1 << 11,
+	IDFMT_FIELDNAME_AFTER_UNION = 1 << 12,
 
 	// for gpu trees
-	IDFMT_FOLLOWPTR			= 1 << 12,
-	IDFMT_OFFSETS			= 1 << 13,
-	IDFMT_MARKERS			= 1 << 14,
+	IDFMT_FOLLOWPTR			= 1 << 13,
+	IDFMT_OFFSETS			= 1 << 14,
+	IDFMT_MARKERS			= 1 << 15,
 };
 
 inline IDFMT operator*(IDFMT a, bool b)		{ return b ? a : IDFMT(0); }
@@ -240,26 +272,15 @@ template<> struct array_names<0> {
 	operator const char*() { return (const char*)this; }
 };
 
-
-#define	_MAKE_ENUM(S,X)			#X,
-#define	_MAKE_ENUMS(S, ...)		VA_APPLYP(_MAKE_ENUM, S, __VA_ARGS__)
-#define	MAKE_ENUMS(S, ...)		template<> const char *field_names<S>::s[]	= { _MAKE_ENUMS(S, __VA_ARGS__) }
-
-
-#define	_MAKE_VALUE(S,X)		{#X, X},
-#define	_MAKE_VALUES(S, ...)	VA_APPLYP(_MAKE_VALUE, S, __VA_ARGS__)
-#define	MAKE_VALUES(S, ...)	template<> struct field_names<S> { static field_value s[]; };	field_value field_names<S>::s[] = { _MAKE_VALUES(S, __VA_ARGS__) 0 }
-#define	MAKE_BITS(S, ...)	template<> struct field_names<S> { static field_bit s[]; };		field_bit field_names<S>::s[] =	{ _MAKE_VALUES(S, __VA_ARGS__) 0 }
-
 //-----------------------------------------------------------------------------
 //	field
 //-----------------------------------------------------------------------------
 
-template<typename T> static constexpr bool field_is_struct = is_class<T>;
-template<typename T> static constexpr bool field_is_struct<constructable<T>> = field_is_struct<T>;
+template<typename T>			static constexpr bool field_is_struct = is_class<T>;
+template<typename T>			static constexpr bool field_is_struct<constructable<T>> = field_is_struct<T>;
 template<int B, typename T>		static constexpr bool field_is_struct<baseint<B,T>> = false;
 template<typename T, size_t N>	static constexpr bool field_is_struct<T[N]> = true;
-template<> static constexpr bool field_is_struct<string> = false;
+template<>						static constexpr bool field_is_struct<string> = false;
 
 template<typename T, bool S = field_is_struct<T>> struct field_maker;
 
@@ -294,7 +315,8 @@ struct field {
 	static constexpr MODE get_mode(field_bit*)								{ return MODE_BITS; }
 	static constexpr MODE get_mode(field_custom*)							{ return MODE_CUSTOM; }
 	static constexpr MODE get_mode(field_callback_func)						{ return MODE_CALLBACK; }
-	template<typename T> static constexpr MODE get_mode(field_prefix<T>*)	{ return get_mode((T*)0) | MODE_PREFIX; }
+	template<typename T> static constexpr MODE get_mode(const field_prefix<T>&)	{ return MODE(get_mode((T*)0) | MODE_PREFIX); }
+//	template<typename T> static constexpr MODE get_mode(field_prefix<T>*)	{ return get_mode((T*)0) | MODE_PREFIX; }
 	template<typename T> static constexpr MODE get_mode(field_dot<T>*)		{ return get_mode((T*)0) | MODE_DOT; }
 
 	static constexpr field dummy(uint32 num) {
@@ -308,6 +330,9 @@ struct field {
 	}
 	template<typename V> static constexpr field make(const char *name, uint32 start, uint32 num, V *values) {
 		return {name, start, num, uint32(get_mode(values) & 15), uint32(get_mode(values) >> 4), (const char**)values};
+	}
+	template<typename V> static constexpr field make(const char *name, uint32 start, uint32 num, const V &values) {
+		return {name, start, num, uint32(get_mode(values) & 15), uint32(get_mode(values) >> 4), (const char**)&values};
 	}
 	template<typename B, typename T, typename V> static constexpr field make(const char *name, T B::*p, V *values) {
 		return make(name, uint32(BIT_OFFSET(p)), uint32(sizeof(T)), values);
@@ -360,6 +385,9 @@ struct field {
 	uint32		set_raw_value(uint32 x, uint64 val) const {
 		return (x & ~bits(num, start)) | uint32((min(val, bits(num)) << start));
 	}
+	const void*	get_raw_ptr(const void *p, uint32 start_offset = 0) const {
+		return (const uint8*)p + (start_offset + start) / 8;
+	}
 	uint64		get_raw_value(const uint32 *p, uint32 start_offset = 0) const {
 		uint32	start	= start_offset + this->start;
 		uint32	i		= start / 32;
@@ -406,10 +434,6 @@ struct field {
 		return values == (const char**)field_names<T>::s;
 	}
 };
-
-#define	_MAKE_FIELD(S,X)		field::make<S>(#X, &S::X),
-#define	_MAKE_FIELDS(S, ...)	VA_APPLYP(_MAKE_FIELD, S, __VA_ARGS__)
-#define	MAKE_FIELDS(S, ...)		template<> field fields<S>::f[] = { _MAKE_FIELDS(S, __VA_ARGS__) field::terminator<S>() }
 
 extern field	float_field[], empty_field[], custom_ptr_field[];
 
@@ -533,7 +557,7 @@ template<typename T, int N>	struct fields<const T[N]> : fields<T[N]> {};
 template<typename T, int N>	fields_array<T, N> fields<T[N]>::f;
 
 // get_field_name
-inline constexpr const char *get_field_name(const char **p, int i) {
+inline constexpr const char *get_field_name(const char *const *p, int i) {
 	return p[i];
 }
 inline constexpr const char *get_field_name(const field_value *p, int i) {
@@ -544,8 +568,15 @@ inline constexpr const char *get_field_name(const field_value *p, int i) {
 	}
 	return 0;
 }
+template<typename T> constexpr const char *get_field_name(const field_prefix<T> &p, int i) {
+	return get_field_name(p.names, i);
+}
 template<typename T> constexpr const char *get_field_name(const T &t) {
 	return get_field_name(field_names<T>::s, (int)t);
+}
+
+template<typename T> inline enable_if_t<is_enum<T>, const char*> to_string(const T& t) {
+	return get_field_name(t);
 }
 
 // get_field_value
@@ -583,6 +614,7 @@ template<typename T> size_t	get_field_value(const char *s, T &t) {
 template<typename T> inline enable_if_t<is_enum<T>, size_t> from_string(const char *s, T &t) {
 	return get_field_value(s, t);
 }
+
 
 string_accum&	PutConst(string_accum &a, IDFMT fmt, const char *const *names, uint32 val, uint8 mode = 0);
 string_accum&	PutConst(string_accum &a, IDFMT fmt, const field *pf, uint64 val);

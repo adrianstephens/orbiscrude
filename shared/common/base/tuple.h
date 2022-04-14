@@ -125,6 +125,7 @@ public:
 	variant(variant &&b)		: index(b.index) { visit(op_construct(), move(b)); }
 	variant(variant &b)			: variant((const variant&)b)	{}
 	template<typename A, size_t I = best_index<A>> variant(A &&a) : index(I) { construct(u.template get<I>(), forward<A>(a));}
+	template<typename A, size_t I = best_index<A>> variant(const A &a) : index(I) { construct(u.template get<I>(), a);}
 	~variant()	{ visit(op_destruct()); }
 
 	variant&	operator=(const variant &b)	{

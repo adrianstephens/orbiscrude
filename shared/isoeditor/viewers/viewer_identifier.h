@@ -293,11 +293,17 @@ struct RegisterList {
 inline int	MakeColumns(ListViewControl c, const field *pf, IDFMT format, int nc) {
 	return RegisterList(c, format).MakeColumns(pf, nc);
 }
+template<typename T>  int	MakeColumns(ListViewControl c, IDFMT format, int nc) {
+	return RegisterList(c, format).MakeColumns(fields<T>::f, nc);
+}
 inline void	FillRow(ListViewControl c, ListViewControl::Item &item, IDFMT format, const field *pf, const uint32 *p) {
 	RegisterList(c, format).FillRow(item, pf, p, 0);
 }
 inline void	FillRow(ListViewControl c, const RegisterList::cb_type &cb, ListViewControl::Item &item, IDFMT format, const field *pf, const uint32 *p) {
 	RegisterList(c, cb, format).FillRow(item, pf, p, 0);
+}
+template<typename T> void	FillRow(ListViewControl c, const RegisterList::cb_type &cb, ListViewControl::Item &item, IDFMT format, const T *p) {
+	RegisterList(c, cb, format).FillRow(item, fields<T>::f, (const uint32*)p, 0);
 }
 
 //-----------------------------------------------------------------------------
@@ -460,7 +466,6 @@ template<typename T, typename U = T, typename A = dynamic_array<U>> struct Entry
 	}
 
 	int Init() {
-		SetExtendedStyle(GRIDLINES | DOUBLEBUFFER | FULLROWSELECT);
 		AddColumns(
 			"name",		200,
 			"used at",	100,
@@ -469,14 +474,19 @@ template<typename T, typename U = T, typename A = dynamic_array<U>> struct Entry
 		return MakeColumns(*this, fields<T>::f, IDFMT_CAMEL | IDFMT_FOLLOWPTR, 3);
 	}
 
-	HWND _Create(const WindowPos &wpos, text title, ID id, Style style = CHILD | CLIPSIBLINGS | VISIBLE | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS, StyleEx styleEx = NOEX) {
+	HWND CreateNoColumns(const WindowPos &wpos, text title, ID id, Style style = CHILD | CLIPSIBLINGS | VISIBLE | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS, StyleEx styleEx = GRIDLINES | DOUBLEBUFFER | FULLROWSELECT) {
+		HWND h = ListViewControl::Create(wpos, title, style, styleEx, id);
+		user = this;
+		return h;
+	}
+	HWND CreateWithID(const WindowPos &wpos, text title, ID id, Style style = CHILD | CLIPSIBLINGS | VISIBLE | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS, StyleEx styleEx = GRIDLINES | DOUBLEBUFFER | FULLROWSELECT) {
 		HWND h = ListViewControl::Create(wpos, title, style, styleEx, id);
 		user = this;
 		Init();
 		return h;
 	}
 
-	HWND Create(const WindowPos &wpos, text title, Style style = CHILD | CLIPSIBLINGS | VISIBLE | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS, StyleEx styleEx = NOEX, ID id = ID()) {
+	HWND Create(const WindowPos &wpos, text title, Style style = CHILD | CLIPSIBLINGS | VISIBLE | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS, StyleEx styleEx = GRIDLINES | DOUBLEBUFFER | FULLROWSELECT, ID id = ID()) {
 		HWND h = ListViewControl::Create(wpos, title, style, styleEx, id);
 		user = this;
 		Init();

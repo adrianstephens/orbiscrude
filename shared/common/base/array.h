@@ -1191,16 +1191,7 @@ public:
 	const_iterator	end()					const	{ return {p + wrap(curr_size), p, p + max_size}; }
 	iterator		begin()							{ return {p + offset, p, p + max_size}; }
 	iterator		end()							{ return {p + wrap(curr_size), p, p + max_size}; }
-/*
-	T&							push_front()				{ return *new(_expand_front(1)) T; }
-	template<typename U>	T&	push_front(const U &t)		{ return *new(_expand_front(1)) T(t); }
-	template<typename... U>	T&	emplace_front(U&&...t)		{ return *new(_expand_front(1)) T(forward<U>(t)...); }
-	void						pop_front()					{ destruct(p + offset, 1); --curr_size; offset = wrap(1); }
-	T							pop_front_value()			{ T t = move(*begin()); pop_front(); return t; }
 
-	template<typename I> auto&	prepend(I first, I last)	{ size_t n = distance(first, last); copy_new_n(first, _expand_front(n), n); return *this; }
-	template<typename C> auto&	prepend(const C &c)			{ using iso::begin; using iso::end; return prepend(begin(c), end(c)); }
-*/
 	friend void 	swap(_dynamic_array_de<T> &a, _dynamic_array_de<T> &b) { raw_swap(a, b); }
 };
 
@@ -1274,16 +1265,7 @@ public:
 	T*				end()							{ return p + offset + curr_size; }
 	int				index_of(const T *e)	const	{ return e ? e - begin() : -1;}
 	int				index_of(const T &e)	const	{ return &e - begin(); }
-	/*
-	T&							push_front()				{ return *new(_expand_front(1)) T; }
-	template<typename U>	T&	push_front(const U &t)		{ return *new(_expand_front(1)) T(t); }
-	template<typename... U>	T&	emplace_front(U&&...t)		{ return *new(_expand_front(1)) T(forward<U>(t)...); }
-	void						pop_front()					{ destruct(begin(), 1); --curr_size; ++offset; }
-	T							pop_front_value()			{ T t = move(*begin()); pop_front(); return t; }
 
-	template<typename I> auto&	prepend(I first, I last)	{ size_t n = distance(first, last); copy_new_n(first, _expand_front(n), n); return *this; }
-	template<typename C> auto&	prepend(const C &c)			{ using iso::begin; using iso::end; return prepend(begin(c), end(c)); }
-	*/
 	friend void 	swap(_dynamic_array_de1<T> &a, _dynamic_array_de1<T> &b) { raw_swap(a, b); }
 };
 

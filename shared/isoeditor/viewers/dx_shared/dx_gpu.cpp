@@ -17,7 +17,7 @@ ChannelUse::chans GetChannels(DXGI_COMPONENTS format) {
 }
 
 template<typename T> const void *copy_slices(const block<T, 3> &dest, const void *srce, DXGI_COMPONENTS format, uint64 depth_stride) {
-	srce = copy_slices(dest, srce, format.Layout(), depth_stride);
+	srce = copy_slices(dest, srce, format.Layout(), format.Type(), depth_stride);
 	RearrangeChannels(dest, GetChannels(format));
 	return srce;
 }
@@ -388,7 +388,8 @@ bool DXCapturer::OpenProcess(const filename &app, const char *dir, const char *a
 void DXCapturer::ConnectDebugOutput() {
 	static const int INTF_DebugOutput = 42;
 	RunThread([addr = addr]() {
-		Socket	sock =	 addr.socket();
+		ISO_OUTPUT("ConnectDebugOutput started");
+		SocketWait	sock =	 addr.socket();
 		for (uint32 delay = 1; delay < 10000 && !sock.exists(); delay <<= 1) {
 			Sleep(delay);
 			sock =	 addr.socket();
@@ -416,7 +417,7 @@ void DXCapturer::ConnectDebugOutput() {
 			sock =	 addr.socket();
 		}
 		#endif
-		ISO_TRACE("ConnectDebugOutput stopped");
+		ISO_OUTPUT("ConnectDebugOutput stopped");
 	});
 }
 

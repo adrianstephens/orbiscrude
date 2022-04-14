@@ -25,21 +25,6 @@ template<> const char *field_names<D3D11_CONSERVATIVE_RASTERIZATION_MODE>::s[] =
 	"D3D11_CONSERVATIVE_RASTERIZATION_MODE_ON",		// 1
 };
 
-template<> const char *field_names<D3D_SRV_DIMENSION>::s[] = {
-	"D3D_SRV_DIMENSION_UNKNOWN",
-	"D3D_SRV_DIMENSION_BUFFER",
-	"D3D_SRV_DIMENSION_TEXTURE1D",
-	"D3D_SRV_DIMENSION_TEXTURE1DARRAY",
-	"D3D_SRV_DIMENSION_TEXTURE2D",
-	"D3D_SRV_DIMENSION_TEXTURE2DARRAY",
-	"D3D_SRV_DIMENSION_TEXTURE2DMS",
-	"D3D_SRV_DIMENSION_TEXTURE2DMSARRAY",
-	"D3D_SRV_DIMENSION_TEXTURE3D",
-	"D3D_SRV_DIMENSION_TEXTURECUBE",
-	"D3D_SRV_DIMENSION_TEXTURECUBEARRAY",
-	"D3D_SRV_DIMENSION_BUFFEREX",
-};
-
 template<> const char *field_names<D3D11_INPUT_CLASSIFICATION>::s[] = {
 	"D3D11_INPUT_PER_VERTEX_DATA",		//0,
 	"D3D11_INPUT_PER_INSTANCE_DATA",	//1
@@ -48,13 +33,13 @@ template<> const char *field_names<D3D11_INPUT_CLASSIFICATION>::s[] = {
 template<> field fields<D3D11_INPUT_ELEMENT_DESC_rel>::f[] = {
 #undef S
 #define S D3D11_INPUT_ELEMENT_DESC_rel
-	MAKE_DX_FIELD(SemanticName),
-	MAKE_DX_FIELD(SemanticIndex),
-	MAKE_DX_FIELD(Format),
-	MAKE_DX_FIELD(InputSlot),
-	MAKE_DX_FIELD(AlignedByteOffset),
-	MAKE_DX_FIELD(InputSlotClass),
-	MAKE_DX_FIELD(InstanceDataStepRate),
+	_MAKE_FIELD(S,SemanticName)
+	_MAKE_FIELD(S,SemanticIndex)
+	_MAKE_FIELD(S,Format)
+	_MAKE_FIELD(S,InputSlot)
+	_MAKE_FIELD(S,AlignedByteOffset)
+	_MAKE_FIELD(S,InputSlotClass)
+	_MAKE_FIELD(S,InstanceDataStepRate)
 	TERMINATOR
 };
 
@@ -74,24 +59,24 @@ template<> const char *field_names<D3D11_CULL_MODE>::s[] = {
 template<> field fields<D3D11_SO_DECLARATION_ENTRY>::f[] = {
 #undef S
 #define S D3D11_SO_DECLARATION_ENTRY
-	MAKE_DX_FIELD(Stream),
-	MAKE_DX_FIELD(SemanticName),
-	MAKE_DX_FIELD(SemanticIndex),
-	MAKE_DX_FIELD(StartComponent),
-	MAKE_DX_FIELD(ComponentCount),
-	MAKE_DX_FIELD(OutputSlot),
+	_MAKE_FIELD(S,Stream)
+	_MAKE_FIELD(S,SemanticName)
+	_MAKE_FIELD(S,SemanticIndex)
+	_MAKE_FIELD(S,StartComponent)
+	_MAKE_FIELD(S,ComponentCount)
+	_MAKE_FIELD(S,OutputSlot)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_VIEWPORT>::f[] = {
 #undef S
 #define S D3D11_VIEWPORT
-	MAKE_DX_FIELD(TopLeftX),
-	MAKE_DX_FIELD(TopLeftY),
-	MAKE_DX_FIELD(Width),
-	MAKE_DX_FIELD(Height),
-	MAKE_DX_FIELD(MinDepth),
-	MAKE_DX_FIELD(MaxDepth),
+	_MAKE_FIELD(S,TopLeftX)
+	_MAKE_FIELD(S,TopLeftY)
+	_MAKE_FIELD(S,Width)
+	_MAKE_FIELD(S,Height)
+	_MAKE_FIELD(S,MinDepth)
+	_MAKE_FIELD(S,MaxDepth)
 	TERMINATOR
 };
 
@@ -214,12 +199,12 @@ template<> const char *field_names<D3D11_CLEAR_FLAG>::s[] = {
 template<> field fields<D3D11_BOX>::f[] = {
 #undef S
 #define S D3D11_BOX
-	MAKE_DX_FIELD(left),
-	MAKE_DX_FIELD(top),
-	MAKE_DX_FIELD(front),
-	MAKE_DX_FIELD(right),
-	MAKE_DX_FIELD(bottom),
-	MAKE_DX_FIELD(back),
+	_MAKE_FIELD(S,left)
+	_MAKE_FIELD(S,top)
+	_MAKE_FIELD(S,front)
+	_MAKE_FIELD(S,right)
+	_MAKE_FIELD(S,bottom)
+	_MAKE_FIELD(S,back)
 	TERMINATOR
 };
 
@@ -256,24 +241,24 @@ template<> const char *field_names<D3D11_STENCIL_OP>::s[] = {
 template<> field fields<D3D11_DEPTH_STENCILOP_DESC>::f[] = {
 #undef S
 #define S D3D11_DEPTH_STENCILOP_DESC
-	MAKE_DX_FIELD(StencilFailOp),
-	MAKE_DX_FIELD(StencilDepthFailOp),
-	MAKE_DX_FIELD(StencilPassOp),
-	MAKE_DX_FIELD(StencilFunc),
+	_MAKE_FIELD(S,StencilFailOp)
+	_MAKE_FIELD(S,StencilDepthFailOp)
+	_MAKE_FIELD(S,StencilPassOp)
+	_MAKE_FIELD(S,StencilFunc)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_DEPTH_STENCIL_DESC>::f[] = {
 #undef S
 #define S D3D11_DEPTH_STENCIL_DESC
-	MAKE_DX_FIELD(DepthEnable),
-	MAKE_DX_FIELD(DepthWriteMask),
-	MAKE_DX_FIELD(DepthFunc),
-	MAKE_DX_FIELD(StencilEnable),
-	MAKE_DX_FIELD(StencilReadMask),
-	MAKE_DX_FIELD(StencilWriteMask),
-	MAKE_DX_FIELD(FrontFace),
-	MAKE_DX_FIELD(BackFace),
+	_MAKE_FIELD(S,DepthEnable)
+	_MAKE_FIELD(S,DepthWriteMask)
+	_MAKE_FIELD(S,DepthFunc)
+	_MAKE_FIELD(S,StencilEnable)
+	_MAKE_FIELD(S,StencilReadMask)
+	_MAKE_FIELD(S,StencilWriteMask)
+	_MAKE_FIELD(S,FrontFace)
+	_MAKE_FIELD(S,BackFace)
 	TERMINATOR
 };
 
@@ -339,64 +324,64 @@ template<> const char *field_names<D3D11_LOGIC_OP>::s[] = {
 template<> field fields<D3D11_RENDER_TARGET_BLEND_DESC>::f[] = {
 #undef S
 #define S D3D11_RENDER_TARGET_BLEND_DESC
-	MAKE_DX_FIELD(BlendEnable),
-	MAKE_DX_FIELD(SrcBlend),
-	MAKE_DX_FIELD(DestBlend),
-	MAKE_DX_FIELD(BlendOp),
-	MAKE_DX_FIELD(SrcBlendAlpha),
-	MAKE_DX_FIELD(DestBlendAlpha),
-	MAKE_DX_FIELD(BlendOpAlpha),
-	MAKE_DX_FIELD(RenderTargetWriteMask),
+	_MAKE_FIELD(S,BlendEnable)
+	_MAKE_FIELD(S,SrcBlend)
+	_MAKE_FIELD(S,DestBlend)
+	_MAKE_FIELD(S,BlendOp)
+	_MAKE_FIELD(S,SrcBlendAlpha)
+	_MAKE_FIELD(S,DestBlendAlpha)
+	_MAKE_FIELD(S,BlendOpAlpha)
+	_MAKE_FIELD(S,RenderTargetWriteMask)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_RENDER_TARGET_BLEND_DESC1>::f[] = {
 #undef S
 #define S D3D11_RENDER_TARGET_BLEND_DESC1
-	MAKE_DX_FIELD(BlendEnable),
-	MAKE_DX_FIELD(LogicOpEnable),
-	MAKE_DX_FIELD(SrcBlend),
-	MAKE_DX_FIELD(DestBlend),
-	MAKE_DX_FIELD(BlendOp),
-	MAKE_DX_FIELD(SrcBlendAlpha),
-	MAKE_DX_FIELD(DestBlendAlpha),
-	MAKE_DX_FIELD(BlendOpAlpha),
-	MAKE_DX_FIELD(LogicOp),
-	MAKE_DX_FIELD(RenderTargetWriteMask),
+	_MAKE_FIELD(S,BlendEnable)
+	_MAKE_FIELD(S,LogicOpEnable)
+	_MAKE_FIELD(S,SrcBlend)
+	_MAKE_FIELD(S,DestBlend)
+	_MAKE_FIELD(S,BlendOp)
+	_MAKE_FIELD(S,SrcBlendAlpha)
+	_MAKE_FIELD(S,DestBlendAlpha)
+	_MAKE_FIELD(S,BlendOpAlpha)
+	_MAKE_FIELD(S,LogicOp)
+	_MAKE_FIELD(S,RenderTargetWriteMask)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_BLEND_DESC>::f[] = {
 #undef S
 #define S D3D11_BLEND_DESC
-	MAKE_DX_FIELD(AlphaToCoverageEnable),
-	MAKE_DX_FIELD(IndependentBlendEnable),
-	MAKE_DX_FIELD(RenderTarget),
+	_MAKE_FIELD(S,AlphaToCoverageEnable)
+	_MAKE_FIELD(S,IndependentBlendEnable)
+	_MAKE_FIELD(S,RenderTarget)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_BLEND_DESC1>::f[] = {
 #undef S
 #define S D3D11_BLEND_DESC1
-	MAKE_DX_FIELD(AlphaToCoverageEnable),
-	MAKE_DX_FIELD(IndependentBlendEnable),
-	MAKE_DX_FIELD(RenderTarget),
+	_MAKE_FIELD(S,AlphaToCoverageEnable)
+	_MAKE_FIELD(S,IndependentBlendEnable)
+	_MAKE_FIELD(S,RenderTarget)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_RASTERIZER_DESC>::f[] = {
 #undef S
 #define S D3D11_RASTERIZER_DESC
-	MAKE_DX_FIELD(FillMode),
-	MAKE_DX_FIELD(CullMode),
-	MAKE_DX_FIELD(FrontCounterClockwise),
-	MAKE_DX_FIELD(DepthBias),
-	MAKE_DX_FIELD(DepthBiasClamp),
-	MAKE_DX_FIELD(SlopeScaledDepthBias),
-	MAKE_DX_FIELD(DepthClipEnable),
-	MAKE_DX_FIELD(ScissorEnable),
-	MAKE_DX_FIELD(MultisampleEnable),
-	MAKE_DX_FIELD(AntialiasedLineEnable),
+	_MAKE_FIELD(S,FillMode)
+	_MAKE_FIELD(S,CullMode)
+	_MAKE_FIELD(S,FrontCounterClockwise)
+	_MAKE_FIELD(S,DepthBias)
+	_MAKE_FIELD(S,DepthBiasClamp)
+	_MAKE_FIELD(S,SlopeScaledDepthBias)
+	_MAKE_FIELD(S,DepthClipEnable)
+	_MAKE_FIELD(S,ScissorEnable)
+	_MAKE_FIELD(S,MultisampleEnable)
+	_MAKE_FIELD(S,AntialiasedLineEnable)
 	TERMINATOR
 };
 
@@ -404,81 +389,81 @@ template<> field fields<D3D11_RASTERIZER_DESC1>::f[] = {
 #undef S
 #define S D3D11_RASTERIZER_DESC1
 	field::call<D3D11_RASTERIZER_DESC>(0, 0),
-	MAKE_DX_FIELD(ForcedSampleCount),
+	_MAKE_FIELD(S,ForcedSampleCount)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_SUBRESOURCE_DATA>::f[] = {
 #undef S
 #define S D3D11_SUBRESOURCE_DATA
-	MAKE_DX_FIELD(pSysMem),
-	MAKE_DX_FIELD(SysMemPitch),
-	MAKE_DX_FIELD(SysMemSlicePitch),
+	_MAKE_FIELD(S,pSysMem)
+	_MAKE_FIELD(S,SysMemPitch)
+	_MAKE_FIELD(S,SysMemSlicePitch)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_MAPPED_SUBRESOURCE>::f[] = {
 #undef S
 #define S D3D11_MAPPED_SUBRESOURCE
-	MAKE_DX_FIELD(pData),
-	MAKE_DX_FIELD(RowPitch),
-	MAKE_DX_FIELD(DepthPitch),
+	_MAKE_FIELD(S,pData)
+	_MAKE_FIELD(S,RowPitch)
+	_MAKE_FIELD(S,DepthPitch)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_BUFFER_DESC>::f[] = {
 #undef S
 #define S D3D11_BUFFER_DESC
-	MAKE_DX_FIELD(ByteWidth),
-	MAKE_DX_FIELD(Usage),
-	MAKE_DX_FIELDT(BindFlags, D3D11_BIND_FLAG),
-	MAKE_DX_FIELDT(CPUAccessFlags, D3D11_CPU_ACCESS_FLAG),
-	MAKE_DX_FIELDT(MiscFlags, D3D11_RESOURCE_MISC_FLAG ),
-	MAKE_DX_FIELD(StructureByteStride),
+	_MAKE_FIELD(S,ByteWidth)
+	_MAKE_FIELD(S,Usage)
+	_MAKE_FIELDT(S,BindFlags, D3D11_BIND_FLAG),
+	_MAKE_FIELDT(S,CPUAccessFlags, D3D11_CPU_ACCESS_FLAG),
+	_MAKE_FIELDT(S,MiscFlags, D3D11_RESOURCE_MISC_FLAG ),
+	_MAKE_FIELD(S,StructureByteStride)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_TEXTURE1D_DESC>::f[] = {
 #undef S
 #define S D3D11_TEXTURE1D_DESC
-	MAKE_DX_FIELD(Width),
-	MAKE_DX_FIELD(MipLevels),
-	MAKE_DX_FIELD(ArraySize),
-	MAKE_DX_FIELD(Format),
-	MAKE_DX_FIELD(Usage),
-	MAKE_DX_FIELDT(BindFlags, D3D11_BIND_FLAG),
-	MAKE_DX_FIELDT(CPUAccessFlags, D3D11_CPU_ACCESS_FLAG),
-	MAKE_DX_FIELDT(MiscFlags, D3D11_RESOURCE_MISC_FLAG ),
+	_MAKE_FIELD(S,Width)
+	_MAKE_FIELD(S,MipLevels)
+	_MAKE_FIELD(S,ArraySize)
+	_MAKE_FIELD(S,Format)
+	_MAKE_FIELD(S,Usage)
+	_MAKE_FIELDT(S,BindFlags, D3D11_BIND_FLAG),
+	_MAKE_FIELDT(S,CPUAccessFlags, D3D11_CPU_ACCESS_FLAG),
+	_MAKE_FIELDT(S,MiscFlags, D3D11_RESOURCE_MISC_FLAG ),
 	TERMINATOR
 };
 
 template<> field fields<D3D11_TEXTURE2D_DESC>::f[] = {
 #undef S
 #define S D3D11_TEXTURE2D_DESC
-	MAKE_DX_FIELD(Width),
-	MAKE_DX_FIELD(Height),
-	MAKE_DX_FIELD(MipLevels),
-	MAKE_DX_FIELD(ArraySize),
-	MAKE_DX_FIELD(Format),
+	_MAKE_FIELD(S,Width)
+	_MAKE_FIELD(S,Height)
+	_MAKE_FIELD(S,MipLevels)
+	_MAKE_FIELD(S,ArraySize)
+	_MAKE_FIELD(S,Format)
 	CALL_FIELD(SampleDesc),
-	MAKE_DX_FIELD(Usage),
-	MAKE_DX_FIELDT(BindFlags, D3D11_BIND_FLAG),
-	MAKE_DX_FIELDT(CPUAccessFlags, D3D11_CPU_ACCESS_FLAG),
-	MAKE_DX_FIELDT(MiscFlags, D3D11_RESOURCE_MISC_FLAG ),
+	_MAKE_FIELD(S,Usage)
+	_MAKE_FIELDT(S,BindFlags, D3D11_BIND_FLAG),
+	_MAKE_FIELDT(S,CPUAccessFlags, D3D11_CPU_ACCESS_FLAG),
+	_MAKE_FIELDT(S,MiscFlags, D3D11_RESOURCE_MISC_FLAG ),
 	TERMINATOR
 };
 template<> field fields<D3D11_TEXTURE3D_DESC>::f[] = {
 #undef S
 #define S D3D11_TEXTURE3D_DESC
-	MAKE_DX_FIELD(Width),
-	MAKE_DX_FIELD(Height),
-	MAKE_DX_FIELD(Depth),
-	MAKE_DX_FIELD(MipLevels),
-	MAKE_DX_FIELD(Format),
-	MAKE_DX_FIELD(Usage),
-	MAKE_DX_FIELDT(BindFlags, D3D11_BIND_FLAG),
-	MAKE_DX_FIELDT(CPUAccessFlags, D3D11_CPU_ACCESS_FLAG),
-	MAKE_DX_FIELDT(MiscFlags, D3D11_RESOURCE_MISC_FLAG ),
+	_MAKE_FIELD(S,Width)
+	_MAKE_FIELD(S,Height)
+	_MAKE_FIELD(S,Depth)
+	_MAKE_FIELD(S,MipLevels)
+	_MAKE_FIELD(S,Format)
+	_MAKE_FIELD(S,Usage)
+	_MAKE_FIELDT(S,BindFlags, D3D11_BIND_FLAG),
+	_MAKE_FIELDT(S,CPUAccessFlags, D3D11_CPU_ACCESS_FLAG),
+	_MAKE_FIELDT(S,MiscFlags, D3D11_RESOURCE_MISC_FLAG ),
 	TERMINATOR
 };
 
@@ -494,8 +479,8 @@ template<> const char *field_names<D3D11_TEXTURECUBE_FACE>::s[] = {
 template<> field fields<D3D11_BUFFER_SRV>::f[] = {
 #undef S
 #define S D3D11_BUFFER_SRV
-	MAKE_DX_FIELD(FirstElement),
-	MAKE_DX_FIELD(NumElements),
+	_MAKE_FIELD(S,FirstElement)
+	_MAKE_FIELD(S,NumElements)
 	TERMINATOR
 };
 
@@ -506,70 +491,70 @@ template<> const char *field_names<D3D11_BUFFEREX_SRV_FLAG>::s[] = {
 template<> field fields<D3D11_BUFFEREX_SRV>::f[] = {
 #undef S
 #define S D3D11_BUFFEREX_SRV
-	MAKE_DX_FIELD(FirstElement),
-	MAKE_DX_FIELD(NumElements),
-	MAKE_DX_FIELD(Flags),
+	_MAKE_FIELD(S,FirstElement)
+	_MAKE_FIELD(S,NumElements)
+	_MAKE_FIELD(S,Flags)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_TEX1D_SRV>::f[] = {
 #undef S
 #define S D3D11_TEX1D_SRV
-	MAKE_DX_FIELD(MostDetailedMip),
-	MAKE_DX_FIELD(MipLevels),
+	_MAKE_FIELD(S,MostDetailedMip)
+	_MAKE_FIELD(S,MipLevels)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_TEX1D_ARRAY_SRV>::f[] = {
 #undef S
 #define S D3D11_TEX1D_ARRAY_SRV
-	MAKE_DX_FIELD(MostDetailedMip),
-	MAKE_DX_FIELD(MipLevels),
-	MAKE_DX_FIELD(FirstArraySlice),
-	MAKE_DX_FIELD(ArraySize),
+	_MAKE_FIELD(S,MostDetailedMip)
+	_MAKE_FIELD(S,MipLevels)
+	_MAKE_FIELD(S,FirstArraySlice)
+	_MAKE_FIELD(S,ArraySize)
 };
 
 template<> field fields<D3D11_TEX2D_SRV>::f[] = {
 #undef S
 #define S D3D11_TEX2D_SRV
-	MAKE_DX_FIELD(MostDetailedMip),
-	MAKE_DX_FIELD(MipLevels),
+	_MAKE_FIELD(S,MostDetailedMip)
+	_MAKE_FIELD(S,MipLevels)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_TEX2D_ARRAY_SRV>::f[] = {
 #undef S
 #define S D3D11_TEX2D_ARRAY_SRV
-	MAKE_DX_FIELD(MostDetailedMip),
-	MAKE_DX_FIELD(MipLevels),
-	MAKE_DX_FIELD(FirstArraySlice),
-	MAKE_DX_FIELD(ArraySize),
+	_MAKE_FIELD(S,MostDetailedMip)
+	_MAKE_FIELD(S,MipLevels)
+	_MAKE_FIELD(S,FirstArraySlice)
+	_MAKE_FIELD(S,ArraySize)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_TEX3D_SRV>::f[] = {
 #undef S
 #define S D3D11_TEX3D_SRV
-	MAKE_DX_FIELD(MostDetailedMip),
-	MAKE_DX_FIELD(MipLevels),
+	_MAKE_FIELD(S,MostDetailedMip)
+	_MAKE_FIELD(S,MipLevels)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_TEXCUBE_SRV>::f[] = {
 #undef S
 #define S D3D11_TEXCUBE_SRV
-	MAKE_DX_FIELD(MostDetailedMip),
-	MAKE_DX_FIELD(MipLevels),
+	_MAKE_FIELD(S,MostDetailedMip)
+	_MAKE_FIELD(S,MipLevels)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_TEXCUBE_ARRAY_SRV>::f[] = {
 #undef S
 #define S D3D11_TEXCUBE_ARRAY_SRV
-	MAKE_DX_FIELD(MostDetailedMip),
-	MAKE_DX_FIELD(MipLevels),
-	MAKE_DX_FIELD(First2DArrayFace),
-	MAKE_DX_FIELD(NumCubes),
+	_MAKE_FIELD(S,MostDetailedMip)
+	_MAKE_FIELD(S,MipLevels)
+	_MAKE_FIELD(S,First2DArrayFace)
+	_MAKE_FIELD(S,NumCubes)
 };
 
 template<> field fields<D3D11_TEX2DMS_SRV>::f[] = {
@@ -579,8 +564,8 @@ template<> field fields<D3D11_TEX2DMS_SRV>::f[] = {
 template<> field fields<D3D11_TEX2DMS_ARRAY_SRV>::f[] = {
 #undef S
 #define S D3D11_TEX2DMS_ARRAY_SRV
-	MAKE_DX_FIELD(FirstArraySlice),
-	MAKE_DX_FIELD(ArraySize),
+	_MAKE_FIELD(S,FirstArraySlice)
+	_MAKE_FIELD(S,ArraySize)
 	TERMINATOR
 };
 
@@ -602,39 +587,39 @@ field* D3D11_SHADER_RESOURCE_VIEW_DESC_union[] = {
 template<> field fields<D3D11_SHADER_RESOURCE_VIEW_DESC>::f[] = {
 #undef S
 #define S D3D11_SHADER_RESOURCE_VIEW_DESC
-	MAKE_DX_FIELD(Format),
-	MAKE_DX_FIELD(ViewDimension),
+	_MAKE_FIELD(S,Format)
+	_MAKE_FIELD(S,ViewDimension)
 	MAKE_UNION(Buffer, 1, D3D11_SHADER_RESOURCE_VIEW_DESC_union),
 	TERMINATOR
 };
 template<> field fields<D3D11_BUFFER_RTV>::f[] = {
 #undef S
 #define S D3D11_BUFFER_RTV
-	MAKE_DX_FIELD(FirstElement),
-	MAKE_DX_FIELD(NumElements),
+	_MAKE_FIELD(S,FirstElement)
+	_MAKE_FIELD(S,NumElements)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_TEX1D_RTV>::f[] = {
 #undef S
 #define S D3D11_TEX1D_RTV
-	MAKE_DX_FIELD(MipSlice),
+	_MAKE_FIELD(S,MipSlice)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_TEX1D_ARRAY_RTV>::f[] = {
 #undef S
 #define S D3D11_TEX1D_ARRAY_RTV
-	MAKE_DX_FIELD(MipSlice),
-	MAKE_DX_FIELD(FirstArraySlice),
-	MAKE_DX_FIELD(ArraySize),
+	_MAKE_FIELD(S,MipSlice)
+	_MAKE_FIELD(S,FirstArraySlice)
+	_MAKE_FIELD(S,ArraySize)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_TEX2D_RTV>::f[] = {
 #undef S
 #define S D3D11_TEX2D_RTV
-	MAKE_DX_FIELD(MipSlice),
+	_MAKE_FIELD(S,MipSlice)
 	TERMINATOR
 };
 
@@ -645,26 +630,26 @@ template<> field fields<D3D11_TEX2DMS_RTV>::f[] = {
 template<> field fields<D3D11_TEX2D_ARRAY_RTV>::f[] = {
 #undef S
 #define S D3D11_TEX2D_ARRAY_RTV
-	MAKE_DX_FIELD(MipSlice),
-	MAKE_DX_FIELD(FirstArraySlice),
-	MAKE_DX_FIELD(ArraySize),
+	_MAKE_FIELD(S,MipSlice)
+	_MAKE_FIELD(S,FirstArraySlice)
+	_MAKE_FIELD(S,ArraySize)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_TEX2DMS_ARRAY_RTV>::f[] = {
 #undef S
 #define S D3D11_TEX2DMS_ARRAY_RTV
-	MAKE_DX_FIELD(FirstArraySlice),
-	MAKE_DX_FIELD(ArraySize),
+	_MAKE_FIELD(S,FirstArraySlice)
+	_MAKE_FIELD(S,ArraySize)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_TEX3D_RTV>::f[] = {
 #undef S
 #define S D3D11_TEX3D_RTV
-	MAKE_DX_FIELD(MipSlice),
-	MAKE_DX_FIELD(FirstWSlice),
-	MAKE_DX_FIELD(WSize),
+	_MAKE_FIELD(S,MipSlice)
+	_MAKE_FIELD(S,FirstWSlice)
+	_MAKE_FIELD(S,WSize)
 	TERMINATOR
 };
 
@@ -683,40 +668,40 @@ field *D3D11_RENDER_TARGET_VIEW_DESC_union[] = {
 template<> field fields<D3D11_RENDER_TARGET_VIEW_DESC>::f[] = {
 #undef S
 #define S D3D11_RENDER_TARGET_VIEW_DESC
-	MAKE_DX_FIELD(Format),
-	MAKE_DX_FIELD(ViewDimension),
+	_MAKE_FIELD(S,Format)
+	_MAKE_FIELD(S,ViewDimension)
 	MAKE_UNION(Buffer,1,D3D11_RENDER_TARGET_VIEW_DESC_union),
 	TERMINATOR
 };
 template<> field fields<D3D11_TEX1D_DSV>::f[] = {
 #undef S
 #define S D3D11_TEX1D_DSV
-	MAKE_DX_FIELD(MipSlice),
+	_MAKE_FIELD(S,MipSlice)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_TEX1D_ARRAY_DSV>::f[] = {
 #undef S
 #define S D3D11_TEX1D_ARRAY_DSV
-	MAKE_DX_FIELD(MipSlice),
-	MAKE_DX_FIELD(FirstArraySlice),
-	MAKE_DX_FIELD(ArraySize),
+	_MAKE_FIELD(S,MipSlice)
+	_MAKE_FIELD(S,FirstArraySlice)
+	_MAKE_FIELD(S,ArraySize)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_TEX2D_DSV>::f[] = {
 #undef S
 #define S D3D11_TEX2D_DSV
-	MAKE_DX_FIELD(MipSlice),
+	_MAKE_FIELD(S,MipSlice)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_TEX2D_ARRAY_DSV>::f[] = {
 #undef S
 #define S D3D11_TEX2D_ARRAY_DSV
-	MAKE_DX_FIELD(MipSlice),
-	MAKE_DX_FIELD(FirstArraySlice),
-	MAKE_DX_FIELD(ArraySize),
+	_MAKE_FIELD(S,MipSlice)
+	_MAKE_FIELD(S,FirstArraySlice)
+	_MAKE_FIELD(S,ArraySize)
 	TERMINATOR
 };
 
@@ -727,8 +712,8 @@ template<> field fields<D3D11_TEX2DMS_DSV>::f[] = {
 template<> field fields<D3D11_TEX2DMS_ARRAY_DSV>::f[] = {
 #undef S
 #define S D3D11_TEX2DMS_ARRAY_DSV
-	MAKE_DX_FIELD(FirstArraySlice),
-	MAKE_DX_FIELD(ArraySize),
+	_MAKE_FIELD(S,FirstArraySlice)
+	_MAKE_FIELD(S,ArraySize)
 	TERMINATOR
 };
 
@@ -749,9 +734,9 @@ field* D3D11_DEPTH_STENCIL_VIEW_DESC_union[] = {
 template<> field fields<D3D11_DEPTH_STENCIL_VIEW_DESC>::f[] = {
 #undef S
 #define S D3D11_DEPTH_STENCIL_VIEW_DESC
-	MAKE_DX_FIELD(Format),
-	MAKE_DX_FIELD(ViewDimension),
-	MAKE_DX_FIELD(Flags),
+	_MAKE_FIELD(S,Format)
+	_MAKE_FIELD(S,ViewDimension)
+	_MAKE_FIELD(S,Flags)
 	MAKE_UNION(Texture1D, 1, D3D11_DEPTH_STENCIL_VIEW_DESC_union),
 	TERMINATOR
 };
@@ -767,50 +752,50 @@ field_bit field_names<D3D11_BUFFER_UAV_FLAG>::s[] = {
 template<> field fields<D3D11_BUFFER_UAV>::f[] = {
 #undef S
 #define S D3D11_BUFFER_UAV
-	MAKE_DX_FIELD(FirstElement),
-	MAKE_DX_FIELD(NumElements),
-	MAKE_DX_FIELD(Flags),
+	_MAKE_FIELD(S,FirstElement)
+	_MAKE_FIELD(S,NumElements)
+	_MAKE_FIELD(S,Flags)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_TEX1D_UAV>::f[] = {
 #undef S
 #define S D3D11_TEX1D_UAV
-	MAKE_DX_FIELD(MipSlice),
+	_MAKE_FIELD(S,MipSlice)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_TEX1D_ARRAY_UAV>::f[] = {
 #undef S
 #define S D3D11_TEX1D_ARRAY_UAV
-	MAKE_DX_FIELD(MipSlice),
-	MAKE_DX_FIELD(FirstArraySlice),
-	MAKE_DX_FIELD(ArraySize),
+	_MAKE_FIELD(S,MipSlice)
+	_MAKE_FIELD(S,FirstArraySlice)
+	_MAKE_FIELD(S,ArraySize)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_TEX2D_UAV>::f[] = {
 #undef S
 #define S D3D11_TEX2D_UAV
-	MAKE_DX_FIELD(MipSlice),
+	_MAKE_FIELD(S,MipSlice)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_TEX2D_ARRAY_UAV>::f[] = {
 #undef S
 #define S D3D11_TEX2D_ARRAY_UAV
-	MAKE_DX_FIELD(MipSlice),
-	MAKE_DX_FIELD(FirstArraySlice),
-	MAKE_DX_FIELD(ArraySize),
+	_MAKE_FIELD(S,MipSlice)
+	_MAKE_FIELD(S,FirstArraySlice)
+	_MAKE_FIELD(S,ArraySize)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_TEX3D_UAV>::f[] = {
 #undef S
 #define S D3D11_TEX3D_UAV
-	MAKE_DX_FIELD(MipSlice),
-	MAKE_DX_FIELD(FirstWSlice),
-	MAKE_DX_FIELD(WSize),
+	_MAKE_FIELD(S,MipSlice)
+	_MAKE_FIELD(S,FirstWSlice)
+	_MAKE_FIELD(S,WSize)
 	TERMINATOR
 };
 
@@ -829,8 +814,8 @@ field *D3D11_UNORDERED_ACCESS_VIEW_DESC_union[] = {
 template<> field fields<D3D11_UNORDERED_ACCESS_VIEW_DESC>::f[] = {
 #undef S
 #define S D3D11_UNORDERED_ACCESS_VIEW_DESC
-	MAKE_DX_FIELD(Format),
-	MAKE_DX_FIELD(ViewDimension),
+	_MAKE_FIELD(S,Format)
+	_MAKE_FIELD(S,ViewDimension)
 	MAKE_UNION(Buffer, 1, D3D11_UNORDERED_ACCESS_VIEW_DESC_union),
 	TERMINATOR
 };
@@ -900,16 +885,16 @@ template<> const char *field_names<D3D11_TEXTURE_ADDRESS_MODE>::s[] = {
 template<> field fields<D3D11_SAMPLER_DESC>::f[] = {
 #undef S
 #define S D3D11_SAMPLER_DESC
-	MAKE_DX_FIELD(Filter),
-	MAKE_DX_FIELD(AddressU),
-	MAKE_DX_FIELD(AddressV),
-	MAKE_DX_FIELD(AddressW),
-	MAKE_DX_FIELD(MipLODBias),
-	MAKE_DX_FIELD(MaxAnisotropy),
-	MAKE_DX_FIELD(ComparisonFunc),
-	MAKE_DX_FIELD(BorderColor),
-	MAKE_DX_FIELD(MinLOD),
-	MAKE_DX_FIELD(MaxLOD),
+	_MAKE_FIELD(S,Filter)
+	_MAKE_FIELD(S,AddressU)
+	_MAKE_FIELD(S,AddressV)
+	_MAKE_FIELD(S,AddressW)
+	_MAKE_FIELD(S,MipLODBias)
+	_MAKE_FIELD(S,MaxAnisotropy)
+	_MAKE_FIELD(S,ComparisonFunc)
+	_MAKE_FIELD(S,BorderColor)
+	_MAKE_FIELD(S,MinLOD)
+	_MAKE_FIELD(S,MaxLOD)
 	TERMINATOR
 };
 
@@ -995,41 +980,41 @@ template<> const char *field_names<D3D11_QUERY_MISC_FLAG>::s[] = {
 template<> field fields<D3D11_QUERY_DESC>::f[] = {
 #undef S
 #define S D3D11_QUERY_DESC
-	MAKE_DX_FIELD(Query),
-	MAKE_DX_FIELD(MiscFlags),
+	_MAKE_FIELD(S,Query)
+	_MAKE_FIELD(S,MiscFlags)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_QUERY_DATA_TIMESTAMP_DISJOINT>::f[] = {
 #undef S
 #define S D3D11_QUERY_DATA_TIMESTAMP_DISJOINT
-	MAKE_DX_FIELD(Frequency),
-	MAKE_DX_FIELD(Disjoint),
+	_MAKE_FIELD(S,Frequency)
+	_MAKE_FIELD(S,Disjoint)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_QUERY_DATA_PIPELINE_STATISTICS>::f[] = {
 #undef S
 #define S D3D11_QUERY_DATA_PIPELINE_STATISTICS
-	MAKE_DX_FIELD(IAVertices),
-	MAKE_DX_FIELD(IAPrimitives),
-	MAKE_DX_FIELD(VSInvocations),
-	MAKE_DX_FIELD(GSInvocations),
-	MAKE_DX_FIELD(GSPrimitives),
-	MAKE_DX_FIELD(CInvocations),
-	MAKE_DX_FIELD(CPrimitives),
-	MAKE_DX_FIELD(PSInvocations),
-	MAKE_DX_FIELD(HSInvocations),
-	MAKE_DX_FIELD(DSInvocations),
-	MAKE_DX_FIELD(CSInvocations),
+	_MAKE_FIELD(S,IAVertices)
+	_MAKE_FIELD(S,IAPrimitives)
+	_MAKE_FIELD(S,VSInvocations)
+	_MAKE_FIELD(S,GSInvocations)
+	_MAKE_FIELD(S,GSPrimitives)
+	_MAKE_FIELD(S,CInvocations)
+	_MAKE_FIELD(S,CPrimitives)
+	_MAKE_FIELD(S,PSInvocations)
+	_MAKE_FIELD(S,HSInvocations)
+	_MAKE_FIELD(S,DSInvocations)
+	_MAKE_FIELD(S,CSInvocations)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_QUERY_DATA_SO_STATISTICS>::f[] = {
 #undef S
 #define S D3D11_QUERY_DATA_SO_STATISTICS
-	MAKE_DX_FIELD(NumPrimitivesWritten),
-	MAKE_DX_FIELD(PrimitivesStorageNeeded),
+	_MAKE_FIELD(S,NumPrimitivesWritten)
+	_MAKE_FIELD(S,PrimitivesStorageNeeded)
 	TERMINATOR
 };
 
@@ -1047,16 +1032,16 @@ template<> const char *field_names<D3D11_COUNTER_TYPE>::s[] = {
 template<> field fields<D3D11_COUNTER_DESC>::f[] = {
 #undef S
 #define S D3D11_COUNTER_DESC
-	MAKE_DX_FIELD(Counter),
-	MAKE_DX_FIELD(MiscFlags),
+	_MAKE_FIELD(S,Counter)
+	_MAKE_FIELD(S,MiscFlags)
 };
 
 template<> field fields<D3D11_COUNTER_INFO>::f[] = {
 #undef S
 #define S D3D11_COUNTER_INFO
-	MAKE_DX_FIELD(LastDeviceDependentCounter),
-	MAKE_DX_FIELD(NumSimultaneousCounters),
-	MAKE_DX_FIELD(NumDetectableParallelUnits),
+	_MAKE_FIELD(S,LastDeviceDependentCounter)
+	_MAKE_FIELD(S,NumSimultaneousCounters)
+	_MAKE_FIELD(S,NumDetectableParallelUnits)
 	TERMINATOR
 };
 
@@ -1075,14 +1060,14 @@ template<> const char *field_names<D3D11_DEVICE_CONTEXT_TYPE>::s[] = {
 template<> field fields<D3D11_CLASS_INSTANCE_DESC>::f[] = {
 #undef S
 #define S D3D11_CLASS_INSTANCE_DESC
-	MAKE_DX_FIELD(InstanceId),
-	MAKE_DX_FIELD(InstanceIndex),
-	MAKE_DX_FIELD(TypeId),
-	MAKE_DX_FIELD(ConstantBuffer),
-	MAKE_DX_FIELD(BaseConstantBufferOffset),
-	MAKE_DX_FIELD(BaseTexture),
-	MAKE_DX_FIELD(BaseSampler),
-	MAKE_DX_FIELD(Created),
+	_MAKE_FIELD(S,InstanceId)
+	_MAKE_FIELD(S,InstanceIndex)
+	_MAKE_FIELD(S,TypeId)
+	_MAKE_FIELD(S,ConstantBuffer)
+	_MAKE_FIELD(S,BaseConstantBufferOffset)
+	_MAKE_FIELD(S,BaseTexture)
+	_MAKE_FIELD(S,BaseSampler)
+	_MAKE_FIELD(S,Created)
 	TERMINATOR
 };
 
@@ -1106,79 +1091,79 @@ template<> const char *field_names<D3D11_FEATURE>::s[] = {
 template<> field fields<D3D11_FEATURE_DATA_THREADING>::f[] = {
 #undef S
 #define S D3D11_FEATURE_DATA_THREADING
-	MAKE_DX_FIELD(DriverConcurrentCreates),
-	MAKE_DX_FIELD(DriverCommandLists),
+	_MAKE_FIELD(S,DriverConcurrentCreates)
+	_MAKE_FIELD(S,DriverCommandLists)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_FEATURE_DATA_DOUBLES>::f[] = {
 #undef S
 #define S D3D11_FEATURE_DATA_DOUBLES
-	MAKE_DX_FIELD(DoublePrecisionFloatShaderOps),
+	_MAKE_FIELD(S,DoublePrecisionFloatShaderOps)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_FEATURE_DATA_FORMAT_SUPPORT>::f[] = {
 #undef S
 #define S D3D11_FEATURE_DATA_FORMAT_SUPPORT
-	MAKE_DX_FIELD(InFormat),
-	MAKE_DX_FIELD(OutFormatSupport),
+	_MAKE_FIELD(S,InFormat)
+	_MAKE_FIELD(S,OutFormatSupport)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_FEATURE_DATA_FORMAT_SUPPORT2>::f[] = {
 #undef S
 #define S D3D11_FEATURE_DATA_FORMAT_SUPPORT2
-	MAKE_DX_FIELD(InFormat),
-	MAKE_DX_FIELD(OutFormatSupport2),
+	_MAKE_FIELD(S,InFormat)
+	_MAKE_FIELD(S,OutFormatSupport2)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_FEATURE_DATA_D3D10_X_HARDWARE_OPTIONS>::f[] = {
 #undef S
 #define S D3D11_FEATURE_DATA_D3D10_X_HARDWARE_OPTIONS
-	MAKE_DX_FIELD(ComputeShaders_Plus_RawAndStructuredBuffers_Via_Shader_4_x),
+	_MAKE_FIELD(S,ComputeShaders_Plus_RawAndStructuredBuffers_Via_Shader_4_x)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_FEATURE_DATA_D3D11_OPTIONS>::f[] = {
 #undef S
 #define S D3D11_FEATURE_DATA_D3D11_OPTIONS
-	MAKE_DX_FIELD(OutputMergerLogicOp),
-	MAKE_DX_FIELD(UAVOnlyRenderingForcedSampleCount),
-	MAKE_DX_FIELD(DiscardAPIsSeenByDriver),
-	MAKE_DX_FIELD(FlagsForUpdateAndCopySeenByDriver),
-	MAKE_DX_FIELD(ClearView),
-	MAKE_DX_FIELD(CopyWithOverlap),
-	MAKE_DX_FIELD(ConstantBufferPartialUpdate),
-	MAKE_DX_FIELD(ConstantBufferOffsetting),
-	MAKE_DX_FIELD(MapNoOverwriteOnDynamicConstantBuffer),
-	MAKE_DX_FIELD(MapNoOverwriteOnDynamicBufferSRV),
-	MAKE_DX_FIELD(MultisampleRTVWithForcedSampleCountOne),
-	MAKE_DX_FIELD(SAD4ShaderInstructions),
-	MAKE_DX_FIELD(ExtendedDoublesShaderInstructions),
-	MAKE_DX_FIELD(ExtendedResourceSharing),
+	_MAKE_FIELD(S,OutputMergerLogicOp)
+	_MAKE_FIELD(S,UAVOnlyRenderingForcedSampleCount)
+	_MAKE_FIELD(S,DiscardAPIsSeenByDriver)
+	_MAKE_FIELD(S,FlagsForUpdateAndCopySeenByDriver)
+	_MAKE_FIELD(S,ClearView)
+	_MAKE_FIELD(S,CopyWithOverlap)
+	_MAKE_FIELD(S,ConstantBufferPartialUpdate)
+	_MAKE_FIELD(S,ConstantBufferOffsetting)
+	_MAKE_FIELD(S,MapNoOverwriteOnDynamicConstantBuffer)
+	_MAKE_FIELD(S,MapNoOverwriteOnDynamicBufferSRV)
+	_MAKE_FIELD(S,MultisampleRTVWithForcedSampleCountOne)
+	_MAKE_FIELD(S,SAD4ShaderInstructions)
+	_MAKE_FIELD(S,ExtendedDoublesShaderInstructions)
+	_MAKE_FIELD(S,ExtendedResourceSharing)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_FEATURE_DATA_ARCHITECTURE_INFO>::f[] = {
 #undef S
 #define S D3D11_FEATURE_DATA_ARCHITECTURE_INFO
-	MAKE_DX_FIELD(TileBasedDeferredRenderer),
+	_MAKE_FIELD(S,TileBasedDeferredRenderer)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_FEATURE_DATA_D3D9_OPTIONS>::f[] = {
 #undef S
 #define S D3D11_FEATURE_DATA_D3D9_OPTIONS
-	MAKE_DX_FIELD(FullNonPow2TextureSupport),
+	_MAKE_FIELD(S,FullNonPow2TextureSupport)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_FEATURE_DATA_D3D9_SHADOW_SUPPORT>::f[] = {
 #undef S
 #define S D3D11_FEATURE_DATA_D3D9_SHADOW_SUPPORT
-	MAKE_DX_FIELD(SupportsDepthAsTextureWithLessEqualComparisonFilter),
+	_MAKE_FIELD(S,SupportsDepthAsTextureWithLessEqualComparisonFilter)
 	TERMINATOR
 };
 
@@ -1191,8 +1176,8 @@ template<> const char *field_names<D3D11_SHADER_MIN_PRECISION_SUPPORT>::s[] = {
 template<> field fields<D3D11_FEATURE_DATA_SHADER_MIN_PRECISION_SUPPORT>::f[] = {
 #undef S
 #define S D3D11_FEATURE_DATA_SHADER_MIN_PRECISION_SUPPORT
-	MAKE_DX_FIELD(PixelShaderMinPrecision),
-	MAKE_DX_FIELD(AllOtherShaderStagesMinPrecision),
+	_MAKE_FIELD(S,PixelShaderMinPrecision)
+	_MAKE_FIELD(S,AllOtherShaderStagesMinPrecision)
 	TERMINATOR
 };
 
@@ -1205,34 +1190,34 @@ template<> const char *field_names<D3D11_TILED_RESOURCES_TIER>::s[] = {
 template<> field fields<D3D11_FEATURE_DATA_D3D11_OPTIONS1>::f[] = {
 #undef S
 #define S D3D11_FEATURE_DATA_D3D11_OPTIONS1
-	MAKE_DX_FIELD(TiledResourcesTier),
-	MAKE_DX_FIELD(MinMaxFiltering),
-	MAKE_DX_FIELD(ClearViewAlsoSupportsDepthOnlyFormats),
-	MAKE_DX_FIELD(MapOnDefaultBuffers),
+	_MAKE_FIELD(S,TiledResourcesTier)
+	_MAKE_FIELD(S,MinMaxFiltering)
+	_MAKE_FIELD(S,ClearViewAlsoSupportsDepthOnlyFormats)
+	_MAKE_FIELD(S,MapOnDefaultBuffers)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_FEATURE_DATA_D3D9_SIMPLE_INSTANCING_SUPPORT>::f[] = {
 #undef S
 #define S D3D11_FEATURE_DATA_D3D9_SIMPLE_INSTANCING_SUPPORT
-	MAKE_DX_FIELD(SimpleInstancingSupported),
+	_MAKE_FIELD(S,SimpleInstancingSupported)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_FEATURE_DATA_MARKER_SUPPORT>::f[] = {
 #undef S
 #define S D3D11_FEATURE_DATA_MARKER_SUPPORT
-	MAKE_DX_FIELD(Profile),
+	_MAKE_FIELD(S,Profile)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_FEATURE_DATA_D3D9_OPTIONS1>::f[] = {
 #undef S
 #define S D3D11_FEATURE_DATA_D3D9_OPTIONS1
-	MAKE_DX_FIELD(FullNonPow2TextureSupported),
-	MAKE_DX_FIELD(DepthAsTextureWithLessEqualComparisonFilterSupported),
-	MAKE_DX_FIELD(SimpleInstancingSupported),
-	MAKE_DX_FIELD(TextureCubeFaceRenderTargetWithNonCubeDepthStencilSupported),
+	_MAKE_FIELD(S,FullNonPow2TextureSupported)
+	_MAKE_FIELD(S,DepthAsTextureWithLessEqualComparisonFilterSupported)
+	_MAKE_FIELD(S,SimpleInstancingSupported)
+	_MAKE_FIELD(S,TextureCubeFaceRenderTargetWithNonCubeDepthStencilSupported)
 	TERMINATOR
 };
 
@@ -1245,67 +1230,61 @@ template<> const char *field_names<D3D11_SHADER_VERSION_TYPE>::s[]	= {
 	"D3D11_SHVER_COMPUTE_SHADER",	//5
 };
 
-template<> const char *field_names<D3D_PARAMETER_FLAGS>::s[]	= {
-	"D3D_PF_NONE",					//0
-	"D3D_PF_IN",					//1
-	"D3D_PF_OUT",					//2
-};
-
 //D3D_RESOURCE_RETURN_TYPE D3D11_RESOURCE_RETURN_TYPE;
 //D3D_CBUFFER_TYPE D3D11_CBUFFER_TYPE;
 
 template<> field fields<D3D11_SIGNATURE_PARAMETER_DESC>::f[] = {
 #undef S
 #define S D3D11_SIGNATURE_PARAMETER_DESC
-	MAKE_DX_FIELD(SemanticName),
-	MAKE_DX_FIELD(SemanticIndex),
-	MAKE_DX_FIELD(Register),
-	MAKE_DX_FIELD(SystemValueType),
-	MAKE_DX_FIELD(ComponentType),
-	MAKE_DX_FIELD(Mask),
-	MAKE_DX_FIELD(ReadWriteMask),
-	MAKE_DX_FIELD(Stream),
-	MAKE_DX_FIELD(MinPrecision),
+	_MAKE_FIELD(S,SemanticName)
+	_MAKE_FIELD(S,SemanticIndex)
+	_MAKE_FIELD(S,Register)
+	_MAKE_FIELD(S,SystemValueType)
+	_MAKE_FIELD(S,ComponentType)
+	_MAKE_FIELD(S,Mask)
+	_MAKE_FIELD(S,ReadWriteMask)
+	_MAKE_FIELD(S,Stream)
+	_MAKE_FIELD(S,MinPrecision)
 	0
 };
 
 template<> field fields<D3D11_SHADER_BUFFER_DESC>::f[] = {
 #undef S
 #define S D3D11_SHADER_BUFFER_DESC
-	MAKE_DX_FIELD(Name),
-	MAKE_DX_FIELD(Type),
-	MAKE_DX_FIELD(Variables),
-	MAKE_DX_FIELD(Size),
-	MAKE_DX_FIELD(uFlags),
+	_MAKE_FIELD(S,Name)
+	_MAKE_FIELD(S,Type)
+	_MAKE_FIELD(S,Variables)
+	_MAKE_FIELD(S,Size)
+	_MAKE_FIELD(S,uFlags)
 	0
 };
 
 template<> field fields<D3D11_SHADER_VARIABLE_DESC>::f[] = {
 #undef S
 #define S D3D11_SHADER_VARIABLE_DESC
-	MAKE_DX_FIELD(Name),
-	MAKE_DX_FIELD(StartOffset),
-	MAKE_DX_FIELD(Size),
-	MAKE_DX_FIELD(uFlags),
-	MAKE_DX_FIELD(DefaultValue),
-	MAKE_DX_FIELD(StartTexture),
-	MAKE_DX_FIELD(TextureSize),
-	MAKE_DX_FIELD(StartSampler),
-	MAKE_DX_FIELD(SamplerSize),
+	_MAKE_FIELD(S,Name)
+	_MAKE_FIELD(S,StartOffset)
+	_MAKE_FIELD(S,Size)
+	_MAKE_FIELD(S,uFlags)
+	_MAKE_FIELD(S,DefaultValue)
+	_MAKE_FIELD(S,StartTexture)
+	_MAKE_FIELD(S,TextureSize)
+	_MAKE_FIELD(S,StartSampler)
+	_MAKE_FIELD(S,SamplerSize)
 	0
 };
 
 template<> field fields<D3D11_SHADER_TYPE_DESC>::f[] = {
 #undef S
 #define S D3D11_SHADER_TYPE_DESC
-	MAKE_DX_FIELD(Class),
-	MAKE_DX_FIELD(Type),
-	MAKE_DX_FIELD(Rows),
-	MAKE_DX_FIELD(Columns),
-	MAKE_DX_FIELD(Elements),
-	MAKE_DX_FIELD(Members),
-	MAKE_DX_FIELD(Offset),
-	MAKE_DX_FIELD(Name),
+	_MAKE_FIELD(S,Class)
+	_MAKE_FIELD(S,Type)
+	_MAKE_FIELD(S,Rows)
+	_MAKE_FIELD(S,Columns)
+	_MAKE_FIELD(S,Elements)
+	_MAKE_FIELD(S,Members)
+	_MAKE_FIELD(S,Offset)
+	_MAKE_FIELD(S,Name)
 	0
 };
 
@@ -1316,132 +1295,132 @@ template<> field fields<D3D11_SHADER_TYPE_DESC>::f[] = {
 template<> field fields<D3D11_SHADER_DESC>::f[] = {
 #undef S
 #define S D3D11_SHADER_DESC
-	MAKE_DX_FIELD(Version),
-	MAKE_DX_FIELD(Creator),
-	MAKE_DX_FIELD(Flags),
+	_MAKE_FIELD(S,Version)
+	_MAKE_FIELD(S,Creator)
+	_MAKE_FIELD(S,Flags)
     
-	MAKE_DX_FIELD(ConstantBuffers),
-	MAKE_DX_FIELD(BoundResources),
-	MAKE_DX_FIELD(InputParameters),
-	MAKE_DX_FIELD(OutputParameters),
+	_MAKE_FIELD(S,ConstantBuffers)
+	_MAKE_FIELD(S,BoundResources)
+	_MAKE_FIELD(S,InputParameters)
+	_MAKE_FIELD(S,OutputParameters)
 
-	MAKE_DX_FIELD(InstructionCount),
-	MAKE_DX_FIELD(TempRegisterCount),
-	MAKE_DX_FIELD(TempArrayCount),
-	MAKE_DX_FIELD(DefCount),
-	MAKE_DX_FIELD(DclCount),
-	MAKE_DX_FIELD(TextureNormalInstructions),
-	MAKE_DX_FIELD(TextureLoadInstructions),
-	MAKE_DX_FIELD(TextureCompInstructions),
-	MAKE_DX_FIELD(TextureBiasInstructions),
-	MAKE_DX_FIELD(TextureGradientInstructions),
-	MAKE_DX_FIELD(FloatInstructionCount),
-	MAKE_DX_FIELD(IntInstructionCount),
-	MAKE_DX_FIELD(UintInstructionCount),
-	MAKE_DX_FIELD(StaticFlowControlCount),
-	MAKE_DX_FIELD(DynamicFlowControlCount),
-	MAKE_DX_FIELD(MacroInstructionCount),
-	MAKE_DX_FIELD(ArrayInstructionCount),
-	MAKE_DX_FIELD(CutInstructionCount),
-	MAKE_DX_FIELD(EmitInstructionCount),
-	MAKE_DX_FIELD(GSOutputTopology),
-	MAKE_DX_FIELD(GSMaxOutputVertexCount),
-	MAKE_DX_FIELD(InputPrimitive),
-	MAKE_DX_FIELD(PatchConstantParameters),
-	MAKE_DX_FIELD(cGSInstanceCount),
-	MAKE_DX_FIELD(cControlPoints),
-	MAKE_DX_FIELD(HSOutputPrimitive),
-	MAKE_DX_FIELD(HSPartitioning),
-	MAKE_DX_FIELD(TessellatorDomain),
+	_MAKE_FIELD(S,InstructionCount)
+	_MAKE_FIELD(S,TempRegisterCount)
+	_MAKE_FIELD(S,TempArrayCount)
+	_MAKE_FIELD(S,DefCount)
+	_MAKE_FIELD(S,DclCount)
+	_MAKE_FIELD(S,TextureNormalInstructions)
+	_MAKE_FIELD(S,TextureLoadInstructions)
+	_MAKE_FIELD(S,TextureCompInstructions)
+	_MAKE_FIELD(S,TextureBiasInstructions)
+	_MAKE_FIELD(S,TextureGradientInstructions)
+	_MAKE_FIELD(S,FloatInstructionCount)
+	_MAKE_FIELD(S,IntInstructionCount)
+	_MAKE_FIELD(S,UintInstructionCount)
+	_MAKE_FIELD(S,StaticFlowControlCount)
+	_MAKE_FIELD(S,DynamicFlowControlCount)
+	_MAKE_FIELD(S,MacroInstructionCount)
+	_MAKE_FIELD(S,ArrayInstructionCount)
+	_MAKE_FIELD(S,CutInstructionCount)
+	_MAKE_FIELD(S,EmitInstructionCount)
+	_MAKE_FIELD(S,GSOutputTopology)
+	_MAKE_FIELD(S,GSMaxOutputVertexCount)
+	_MAKE_FIELD(S,InputPrimitive)
+	_MAKE_FIELD(S,PatchConstantParameters)
+	_MAKE_FIELD(S,cGSInstanceCount)
+	_MAKE_FIELD(S,cControlPoints)
+	_MAKE_FIELD(S,HSOutputPrimitive)
+	_MAKE_FIELD(S,HSPartitioning)
+	_MAKE_FIELD(S,TessellatorDomain)
     // instruction counts
-	MAKE_DX_FIELD(cBarrierInstructions),
-	MAKE_DX_FIELD(cInterlockedInstructions),
-	MAKE_DX_FIELD(cTextureStoreInstructions),
+	_MAKE_FIELD(S,cBarrierInstructions)
+	_MAKE_FIELD(S,cInterlockedInstructions)
+	_MAKE_FIELD(S,cTextureStoreInstructions)
 	0
 };
 
 template<> field fields<D3D11_SHADER_INPUT_BIND_DESC>::f[] = {
 #undef S
 #define S D3D11_SHADER_INPUT_BIND_DESC
-	MAKE_DX_FIELD(Name),
-	MAKE_DX_FIELD(Type),
-	MAKE_DX_FIELD(BindPoint),
-	MAKE_DX_FIELD(BindCount),
+	_MAKE_FIELD(S,Name)
+	_MAKE_FIELD(S,Type)
+	_MAKE_FIELD(S,BindPoint)
+	_MAKE_FIELD(S,BindCount)
     
-	MAKE_DX_FIELD(uFlags),
-	MAKE_DX_FIELD(ReturnType),
-	MAKE_DX_FIELD(Dimension),
-	MAKE_DX_FIELD(NumSamples),
+	_MAKE_FIELD(S,uFlags)
+	_MAKE_FIELD(S,ReturnType)
+	_MAKE_FIELD(S,Dimension)
+	_MAKE_FIELD(S,NumSamples)
 	0
 };
 
 template<> field fields<D3D11_LIBRARY_DESC>::f[] = {
 #undef S
 #define S D3D11_LIBRARY_DESC
-	MAKE_DX_FIELD(Creator),
-	MAKE_DX_FIELD(Flags),
-	MAKE_DX_FIELD(FunctionCount),
+	_MAKE_FIELD(S,Creator)
+	_MAKE_FIELD(S,Flags)
+	_MAKE_FIELD(S,FunctionCount)
 	0
 };
 
 template<> field fields<D3D11_FUNCTION_DESC>::f[] = {
 #undef S
 #define S D3D11_FUNCTION_DESC
-	MAKE_DX_FIELD(Version),
-	MAKE_DX_FIELD(Creator),
-	MAKE_DX_FIELD(Flags),
+	_MAKE_FIELD(S,Version)
+	_MAKE_FIELD(S,Creator)
+	_MAKE_FIELD(S,Flags)
     
-	MAKE_DX_FIELD(ConstantBuffers),
-	MAKE_DX_FIELD(BoundResources),
+	_MAKE_FIELD(S,ConstantBuffers)
+	_MAKE_FIELD(S,BoundResources)
 
-	MAKE_DX_FIELD(InstructionCount),
-	MAKE_DX_FIELD(TempRegisterCount),
-	MAKE_DX_FIELD(TempArrayCount),
-	MAKE_DX_FIELD(DefCount),
-	MAKE_DX_FIELD(DclCount),
-	MAKE_DX_FIELD(TextureNormalInstructions),
-	MAKE_DX_FIELD(TextureLoadInstructions),
-	MAKE_DX_FIELD(TextureCompInstructions),
-	MAKE_DX_FIELD(TextureBiasInstructions),
-	MAKE_DX_FIELD(TextureGradientInstructions),
-	MAKE_DX_FIELD(FloatInstructionCount),
-	MAKE_DX_FIELD(IntInstructionCount),
-	MAKE_DX_FIELD(UintInstructionCount),
-	MAKE_DX_FIELD(StaticFlowControlCount),
-	MAKE_DX_FIELD(DynamicFlowControlCount),
-	MAKE_DX_FIELD(MacroInstructionCount),
-	MAKE_DX_FIELD(ArrayInstructionCount),
-	MAKE_DX_FIELD(MovInstructionCount),
-	MAKE_DX_FIELD(MovcInstructionCount),
-	MAKE_DX_FIELD(ConversionInstructionCount),
-	MAKE_DX_FIELD(BitwiseInstructionCount),
-	MAKE_DX_FIELD(MinFeatureLevel),
-	MAKE_DX_FIELD(RequiredFeatureFlags),
+	_MAKE_FIELD(S,InstructionCount)
+	_MAKE_FIELD(S,TempRegisterCount)
+	_MAKE_FIELD(S,TempArrayCount)
+	_MAKE_FIELD(S,DefCount)
+	_MAKE_FIELD(S,DclCount)
+	_MAKE_FIELD(S,TextureNormalInstructions)
+	_MAKE_FIELD(S,TextureLoadInstructions)
+	_MAKE_FIELD(S,TextureCompInstructions)
+	_MAKE_FIELD(S,TextureBiasInstructions)
+	_MAKE_FIELD(S,TextureGradientInstructions)
+	_MAKE_FIELD(S,FloatInstructionCount)
+	_MAKE_FIELD(S,IntInstructionCount)
+	_MAKE_FIELD(S,UintInstructionCount)
+	_MAKE_FIELD(S,StaticFlowControlCount)
+	_MAKE_FIELD(S,DynamicFlowControlCount)
+	_MAKE_FIELD(S,MacroInstructionCount)
+	_MAKE_FIELD(S,ArrayInstructionCount)
+	_MAKE_FIELD(S,MovInstructionCount)
+	_MAKE_FIELD(S,MovcInstructionCount)
+	_MAKE_FIELD(S,ConversionInstructionCount)
+	_MAKE_FIELD(S,BitwiseInstructionCount)
+	_MAKE_FIELD(S,MinFeatureLevel)
+	_MAKE_FIELD(S,RequiredFeatureFlags)
 
-	MAKE_DX_FIELD(Name),
-	MAKE_DX_FIELD(FunctionParameterCount),
-	MAKE_DX_FIELD(HasReturn),
-	MAKE_DX_FIELD(Has10Level9VertexShader),
-	MAKE_DX_FIELD(Has10Level9PixelShader),
+	_MAKE_FIELD(S,Name)
+	_MAKE_FIELD(S,FunctionParameterCount)
+	_MAKE_FIELD(S,HasReturn)
+	_MAKE_FIELD(S,Has10Level9VertexShader)
+	_MAKE_FIELD(S,Has10Level9PixelShader)
 	0
 };
 
 template<> field fields<D3D11_PARAMETER_DESC>::f[] = {
 #undef S
 #define S D3D11_PARAMETER_DESC
-	MAKE_DX_FIELD(Name),
-	MAKE_DX_FIELD(SemanticName),
-	MAKE_DX_FIELD(Type),
-	MAKE_DX_FIELD(Class),
-	MAKE_DX_FIELD(Rows),
-	MAKE_DX_FIELD(Columns),
-	MAKE_DX_FIELD(InterpolationMode),
-	MAKE_DX_FIELD(Flags),
+	_MAKE_FIELD(S,Name)
+	_MAKE_FIELD(S,SemanticName)
+	_MAKE_FIELD(S,Type)
+	_MAKE_FIELD(S,Class)
+	_MAKE_FIELD(S,Rows)
+	_MAKE_FIELD(S,Columns)
+	_MAKE_FIELD(S,InterpolationMode)
+	_MAKE_FIELD(S,Flags)
 
-	MAKE_DX_FIELD(FirstInRegister),
-	MAKE_DX_FIELD(FirstInComponent),
-	MAKE_DX_FIELD(FirstOutRegister),
-	MAKE_DX_FIELD(FirstOutComponent),
+	_MAKE_FIELD(S,FirstInRegister)
+	_MAKE_FIELD(S,FirstInComponent)
+	_MAKE_FIELD(S,FirstOutRegister)
+	_MAKE_FIELD(S,FirstOutComponent)
 	0
 };
 
@@ -1452,44 +1431,44 @@ template<> field fields<D3D11_PARAMETER_DESC>::f[] = {
 template<> field fields<D3D11_QUERY_DESC1>::f[] = {
 #undef S
 #define S D3D11_QUERY_DESC1
-	MAKE_DX_FIELD(Query),
-	MAKE_DX_FIELD(MiscFlags),
-	MAKE_DX_FIELD(ContextType),
+	_MAKE_FIELD(S,Query)
+	_MAKE_FIELD(S,MiscFlags)
+	_MAKE_FIELD(S,ContextType)
 	TERMINATOR
 };
 template<> field fields<D3D11_RASTERIZER_DESC2>::f[] = {
 #undef S
 #define S D3D11_RASTERIZER_DESC2
-	MAKE_DX_FIELD(FillMode),
-	MAKE_DX_FIELD(CullMode),
-	MAKE_DX_FIELD(FrontCounterClockwise),
-	MAKE_DX_FIELD(DepthBias),
-	MAKE_DX_FIELD(DepthBiasClamp),
-	MAKE_DX_FIELD(SlopeScaledDepthBias),
-	MAKE_DX_FIELD(DepthClipEnable),
-	MAKE_DX_FIELD(ScissorEnable),
-	MAKE_DX_FIELD(MultisampleEnable),
-	MAKE_DX_FIELD(AntialiasedLineEnable),
-	MAKE_DX_FIELD(ForcedSampleCount),
-	MAKE_DX_FIELD(ConservativeRaster),
+	_MAKE_FIELD(S,FillMode)
+	_MAKE_FIELD(S,CullMode)
+	_MAKE_FIELD(S,FrontCounterClockwise)
+	_MAKE_FIELD(S,DepthBias)
+	_MAKE_FIELD(S,DepthBiasClamp)
+	_MAKE_FIELD(S,SlopeScaledDepthBias)
+	_MAKE_FIELD(S,DepthClipEnable)
+	_MAKE_FIELD(S,ScissorEnable)
+	_MAKE_FIELD(S,MultisampleEnable)
+	_MAKE_FIELD(S,AntialiasedLineEnable)
+	_MAKE_FIELD(S,ForcedSampleCount)
+	_MAKE_FIELD(S,ConservativeRaster)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_TEX2D_RTV1>::f[] = {
 #undef S
 #define S D3D11_TEX2D_RTV1
-	MAKE_DX_FIELD(MipSlice),
-	MAKE_DX_FIELD(PlaneSlice),
+	_MAKE_FIELD(S,MipSlice)
+	_MAKE_FIELD(S,PlaneSlice)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_TEX2D_ARRAY_RTV1>::f[] = {
 #undef S
 #define S D3D11_TEX2D_ARRAY_RTV1
-	MAKE_DX_FIELD(MipSlice),
-	MAKE_DX_FIELD(FirstArraySlice),
-	MAKE_DX_FIELD(ArraySize),
-	MAKE_DX_FIELD(PlaneSlice),
+	_MAKE_FIELD(S,MipSlice)
+	_MAKE_FIELD(S,FirstArraySlice)
+	_MAKE_FIELD(S,ArraySize)
+	_MAKE_FIELD(S,PlaneSlice)
 	TERMINATOR
 };
 field *D3D11_RENDER_TARGET_VIEW_DESC1_union[] = {
@@ -1506,8 +1485,8 @@ field *D3D11_RENDER_TARGET_VIEW_DESC1_union[] = {
 template<> field fields<D3D11_RENDER_TARGET_VIEW_DESC1>::f[] = {
 #undef S
 #define S D3D11_RENDER_TARGET_VIEW_DESC1
-	MAKE_DX_FIELD(Format),
-	MAKE_DX_FIELD(ViewDimension),
+	_MAKE_FIELD(S,Format)
+	_MAKE_FIELD(S,ViewDimension)
 	MAKE_UNION(Buffer,1,D3D11_RENDER_TARGET_VIEW_DESC1_union),
 	TERMINATOR
 };
@@ -1515,20 +1494,20 @@ template<> field fields<D3D11_RENDER_TARGET_VIEW_DESC1>::f[] = {
 template<> field fields<D3D11_TEX2D_SRV1>::f[] = {
 #undef S
 #define S D3D11_TEX2D_SRV1
-	MAKE_DX_FIELD(MostDetailedMip),
-	MAKE_DX_FIELD(MipLevels),
-	MAKE_DX_FIELD(PlaneSlice),
+	_MAKE_FIELD(S,MostDetailedMip)
+	_MAKE_FIELD(S,MipLevels)
+	_MAKE_FIELD(S,PlaneSlice)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_TEX2D_ARRAY_SRV1>::f[] = {
 #undef S
 #define S D3D11_TEX2D_ARRAY_SRV1
-	MAKE_DX_FIELD(MostDetailedMip),
-	MAKE_DX_FIELD(MipLevels),
-	MAKE_DX_FIELD(FirstArraySlice),
-	MAKE_DX_FIELD(ArraySize),
-	MAKE_DX_FIELD(PlaneSlice),
+	_MAKE_FIELD(S,MostDetailedMip)
+	_MAKE_FIELD(S,MipLevels)
+	_MAKE_FIELD(S,FirstArraySlice)
+	_MAKE_FIELD(S,ArraySize)
+	_MAKE_FIELD(S,PlaneSlice)
 	TERMINATOR
 };
 field *D3D11_SHADER_RESOURCE_VIEW_DESC1_union[] = {
@@ -1548,8 +1527,8 @@ field *D3D11_SHADER_RESOURCE_VIEW_DESC1_union[] = {
 template<> field fields<D3D11_SHADER_RESOURCE_VIEW_DESC1>::f[] = {
 #undef S
 #define S D3D11_SHADER_RESOURCE_VIEW_DESC1
-	MAKE_DX_FIELD(Format),
-	MAKE_DX_FIELD(ViewDimension),
+	_MAKE_FIELD(S,Format)
+	_MAKE_FIELD(S,ViewDimension)
 	MAKE_UNION(Buffer,1,D3D11_SHADER_RESOURCE_VIEW_DESC1_union),
 	TERMINATOR
 };
@@ -1557,18 +1536,18 @@ template<> field fields<D3D11_SHADER_RESOURCE_VIEW_DESC1>::f[] = {
 template<> field fields<D3D11_TEX2D_UAV1>::f[] = {
 #undef S
 #define S D3D11_TEX2D_UAV1
-	MAKE_DX_FIELD(MipSlice),
-	MAKE_DX_FIELD(PlaneSlice),
+	_MAKE_FIELD(S,MipSlice)
+	_MAKE_FIELD(S,PlaneSlice)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_TEX2D_ARRAY_UAV1>::f[] = {
 #undef S
 #define S D3D11_TEX2D_ARRAY_UAV1
-	MAKE_DX_FIELD(MipSlice),
-	MAKE_DX_FIELD(FirstArraySlice),
-	MAKE_DX_FIELD(ArraySize),
-	MAKE_DX_FIELD(PlaneSlice),
+	_MAKE_FIELD(S,MipSlice)
+	_MAKE_FIELD(S,FirstArraySlice)
+	_MAKE_FIELD(S,ArraySize)
+	_MAKE_FIELD(S,PlaneSlice)
 	TERMINATOR
 };
 field *D3D11_UNORDERED_ACCESS_VIEW_DESC1_union[] = {
@@ -1585,8 +1564,8 @@ field *D3D11_UNORDERED_ACCESS_VIEW_DESC1_union[] = {
 template<> field fields<D3D11_UNORDERED_ACCESS_VIEW_DESC1>::f[] = {
 #undef S
 #define S D3D11_UNORDERED_ACCESS_VIEW_DESC1
-	MAKE_DX_FIELD(Format),
-	MAKE_DX_FIELD(ViewDimension),
+	_MAKE_FIELD(S,Format)
+	_MAKE_FIELD(S,ViewDimension)
 	MAKE_UNION(Buffer,1,D3D11_UNORDERED_ACCESS_VIEW_DESC1_union),
 	TERMINATOR
 };
@@ -1594,54 +1573,54 @@ template<> field fields<D3D11_UNORDERED_ACCESS_VIEW_DESC1>::f[] = {
 template<> field fields<D3D11_TEXTURE2D_DESC1>::f[] = {
 #undef S
 #define S D3D11_TEXTURE2D_DESC1
-	MAKE_DX_FIELD(Width),
-	MAKE_DX_FIELD(Height),
-	MAKE_DX_FIELD(MipLevels),
-	MAKE_DX_FIELD(ArraySize),
-	MAKE_DX_FIELD(Format),
-	MAKE_DX_FIELD(SampleDesc),
-	MAKE_DX_FIELD(Usage),
-	MAKE_DX_FIELD(BindFlags),
-	MAKE_DX_FIELD(CPUAccessFlags),
-	MAKE_DX_FIELD(MiscFlags),
-	MAKE_DX_FIELD(TextureLayout),
+	_MAKE_FIELD(S,Width)
+	_MAKE_FIELD(S,Height)
+	_MAKE_FIELD(S,MipLevels)
+	_MAKE_FIELD(S,ArraySize)
+	_MAKE_FIELD(S,Format)
+	_MAKE_FIELD(S,SampleDesc)
+	_MAKE_FIELD(S,Usage)
+	_MAKE_FIELD(S,BindFlags)
+	_MAKE_FIELD(S,CPUAccessFlags)
+	_MAKE_FIELD(S,MiscFlags)
+	_MAKE_FIELD(S,TextureLayout)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_TEXTURE3D_DESC1>::f[] = {
 #undef S
 #define S D3D11_TEXTURE3D_DESC1
-	MAKE_DX_FIELD(Width),
-	MAKE_DX_FIELD(Height),
-	MAKE_DX_FIELD(Depth),
-	MAKE_DX_FIELD(MipLevels),
-	MAKE_DX_FIELD(Format),
-	MAKE_DX_FIELD(Usage),
-	MAKE_DX_FIELD(BindFlags),
-	MAKE_DX_FIELD(CPUAccessFlags),
-	MAKE_DX_FIELD(MiscFlags),
-	MAKE_DX_FIELD(TextureLayout),
+	_MAKE_FIELD(S,Width)
+	_MAKE_FIELD(S,Height)
+	_MAKE_FIELD(S,Depth)
+	_MAKE_FIELD(S,MipLevels)
+	_MAKE_FIELD(S,Format)
+	_MAKE_FIELD(S,Usage)
+	_MAKE_FIELD(S,BindFlags)
+	_MAKE_FIELD(S,CPUAccessFlags)
+	_MAKE_FIELD(S,MiscFlags)
+	_MAKE_FIELD(S,TextureLayout)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_TILED_RESOURCE_COORDINATE>::f[] = {
 #undef S
 #define S D3D11_TILED_RESOURCE_COORDINATE
-	MAKE_DX_FIELD(X),
-	MAKE_DX_FIELD(Y),
-	MAKE_DX_FIELD(Z),
-	MAKE_DX_FIELD(Subresource),
+	_MAKE_FIELD(S,X)
+	_MAKE_FIELD(S,Y)
+	_MAKE_FIELD(S,Z)
+	_MAKE_FIELD(S,Subresource)
 	TERMINATOR
 };
 
 template<> field fields<D3D11_TILE_REGION_SIZE>::f[] = {
 #undef S
 #define S D3D11_TILE_REGION_SIZE
-	MAKE_DX_FIELD(NumTiles),
-	MAKE_DX_FIELD(bUseBox),
-	MAKE_DX_FIELD(Width),
-	MAKE_DX_FIELD(Height),
-	MAKE_DX_FIELD(Depth),
+	_MAKE_FIELD(S,NumTiles)
+	_MAKE_FIELD(S,bUseBox)
+	_MAKE_FIELD(S,Width)
+	_MAKE_FIELD(S,Height)
+	_MAKE_FIELD(S,Depth)
 	TERMINATOR
 };
 

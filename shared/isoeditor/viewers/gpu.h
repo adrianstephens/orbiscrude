@@ -178,7 +178,7 @@ template<typename T, typename U = T, typename A = dynamic_array<U>> struct Entry
 
 	BatchList&	GetBatches(int i)		const	{ return usedat[GetEntryIndex(i)]; }
 
-	EntryTable(A &table, IDFMT format = IDFMT_FOLLOWPTR | IDFMT_FIELDNAME_AFTER_UNION) : EntryTable0<T, U, A>(table, format), usedat(table.size()) {}
+	EntryTable(A &table, IDFMT format = IDFMT_FOLLOWPTR | IDFMT_NOPREFIX | IDFMT_FIELDNAME_AFTER_UNION) : EntryTable0<T, U, A>(table, format), usedat(table.size()) {}
 };
 
 //-----------------------------------------------------------------------------

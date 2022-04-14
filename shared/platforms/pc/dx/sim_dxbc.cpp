@@ -567,7 +567,7 @@ DD<~2,2> ddy(const ASMOperand &op) { return op; }
 template<typename T> struct RegVecDD {
 	T	t;
 	RegVecDD(SimulatorDXBC::Register &r1, SimulatorDXBC::Register &r2, const Operand &op, OperandModifier mod, bool sat) {
-		t = RegValue<T>(r2, op, mod) - RegValue<T>(r1, op, mod);
+		t = (T)RegValue<T>(r2, op, mod) - (T)RegValue<T>(r1, op, mod);
 	}
 	operator const T&() const { return t; }
 };
@@ -1537,7 +1537,7 @@ const Opcode *SimulatorDXBC::ProcessOp(const Opcode *op) {
 
 		case OPCODE_BUFINFO: {
 			SimulatorDXBC::Resource	*res = get_resource(ops[1]);
-			operate_vec(sat, [res](ThreadState &ts, int4p &r) {
+			operate_vec(sat, [res](ThreadState &ts, point4 &r) {
 				r.x = r.y = r.z = r.w = res->height;
             }, ops[0]);
 			break;
@@ -1564,7 +1564,7 @@ const Opcode *SimulatorDXBC::ProcessOp(const Opcode *op) {
 					}, ops[0], ops[1]);
 					break;
 				case RETTYPE_UINT:
-					operate_vec(sat, [res](ThreadState &ts, int4p &r, uint32 mip) {
+					operate_vec(sat, [res](ThreadState &ts, point4 &r, uint32 mip) {
 						int	dim = dimensions(res->dim);
 						r.x = max(res->width >> mip, 1);
 						r.y = dim > 1 ? max(res->height >> mip, 1) : 0;

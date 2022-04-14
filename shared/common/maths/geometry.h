@@ -1463,6 +1463,7 @@ public:
 	static ellipse			through(param(position2) p1, param(position2) p2, param(position2) p3, param(position2) p4, param(position2) p5);
 
 	force_inline position2	centre()					const	{ return position2(v.xy); }
+	force_inline float2		radii()						const	{ float r = len(major()); return {r, r * ratio}; }
 	force_inline float2		major()						const	{ return v.zw; }
 	force_inline float2		minor()						const	{ return perp(major()) * ratio; }
 	force_inline float		area()						const	{ return len2(major()) * ratio * pi;	}

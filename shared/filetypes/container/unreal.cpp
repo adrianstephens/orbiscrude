@@ -2730,9 +2730,9 @@ void FMeshDescription::InitSubmesh(SubMesh* sm) const {
 	sm->NumFaces(nt);
 	auto	*di	= sm->indices.begin();
 	for (auto &i : TriangleArray) {
-		(*di)[0]	= i.t.VertexInstanceIDs[2];
-		(*di)[1]	= i.t.VertexInstanceIDs[1];
-		(*di)[2]	= i.t.VertexInstanceIDs[0];
+		(*di)[0]	= i->VertexInstanceIDs[2];
+		(*di)[1]	= i->VertexInstanceIDs[1];
+		(*di)[2]	= i->VertexInstanceIDs[0];
 		++di;
 	}
 
@@ -2742,7 +2742,7 @@ void FMeshDescription::InitSubmesh(SubMesh* sm) const {
 	auto	dv		= sm->CreateVerts<UnrealVertex>(nv);
 
 	for (auto &i : VertexInstanceArray) {
-		int	v = i.t.VertexID;
+		int	v = i->VertexID;
 		dv->pos.x	= pos[v].X;
 		dv->pos.y	= pos[v].Y;
 		dv->pos.z	= pos[v].Z;

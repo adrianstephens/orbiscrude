@@ -17,6 +17,7 @@
       <Filter>resources</Filter>
     </ClInclude>
     <ClInclude Include="..\..\..\platforms\pc\dx12\dx12_record.h" />
+    <ClInclude Include="dx12_fields.h" />
   </ItemGroup>
   <ItemGroup>
     <IsoCmd Include="toolbar_dx12gpu.psd">

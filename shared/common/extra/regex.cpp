@@ -1110,7 +1110,7 @@ int32 NFA::Search(const count_string& text, EmptyOp enable) {
 		//STEP: run runq on byte c, appending new states to nextq
 
 		for (auto &i : *runq) {
-			Thread* t = i;
+			Thread* t = *i;
 			if (!t)
 				continue;
 
@@ -1202,7 +1202,7 @@ int32 NFA::Search(const count_string& text, EmptyOp enable) {
 	}
 
 	for (auto &i : *runq)
-		release(i);
+		release(*i);
 	runq->clear();
 
 	return matched;

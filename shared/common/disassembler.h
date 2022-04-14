@@ -75,7 +75,7 @@ public:
 		uint64		LineToAddress(int i)		{ return i < Count() ? GetAddress(i) : 0; }
 		int			AddressToLine(uint64 addr)	{ return addr ? iso::lower_boundc(*this, addr).i : 0; }
 
-		template<typename L> bool	IgnoreLoc(L loc, uint64 base, bool combine_lines) {
+		template<typename L> bool			IgnoreLoc(L loc, uint64 base, bool combine_lines) {
 			return combine_lines && loc[0].line == loc[-1].line && GetAddress(AddressToLine(loc[-1].offset + base) + 1) >= base + loc[0].offset;
 		}
 		template<typename L> iterator_t<L>	MixedLineToSource(L &&source, int &line, uint64 base);

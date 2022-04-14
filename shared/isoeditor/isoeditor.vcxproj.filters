@@ -2531,6 +2531,9 @@
     <ClInclude Include="..\common\codec\reed_solomon.h">
       <Filter>Common\codec</Filter>
     </ClInclude>
+    <ClInclude Include="viewers\viewer2d.h">
+      <Filter>Viewers</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\assets\shaders\particle.fxh">

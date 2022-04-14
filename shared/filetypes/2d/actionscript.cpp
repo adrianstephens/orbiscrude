@@ -99,7 +99,7 @@ struct cpool_info {
 	};
 	struct ns_set_info : abc_array<u30> {
 		bool read(byte_reader &r) {
-			if (r.read<abc_array<u30> >(*this)) {
+			if (r.read(*(abc_array<u30>*)this)) {
 				for (int i = 0; i < count; i++) {
 					if ((*this)[i] == 0)
 						return false;

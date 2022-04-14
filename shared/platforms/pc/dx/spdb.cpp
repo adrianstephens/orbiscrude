@@ -130,7 +130,7 @@ ParsedSPDB::ParsedSPDB(istream_ref file, const char *path) : flags(0) {
 					if (line_mapper.start()) {
 						// remap lines back to #line
 						for (auto& i : files) {
-							LineMapper::File	*lines = 0;
+							LineMapper::File	*lines2 = 0;
 
 							for (const char *p = i.source; p = string_find(p, "#line "); ++p) {
 								string_scan	ss(p);
@@ -141,15 +141,16 @@ ParsedSPDB::ParsedSPDB(istream_ref file, const char *path) : flags(0) {
 								if (ss.skip_whitespace().check('"')) {
 									auto	fn	= ss.get_token(~char_set('"'));
 									ss.scan_skip('\n');
-									lines	= line_mapper.get_file(fn);
+									lines2	= line_mapper.get_file(fn);
 								}
-								if (lines) {
+								if (lines2) {
 									int	iline = i.get_line_num(p);
 									while (ss.remaining()) {
-										auto data = ss.get_token(~char_set('\n'));
+										auto data = ss.get_raw(~char_set('\n'));
 										if (data.begins("#line "))
 											break;
-										lines->lines[line++] = LineLoc(i.id, iline++);
+										lines2->lines[line++] = LineLoc(i.id, iline++);
+										ss.move(1);
 									}
 								}
 							}

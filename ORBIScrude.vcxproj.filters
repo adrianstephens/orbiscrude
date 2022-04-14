@@ -714,6 +714,9 @@
     <ClInclude Include="shared\common\codec\texels\dxt.h">
       <Filter>common\codec\texels</Filter>
     </ClInclude>
+    <ClInclude Include="shared\common\base\sparse_array.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="ORBIScrude.rc">

@@ -344,23 +344,22 @@ ISO_ptr<void> CABFileHandler::Read(tag id, istream_ref file) {
 		while (file.getc());
 
 	dynamic_array<CFFolder>	cff(cfh.cFolders);
-	for (int i = 0; i < cfh.cFolders; i++) {
-		file.read<CFFOLDER>(cff[i]);
+	for (auto &i : cff) {
+		file.read(i);
 		if (cbCFFolder)
 			file.seek_cur(cbCFFolder);
 	}
 
 	dynamic_array<CFFile>	files(cfh.cFiles);
 	file.seek(cfh.coffFiles);
-	for (int i = 0; i < cfh.cFiles; i++) {
-		file.read<CFFILE>(files[i]);
+	for (auto &i : files) {
+		file.read(i);
 		char	buffer[1024], *p = buffer;
 		while (*p++ = file.getc());
-		files[i].name = buffer;
+		i.name = buffer;
 	}
 
-	for (int i = 0; i < cfh.cFolders; i++) {
-		CFFolder	&folder = cff[i];
+	for (auto &folder : cff) {
 		uint32		total	= 0;
 
 		file.seek(folder.coffCabStart);
@@ -385,8 +384,7 @@ ISO_ptr<void> CABFileHandler::Read(tag id, istream_ref file) {
 	ISO_ptr<anything> t(id);
 	bool	raw = WantRaw();
 
-	for (int i = 0; i < cfh.cFiles; i++) {
-		auto	&f		= files[i];
+	for (auto &f : files) {
 		auto	&folder = cff[f.iFolder];
 		ISO_ptr<void>	p = ReadData1(filename(f.name.name()).set_ext(f.name.ext()), memory_reader(memory_block((uint8*)folder.data + f.uoffFolderStart, f.cbFile)).me(), f.cbFile, raw);
 		GetDir(t, f.name.dir())->Append(p);

@@ -59,7 +59,7 @@ protected:
 
 public:
 	void			reset()							{ B::bit_buffer = 0; bits_left = 0; }
-	inline void		discard(int n)					{ bits_left -= n; B::discard(n); }
+	inline void		discard(int n)					{ ISO_ASSERT(bits_left >= n); bits_left -= n; B::discard(n); }
 	inline void		extend(int n)					{ bits_left += n; }
 	unsigned		bits_held()			const		{ return bits_left; }
 	inline bool		can_extend(int n)	const		{ return bits_left + n <= sizeof(T) * 8; }

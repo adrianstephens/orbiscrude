@@ -180,6 +180,21 @@ iso_export void			SetDefaultInstance(HINSTANCE h);
 iso_export HINSTANCE	GetDefaultInstance();
 iso_export HINSTANCE	GetInstance(HINSTANCE h);
 
+class Win32Handle {
+protected:
+	HANDLE	h;
+public:
+	Win32Handle(HANDLE h = INVALID_HANDLE_VALUE) : h(h)		{}
+	Win32Handle(Win32Handle &&b) : h(b.detach())			{}
+	~Win32Handle()							{ CloseHandle(h); }
+	Win32Handle	&operator=(Win32Handle &&b)	{ auto t = h; h = b.h; b.h = t; return *this; }
+	HANDLE	detach()			{ auto t = h; h = INVALID_HANDLE_VALUE; return t; }
+	HANDLE*	operator&()			{ return &h; }
+	operator HANDLE()	const	{ return h; }
+	bool	Valid()		const	{ return h != INVALID_HANDLE_VALUE; }
+	bool	operator!()	const	{ return h == INVALID_HANDLE_VALUE; }
+};
+
 struct Win32Error {
 	DWORD	err;
 	va_list	*args;
@@ -187,7 +202,7 @@ struct Win32Error {
 	Win32Error(va_list *_args = 0) : err(GetLastError()), args(_args) {}
 };
 
-void Win32ErrorPrint(const Win32Error &v);
+void					Win32ErrorPrint(const Win32Error &v);
 template<typename T> T	Win32ErrorCheck(const T &t,...)		{ if (!t) { va_list args; va_start(args, t); Win32ErrorPrint(&args); } return t; }
 inline HINSTANCE		Win32ErrorCheck(HINSTANCE t,...)	{ if (!t) { va_list args; va_start(args, t); Win32ErrorPrint(&args); } return t; }
 inline BOOL				Win32ErrorCheck(BOOL t,...)			{ if (!t) { va_list args; va_start(args, t); Win32ErrorPrint(&args); } return t; }

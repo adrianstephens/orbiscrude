@@ -59,25 +59,6 @@ public:
 };
 
 //-----------------------------------------------------------------------------
-// Win32Handle
-//-----------------------------------------------------------------------------
-
-class Win32Handle {
-protected:
-	HANDLE	h;
-public:
-	Win32Handle(HANDLE h = INVALID_HANDLE_VALUE) : h(h)		{}
-	Win32Handle(Win32Handle &&b) : h(b.detach())			{}
-	~Win32Handle()							{ CloseHandle(h); }
-	Win32Handle	&operator=(Win32Handle &&b)	{ swap(h, b.h); return *this; }
-	HANDLE	detach()			{ return exchange(h, INVALID_HANDLE_VALUE); }
-	HANDLE*	operator&()			{ return &h; }
-	operator HANDLE()	const	{ return h; }
-	bool	Valid()		const	{ return h != INVALID_HANDLE_VALUE; }
-	bool	operator!()	const	{ return h == INVALID_HANDLE_VALUE; }
-};
-
-//-----------------------------------------------------------------------------
 // Thread
 //-----------------------------------------------------------------------------
 

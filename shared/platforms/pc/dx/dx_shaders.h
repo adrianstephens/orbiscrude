@@ -65,13 +65,16 @@ enum ResourceDimension {
 	NUM_DIMENSIONS,
 };
 
-inline bool is_array(ResourceDimension d) {
+constexpr bool is_texture(ResourceDimension d) {
+	return between(d, RESOURCE_DIMENSION_TEXTURE1D, RESOURCE_DIMENSION_TEXTURECUBEARRAY);
+}
+constexpr bool is_array(ResourceDimension d) {
 	return between(d, RESOURCE_DIMENSION_TEXTURE1DARRAY, RESOURCE_DIMENSION_TEXTURECUBEARRAY);
 }
-inline bool is_buffer(ResourceDimension d) {
+constexpr bool is_buffer(ResourceDimension d) {
 	return d == RESOURCE_DIMENSION_BUFFER || d >= RESOURCE_DIMENSION_RAW_BUFFER;
 }
-inline int dimensions(ResourceDimension d) {
+constexpr int dimensions(ResourceDimension d) {
 	return is_buffer(d) || d == RESOURCE_DIMENSION_TEXTURE1D || d == RESOURCE_DIMENSION_TEXTURE1DARRAY ? 1
 		: d == RESOURCE_DIMENSION_TEXTURE3D ? 3
 		: 2;

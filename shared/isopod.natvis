@@ -526,7 +526,7 @@ Allowed Instrinsics (?)
 		</Expand>
 	</Type>
 
-	<Type Name="iso::auto_array&lt;*&gt;">
+	<Type Name="iso::auto_array&lt;*&gt;" Inheritable="false">
 		<DisplayString>size = {curr_size}</DisplayString>
 		<Expand>
 			<ArrayItems>
@@ -536,7 +536,7 @@ Allowed Instrinsics (?)
 		</Expand>
 	</Type>
 
-	<Type Name="iso::ptr_array&lt;*&gt;">
+	<Type Name="iso::ptr_array&lt;*&gt;" Inheritable="false">
 		<DisplayString>[{curr_size,d}] {p,[curr_size]}</DisplayString>
 		<Expand>
 			<ArrayItems>
@@ -546,7 +546,7 @@ Allowed Instrinsics (?)
 		</Expand>
 	</Type>
 
-	<Type Name="iso::static_array&lt;*&gt;">
+	<Type Name="iso::static_array&lt;*&gt;" Inheritable="false">
 		<DisplayString>[{curr_size,d} / {$T2,d}] {($T1*)&amp;t,[curr_size]}</DisplayString>
 		<Expand>
 			<ArrayItems>
@@ -556,7 +556,7 @@ Allowed Instrinsics (?)
 		</Expand>
 	</Type>
 
-	<Type Name="iso::dynamic_array&lt;*&gt;">
+	<Type Name="iso::dynamic_array&lt;*&gt;" Inheritable="false">
 		<DisplayString>[{curr_size,d} / {max_size,d}] {p,[curr_size]}</DisplayString>
 		<Expand>
 			<ArrayItems>
@@ -566,7 +566,7 @@ Allowed Instrinsics (?)
 		</Expand>
 	</Type>
 
-	<Type Name="iso::temp_array&lt;*&gt;">
+	<Type Name="iso::temp_array&lt;*&gt;" Inheritable="false">
 		<DisplayString>[{curr_size,d}] {p,[curr_size]}</DisplayString>
 		<Expand>
 			<ArrayItems>
@@ -576,7 +576,7 @@ Allowed Instrinsics (?)
 		</Expand>
 	</Type>
 
-	<Type Name="iso::_ptr_array&lt;*&gt;">
+	<Type Name="iso::_ptr_array&lt;*&gt;" Inheritable="false">
 		<DisplayString>[{curr_size,d}] {p,[curr_size]}</DisplayString>
 		<Expand>
 			<ArrayItems>

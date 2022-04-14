@@ -300,8 +300,8 @@ struct INPUT_LAYOUT {
 template<> field fields<INPUT_LAYOUT>::f[] = {
 #undef S
 #define	S INPUT_LAYOUT
-	MAKE_DX_FIELD_IDX(0, num),
-	MAKE_DX_FIELD_IDX(1, desc),
+	_MAKE_FIELD_IDX(S, 0, num),
+	_MAKE_FIELD_IDX(S, 1, desc),
 	0
 };
 
@@ -3426,7 +3426,7 @@ LRESULT DX11BatchWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 template<typename D, typename S> void copy_vert_stream(const D &dest, const S &srce, dx::SIG::ComponentType type) {
 	switch (type) {
 		case dx::SIG::SINT32:
-			rcopy(element_cast<int4p>(dest), srce);
+			rcopy(element_cast<point4>(dest), srce);
 			break;
 		case dx::SIG::UINT32:
 			rcopy(element_cast<uint4p>(dest), srce);
@@ -4361,17 +4361,17 @@ struct ResourceTable {
 template<> field	fields<ResourceTable::Record>::f[] = {
 #undef S
 #define	S ResourceTable::Record
-	MAKE_DX_FIELD(type),
-	MAKE_DX_FIELD(Width),
-	MAKE_DX_FIELD(Height),
-	MAKE_DX_FIELD(Depth),
-	MAKE_DX_FIELD(MipLevels),
-	MAKE_DX_FIELD(Format),
-	MAKE_DX_FIELD(SampleDesc),//2d
-	MAKE_DX_FIELD(Usage),
-	MAKE_DX_FIELD(BindFlags),
-	MAKE_DX_FIELD(CPUAccessFlags),
-	MAKE_DX_FIELD(MiscFlags),
+	_MAKE_FIELD(S,type)
+	_MAKE_FIELD(S,Width)
+	_MAKE_FIELD(S,Height)
+	_MAKE_FIELD(S,Depth)
+	_MAKE_FIELD(S,MipLevels)
+	_MAKE_FIELD(S,Format)
+	_MAKE_FIELD(S,SampleDesc)//2d
+	_MAKE_FIELD(S,Usage)
+	_MAKE_FIELD(S,BindFlags)
+	_MAKE_FIELD(S,CPUAccessFlags)
+	_MAKE_FIELD(S,MiscFlags)
 	TERMINATOR
 };
 
@@ -4464,7 +4464,7 @@ struct DX11ShadersList : EditableListView<DX11ShadersList, Subclass<DX11ShadersL
 	}
 
 	DX11ShadersList(const WindowPos &wpos, DX11Connection *_con) : Base(_con->shaders), con(_con) {
-		_Create(wpos, "Shaders", ID, CHILD | CLIPSIBLINGS | VISIBLE | LVS_REPORT | LVS_AUTOARRANGE | LVS_SINGLESEL | LVS_SHOWSELALWAYS);
+		CreateWithID(wpos, "Shaders", ID, CHILD | CLIPSIBLINGS | VISIBLE | LVS_REPORT | LVS_AUTOARRANGE | LVS_SINGLESEL | LVS_SHOWSELALWAYS);
 
 		RunThread([this]{
 			addref();

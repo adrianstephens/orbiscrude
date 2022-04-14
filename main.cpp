@@ -23,6 +23,8 @@
 #include "hook.h"
 #include "../../platforms/ps4/shared/sdb.h"
 #include "windows/text_control.h"
+#include "base/sparse_array.h"
+#include "packed_types.h"
 
 #include "resource.h"
 
@@ -718,15 +720,15 @@ void iso::JobQueueMain::put(const job &j) {
 
 #if 1
 #define FORCE_UNDEFINED_SYMBOL(x) extern void x(); void* __ ## x ## _fp =(void*)&x;
-FORCE_UNDEFINED_SYMBOL(ps3_dummy);
-FORCE_UNDEFINED_SYMBOL(ps4_dummy);
+//FORCE_UNDEFINED_SYMBOL(ps3_dummy);
+//FORCE_UNDEFINED_SYMBOL(ps4_dummy);
 FORCE_UNDEFINED_SYMBOL(dx11_dummy);
 FORCE_UNDEFINED_SYMBOL(dx12_dummy);
-FORCE_UNDEFINED_SYMBOL(wii_dummy);
+//FORCE_UNDEFINED_SYMBOL(wii_dummy);
 //FORCE_UNDEFINED_SYMBOL(xone_dummy);
 FORCE_UNDEFINED_SYMBOL(x64_dummy);
 FORCE_UNDEFINED_SYMBOL(dxbc_dis_dummy);
-FORCE_UNDEFINED_SYMBOL(isa_dis_dummy);
+//FORCE_UNDEFINED_SYMBOL(isa_dis_dummy);
 FORCE_UNDEFINED_SYMBOL(intel_dis_dummy);
 #endif
 
@@ -787,6 +789,11 @@ template<typename T> struct maybe_owned : pointer_pair<T, bool, 2> {
 
 
 int __stdcall WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, char *cmdline, int show) {
+	unorm3_11_11_10	tt;
+	
+	bitfield_vec_base<scaled_bits<uint32,2047,11>, scaled_bits<uint32,2047,11>, scaled_bits<uint32,1023,10>>		tt2;
+	ISO_TRACEF("sizeof tt2") << sizeof(tt2) << '\n';
+
 	OleInitialize(NULL);
 
 	auto *con = new DockableWindow(Rect(0,0,200,200), "OC console");

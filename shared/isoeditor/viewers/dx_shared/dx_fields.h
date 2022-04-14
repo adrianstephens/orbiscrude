@@ -5,11 +5,24 @@
 
 namespace iso {
 
-template<> struct field_names<D3D_SHADER_VARIABLE_FLAGS>	{ static field_bit s[]; };
-template<> struct field_names<D3D_SHADER_INPUT_FLAGS>		{ static field_value s[]; };
-template<> struct field_names<D3D_NAME>						{ static field_value s[]; };
+template<> struct field_names<DXGI_FORMAT> 					{ static field_prefix<const char*> s; };
+template<> struct field_names<D3D_SHADER_VARIABLE_CLASS> 	{ static field_prefix<const char*> s; };
+template<> struct field_names<D3D_SHADER_VARIABLE_TYPE> 	{ static field_prefix<const char*> s; };
+template<> struct field_names<D3D_SHADER_INPUT_TYPE> 		{ static field_prefix<const char*> s; };
+template<> struct field_names<D3D_RESOURCE_RETURN_TYPE> 	{ static field_prefix<const char*> s; };
+template<> struct field_names<D3D_REGISTER_COMPONENT_TYPE> 	{ static field_prefix<const char*> s; };
+template<> struct field_names<D3D_TESSELLATOR_DOMAIN> 		{ static field_prefix<const char*> s; };
+template<> struct field_names<D3D_TESSELLATOR_PARTITIONING> { static field_prefix<const char*> s; };
+template<> struct field_names<D3D_TESSELLATOR_OUTPUT_PRIMITIVE>	{ static field_prefix<const char*> s; };
+template<> struct field_names<D3D_INTERPOLATION_MODE>		{ static field_prefix<const char*> s; };
+template<> struct field_names<D3D_PARAMETER_FLAGS>			{ static field_prefix<const char*> s; };
+template<> struct field_names<D3D_SRV_DIMENSION>			{ static field_prefix<const char*> s; };
+
+template<> struct field_names<D3D_SHADER_VARIABLE_FLAGS>	{ static field_prefix<field_bit> s; };
+template<> struct field_names<D3D_SHADER_INPUT_FLAGS>		{ static field_prefix<field_value> s; };
+template<> struct field_names<D3D_NAME>						{ static field_prefix<field_value> s; };
+template<> struct field_names<D3D_MIN_PRECISION>			{ static field_prefix<field_value> s; };
 template<> struct field_names<D3D_FEATURE_LEVEL>			{ static field_value s[]; };
-template<> struct field_names<D3D_MIN_PRECISION>			{ static field_value s[]; };
 template<> struct fields<D3D_FEATURE_LEVEL> : value_field<D3D_FEATURE_LEVEL> {};
 
 template<typename T> struct get_fields_s {
@@ -89,10 +102,8 @@ template<int N, typename B, int I, typename...TT> constexpr field make_field_idx
 	return field::call_union<TT...>(name, T_get_member_offset(p) * 8, N - I);
 }
 
-#define	MAKE_DX_FIELD_IDX(I,X)	make_field_idx<I,S>(#X, &S::X)
-#define	MAKE_DX_FIELD(X)		field::make<S>(#X, &S::X)
-#define	MAKE_DX_FIELDS(S,...)	VA_APPLYP(_MAKE_FIELD, S, __VA_ARGS__)
-#define	MAKE_DX_FIELDT(X,T)		field::make<S,T>(#X, &S::X)
+#define	_MAKE_FIELDT(S,X,T)		field::make<S,T>(#X, &S::X)
+#define	_MAKE_FIELD_IDX(S,I,X)	make_field_idx<I,S>(#X, &S::X)
 #define	CALL_FIELD(X)			field::call<S>(#X, &S::X)
 #define	MAKE_UNION(F,O,N)		{0, iso_offset(S, F) * 8, 0, 0, O, (const char**)N}
 #define	TERMINATOR				field::terminator<S>()

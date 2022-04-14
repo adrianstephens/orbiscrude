@@ -100,8 +100,8 @@ public:
 
 enum {
 	SCRIPT_ONLYNAMES		= 1 << 0,
-	SCRIPT_VIRTUALS		= 1 << 1,
-	SCRIPT_DEFS			= 1 << 2,
+	SCRIPT_IGNORE_DEFER		= 1 << 1,
+	SCRIPT_DEFS				= 1 << 2,
 };
 
 class ScriptWriter : public text_mode_writer<writer_intf> {

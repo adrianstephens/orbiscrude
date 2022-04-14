@@ -202,7 +202,7 @@ bool Registry::Set(const RegKey &r, ISO_ptr<void> p, bool strings) {
 
 			if (strings) {
 				dynamic_memory_writer	m;
-				ISO::ScriptWriter(m).SetFlags(ISO::SCRIPT_ONLYNAMES|ISO::SCRIPT_VIRTUALS).DumpData(p);
+				ISO::ScriptWriter(m).SetFlags(ISO::SCRIPT_ONLYNAMES|ISO::SCRIPT_IGNORE_DEFER).DumpData(p);
 				return v = (const char*)m.data();
 			}
 			if (ptype->IsPlainData())
@@ -250,7 +250,7 @@ bool Registry::Set(const RegKey &r, ISO_ptr<void> p, bool strings) {
 
 			} else {
 				dynamic_memory_writer	m;
-				ISO::ScriptWriter(m).SetFlags(ISO::SCRIPT_ONLYNAMES|ISO::SCRIPT_VIRTUALS).DumpData(p);
+				ISO::ScriptWriter(m).SetFlags(ISO::SCRIPT_ONLYNAMES|ISO::SCRIPT_IGNORE_DEFER).DumpData(p);
 				return v = (const char*)m.data();
 			}
 

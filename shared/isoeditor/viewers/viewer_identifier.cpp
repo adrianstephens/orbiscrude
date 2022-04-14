@@ -344,6 +344,11 @@ LRESULT ColourTree::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 		case WM_CHAR:
 			Parent().SendMessage(message, wParam, lParam);
 			break;
+
+		case WM_DESTROY:
+			ISO_TRACE("Destroy ColourTree\n");
+			break;
+
 	}
 	return Super(message, wParam, lParam);
 }

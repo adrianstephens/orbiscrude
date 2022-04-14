@@ -103,8 +103,15 @@ template<typename L> void DumpDisassemble(win::RichEditControl &text, Disassembl
 					text.SetFormat(win::CharFormat().Colour(colourer.Colour(type)));
 				}
 			} else {
+				buffer_accum<256>	ba("missing source");
+				if (auto* f = files.check(loc->file)) {
+					ba << " @ " << f->name;
+				} else {
+					ba << " @ unknown#" << loc->file;
+				}
+				ba << "(" << loc->line << ")\n";
 				text.SetSelection(CharRange::end());
-				text.ReplaceSelection("missing source\n");
+				text.ReplaceSelection(ba);
 				//text.SetSelection(CharRange(len).to_end());
 				text.SetFormat(win::CharFormat().Colour(0, 0, 0));
 			}
@@ -221,9 +228,9 @@ void DebugWindow::SetMode(int new_mode) {
 
 DebugWindow::DebugWindow(const SyntaxColourerRE &colourer, Disassembler::AsyncSymbolFinder &&sym_finder, int mode)
 	: CodeHelper(colourer, move(sym_finder), mode)
+	, images(ID("IDB_IMAGELIST_DEBUG"), 16, LR_CREATEDIBSECTION)
 	, pc_line(0)
 	, orig_mode(mode)
-	, images(ID("IDB_IMAGELIST_DEBUG"), 16, LR_CREATEDIBSECTION)
 {}
 
 LRESULT DebugWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {

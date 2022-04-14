@@ -59,7 +59,8 @@ public:
 
 	template<typename T> bool	write(const T &t)			{ return global_write(*this, t); }
 	template<typename P> void	set(const P &p)				{ clear(); this->write(p); }
-	template<typename P> crc	operator+(const P &p) const { crc b(*this); b.write(p); return b; }
+	template<typename P> crc	operator+(const P &p) const	{ crc b(*this); b.write(p); return b; }
+	template<typename P> crc&	operator<<(const P &p)		{ write(p); return *this; }
 
 	static cb_t set_callback(cb_t p)						{ return exchange(cb, p); }
 	size_t	string_len()							const	{ return 0; }

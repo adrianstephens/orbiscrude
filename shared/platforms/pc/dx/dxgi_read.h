@@ -401,7 +401,7 @@ template<> struct param_element<const uint8&, DXGI_COMPONENTS> : DXGI_ConstCompo
 	template<typename T> friend void assign(T &f, const param_element &c)		{ assign(f, (const DXGI_Components&)c); }
 };
 
-template<typename D> const void *copy_slices(const block<D, 3> &dest, const void *srce, DXGI_COMPONENTS::LAYOUT layout, uint64 depth_stride);
+template<typename D> const void *copy_slices(const block<D, 3> &dest, const void *srce, DXGI_COMPONENTS::LAYOUT layout, DXGI_COMPONENTS::TYPE type, uint64 depth_stride);
 
 }
 

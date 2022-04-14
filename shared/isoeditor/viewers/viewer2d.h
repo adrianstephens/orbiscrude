@@ -50,7 +50,7 @@ public:
 				position2	pt2(pt.x, pt.y);
 				float		mult	= iso::pow(1.05f, (short)HIWORD(wParam) / 64.f);
 				zoom		*= mult;
-				pos			= pt2 - ((position2)(float2)pos - pt2) * mult;
+				pos			= pt2 - (pt2 - (float2)pos) * mult;
 				Invalidate();
 				break;
 			}
