@@ -21,7 +21,7 @@ public:
 	D2DTextWindow(const WindowPos &pos, const char *_title, Style style = NOSTYLE, StyleEx styleEx = NOEX, ID id = ID());
 	HWND	Create(const WindowPos &pos, const char *_title, Style style = NOSTYLE, StyleEx styleEx = NOEX, ID id = ID());
 	void	Online(bool enable);
-	void	SetTitle(const char *_title) { title = _title; }
+	void	SetTitle(const char *_title);
 };
 
 //-----------------------------------------------------------------------------
@@ -41,7 +41,7 @@ public:
 	TextWindow(const WindowPos &pos, const char *_title, Style style = NOSTYLE, StyleEx styleEx = NOEX, ID id = ID());
 	HWND	Create(const WindowPos &pos, const char *_title, Style style = NOSTYLE, StyleEx styleEx = NOEX, ID id = ID());
 	void	Online(bool enable);
-	void	SetTitle(const char *_title) { title = _title; }
+	void	SetTitle(const char *_title);
 };
 
 //-----------------------------------------------------------------------------

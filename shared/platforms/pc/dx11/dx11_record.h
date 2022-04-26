@@ -158,37 +158,37 @@ inline size_t GetSubResourceOffset(const D3D11_TEXTURE3D_DESC *desc, int sub) {
 }
 
 inline size_t GetSubResourceSize(const D3D11_TEXTURE1D_DESC *desc, int sub) {
-	return mip_stride(desc->Format, desc->Width, sub % desc->MipLevels, false);
+	return mip_stride(desc->Format, desc->Width, sub % desc->MipLevels);
 }
 inline size_t GetSubResourceSize(const D3D11_TEXTURE2D_DESC *desc, int sub) {
 	DXGI_COMPONENTS	comp(desc->Format);
 	int				mip = sub % desc->MipLevels;
-	return mip_stride(comp, desc->Width, mip, true) * mip_size(comp, desc->Height, mip);
+	return dxgi_align(mip_stride(comp, desc->Width, mip)) * mip_size(comp, desc->Height, mip);
 }
 inline size_t GetSubResourceSize(const D3D11_TEXTURE3D_DESC *desc, int sub) {
 	DXGI_COMPONENTS	comp(desc->Format);
 	int		mip = sub % desc->MipLevels;
-	return mip_stride(comp, desc->Width, mip, true) * mip_size(comp, desc->Height, mip) *  mip_size(desc->Depth, mip);
+	return dxgi_align(mip_stride(comp, desc->Width, mip)) * mip_size(comp, desc->Height, mip) *  mip_size(desc->Depth, mip);
 }
 
 inline uint32 GetSubResourceDims(const D3D11_TEXTURE1D_DESC *desc, int sub, uint32 &rows) {
 	int		mip = sub % desc->MipLevels;
 	rows	= desc->ArraySize;
-	return mip_stride(desc->Format, desc->Width, mip, false);
+	return mip_stride(desc->Format, desc->Width, mip);
 }
 inline uint32 GetSubResourceDims(const D3D11_TEXTURE2D_DESC *desc, int sub, uint32 &rows, uint32 &array) {
 	DXGI_COMPONENTS	comp(desc->Format);
 	int		mip = sub % desc->MipLevels;
 	rows	= mip_size(comp, desc->Height, mip);
 	array	= desc->ArraySize;
-	return mip_stride(desc->Format, desc->Width, mip, false);
+	return mip_stride(desc->Format, desc->Width, mip);
 }
 inline uint32 GetSubResourceDims(const D3D11_TEXTURE3D_DESC *desc, int sub, uint32 &rows, uint32 &depth) {
 	DXGI_COMPONENTS	comp(desc->Format);
 	int		mip = sub % desc->MipLevels;
 	rows	= mip_size(comp, desc->Height, mip);
 	depth	= mip_size(desc->Depth, mip);
-	return mip_stride(desc->Format, desc->Width, mip, false);
+	return mip_stride(desc->Format, desc->Width, mip);
 }
 
 struct RecItem {
@@ -265,7 +265,7 @@ struct RecItem2 : RecItem {
 		return iso::read(r, type, name, obj, info);
 	}
 	template<typename W>	bool write(W &&w) const	{
-		return iso::write(w, type, name, obj, info);
+		return w.write(type, name, obj, info);
 	}
 
 	size_t GetSize() const {
@@ -714,10 +714,10 @@ struct Recording {
 	Recording(TYPE type, malloc_block &&recording)	: type(type), recording(move(recording)) {}
 
 	template<typename R>	bool read(R &&r) {
-		return iso::read(r, type, recording);
+		return r.read(type, recording);
 	}
 	template<typename W>	bool write(W &&w) const	{
-		return iso::write(w, type, recording);
+		return w.write(type, recording);
 	}
 };
 

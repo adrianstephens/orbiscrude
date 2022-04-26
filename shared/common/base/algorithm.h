@@ -529,7 +529,7 @@ template<class I, class P = less> void selection_sort(I lo, I hi, P comp = P()) 
 //	sort (quick sort)
 //----------------------------------------
 
-template<class I, class P = less> void sort(I lo, I hi, P comp = P()) {
+template<class I, class P = less> enable_if_t<!is_lvalue_v<I>> sort(I lo, I hi, P comp = P()) {
 	if (hi - lo < 2)
 		return;
 
@@ -618,10 +618,11 @@ template<class I, class P = less> void sort(I lo, I hi, P comp = P()) {
 	}
 }
 
-template<class P, class I> 			void sort(I lo, I hi)			{ sort(lo, hi, P()); }
+//template<class I, class P = less>	void sort(I &lo, I &hi, P comp = P())	{ sort<I>(lo, hi, comp); }
+template<class P, class I> 			void sort(I lo, I hi)					{ sort(lo, hi, P()); }
 //template<class C, class P = less, typename=enable_if_t<T_has_begin<C>::value>>	void sort(C&& c, P comp = P())	{ sort(begin(c), end(c), comp); }
 template<class C, class P = less, typename=enable_if_t<has_begin_v<C>>>	void sort(C&& c, P comp = P())	{ sort(begin(c), end(c), comp); }
-template<class P, class C> 			void sort(C&& c)				{ sort(c, P()); }
+template<class P, class C> 			void sort(C&& c)						{ sort(c, P()); }
 
 //----------------------------------------
 //	reverse sort

@@ -42,7 +42,7 @@ void ViewBin::Radio(uint32 id) {
 
 void ViewBin::Find(const interval<uint64> &range, bool fwd) {
 	if (!prog) {
-		prog.Create(toolbar, "progress", VISIBLE | CHILD | PBS_SMOOTH, NOEX, toolbar.GetUnusedRect());
+		prog.Create(toolbar, "progress", VISIBLE | CHILD | ProgressBarControl::SMOOTH, NOEX, toolbar.GetUnusedRect());
 		prog_start	= range.a;
 		prog_shift	= max(highest_set_index(uint64(range.extent())), 30) - 30;
 		prog.SetRange(0, range.extent() >> prog_shift);
@@ -266,7 +266,7 @@ LRESULT ViewBin::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 						PutNumber(buffer, GetMemory(edit_addr), chars_per_element);
 						buffer[chars_per_element] = 0;
 					}
-					miniedit.Create(*this, NULL, CHILD | VISIBLE | CLIPSIBLINGS | ES_AUTOHSCROLL | ES_WANTRETURN, CLIENTEDGE,
+					miniedit.Create(*this, NULL, CHILD | VISIBLE | CLIPSIBLINGS | EditControl::AUTOHSCROLL | EditControl::WANTRETURN, CLIENTEDGE,
 						rect.Grow(4,2,4,2),
 						ID_EDIT
 					);

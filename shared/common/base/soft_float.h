@@ -7,8 +7,8 @@
 
 namespace iso {
 #ifndef MATHS_H
-	float	abs(float);
-	double	abs(double);
+	//float	abs(float);
+	//double	abs(double);
 	float	copysign(float, float);
 #endif
 

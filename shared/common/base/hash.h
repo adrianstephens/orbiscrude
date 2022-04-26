@@ -735,7 +735,7 @@ public:
 	T*				remove(const K &key)				{ return B::remove(hashk<K>(key)); }
 	T*				remove(T *t)						{ return B::remove(t);	}
 	auto			get(const K &k)		const			{ return B::get(hashk<K>(k)); }
-	auto&			put(const K& k)						{ return B::put(hashk<K>(k)); }
+	auto&			put(const K &k)						{ return B::put(hashk<K>(k)); }
 	template<typename U> auto& put(const K &k, U &&u)	{ return B::put(hashk<K>(k), forward<U>(u)); }
 	auto			find(const K &k)	const			{ return B::find(hashk<K>(k)); }
 	bool			count(const K &k)	const			{ return !!check(k); }
@@ -1039,11 +1039,12 @@ public:
 //-------------------------------------
 
 struct count_entry {
-	uint32	count;
-	count_entry()	: count(1) {}
+	uint32	count	= 0;
 	operator uint32() const			{ return count; }
 	uint32	operator++()			{ return ++count; }
 	uint32	operator--()			{ return --count; }
+	uint32	operator++(int)			{ return count++; }
+	uint32	operator--(int)			{ return count--; }
 	void	operator+=(uint32 b)	{ count += b; }
 	void	operator-=(uint32 b)	{ count -= b; }
 	bool	operator<(uint32 b)		{ return count < b; }
@@ -1055,9 +1056,9 @@ template<typename K, bool MT = false, int HASH_BITS = 0> class hash_multiset : p
 	typedef	hash_t<K>										H;
 	typedef hash_multiset0<H, count_entry, MT, HASH_BITS>	B;
 public:
-	uint32		insert(const K &key)			{ return B::put(hashk<K>(key)); }
+	uint32		insert(const K &key)			{ return B::put(hashk<K>(key))++; }
 	uint32		count(const K &key) const		{ return B::count(hashk<K>(key)); }
-	bool		remove(const K &key)			{ return remove(hashk<K>(key)); }
+	bool		remove(const K &key)			{ return B::remove(hashk<K>(key)); }
 
 	auto& operator+=(const hash_multiset &b) { B::add(b); return *this; }
 	auto& operator-=(const hash_multiset &b) { B::sub(b); return *this; }
@@ -1076,8 +1077,6 @@ public:
 template<typename K> struct count_with_key_entry : count_entry {
 	K		k;
 	count_with_key_entry(const K &k) : k(k) {}
-	auto&	operator=(const K &k)		{ ++count; return *this; }
-	auto&	operator=(const count_with_key_entry &k)		{ count += k.count; return *this; }
 };
 
 template<typename K, bool MT = false, int HASH_BITS = 0> class hash_multiset_with_key : public hash_multiset0<hash_t<K>, count_with_key_entry<K>, MT, HASH_BITS> {
@@ -1095,9 +1094,9 @@ public:
 	iterator	begin()	const	{ return B::begin(); }
 	iterator	end()	const	{ return B::end(); }
 
-	uint32		insert(const K &key)			{ return B::put(hashk<K>(key), key); }
+	uint32		insert(const K &key)			{ return B::put(hashk<K>(key))++; }
 	uint32		count(const K &key) const		{ return B::count(hashk<K>(key)); }
-	bool		remove(const K &key)			{ return remove(hashk<K>(key)); }
+	bool		remove(const K &key)			{ return B::remove(hashk<K>(key)); }
 
 	auto& operator+=(const hash_multiset_with_key &b) { B::add(b); return *this; }
 	auto& operator-=(const hash_multiset_with_key &b) { B::sub(b); return *this; }

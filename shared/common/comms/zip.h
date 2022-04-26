@@ -51,7 +51,7 @@ struct ZIP {
 		time()	{}
 		time(const _none&)			{ clear(*this); }
 		time(const TimeOfDay& t)	: seconds2(uint16(t.Sec())), minute(t.Min()), hour(t.Hour()) {}
-		operator TimeOfDay() const	{ return {hour, minute, seconds2 * 2}; }
+		operator TimeOfDay() const	{ return TimeOfDay(hour, minute, seconds2 * 2); }
 	};
 	struct date {
 		uint16	day : 5, month : 4, years1980 : 7;

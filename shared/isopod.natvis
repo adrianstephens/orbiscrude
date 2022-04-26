@@ -416,9 +416,9 @@ Allowed Instrinsics (?)
 		</Expand>
 	</Type>
 
-	<Type Name="iso::crc&lt;32&gt;">
+	<!--Type Name="iso::crc&lt;32&gt;">
 		<DisplayString LegacyAddin="isocrc_vc.dll" Export="IsoCrc32Handler"></DisplayString>
-	</Type>
+	</Type-->
 
 	<Type Name="iso::holder&lt;*&gt;">
 		<DisplayString>{t}</DisplayString>

@@ -45,6 +45,9 @@ namespace iso {
 	using simd::ln;
 	using simd::exp;
 	using simd::pow;
+	
+	using simd::min_component_index;
+	using simd::max_component_index;
 }
 
 #include "soft_float.h"
@@ -426,12 +429,22 @@ template<typename X, int A>			force_inline auto		cross(axis_s<A> y, X x)			{ ret
 template<typename X, int A>			force_inline auto		cross(X x, neg_axis_s<A> y)		{ return -cross<element_type<X>>(x, -y); }
 template<typename X, int A>			force_inline auto		cross(neg_axis_s<A> y, X x)		{ return cross<element_type<X>>(x, -y); }
 
+#if 1
 template<typename E>				force_inline auto		perp(const vec<E,3> &v)			{ return cross(rotate(vec<E,3>(x_axis), -min_component_index(abs(v))), v); }
+#else 
+// based on Duff - requires  v is normal
+template<typename E> inline vec<E,3> perp(const vec<E,3> &v) {
+	auto s = copysign(1.f, v.z);
+	auto a = -1 / (s + v.z);
+	return {v.x * v.y * a, s + a * square(v.y), -v.y};
+}
+#endif
 template<typename X>				force_inline auto		perp(const X &v)				{ return perp<element_type<X>>(v); }
+
 
 template<typename E>	inline vec<E, 2> to_octohedral(const vec<E, 3>& v) {
 	auto	v1 = v / reduce_add(abs(v));
-	return select(v.z < zero, sign1(v.xy) - v1.xy : v1.xy);
+	return select(v.z < zero, sign1(v.xy) - v1.xy, v1.xy);
 }
 
 template<typename E>	inline vec<E, 3> from_octohedral(const vec<E, 2>& v) {
@@ -584,9 +597,7 @@ template<typename E> inline int32x3 rank_sort(vec<E,3> x) {
 template<typename E> int32x4 rank_sort(vec<E,4> x) {
 	int32x3	isX		= x.yzw > x.xxx;
 	int32x3	isYZ	= x.zww > x.yyz;
-	auto	x		= reduce_add(isX);
-	return concat(x, (one - x) + concat(isYZ.x + isYZ.y, (one - isYZ.xy) + concat(isYZ.z, one - isYZ.z)));
-
+	return concat(x, (one - reduce_add(isX)) + concat(isYZ.x + isYZ.y, (one - isYZ.xy) + concat(isYZ.z, one - isYZ.z)));
 }
 
 template<typename V> inline enable_if_t<is_vec<V>, vec<int, num_elements_v<V>>> rank_sort(V v) { return rank_sort<element_type<V>>(v); }

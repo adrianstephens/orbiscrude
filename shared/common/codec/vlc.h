@@ -231,6 +231,7 @@ public:
 	state_t				get_state()		const			{ return *this; }
 	void				set_state(const state_t &s)		{ T::operator=(s); }
 	inline S&			get_stream()					{ return file; }
+	streamptr			tell_bit()						{ return file.tell() * 8 + T::bits_held(); }
 };
 
 template<typename T, bool be, typename S=ostream_ref> using vlc_out				= vlc_out0<bit_stack_count<T, !be>, S>;

@@ -61,17 +61,17 @@ no_inline size_t wcslen(const wchar_t *s) {
 }
 #endif
 
-const void *memmem(const void *l, size_t l_len, const void *s, size_t s_len) {
+void *memmem(const void *l, size_t l_len, const void *s, size_t s_len) {
 	if (l_len == 0 || s_len == 0 || l_len < s_len)
 		return nullptr;
 
 	char	first	= *(const char*)s;
 	if (s_len == 1)
-		return memchr(l, first, l_len);
+		return (void*)memchr(l, first, l_len);
 
 	for (auto i = (const char*)l, end = i + (l_len - s_len); i <= end; ++i)
 		if (*i == first && memcmp(i, s, s_len) == 0)
-			return i;
+			return (void*)i;
 
 	return nullptr;
 }
@@ -388,6 +388,27 @@ int	scan_string(const char *buffer, const char *format, ...) {
 	va_list valist;
 	va_start(valist, format);
 	return vscan_string(buffer, format, valist);
+}
+
+int numstring_cmp(const char *a, const char *b) {
+	if (!a || !b)
+		return a ? 1 : b ? -1 : 0;
+	for (;;) {
+		char	ca = *a++;
+		char	cb = *b++;
+		if (ca == 0 || cb == 0)
+			return ca - cb;
+		if (is_digit(ca)) {
+			int	na, nb;
+			a = get_unsigned_num(a - 1, na);
+			b = get_unsigned_num(b - 1, nb);
+			if (int d = simple_compare(a, b))
+				return d;
+		} else {
+			if (int d = simple_compare(ca, cb))
+				return d;
+		}
+	}
 }
 
 //-----------------------------------------------------------------------------
@@ -1013,7 +1034,7 @@ number number::to_binary() const {
 
 	int		e2	= 0;
 	int		e10	= e;
-	uint64	m2	= iso::abs(m);
+	uint64	m2	= abs(m);
 
 	while (e10 > 0) {
 #if 1

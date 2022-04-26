@@ -81,8 +81,9 @@ template<typename T> struct interval {
 	friend constexpr interval	abs(const interval &i)									{ return {i.minimum(), i.maximum()}; }
 	friend bool		overlap(const interval &a, const interval &b)			{ return !(any(b.b < a.a) || any(a.b < b.a)); }
 	friend bool		strict_overlap(const interval &a, const interval &b)	{ return all(a.b > b.a) && all(a.a < b.b); }
-	friend int		max_component_index(const interval& i)					{ return max_component_index(i.extent()); }
 };
+
+template<typename T> int		max_component_index(const interval<T>& i)	{ return max_component_index(i.extent()); }
 
 template<typename T> interval<T>	make_interval(const T &a)					{ return interval<T>(a); }
 template<typename T> interval<T>	make_interval(const interval<T> &a)			{ return a; }

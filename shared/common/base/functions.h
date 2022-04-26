@@ -322,7 +322,9 @@ template<class F> struct callback_ref : callback<F> {
 	force_inline callback_ref(callback_ref& b)				: callback<F>(b)	{}
 	force_inline callback_ref(callback_ref&& b)				: callback<F>(b)	{}
 	force_inline callback_ref(const callback_ref& b)		: callback<F>(b)	{}
+	force_inline callback_ref(async_callback<F>& b)			: callback<F>(b)	{}
 	force_inline callback_ref(_none)						: callback<F>(nullptr) {}
+
 	template<class T>	force_inline callback_ref(T *me)	: callback<F>(me) {}
 	template<class T>	force_inline callback_ref(T &&me)	: callback<F>(&me) {}
 	template<class F2, F2 f2> callback_ref(callback_maker<F2, f2> &&m) : callback<F>(m.c, &callback<F>::template thunk<noref_t<decltype(*m.c)>,F2,f2>) {}

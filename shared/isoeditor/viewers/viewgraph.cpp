@@ -48,7 +48,7 @@ public:
 		switch (message) {
 
 			case WM_CREATE: {
-				treecolumn.Create(GetChildWindowPos(), NULL, CHILD | VISIBLE | HSCROLL | TCS_GRIDLINES | TCS_HEADERAUTOSIZE, CLIENTEDGE | ACCEPTFILES);
+				treecolumn.Create(GetChildWindowPos(), NULL, CHILD | VISIBLE | HSCROLL | treecolumn.GRIDLINES | treecolumn.HEADERAUTOSIZE, CLIENTEDGE | ACCEPTFILES);
 				HeaderControl	header	= treecolumn.GetHeaderControl();
 				header.SetValue(GWL_STYLE, CHILD | VISIBLE | HDS_FULLDRAG);
 				HeaderControl::Item("Symbol").Format(HDF_LEFT).Width(100).Insert(header, 0);

@@ -771,7 +771,7 @@ mpg123::RETURNVALS mpg123::decode_frame(int64 *outnum, void **outdata, size_t *o
 //-----------------------------------------------------------------------------
 
 bool close(float a, float b, float part=1000) {
-	return iso::abs(a - b) * part <= iso::abs(a + b);
+	return abs(a - b) * part <= abs(a + b);
 }
 
 //-----------------------------------------------------------------------------

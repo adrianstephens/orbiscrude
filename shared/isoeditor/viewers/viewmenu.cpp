@@ -150,7 +150,7 @@ LRESULT ViewMenu::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 		case WM_CREATE:
 			menu	= Menu(IDR_MENU_MENU);
-			toolbar.Create(*this, NULL, CHILD | VISIBLE | CLIPSIBLINGS | TBSTYLE_FLAT);
+			toolbar.Create(*this, NULL, CHILD | VISIBLE | CLIPSIBLINGS | toolbar.FLAT);
 			toolbar.Init(menu);
 			menu.Radio(ID_MENU_SETCOORDINATESYSTEM_1280X720);
 			menu.Radio(ID_MENU_SETSPEED_NORMAL);

@@ -114,14 +114,14 @@ ParsedSPDB::ParsedSPDB(istream_ref file, const char *path) : flags(0) {
 						const char *name	= FileName(i.name);
 
 						if (auto sn = info.Stream(cstr("/src/files/") + to_lower(name))) {
-							files.add(file, name, malloc_block::unterminated(lvalue(MSF::stream_reader(msf, sn))));
+							files.add(file, name, malloc_block::unterminated(MSF::stream_reader(msf, sn)));
 
 						} else if (exists(name)) {
-							files.add(file, name, malloc_block(lvalue(FileInput(name)), filelength(name)));
+							files.add(file, name, malloc_block(FileInput(name), filelength(name)));
 
 						} else if (path && exists(filename(path).add_dir(name))) {
 							filename	name2 = filename(path).add_dir(name);
-							files.add(file, name, malloc_block(lvalue(FileInput(name2)), filelength(name2)));
+							files.add(file, name, malloc_block(FileInput(name2), filelength(name2)));
 						} else {
 							line_mapper.add_file(file, name);
 						}

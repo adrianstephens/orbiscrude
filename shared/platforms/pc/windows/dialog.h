@@ -80,7 +80,7 @@ struct DialogUnits {
 
 enum DialogItemType {
 	DLG_BUTTON		= 0x80,	//CHILD|VISIBLE|TABSTOP
-	DLG_EDIT		= 0x81,	//CHILD|VISIBLE|BORDER|TABSTOP | ES_AUTOHSCROLL
+	DLG_EDIT		= 0x81,	//CHILD|VISIBLE|BORDER|TABSTOP | EditControl::AUTOHSCROLL
 	DLG_STATIC		= 0x82,	//CHILD|VISIBLE|GROUP
 	DLG_LISTBOX		= 0x83,
 	DLG_SCROLLBAR	= 0x84,
@@ -187,8 +187,8 @@ struct DialogBoxCreator {
 	Font::Params	font;
 	dynamic_array<Control2>	controls;
 
-	DialogBoxCreator(const Rect &_rect, const char *_title, uint32 _style, uint32 _ex_style = 0, uint32 _help_id = 0)
-		: rect(_rect), title(_title), style(_style), ex_style(_ex_style), help_id(_help_id)
+	DialogBoxCreator(const Rect &rect, const char *title, uint32 style, uint32 ex_style = 0, uint32 help_id = 0)
+		: style(style), ex_style(ex_style), help_id(help_id), rect(rect), title(title)
 	{}
 
 	void		SetFont(const Font::Params &_font) {

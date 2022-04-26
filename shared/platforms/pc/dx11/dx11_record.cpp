@@ -2241,7 +2241,7 @@ malloc_block_all Capture::ResourceData(uintptr_t _res) {
 
 				} else {
 					int		mip			= i % info.nmip;
-					uint32	dest_width	= mip_stride(info.format, info.width, mip, false);
+					uint32	dest_width	= mip_stride(info.format, info.width, mip);
 					uint32	dest_stride = align_pow2(dest_width, 8);
 					uint32	height		= mip_size(info.format, info.height, mip);
 					size_t	sub_size	= dest_stride * height;

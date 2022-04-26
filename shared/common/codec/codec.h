@@ -38,8 +38,9 @@ struct codec_defaults {
 };
 
 template<typename T, typename R> using is_memory_transcoder = exists_t<decltype(declval<T>().process(declval<uint8*&>(), nullptr, nullptr, nullptr, TRANSCODE_NONE)), R>;
-template<typename T, typename R> using is_stream_transcoder = exists_t<decltype(declval<T>().process(nullptr, nullptr, declval<istream_ref>(), TRANSCODE_NONE)), R>;
- 
+template<typename T, typename R> using is_istream_transcoder = exists_t<decltype(declval<T>().process(nullptr, nullptr, declval<istream_ref>(), TRANSCODE_NONE)), R>;
+template<typename T, typename R> using is_ostream_transcoder = exists_t<decltype(declval<T>().process(declval<ostream_ref>(), nullptr, nullptr, TRANSCODE_NONE)), R>;
+
 template<typename T> size_t transcode(T&& transcoder, void* dst, size_t dst_size, const void* src, size_t src_size, size_t* bytes_written = 0, TRANSCODE_FLAGS flags = TRANSCODE_NONE) {
 	auto	dst1 = (uint8*)dst;
 	auto	src1 = (const uint8*)src;
@@ -56,11 +57,11 @@ template<typename T> is_memory_transcoder<T, size_t> transcode(T&& transcoder, m
 		*bytes_written = dst1 - (uint8*)dst;
 	return read;
 }
-template<typename T> is_stream_transcoder<T, size_t> transcode(T&& transcoder, memory_block dst, const_memory_block src, size_t* bytes_written = 0, TRANSCODE_FLAGS flags = TRANSCODE_NONE) {
+template<typename T> is_istream_transcoder<T, size_t> transcode(T&& transcoder, memory_block dst, const_memory_block src, size_t* bytes_written = 0, TRANSCODE_FLAGS flags = TRANSCODE_NONE) {
 	memory_reader	r(src);
 	auto	end = transcoder.process(dst, dst.end(), r, flags);
 	if (bytes_written)
-		*bytes_written = end - (uint8*)dst;
+		*bytes_written = end ? end - (uint8*)dst : 0;
 	return r.tell();
 }
 
@@ -73,7 +74,7 @@ template<typename T> malloc_block transcode(T&& transcoder, const_memory_block s
 		size_t	written, read = transcode(transcoder, dst + dst_offset, src + src_offset, &written);
 		src_offset += read;
 		dst_offset += written;
-		if (src_offset == src.length() && dst_offset != dst.length())
+		if ((src_offset == src.length() && dst_offset != dst.length()) || (read == 0 && written == 0))
 			break;
 
 		dst.resize(dst_offset * 2);
@@ -82,13 +83,24 @@ template<typename T> malloc_block transcode(T&& transcoder, const_memory_block s
 	return move(dst.resize(dst_offset));
 }
 
-template<typename T> malloc_block transcode(T&& transcoder, const_memory_block src) {
+template<typename T> is_memory_transcoder<T, malloc_block> transcode(T&& transcoder, const_memory_block src) {
 	return transcode(transcoder, src, transcoder.estimate_output(src, src.length()));
+}
+template<typename T> is_istream_transcoder<T, malloc_block> transcode(T&& transcoder, const_memory_block src) {
+	return transcode(transcoder, src, transcoder.estimate_output(src, src.length()));
+}
+template<typename T> is_ostream_transcoder<T, malloc_block> transcode(T&& transcoder, const_memory_block src) {
+	dynamic_memory_writer	w;
+	auto	end = transcoder.process(w, src, src.end(), TRANSCODE_NONE);
+	return w;
 }
 
 
-template<typename T> is_stream_transcoder<T, size_t> transcode(T&& transcoder, memory_block dst, istream_ref file, TRANSCODE_FLAGS flags = TRANSCODE_NONE) {
+template<typename T> is_istream_transcoder<T, size_t> transcode(T&& transcoder, memory_block dst, istream_ref file, TRANSCODE_FLAGS flags = TRANSCODE_NONE) {
 	return transcoder.process(dst, dst.end(), file, flags) - (const uint8*)dst;
+}
+template<typename T> is_ostream_transcoder<T, size_t> transcode(T&& transcoder, ostream_ref file, const_memory_block src, TRANSCODE_FLAGS flags = TRANSCODE_NONE) {
+	return transcoder.process(file, src, src.end(), flags);
 }
 
 //-----------------------------------------------------------------------------

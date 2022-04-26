@@ -352,7 +352,7 @@ LRESULT RegisterWindow::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 
 		case WM_ISO_NEWPANE: {
 			ListViewControl	lv;
-			lv.Create(GetChildWindowPos(), 0, CHILD | CLIPCHILDREN | CLIPSIBLINGS | VISIBLE | LVS_REPORT | LVS_NOSORTHEADER | LVS_SINGLESEL | LVS_SHOWSELALWAYS | LVS_OWNERDATA);
+			lv.Create(GetChildWindowPos(), 0, CHILD | CLIPCHILDREN | CLIPSIBLINGS | VISIBLE | lv.REPORT | lv.NOSORTHEADER | lv.SINGLESEL | lv.SHOWSELALWAYS | lv.OWNERDATA);
 			lv.SetExtendedStyle(ListViewControl::DOUBLEBUFFER | ListViewControl::FULLROWSELECT | ListViewControl::GRIDLINES | ListViewControl::ONECLICKACTIVATE | ListViewControl::UNDERLINEHOT | ListViewControl::AUTOSIZECOLUMNS);
 			lv.id = 'RG';
 			Init(lv);
@@ -630,12 +630,12 @@ DWORD BeginDrag(TreeColumnControl tc, HTREEITEM h, const Point &pt) {
 LRESULT LocalsWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 		case WM_CREATE: {
-			tc.Create(GetChildWindowPos(), 0, CHILD | VISIBLE | CLIPSIBLINGS | TCS_GRIDLINES | TCS_HEADERAUTOSIZE);
-			tc.GetTreeControl().style = CHILD | VISIBLE | CLIPSIBLINGS | TVS_NOHSCROLL | TVS_HASLINES | TVS_HASBUTTONS | TVS_LINESATROOT | TVS_SHOWSELALWAYS | TVS_FULLROWSELECT;
+			tc.Create(GetChildWindowPos(), 0, CHILD | VISIBLE | CLIPSIBLINGS | tc.GRIDLINES | tc.HEADERAUTOSIZE);
+			tc.GetTreeControl().style = CHILD | VISIBLE | CLIPSIBLINGS | TreeControl::NOHSCROLL | TreeControl::HASLINES | TreeControl::HASBUTTONS | TreeControl::LINESATROOT | TreeControl::SHOWSELALWAYS | TreeControl::FULLROWSELECT;
 			tc.GetTreeControl().SetImageList(ImageList(ID("IDB_IMAGELIST_DEBUG"), 16, LR_CREATEDIBSECTION));
 
 			HeaderControl	header	= tc.GetHeaderControl();
-			header.style = CHILD | VISIBLE | HDS_FULLDRAG;
+			header.style = CHILD | VISIBLE | HeaderControl::FULLDRAG;
 			HeaderControl::Item("Name").	Format(HDF_LEFT).Width(250).Insert(header);
 			HeaderControl::Item("Value").	Format(HDF_LEFT).Width(100).Insert(header);
 			HeaderControl::Item("Type").	Format(HDF_LEFT|HDF_FIXEDWIDTH).Width(header.Remaining()).Insert(header);
@@ -751,7 +751,7 @@ bool WatchWindow::Drop(const Point &pt, uint32 effect, IDataObject* data) {
 		return true;
 	}
 	if (auto text = (const char*)has_format(data, CF_TEXT)) {
-		AppendEntry(text, ReadCExpression(lvalue(memory_reader(text)), types, nullptr, none));
+		AppendEntry(text, ReadCExpression(memory_reader(text), types, nullptr, none));
 		return true;
 	}
 	return false;
@@ -776,13 +776,13 @@ void WatchWindow::RemoveEntry(HTREEITEM h, bool backwards) {
 LRESULT WatchWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 		case WM_CREATE: {
-			tc.Create(GetChildWindowPos(), 0, CHILD | VISIBLE | CLIPSIBLINGS | TCS_GRIDLINES | TCS_HEADERAUTOSIZE);
+			tc.Create(GetChildWindowPos(), 0, CHILD | VISIBLE | CLIPSIBLINGS | tc.GRIDLINES | tc.HEADERAUTOSIZE);
 			auto	tree	= tc.GetTreeControl();
-			tree.style = CHILD | VISIBLE | CLIPSIBLINGS | TVS_NOHSCROLL | TVS_HASLINES | TVS_HASBUTTONS | TVS_LINESATROOT | TVS_SHOWSELALWAYS | TVS_FULLROWSELECT;
+			tree.style = CHILD | VISIBLE | CLIPSIBLINGS | tree.NOHSCROLL | tree.HASLINES | tree.HASBUTTONS | tree.LINESATROOT | tree.SHOWSELALWAYS | tree.FULLROWSELECT;
 			tree.SetImageList(ImageList(ID("IDB_IMAGELIST_DEBUG"), 16, LR_CREATEDIBSECTION));
 
 			HeaderControl	header	= tc.GetHeaderControl();
-			header.style = CHILD | VISIBLE | HDS_FULLDRAG;
+			header.style = CHILD | VISIBLE | HeaderControl::FULLDRAG;
 			HeaderControl::Item("Name").	Format(HDF_LEFT).Width(250).Param(0).Insert(header, 0);
 			HeaderControl::Item("Value").	Format(HDF_LEFT).Width(100).Param(0).Insert(header, 1);
 			HeaderControl::Item("Type").	Format(HDF_LEFT|HDF_FIXEDWIDTH).Width(header.Remaining()).Param(0).Insert(header, 2);
@@ -911,7 +911,7 @@ LRESULT WatchWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 						case CF_TEXT: {
 							Clipboard	clip(hWnd);
 							if (auto text = clip.Get<char>(CF_TEXT))
-								AppendEntry(&*text, ReadCExpression(lvalue(memory_reader(&*text)), types, nullptr, none));
+								AppendEntry(&*text, ReadCExpression(memory_reader(&*text), types, nullptr, none));
 							break;
 						}
 					}
@@ -1022,7 +1022,7 @@ LRESULT TraceWindow::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 
 TraceWindow::TraceWindow(const WindowPos &wpos, int cols_per_entry) : cols_per_entry(cols_per_entry) {
 	Create(wpos, 0, CHILD | CLIPCHILDREN | CLIPSIBLINGS | VISIBLE, CLIENTEDGE);
-	c.Create(GetChildWindowPos(), 0, CHILD | CLIPCHILDREN | CLIPSIBLINGS | VISIBLE | LVS_REPORT | LVS_NOSORTHEADER | LVS_SINGLESEL | LVS_SHOWSELALWAYS);
+	c.Create(GetChildWindowPos(), 0, CHILD | CLIPCHILDREN | CLIPSIBLINGS | VISIBLE | c.REPORT | c.NOSORTHEADER | c.SINGLESEL | c.SHOWSELALWAYS);
 	c.SetExtendedStyle(ListViewControl::GRIDLINES | ListViewControl::DOUBLEBUFFER);// | LVS_EX_FULLROWSELECT);
 	c.SetFont(win::Font("Courier New", 11));
 	c.AddColumns("address", 100, "instruction", 400);

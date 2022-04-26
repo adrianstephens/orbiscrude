@@ -480,12 +480,12 @@ void ConvertComponent(
 	if (srce_type == dest_type) {
 		struct uint96 {uint32 t[3]; };
 		struct uint128 {uint32 t[4]; };
-		switch (DXGI_COMPONENTS(srce_type).Size()) {
+		switch (DXGI_COMPONENTS(srce_type).Bytes()) {
 			case 1:		copy_n(strided((uint8*)		srce_data, srce_stride),	strided((uint8*)	dest_data, dest_stride), count); break;
-			case 2:		copy_n(strided((uint16*)		srce_data, srce_stride),	strided((uint16*)	dest_data, dest_stride), count); break;
-			case 4:		copy_n(strided((uint32*)		srce_data, srce_stride),	strided((uint32*)	dest_data, dest_stride), count); break;
-			case 8:		copy_n(strided((uint64*)		srce_data, srce_stride),	strided((uint64*)	dest_data, dest_stride), count); break;
-			case 12:	copy_n(strided((uint96*)		srce_data, srce_stride),	strided((uint96*)	dest_data, dest_stride), count); break;
+			case 2:		copy_n(strided((uint16*)	srce_data, srce_stride),	strided((uint16*)	dest_data, dest_stride), count); break;
+			case 4:		copy_n(strided((uint32*)	srce_data, srce_stride),	strided((uint32*)	dest_data, dest_stride), count); break;
+			case 8:		copy_n(strided((uint64*)	srce_data, srce_stride),	strided((uint64*)	dest_data, dest_stride), count); break;
+			case 12:	copy_n(strided((uint96*)	srce_data, srce_stride),	strided((uint96*)	dest_data, dest_stride), count); break;
 			case 16:	copy_n(strided((uint128*)	srce_data, srce_stride),	strided((uint128*)	dest_data, dest_stride), count); break;
 		}
 		return;
@@ -667,7 +667,7 @@ ISO_ptr<DX11SubMesh> SubMesh2DX11SubMesh(ISO_ptr<SubMesh> p) {
 		vert_data[i].srce_size		= srce_size;
 		vert_data[i].dest_type		= dest_type;
 		vert_data[i].dest_offset	= total;
-		vert_data[i].dest_size		= DXGI_COMPONENTS(dest_type).Size();;
+		vert_data[i].dest_size		= DXGI_COMPONENTS(dest_type).Bytes();;
 		vert_data[i].usage			= name;
 		vert_data[i].usage_index	= usage_index;
 		vert_data[i].mult			= mult;

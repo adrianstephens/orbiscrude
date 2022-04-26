@@ -16,7 +16,6 @@
 #include <psapi.h>
 
 namespace iso {
-class filename;
 
 bool MiniDump(EXCEPTION_POINTERS *ep, const char *fn);
 
@@ -154,7 +153,7 @@ struct ModuleBase {
 
 	static const IMAGE_SECTION_HEADER*	SectionByName(const range<const IMAGE_SECTION_HEADER*> &sections, const char *n) {
 		for (auto &i : sections) {
-			if (memcmp(i.Name, n, sizeof(i.Name)) == 0)
+			if (strcmp((char*)i.Name, n) == 0 || memcmp(i.Name, n, sizeof(i.Name)) == 0)
 				return &i;
 		}
 		return 0;

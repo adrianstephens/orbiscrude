@@ -941,11 +941,12 @@ template<typename T> 						constexpr bool exists_v			= T_exists<T>::value;
 
 template<typename T>						struct T_is_pointer				: T_false	{};
 template<typename T>						struct T_is_pointer<T*>			: T_true	{};
-template<typename T>						constexpr bool is_pointer_t		= T_is_pointer<T>::value;
+template<typename T>						constexpr bool is_pointer_v		= T_is_pointer<T>::value;
 
 template<typename T>						struct T_is_lvalue				: T_false	{};
 template<typename T>						struct T_is_lvalue<const T&>	: T_false	{};
 template<typename T>						struct T_is_lvalue<T&>			: T_true	{};
+template<typename T>						constexpr bool is_lvalue_v		= T_is_lvalue<T>::value;
 
 template<typename...T>						struct T_void					: T_type<void> {};
 template<typename...T>						using void_t					= typename T_void<T...>::type;

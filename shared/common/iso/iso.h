@@ -509,7 +509,7 @@ struct TypeFloat : Type {
 	iso_export void		set(void* data, double f) const;
 	iso_export void		set(void* data, number n) const {
 		n	= n.to_binary();
-		uint64	m	= iso::abs(n.m);
+		uint64	m	= abs(n.m);
 		int		i	= leading_zeros(m);
 		set(data, m << i, n.e - i + 62, n.m < 0);
 	}
@@ -2396,6 +2396,7 @@ template<typename T> tag2 GetName() {
 	return buffer_accum<256>(t).term();
 }
 
+#if  0
 template<typename T> struct def<T_swap_endian<T>> : TypeUserSave {
 	struct V : VirtualT1<T_swap_endian<T>, V> {
 		static Browser2 Deref(const T_swap_endian<T>& a) { return MakePtr(tag(), get(a)); }
@@ -2409,6 +2410,15 @@ template<typename T, int BITS> struct def<compact<T, BITS>> : TypeUserSave {
 	} v;
 	def() : TypeUserSave(GetName<T>(), &v) {}
 };
+#else
+template<typename T> struct def<T_swap_endian<T>> : VirtualT2<T_swap_endian<T>> {
+	static Browser2 Deref(const T_swap_endian<T>& a) { return MakePtr(tag(), get(a)); }
+};
+
+template<typename T, int BITS> struct def<compact<T, BITS>> : VirtualT2<compact<T, BITS>> {
+	static Browser2 Deref(const compact<T, BITS>& a) { return MakePtr(tag(), a.get()); }
+};
+#endif
 
 //-------------------------------------
 // pointers

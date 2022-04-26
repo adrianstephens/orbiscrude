@@ -13,7 +13,7 @@
 
 #undef NAN
 
-const void *memmem(const void *l, size_t l_len, const void *s, size_t s_len);
+void *memmem(const void *l, size_t l_len, const void *s, size_t s_len);
 
 #define alloc_auto(T,N)	(T*)alloca((N) * sizeof(T))
 
@@ -909,15 +909,15 @@ public:
 template<typename T> inline auto enum_int(T t) { return underlying_type<T>(t); }
 
 #define ENUM_FLAGOPS(X)\
-	inline X operator&(X a, X b)	{ return X(enum_int(a) &  enum_int(b)); }\
-	inline X operator|(X a, X b)	{ return X(enum_int(a) |  enum_int(b)); }\
-	inline X operator^(X a, X b)	{ return X(enum_int(a) ^  enum_int(b)); }\
-	inline X operator-(X a, X b)	{ return X(enum_int(a) & ~enum_int(b)); }\
-	inline X operator*(X a, bool b)	{ return b ? a : X(0); }\
-	inline X& operator&=(X &a, X b)	{ return a = a & b; }\
-	inline X& operator|=(X &a, X b)	{ return a = a | b; }\
-	inline X& operator^=(X &a, X b)	{ return a = a ^ b; }\
-	inline X& operator-=(X &a, X b)	{ return a = a - b; }
+	nodebug_inline X operator&(X a, X b)	{ return X(enum_int(a) &  enum_int(b)); }\
+	nodebug_inline X operator|(X a, X b)	{ return X(enum_int(a) |  enum_int(b)); }\
+	nodebug_inline X operator^(X a, X b)	{ return X(enum_int(a) ^  enum_int(b)); }\
+	nodebug_inline X operator-(X a, X b)	{ return X(enum_int(a) & ~enum_int(b)); }\
+	nodebug_inline X operator*(X a, bool b)	{ return b ? a : X(0); }\
+	nodebug_inline X& operator&=(X &a, X b)	{ return a = a & b; }\
+	nodebug_inline X& operator|=(X &a, X b)	{ return a = a | b; }\
+	nodebug_inline X& operator^=(X &a, X b)	{ return a = a ^ b; }\
+	nodebug_inline X& operator-=(X &a, X b)	{ return a = a - b; }
 
 template<typename E, typename S = uint_for_t<E>> struct flags {
 	typedef uint_for_t<E>	T;
@@ -1173,43 +1173,43 @@ struct memory_block {
 	constexpr memory_block(const memory_block &t)	: p(t.p), n(t.n)		{}
 	template<typename T> explicit	constexpr memory_block(T *t)		: p(t), n(sizeof(T))		{}
 	template<typename T, int N>		constexpr memory_block(T (&t)[N])	: p(&t), n(sizeof(T) * N)	{}
-	template<typename T> operator T*()					const	{ return (T*)p; }
-	operator arbitrary_ptr()							const	{ return p; }
-	operator arbitrary_const_ptr()						const	{ return p; }
+	template<typename T> operator T*()						const	{ return (T*)p; }
+	operator arbitrary_ptr()								const	{ return p; }
+	operator arbitrary_const_ptr()							const	{ return p; }
 
-	memory_block_copy	operator*()						const	{ return memory_block_copy(p, n); }
-	explicit operator bool()							const	{ return !!p; }
-	size_t				size()							const	{ return n; }
-	uint32				size32()						const	{ return uint32(n); }
-	size_t				length()						const	{ return n; }			// DEPRECATE
-	arbitrary_ptr		begin()							const	{ return p; }
-	arbitrary_ptr		end()							const	{ return (char*)p + n; }
-	bool				contains(const void *x)			const	{ return between(x, p, end()); }
+	memory_block_copy	operator*()							const	{ return memory_block_copy(p, n); }
+	explicit operator bool()								const	{ return !!p; }
+	size_t				size()								const	{ return n; }
+	uint32				size32()							const	{ return uint32(n); }
+	size_t				length()							const	{ return n; }			// DEPRECATE
+	arbitrary_ptr		begin()								const	{ return p; }
+	arbitrary_ptr		end()								const	{ return (char*)p + n; }
+	bool				contains(const void *x)				const	{ return between(x, p, end()); }
 
-	void				clear_contents()				const	{ memset(p, 0, n); }
-	size_t				copy_to(void *dest)				const	{ memcpy(dest, p, n); return n; }
-	size_t				move_to(void *dest)				const	{ memmove(dest, p, n); return n; }
-	void*				find(struct const_memory_block data)	const;
+	void				clear_contents()					const	{ memset(p, 0, n); }
+	size_t				copy_to(void *dest)					const	{ memcpy(dest, p, n); return n; }
+	size_t				move_to(void *dest)					const	{ memmove(dest, p, n); return n; }
+	void*				find(struct const_memory_block data)const;
 
-	size_t				copy_from(const void *srce)		const	{ memcpy(p, srce, n); return n; }
-	void				shift_down(size_t i)			const	{ if (i && i < n) memmove(p, (uint8*)p + i, n - i); }
-	void				shift_up(size_t i)				const	{ if (i && i < n) memmove((uint8*)p + i, p, n - i); }
+	size_t				copy_from(const void *srce)			const	{ memcpy(p, srce, n); return n; }
+	void				shift_down(size_t i)				const	{ if (i && i < n) memmove(p, (uint8*)p + i, n - i); }
+	void				shift_up(size_t i)					const	{ if (i && i < n) memmove((uint8*)p + i, p, n - i); }
 
-	memory_block		begin(size_t i)					const	{ return i < n ? memory_block((char*)p, i) : *this; }
-	memory_block		end(size_t i)					const	{ return i < n ? memory_block((char*)p + n - i, i) : *this; }
-	memory_block		slice(void *a, void *b)			const	{ ISO_ASSERT(a >= p && b >= a && b <= end()); return memory_block(a, size_t(b) - size_t(a)); }
-	memory_block		slice(void *a)					const	{ return slice(a, (void*)end()); }
-	memory_block		slice(void *a, intptr_t b)		const	{ return slice(a, (b < 0 ? (char*)end() : (char*)a) + b); }
-	memory_block		slice(intptr_t a, intptr_t b)	const	{ return slice((char*)p + (a < 0 ? n + a : a), b); }
-	memory_block		slice(intptr_t a)				const	{ return slice((char*)p + (a < 0 ? n + a : a)); }
-	memory_block		slice_to(intptr_t b)			const	{ return slice(p, min(b, n)); }
-	memory_block		slice_to(void *b)				const	{ return slice(p, b); }
+	memory_block		begin(size_t i)						const	{ return i < n ? memory_block((char*)p, i) : *this; }
+	memory_block		end(size_t i)						const	{ return i < n ? memory_block((char*)p + n - i, i) : *this; }
+	memory_block		slice(const void *a, const void *b)	const	{ ISO_ASSERT(a >= p && b >= a && b <= end()); return memory_block((void*)a, size_t(b) - size_t(a)); }
+	memory_block		slice(const void *a)				const	{ return slice(a, (void*)end()); }
+	memory_block		slice(const void *a, intptr_t b)	const	{ return slice(a, (b < 0 ? (char*)end() : (char*)a) + b); }
+	memory_block		slice(intptr_t a, intptr_t b)		const	{ return slice((char*)p + (a < 0 ? n + a : a), b); }
+	memory_block		slice(intptr_t a)					const	{ return slice((char*)p + (a < 0 ? n + a : a)); }
+	memory_block		slice_to(intptr_t b)				const	{ return slice(p, min(b, n)); }
+	memory_block		slice_to(void *b)					const	{ return slice(p, b); }
 
-	template<typename T> memory_block operator+(T i)	const	{ return p && i <= n ? memory_block((char*)p + i, n - i) : none; }
-	template<typename T> void	fill(const T &t)		const	{ for (T *i = (T*)p, *e = end(); i < e; ++i) *i = t; }
+	template<typename T> memory_block operator+(T i)		const	{ return p && i <= n ? memory_block((char*)p + i, n - i) : none; }
+	template<typename T> void	fill(const T &t)			const	{ for (T *i = (T*)p, *e = end(); i < e; ++i) *i = t; }
 
-	template<typename R> bool	read(R &r)				const	{ return r.readbuff(p, n) == n; }
-	template<typename W> bool	write(W &w)				const	{ return w.writebuff(p, n) == n; }
+	template<typename R> bool	read(R &r)					const	{ return r.readbuff(p, n) == n; }
+	template<typename W> bool	write(W &w)					const	{ return !n || w.writebuff(p, n) == n; }
 };
 
 struct const_memory_block {
@@ -1223,7 +1223,7 @@ struct const_memory_block {
 	constexpr const_memory_block(const memory_block &m)			: p(m.p), n(m.n)		{}
 	const_memory_block(const char *t)							: p(t), n(t ? strlen(t) : 0)	{}
 	const_memory_block(char *t)									: p(t), n(t ? strlen(t) : 0)	{}
-	template<typename T, typename = enable_if_t<is_pointer_t<T>>> constexpr	const_memory_block(T t)	: p(t), n(sizeof(deref_t<T>)){}
+	template<typename T, typename = enable_if_t<is_pointer_v<T>>> constexpr	const_memory_block(T t)	: p(t), n(sizeof(deref_t<T>)){}
 	template<typename T, size_t N>		constexpr	const_memory_block(const T (&t)[N])		: p(&t), n(sizeof(T) * N)	{}
 	template<size_t N>					constexpr	const_memory_block(const char (&t)[N])	: p(&t), n(N - 1)			{}
 	template<typename T> operator const T*()	const	{ return (const T*)p; }
@@ -1679,7 +1679,8 @@ public:
 	T*	end()					const	{ return a + N; }
 };
 
-template <typename T, typename... A> force_inline unique_ptr<T> make_unique(A&&... a)	{ return new T(forward<A>(a)...); }
+template<typename T>				force_inline unique_ptr<T> make_unique(T *t)		{ return t; }
+template<typename T, typename... A>	force_inline unique_ptr<T> make_unique(A&&... a)	{ return new T(forward<A>(a)...); }
 
 //-----------------------------------------------------------------------------
 //	class ref_ptr
@@ -1906,7 +1907,7 @@ public:
 		}
 		if (p0) {
 			p0->next = me;
-			single() = exchange(this->next, p);
+			static_list<T>::single() = exchange(this->next, p);
 		}
 	}
 };

@@ -1,273 +1,882 @@
-#include "libpng/png.h"
 #include "bitmapfile.h"
+#include "codec/deflate.h"
+#include "codec/codec_stream.h"
 
 using namespace iso;
+/*
 
-struct png_struct_holder : holder<png_struct*> {
-	png_info		*info_ptr;
-	png_byte		*image_data;
+Critical chunks (must appear in this order, except PLTE is optional):
+	Name  Multiple  Ordering constraints
+	IHDR    No      Must be first
+	PLTE    No      Before IDAT
+	IDAT    Yes     Multiple IDATs must be consecutive
+	IEND    No      Must be last
 
-	png_struct_holder(png_struct *p) : holder<png_struct*>(p), info_ptr(0), image_data(0)	{}
+Ancillary chunks (need not appear in this order):
+	Name  Multiple  Ordering constraints
+	cHRM    No      Before PLTE and IDAT
+	gAMA    No      Before PLTE and IDAT
+	iCCP    No      Before PLTE and IDAT
+	sBIT    No      Before PLTE and IDAT
+	sRGB    No      Before PLTE and IDAT
+	bKGD    No      After PLTE; before IDAT
+	hIST    No      After PLTE; before IDAT
+	tRNS    No      After PLTE; before IDAT
+	pHYs    No      Before IDAT
+	sPLT    Yes     Before IDAT
+	tIME    No      None
+	iTXt    Yes     None
+	tEXt    Yes     None
+	zTXt    Yes     None
 
-	~png_struct_holder()	{
-		png_destroy_read_struct((png_struct**)this, &info_ptr, NULL);
-		iso::free(image_data);
+Standard keywords for text chunks:
+	Title            Short (one line) title or caption for image
+	Author           Name of image's creator
+	Description      Description of image (possibly long)
+	Copyright        Copyright notice
+	Creation Time    Time of original image creation
+	Software         Software used to create the image
+	Disclaimer       Legal disclaimer
+	Warning          Warning of nature of content
+	Source           Device used to create the image
+	Comment          Miscellaneous comment; conversion from GIF comment
+*/
+
+uint8	signature[] = {0x89, 'P', 'N', 'G', 13, 10, 26, 10};
+
+struct Chunk {
+	uint32			type;
+	malloc_block	data;
+
+	uint32	calc_crc() const {
+		crc32	c;
+		c.write(type);
+		c.write(data);
+		return c;
+	}
+
+	Chunk()	{}
+	Chunk(uint32 type, malloc_block&& data) : type(type), data(data) {}
+
+	bool	read(istream_ref file) {
+		uint32be	length;
+		uint32be	crc;
+		return file.read(length, type) && data.read(file, length) && file.read(crc) && calc_crc() == crc;
+	}
+
+	bool	write(ostream_ref file) const {
+		return file.write(uint32be(data.size32()), type, data, uint32be(calc_crc()));
 	}
 };
 
-class PNGreader {
-	istream_ref	file;
-	int			state;
-	streamptr	offset;
-	png_size_t	chunklen;
-	crc32		crc;
-	bool		CgBI;
-	int			idat;
+struct ia8 {
+	uint8		i, a;
+};
+struct rgba8 {
+	uint8		r, g, b, a;
+	operator ISO_rgba() const { return {r,g,b,a}; }
+};
+struct rgb8 {
+	uint8		r, g, b;
+	operator rgba8() const { return {r,g,b,0}; }
+};
+struct rgb16 {
+	uint16be	r, g, b;
+};
+struct chrom {
+	uint32be	x, y;
+};
 
-	struct taghead {
-		uint32be	len, tag;
+union col16 {
+	uint16be	Gray;
+	rgb16		Col;
+	col16()	{}
+};
+
+enum Type : uint8 {	//Bit Depths
+	gray	= 0,	// 1,2,4,8,16
+	rgb		= 2,	// 8,16
+	indexed	= 3,	// 1,2,4,8   
+	graya	= 4,	// 8,16      
+	rgba	= 6,	// 8,16
+
+	noalpha	= 0,
+	alpha	= 2,
+};
+enum Filter : uint8 {
+	None	= 0,
+	Sub		= 1,
+	Up		= 2,
+	Average	= 3,
+	Paeth	= 4,
+};
+enum Interlace : uint8 {
+	NoInterlace	= 0,
+	Adam7		= 1,
+};
+enum Compression : uint8 {
+	zlib	= 0
+};
+
+enum Intent : uint8 {
+	Perceptual				= 0,
+	RelativeColorimetric	= 1,
+	Saturation				= 2,
+	AbsoluteColorimetric	= 3,
+};
+
+uint32	num_components(Type type) {
+	static uint8 ncomps[] = {1, 0, 3, 1, 2, 0, 4};
+	return ncomps[type];
+}
+uint32	bytes_per_texel(Type type, uint8 bitdepth) {
+	return (bitdepth * num_components(type) + 7) / 8;
+}
+
+//Image header 
+struct IHDR {
+	uint32be	Width;
+	uint32be	Height;
+	uint8		BitDepth;
+	Type		ColorType;
+	Compression	CompressionMethod;
+	Filter		FilterMethod;
+	Interlace	InterlaceMethod;
+
+	IHDR()	{}
+	IHDR(uint32 Width, uint32 Height, uint8 BitDepth, Type ColorType, bool interlaced)
+		: Width(Width), Height(Height), BitDepth(BitDepth), ColorType(ColorType)
+		, CompressionMethod(zlib), FilterMethod(None), InterlaceMethod(interlaced ? Adam7 : NoInterlace) {}
+} __attribute__((packed));
+
+//Transparency
+//If present specifies that the image uses simple transparency: either alpha values associated with palette entries (for indexed-color images) or a single transparent color (for grayscale and truecolor images)
+union tRNS {
+	uint8	alpha[];//palette entry alphas
+	col16	trans;	//Pixels of this colour are to be treated as transparent (equivalent to alpha value 0)
+};
+
+//Image gamma
+struct gAMA {
+	uint32be	Gamma;
+};
+
+//Primary chromaticities
+struct  cHRM {
+	chrom		white, red, green, blue;
+};
+
+//Standard RGB color space
+struct sRGB {
+	Intent	RenderingIntent;
+};
+
+//Embedded ICC profile
+struct iCCP {
+	embedded_string	ProfileName;
+	//Compression	CompressionMethod;
+	//CompressedProfile: n bytes
+};
+
+struct tEXt {
+	embedded_string	Keyword;
+	//embedded_string	Text;
+};
+struct zTXt {
+	embedded_string	Keyword;
+	//Compression		CompressionMethod;
+	//embedded_string	Text;
+};
+struct iTXt {
+	embedded_string	Keyword;
+	//uint8				CompressionFlag;
+	//Compression		CompressionMethod;
+	//embedded_string	LanguageTag;
+	//embedded_string	TranslatedKeyword;
+	//embedded_string	Text;
+};
+
+//Background color
+union bKGD {
+	uint8		index;	//3
+	uint16be	Gray;	//0, 4
+	rgb16		col;	//2, 6
+	bKGD() {}
+};
+
+//Physical pixel dimensions
+// When the unit specifier is 0, the pHYs chunk defines pixel aspect ratio only; the actual size of the pixels remains unspecified.
+struct pHYs {
+	enum {
+		unknown	= 0,
+		meters	= 1,
 	};
+	uint32be	PixelsPerUnitX;
+	uint32be	PixelsPerUnitY;
+	uint8		UnitSpecifier;
+};
 
-	void read(png_struct *png_ptr, png_byte *data, png_size_t length) {
-		for (;;) {
-			offset	= file.tell();
-			switch (state) {
-				case 0: {
-					file.readbuff(data, length);
-					taghead	&head	= *(taghead*)data;
-					chunklen		= head.len;
-					switch (head.tag) {
-						case 'CgBI':
-							CgBI	= true;
-							idat	= 0;
-							file.seek_cur(chunklen + 4);
-							continue;
-						case 'IDAT':
-							if (CgBI && idat++ == 0) {
-								head.len = uint32(chunklen += 2);
-								state	= 1;
-								crc		= const_memory_block(data + 4, 4);
-								break;
-							}
-						default:
-							state		= -1;
-							crc			= const_memory_block(data + 4, 4);
-							break;
+//Significant bits
+// Each depth specified in sBIT must be greater than zero and less than or equal to the sample depth (which is 8 for indexed-color images, and the bit depth given in IHDR for other color types).
+union sBIT {
+	uint8	gray_bits;		//0
+	rgb8	col_bits;		//2,3
+	ia8		gray_alpha_bits;//4
+	rgba8	col_alpha_bits;	//6
+};
+
+//Suggested palette
+// Used to suggest a reduced palette to be used when the display device is not capable of displaying the full range of colors present in the image
+// If present, it provides a recommended set of colors, with alpha and frequency information, that can be used to construct a reduced palette to which the PNG image can be quantized.
+struct sPLT {
+	embedded_string	PaletteName;
+	uint8			SampleDepth;
+	struct Entry8 { rgb8	col8; uint16 freq; };
+	struct Entry16 { rgb16	col16; uint16 freq; };
+	union {
+		Entry8	entries8[];
+		Entry16	entries16[];
+	};
+};
+
+//Palette histogram
+struct hIST {
+};
+
+//Image last-modification time
+struct  tIME {
+	uint16be	Year;	// (complete; for example, 1995, not 95)
+	uint8		Month;	// (1-12)
+	uint8		Day;	// (1-31)
+	uint8		Hour;	// (0-23)
+	uint8		Minute;	// (0-59)
+	uint8		Second;	// (0-60) 60 for leap seconds
+};
+
+//CGBI - apple extension
+// if present causes:
+//	byteswapped (RGBA -> BGRA) pixel data
+//	zlib header, footer, and CRC removed from the IDAT chunk
+//	premultiplied alpha (color' = color * alpha / 255)
+struct  CgBI {
+	//CGBitmapInfo bitmask.
+	uint32be	cgbi;	// 0x50 0x00 0x20 0x06 or 0x50 0x00 0x20 0x02 
+};
+
+
+// a = left, b = above, c = upper left
+inline int PaethPredictor(int a, int b, int c) {
+	int		p	= a + b - c;	// initial estimate
+	int		pa	= abs(p - a);	// distances to a, b, c
+	int		pb	= abs(p - b);
+	int		pc	= abs(p - c);
+	// return nearest of a,b,c, breaking ties in order a,b,c.
+	return	pa <= pb && pa <= pc ? a
+		:	pb <= pc ? b
+		:	c;
+}
+
+bool readline(istream_ref file, uint8 *prev, uint8 *next, uint32 len, uint32 bpp) {
+	auto	filter = (Filter)file.getc();
+
+	if (file.readbuff(next, len) != len)
+		return false;
+
+	switch (filter) {
+		case None:
+			break;
+
+		case Sub:
+			for (int i = bpp; i < len; i++)
+				next[i] += next[i - bpp];
+			break;
+
+		case Up:
+			for (int i = 0; i < len; i++)
+				next[i] += prev[i];
+			break;
+
+		case Average:
+			for (int i = 0; i < bpp; i++)
+				next[i] += prev[i] / 2;
+			for (int i = bpp; i < len; i++)
+				next[i] += (next[i - bpp] + prev[i]) / 2;
+			break;
+
+		case Paeth:
+			for (int i = 0; i < bpp; i++)
+				next[i] += PaethPredictor(0, prev[i], 0);
+			for (int i = bpp; i < len; i++)
+				next[i] += PaethPredictor(next[i - bpp], prev[i], prev[i - bpp]);
+			break;
+
+		default:
+			return false;
+	}
+	return true;
+}
+
+template<int B, typename T> const uint8 *readbits(const block<T, 1> &blk, const uint8 *src) {
+	uint32	b = 1 << 16;
+	for (auto& x : blk) {
+		if (b >= (1 << 16))
+			b = *src++ | 0x100;
+		x = (b >> (8 - B)) & bits(B);
+		b <<= B;
+	}
+	return src;
+}
+
+template<typename T> bool readblock(const block<T, 2> &blk, istream_ref file, Type type, uint8 bitdepth) {
+	uint32	bpp	= bytes_per_texel(type, bitdepth);
+	uint32	bpl	= bpp * blk.template size<1>();
+
+	temp_array<uint8>	data(bpl * 2);
+	uint8	*prev	= data, *next = prev + bpl;
+	memset(prev, 0, bpl);
+
+	for (auto y : blk) {
+		readline(file, prev, next, bpl, bpp);
+		switch (type) {
+			case gray:
+				switch (bitdepth) {
+					case 1:
+						readbits<1>(y, next);
+						break;
+					case 2:
+						readbits<2>(y, next);
+						break;
+					case 4:
+						readbits<4>(y, next);
+						break;
+					case 8: {
+						auto	src	= next;
+						for (auto& x : y)
+							x = *src++;
+						break;
 					}
-					return;
+					case 16: {
+						auto	src = (const uint16be*)next;
+						for (auto& x : y)
+							x = (int)*src++;
+						break;
+					}
 				}
+				break;
 
-				case -1:
-					file.readbuff(data, length);
-					chunklen	-= length;
-					if (chunklen == 0)
-						state = -2;
-					crc.writebuff(data, length);
-					return;
+			case rgb:
+				switch (bitdepth) {
+					case 8: {
+						auto	src	= next;
+						for (auto& x : y) {
+							uint8	r = *src++, g = *src++, b = *src++;
+							x = T(r, g, b);
+						}
+						break;
+					}
+					case 16: {
+						auto	src = (const uint16be*)next;
+						for (auto& x : y) {
+							uint16	r = *src++, g = *src++, b = *src++;
+							x = T(r, g, b);
+						}
+						break;
+					}
+				}
+				break;
 
-				case -2:
-//					*(uint32be*)data = crc.as<uint32>();
-					file.readbuff(data, length);
-					state = 0;
-					return;
+			case indexed:
+				switch (bitdepth) {
+					case 1:
+						readbits<1>(y, next);
+						break;
+					case 2:
+						readbits<2>(y, next);
+						break;
+					case 4:
+						readbits<4>(y, next);
+						break;
+					case 8: {
+						auto	src = next;
+						for (auto& x : y)
+							x = *src++;
+						break;
+					}
+				}
+				break;
 
-				case 1:
-					data[0] = 0x78;
-					data[1] = 0x9c;
-					file.readbuff(data + 2, length - 2);
-					state	= 2;
-					chunklen	-= length;
-					crc.writebuff(data, length);
-					return;
+			case graya:
+				switch (bitdepth) {
+					case 8: {
+						auto	src	= next;
+						for (auto& x : y) {
+							uint8	i = *src++, a = *src++;
+							x = T(i, a);
+						}
+						break;
+					}
+					case 16: {
+						auto	src = (const uint16be*)next;
+						for (auto& x : y) {
+							uint16	i = *src++, a = *src++;
+							x = T(i, a);
+						}
+						break;
+					}
+				}
+				break;
 
-				case 2:
-					file.readbuff(data, length);
-					chunklen	-= length;
-					if (chunklen == 0)
-						state = 3;
-					crc.writebuff(data, length);
-					return;
-				case 3:
-					file.readbuff(data, length);
-					*(uint32be*)data = crc;
-					state = 0;
-					return;
-				default:
-					file.readbuff(data, length);
-					return;
-			}
+			case rgba:
+				switch (bitdepth) {
+					case 8: {
+						auto	src	= next;
+						for (auto& x : y) {
+							uint8	r = *src++, g = *src++, b = *src++, a = *src++;
+							x = T(r, g, b, a);
+						}
+						break;
+					}
+					case 16: {
+						auto	src = (const uint16be*)next;
+						for (auto& x : y) {
+							uint16	r = *src++, g = *src++, b = *src++, a = *src++;
+							x = T(r, g, b, a);
+						}
+						break;
+					}
+				}
+				break;
+		}
+
+		swap(prev, next);
+	}
+	return true;
+}
+
+static Filter get_filter(uint8* prev, uint8* next, uint32 len, uint32 bpp) {
+	uint32	mins	= maximum;
+	Filter	filter	= None;
+
+	//None
+	uint32 sum = 0;
+	for (int i = 0; i < len; i++) {
+		int	v = next[i];
+		sum += (v < 128) ? v : 256 - v;
+	}
+	mins = sum;
+
+	// Sub filter
+	sum = 0;
+	for (int i = 0; i < bpp; i++) {
+		int	v = next[i];
+		sum += (v < 128) ? v : 256 - v;
+	}
+	for (int i = bpp; sum < mins && i < len; i++) {
+		int	v = (next[i] - next[i - bpp]) & 0xff;
+		sum += (v < 128) ? v : 256 - v;
+	}
+
+	if (sum < mins) {
+		mins	= sum;
+		filter	= Sub;
+	}
+
+	// Up filter
+	sum	= 0;
+	for (int i = 0; sum < mins && i < len; i++) {
+		int	v = (next[i] - prev[i]) & 0xff;
+		sum += (v < 128) ? v : 256 - v;
+	}
+
+	if (sum < mins) {
+		mins	= sum;
+		filter	= Up;
+	}
+
+	// Avg filter
+	sum	= 0;
+	for (int i = 0; i < bpp; i++) {
+		int	v = (next[i] - prev[i] / 2) & 0xff;
+		sum += (v < 128) ? v : 256 - v;
+	}
+	for (int i = bpp; sum < mins && i < len; i++) {
+		int	v = (next[i] - (prev[i] + next[i - bpp]) / 2) & 0xff;
+		sum += (v < 128) ? v : 256 - v;
+	}
+
+	if (sum < mins) {
+		mins	= sum;
+		filter	= Average;
+	}
+
+	// Paeth filter
+	sum	= 0;
+	for (int i = 0; i < bpp; i++) {
+		int	v = (next[i] - prev[i]) & 0xff;
+		sum += (v < 128) ? v : 256 - v;
+	}
+	for (int i = bpp; sum < mins && i < len; i++) {
+		int	p = PaethPredictor(next[i - bpp], prev[i], prev[i - bpp]);
+		int	v = (next[i] - p) & 0xff;
+		sum += (v < 128) ? v : 256 - v;
+	}
+
+	if (sum < mins)
+		filter = Paeth;
+
+
+	return filter;
+}
+
+static bool writeline(ostream_ref file, uint8 *prev, uint8 *next, uint8 *dest, uint32 len, uint32 bpp, Filter filter) {
+	file.putc(filter);
+
+	switch (filter) {
+		case None:
+			break;
+
+		case Sub:
+			for (int i = 0; i < bpp; i++)
+				dest[i] = next[i];
+			for (int i = bpp; i < len; i++)
+				dest[i] = next[i] - next[i - bpp];
+			break;
+
+		case Up:
+			for (int i = 0; i < len; i++)
+				dest[i] = next[i] - prev[i];
+			break;
+
+		case Average:
+			for (int i = 0; i < bpp; i++)
+				dest[i] = next[i] - prev[i] / 2;
+			for (int i = bpp; i < len; i++)
+				dest[i] = next[i] - (prev[i] + next[i - bpp]) / 2;
+			break;
+
+		case Paeth:
+			for (int i = 0; i < bpp; i++)
+				dest[i] = next[i] - prev[i];
+			for (int i = bpp; i < len; i++)
+				dest[i] = next[i] - PaethPredictor(next[i - bpp], prev[i], prev[i - bpp]);
+			break;
+	}
+
+	return file.writebuff(dest, len) == len;
+}
+
+template<int B, typename T> uint8 *writebits(const block<T, 1> &blk, uint8 *dst) {
+	uint32	b = 1;
+	for (auto& x : blk) {
+		b = (b << B) | (x.r & bits(B));
+		if (b >= (1 << 8)) {
+			*dst++ = b;
+			b = 1;
 		}
 	}
-	static void _read(png_struct *png_ptr, png_byte *data, png_size_t length) {
-		((PNGreader*)png_get_io_ptr(png_ptr))->read(png_ptr, data, length);
+	return dst;
+}
+
+template<typename T> bool writeblock(const block<T, 2> &blk, ostream_ref file, Type type, uint8 bitdepth) {
+	uint32	bpp	= bytes_per_texel(type, bitdepth);
+	uint32	bpl	= bpp * blk.template size<1>();
+
+	temp_array<uint8>	data(bpl * 3);
+	uint8	*prev	= data, *next = prev + bpl, *scratch = next + bpl;
+	memset(prev, 0, bpl);
+
+	for (auto y : blk) {
+		switch (type) {
+			case gray:
+				switch (bitdepth) {
+					case 1:
+						writebits<1>(y, next);
+						break;
+					case 2:
+						writebits<2>(y, next);
+						break;
+					case 4:
+						writebits<4>(y, next);
+						break;
+					case 8: {
+						auto	dst	= next;
+						for (auto& x : y)
+							*dst++ = x.r;
+						break;
+					}
+					case 16: {
+						auto	dst = (uint16be*)next;
+						for (auto& x : y)
+							*dst++ = x.r;
+						break;
+					}
+				}
+				break;
+
+			case rgb:
+				switch (bitdepth) {
+					case 8: {
+						auto	dst	= next;
+						for (auto& x : y) {
+							*dst++ = x.r;
+							*dst++ = x.g;
+							*dst++ = x.b;
+						}
+						break;
+					}
+					case 16: {
+						auto	dst = (uint16be*)next;
+						for (auto& x : y) {
+							*dst++ = x.r;
+							*dst++ = x.g;
+							*dst++ = x.b;
+						}
+						break;
+					}
+				}
+				break;
+
+			case indexed:
+				switch (bitdepth) {
+					case 1:
+						writebits<1>(y, next);
+						break;
+					case 2:
+						writebits<2>(y, next);
+						break;
+					case 4:
+						writebits<4>(y, next);
+						break;
+					case 8: {
+						auto	dst = next;
+						for (auto& x : y)
+							*dst++ = x.r;
+						break;
+					}
+				}
+				break;
+
+			case graya:
+				switch (bitdepth) {
+					case 8: {
+						auto	dst	= next;
+						for (auto& x : y) {
+							*dst++ = x.r;
+							*dst++ = x.a;
+						}
+						break;
+					}
+					case 16: {
+						auto	dst = (uint16be*)next;
+						for (auto& x : y) {
+							*dst++ = x.r;
+							*dst++ = x.a;
+						}
+						break;
+					}
+				}
+				break;
+
+			case rgba:
+				switch (bitdepth) {
+					case 8: {
+						auto	dst	= next;
+						for (auto& x : y) {
+							*dst++ = x.r;
+							*dst++ = x.g;
+							*dst++ = x.b;
+							*dst++ = x.a;
+						}
+						break;
+					}
+					case 16: {
+						auto	dst = (uint16be*)next;
+						for (auto& x : y) {
+							*dst++ = x.r;
+							*dst++ = x.g;
+							*dst++ = x.b;
+							*dst++ = x.a;
+						}
+						break;
+					}
+				}
+				break;
+		}
+
+		Filter filter = get_filter(prev, next, bpl, bpp);
+		writeline(file, prev, next, scratch, bpl, bpp, filter);
+		swap(prev, next);
 	}
-public:
-	PNGreader(png_struct *png_ptr, istream_ref _file) : file(_file), state(0), CgBI(false) {
-		png_set_read_fn(png_ptr, this, _read);
-	}
+	return true;
+}
+
+struct PNG {
+	IHDR	ihdr;
+	sBIT	sbit;
+	bKGD	bkgd;
+	pHYs	phys;
+	cHRM	chrm;
+	tIME	time;
+
+	col16	trans;
+	uint32	gamma	= 0;
+	Intent	intent	= Perceptual;
+	bool	end		= false;
+	uint32	cgbi	= 0;	//apple extension
+
+	map<string, malloc_block>	texts;
+	dynamic_array<rgba8>		palette;
+
+	string			icc_profile_name;
+	malloc_block	icc_profile;
+	malloc_block	image_data;
+
+	PNG()	{}
+
+	bool process(const Chunk &chunk);
+
+	template<typename T> bool read(const block<T, 2> &blk, istream_ref file);
+	template<typename T> bool write(const block<T, 2> &blk, ostream_ref file);
 };
+
+bool PNG::process(const Chunk &chunk) {
+	switch (chunk.type) {
+		case "IHDR"_u32: ihdr = *chunk.data; break;
+		case "PLTE"_u32:
+			palette	= make_range<rgb8>(chunk.data);
+			break;
+		case "IDAT"_u32:
+			image_data	+= chunk.data;
+			break;
+		case "IEND"_u32:
+			end = true;
+			break;
+
+		case "cHRM"_u32: chrm = *chunk.data; break;
+		case "gAMA"_u32: gamma = ((gAMA*)chunk.data)->Gamma; break;
+		case "iCCP"_u32: {
+			const char	*p = chunk.data;
+			icc_profile_name	= p;
+			icc_profile = transcode(zlib_decoder(), chunk.data.slice(string_end(p) + 1));
+			break;
+		}
+		case "sBIT"_u32: sbit = *chunk.data; break;
+		case "sRGB"_u32: intent = ((sRGB*)chunk.data)->RenderingIntent; break;
+		case "bKGD"_u32: bkgd = *chunk.data; break;
+//		case "hIST"_u32: set((hIST*)chunk.data); break;
+		case "tRNS"_u32: {
+			if (ihdr.ColorType == indexed) {
+				auto	p = palette.begin();
+				for (auto i : make_range<uint8>(chunk.data))
+					(p++)->a = i;
+			} else {
+				trans = ((tRNS*)chunk.data)->trans;
+			}
+		}
+		case "pHYs"_u32: phys = *chunk.data; break;
+//		case "sPLT"_u32: set((sPLT*)chunk.data); break;
+		case "tIME"_u32: time = *chunk.data; break;
+		case "tEXt"_u32: {
+			const char *p = chunk.data;
+			texts.put(p, chunk.data.slice(string_end(p) + 1));
+			break;
+		}
+		case "zTXt"_u32: {
+			const char *p = chunk.data;
+			texts.put(p, transcode(zlib_decoder(), chunk.data.slice(string_end(p) + 1)));
+			break;
+		}
+		case "iTXt"_u32: {
+			const char *p			= chunk.data;
+			auto		p2			= string_end(p);
+			uint8		flag		= p2[1];
+			uint8		comp		= p2[2];
+			auto		language	= p2 + 3;
+			auto		keyword		= string_end(language) + 1;
+			auto		text		= string_end(keyword) + 1;
+			if (flag)
+				texts.put(p, transcode(zlib_decoder(), chunk.data.slice(text + 1)));
+			else
+				texts.put(p, chunk.data.slice(text + 1));
+			break;
+		}
+
+		case "CgBI"_u32:	//apple extension
+			cgbi	= ((CgBI*)chunk.data)->cgbi;
+			break;
+
+	}
+	return true;
+}
+
+template<typename T> bool PNG::read(const block<T, 2> &blk, istream_ref file) {
+	if (!ihdr.InterlaceMethod)
+		return readblock(blk, file, ihdr.ColorType, ihdr.BitDepth);
+
+	bool ret = readblock(skip<2>(skip<1>(blk, 8), 8), file, ihdr.ColorType, ihdr.BitDepth);							//1
+	ret		&= readblock(skip<2>(skip<1>(blk.template slice<1>(4), 8), 8), file, ihdr.ColorType, ihdr.BitDepth);	//2
+	ret		&= readblock(skip<2>(skip<1>(blk.template slice<2>(4), 4), 8), file, ihdr.ColorType, ihdr.BitDepth);	//3
+	ret		&= readblock(skip<2>(skip<1>(blk.template slice<1>(2), 4), 4), file, ihdr.ColorType, ihdr.BitDepth);	//4
+	ret		&= readblock(skip<2>(skip<1>(blk.template slice<2>(2), 2), 4), file, ihdr.ColorType, ihdr.BitDepth);	//5
+	ret		&= readblock(skip<2>(skip<1>(blk.template slice<1>(1), 2), 2), file, ihdr.ColorType, ihdr.BitDepth);	//6
+	ret		&= readblock(skip<2>(blk.template slice<2>(1), 2), file, ihdr.ColorType, ihdr.BitDepth);				//7
+	return ret;
+}
+
+template<typename T> bool PNG::write(const block<T, 2> &blk, ostream_ref file) {
+	if (!ihdr.InterlaceMethod)
+		return writeblock(blk, file, ihdr.ColorType, ihdr.BitDepth);
+
+	bool ret = writeblock(skip<2>(skip<1>(blk, 8), 8), file, ihdr.ColorType, ihdr.BitDepth);						//1
+	ret		&= writeblock(skip<2>(skip<1>(blk.template slice<1>(4), 8), 8), file, ihdr.ColorType, ihdr.BitDepth);	//2
+	ret		&= writeblock(skip<2>(skip<1>(blk.template slice<2>(4), 4), 8), file, ihdr.ColorType, ihdr.BitDepth);	//3
+	ret		&= writeblock(skip<2>(skip<1>(blk.template slice<1>(2), 4), 4), file, ihdr.ColorType, ihdr.BitDepth);	//4
+	ret		&= writeblock(skip<2>(skip<1>(blk.template slice<2>(2), 2), 4), file, ihdr.ColorType, ihdr.BitDepth);	//5
+	ret		&= writeblock(skip<2>(skip<1>(blk.template slice<1>(1), 2), 2), file, ihdr.ColorType, ihdr.BitDepth);	//6
+	ret		&= writeblock(skip<2>(blk.template slice<2>(1), 2), file, ihdr.ColorType, ihdr.BitDepth);				//7
+	return ret;
+}
 
 class PNGFileHandler : public BitmapFileHandler {
-	const char*		GetExt() override { return "png";	}
-	const char*		GetMIME() override { return "image/png"; }
-	int				Check(istream_ref file) override { file.seek(0); return file.get<uint32le>() == 0x474E5089 ? CHECK_PROBABLE : CHECK_DEFINITE_NO; }
-
-#if 0
-	png_struct		*png_ptr;
-	png_info		*info_ptr;
-	png_uint_32		width, height;
-	int				bit_depth, color_type;
-	png_byte		*image_data;
-#endif
-
-//	static void _read_data(png_struct *png_ptr, png_byte *data, png_size_t length) {
-//		((istream*)png_get_io_ptr(png_ptr))->readbuff(data, length);
-//	}
-	static void _write_data(png_struct *png_ptr, png_byte *data, png_size_t length) {
-		((writer_intf*)png_get_io_ptr(png_ptr))->writebuff(data, length);
-	}
-	static void _flush_data(png_struct *png_ptr)	{}
-
-	static void _error_fn(png_struct *png_ptr, const char *error) {
-		(throw_accum(error));
+	const char*		GetExt()	override { return "png";	}
+	const char*		GetMIME()	override { return "image/png"; }
+	int				Check(istream_ref file) override {
+		file.seek(0);
+		return file.get<array<uint8, 8>>() == signature ? CHECK_PROBABLE : CHECK_DEFINITE_NO;
 	}
 
-	ISO_ptr<void> Read(tag id, istream_ref file) override {
-		png_byte		sig[8];
-		png_uint_32		width, height;
-		int				bit_depth, color_type;
-
-		file.readbuff(sig, 8);
-		if (!png_check_sig(sig, 8))
+	ISO_ptr<void>	Read(tag id, istream_ref file) override {
+		if (compare_array(file.get<array<uint8, 8>>(), signature))
 			return ISO_NULL;
 
-		png_struct_holder png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, _error_fn, NULL);
-		if (!png_ptr)
-			return ISO_NULL;   /* out of memory */
+		PNG		png;
+		Chunk	ch;
+		while (!png.end && file.read(ch))
+			png.process(ch);
 
-		png_ptr.info_ptr = png_create_info_struct(png_ptr);
-		if (!png_ptr.info_ptr)
-			return ISO_NULL;   /* out of memory */
+		if (png.end) {
+			auto	all		= transcode(zlib_decoder(), png.image_data);
+			auto	file2	= memory_reader(all);
+			//auto	file2 = make_codec_reader<0>(zlib_decoder(), memory_reader(image_data));
 
-//		if (setjmp(png_ptr->jmpbuf)) {
-//			png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
-//			return ISO_NULL;
-//		}
+			if (png.ihdr.BitDepth > 8) {
+				ISO_ptr<HDRbitmap>	bm(id, png.ihdr.Width, png.ihdr.Height);
 
-		PNGreader	reader(png_ptr, file);
-//		png_set_read_fn(png_ptr, &file, _read_data);
-		png_set_sig_bytes(png_ptr, 8);		// we already read the 8 signature bytes
-		png_read_info(png_ptr, png_ptr.info_ptr);	// read all PNG info up to image data
-		png_get_IHDR(png_ptr, png_ptr.info_ptr, &width, &height, &bit_depth, &color_type, NULL, NULL, NULL);
+				png.read(bm->All(), file2);
+				return bm;
 
-		//-----------------------------
+			} else {
+				 ISO_ptr<bitmap>	bm(id, png.ihdr.Width, png.ihdr.Height);
 
-//		double  gamma;
-		png_uint_32	channels;
-		png_size_t	rowbytes;
-		png_byte	**row_pointers = NULL;
-
-		ISO_ptr<bitmap> bm(id);
-		bm->Create(width, height);
-
-		if (color_type & PNG_COLOR_MASK_PALETTE) {
-			png_color	*palette;
-			int			num_palette;
-			png_get_PLTE(png_ptr, png_ptr.info_ptr, &palette, &num_palette);
-			bm->CreateClut(num_palette);
-			for (int i = 0; i < num_palette; i++ )
-				bm->Clut(i) = ISO_rgba(palette[i].red, palette[i].green, palette[i].blue, 255);
-			if (png_get_valid(png_ptr, png_ptr.info_ptr, PNG_INFO_tRNS)) {
-				png_byte		*trans;
-				int				num_trans;
-				png_color_16	*trans_values;
-				png_get_tRNS(png_ptr, png_ptr.info_ptr, &trans, &num_trans, &trans_values);
-				for (int i = 0; i < num_trans; i++)
-					bm->Clut(i).a = trans[i];
-				//bm.SetFlag(BMF_CLUTALPHA);
+				 if (png.ihdr.ColorType == indexed)
+					 ((bitmap*)bm)->CreateClut(png.palette.size()) = png.palette;
+			
+				 png.read(bm->All(), file2);
+				 return bm;
 			}
 		}
 
-//		if (!(color_type & PNG_COLOR_MASK_COLOR))
-//			bm.SetFlag(BMF_INTENSITY);
-
-//		if (color_type & PNG_COLOR_MASK_ALPHA)
-//			bm.SetFlag(BMF_ALPHA);
-
-		if (bit_depth < 8)
-			png_set_packing(png_ptr);
-		if (color_type == PNG_COLOR_TYPE_GRAY && bit_depth < 8)
-			png_set_expand_gray_1_2_4_to_8(png_ptr);
-//		if (png_get_valid(png_ptr, png_ptr.info_ptr, PNG_INFO_tRNS))
-//			png_set_tRNS_to_alpha(png_ptr);
-		if (bit_depth == 16)
-			png_set_strip_16(png_ptr);
-
-//		if (png_get_gAMA(png_ptr, png_ptr.info_ptr, &gamma))
-//			png_set_gamma(png_ptr, display_exponent, gamma);
-
-		png_read_update_info(png_ptr, png_ptr.info_ptr);
-
-		rowbytes = png_get_rowbytes(png_ptr, png_ptr.info_ptr);
-		channels = (int)png_get_channels(png_ptr, png_ptr.info_ptr);
-
-		if ((png_ptr.image_data = (png_byte*)iso::malloc(rowbytes*height)) == NULL)
-			return ISO_NULL;
-
-		if ((row_pointers = (png_byte**)iso::malloc(height*sizeof(png_byte*))) == NULL)
-			return ISO_NULL;
-
-		png_uint_32	i;
-		for (i = 0; i < height; i++)
-			row_pointers[i] = png_ptr.image_data + i*rowbytes;
-
-		png_read_image(png_ptr, row_pointers);
-		png_read_end(png_ptr, NULL);
-
-		for (i = 0; i < height; i++) {
-			ISO_rgba	*dest = bm->ScanLine(i);
-			png_byte	*srce = row_pointers[i];
-			switch(channels) {
-				case 1:
-					for (unsigned x = 0; x < width; x++, srce++)
-						dest[x] = *srce;
-					break;
-				case 2:
-					for (unsigned x = 0; x < width; x++, srce += 2)
-						dest[x] = ISO_rgba(srce[0], srce[1]);
-					break;
-				case 3:
-					for (unsigned x = 0; x < width; x++, srce += 3)
-						dest[x] = ISO_rgba(srce[0],srce[1],srce[2]);
-					break;
-				case 4:
-#if 0
-					for (unsigned x = 0; x < width; x++, srce += 4) {
-						uint8	a = srce[3];
-						if (a == 0) {
-							dest[x] = ISO_rgba(
-								srce[0] ? 0xff : 0,
-								srce[1] ? 0xff : 0,
-								srce[2] ? 0xff : 0,
-								a);
-						} else {
-							dest[x] = ISO_rgba(
-								srce[0] < a ? srce[0] * 255 / a : 0xff,
-								srce[1] < a ? srce[1] * 255 / a : 0xff,
-								srce[2] < a ? srce[2] * 255 / a : 0xff,
-								a);
-						}
-					}
-#else
-					for (unsigned x = 0; x < width; x++, srce += 4)
-						dest[x] = ISO_rgba(srce[0], srce[1], srce[2], srce[3]);
-#endif
-					break;
-			}
-		}
-
-		iso::free(row_pointers);
-		return bm;
+		return ISO_NULL;
 	}
 
 	bool			Write(ISO_ptr<void> p, ostream_ref file) override {
@@ -275,205 +884,25 @@ class PNGFileHandler : public BitmapFileHandler {
 		if (!bm)
 			return false;
 
-		png_uint_32		width= bm->Width(), height= bm->Height();
+		PNG		png;
 
-		png_struct_holder png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, _error_fn, NULL);
-		if (!png_ptr)
-			return false;	// out of memory
+		auto	flags	= bm->Scan();
+		Type	type	= bm->IsPaletted() ? indexed : Type((flags & BMF_GREY ? gray : rgb) | (flags & BMF_ALPHA ? alpha : noalpha));
+		png.ihdr = IHDR(bm->Width(), bm->Height(), 8, type, false);
 
-		png_ptr.info_ptr = png_create_info_struct(png_ptr);
-		if (!png_ptr.info_ptr)
-			return false;	// out of memory
+		file.write(signature);
+		file.write(Chunk("IHDR"_u32, memory_block(&png.ihdr)));
 
-		/* setjmp() must be called in every function that calls a PNG-writing
-		 * libpng function, unless an alternate error handler was installed--
-		 * but compatible error handlers must either use longjmp() themselves
-		 * (as in this program) or exit immediately, so here we go: */
-
-//		if (setjmp(png_ptr->jmpbuf)) {
-//			png_destroy_write_struct(&png_ptr, &info_ptr);
-//			return false;
-//		}
-
-
-		png_set_write_fn(png_ptr, (void*)&file, _write_data, _flush_data);
-
-
-		/* set the compression levels--in general, always want to leave filtering
-		 * turned on (except for palette images) and allow all of the filters,
-		 * which is the default; want 32K zlib window, unless entire image buffer
-		 * is 16K or smaller (unknown here)--also the default; usually want max
-		 * compression (NOT the default); and remaining compression flags should
-		 * be left alone */
-
-		png_set_compression_level(png_ptr, 6);
-		/*
-		>> this is default for no filtering; Z_FILTERED is default otherwise:
-		png_set_compression_strategy(png_ptr, Z_DEFAULT_STRATEGY);
-		>> these are all defaults:
-		png_set_compression_mem_level(png_ptr, 8);
-		png_set_compression_window_bits(png_ptr, 15);
-		png_set_compression_method(png_ptr, 8);
-		*/
-
-
-		/* set the image parameters appropriately */
-
-		int	color_type	= PNG_COLOR_MASK_COLOR;//(!bm.IsIntensity()	? PNG_COLOR_MASK_COLOR		: 0);
-		if (bm->IsPaletted())
-			color_type |= PNG_COLOR_MASK_PALETTE;
-		else if (bm->HasAlpha())
-			color_type |= PNG_COLOR_MASK_ALPHA;
-
-		int	interlace_type	= /*flags & BMWF_TWIDDLE ? PNG_INTERLACE_ADAM7 : */PNG_INTERLACE_NONE;
-		int	bit_depth		= bm->IsPaletted() && bm->ClutSize() <= 16 ? 4 : 8;
-
-		png_set_IHDR(png_ptr, png_ptr.info_ptr, width, height, bit_depth, color_type, interlace_type,
-			PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
-
-		if (color_type & PNG_COLOR_MASK_PALETTE) {
-			png_color	palette[256];
-			uint32		n = bm->ClutSize();
-			for ( int i = 0; i < n; i++ ) {
-				ISO_rgba	&entry = bm->Clut(i);
-				palette[i].red	= entry.r;
-				palette[i].green= entry.g;
-				palette[i].blue	= entry.b;
-			}
-			png_set_PLTE(png_ptr, png_ptr.info_ptr, palette, n);
-/*			if (bm.Flags() & BMF_CLUTALPHA) {
-				png_byte		trans[256];
-				for ( int i = 0; i < n; i++ )
-					trans[i] = bm.Clut(i).a;
-				png_set_tRNS(png_ptr, png_ptr.info_ptr, trans, n, NULL);
-			}
-*/
+		dynamic_memory_writer	mem;
+		{
+			//auto	file2 = make_codec_writer<0>(zlib_encoder(), mem);
+			png.write(bm->All(), mem);
 		}
+		file.write(Chunk("IDAT"_u32, transcode(zlib_encoder(), mem.data())));
+		file.write(Chunk("IEND"_u32, none));
 
-//		if (mainprog_ptr->gamma > 0.0)
-//			png_set_gAMA(png_ptr, png_ptr.info_ptr, mainprog_ptr->gamma);
-#if 0
-		if (mainprog_ptr->have_bg) {   /* we know it's RGBA, not gray+alpha */
-			png_color_16  background;
-			background.red		= keycolour.red;
-			background.green	= keycolour.green;
-			background.blue		= keycolour.blue;
-			png_set_bKGD(png_ptr, png_ptr.info_ptr, &background);
-		}
-
-		if (mainprog_ptr->have_time) {
-			png_time  modtime;
-			png_convert_from_time_t(&modtime, mainprog_ptr->modtime);
-			png_set_tIME(png_ptr, png_ptr.info_ptr, &modtime);
-		}
-
-		if (mainprog_ptr->have_text) {
-			png_text  text[6];
-			int  num_text = 0;
-
-			if (mainprog_ptr->have_text & TEXT_TITLE) {
-				text[num_text].compression = PNG_TEXT_COMPRESSION_NONE;
-				text[num_text].key = "Title";
-				text[num_text].text = mainprog_ptr->title;
-				++num_text;
-			}
-			if (mainprog_ptr->have_text & TEXT_AUTHOR) {
-				text[num_text].compression = PNG_TEXT_COMPRESSION_NONE;
-				text[num_text].key = "Author";
-				text[num_text].text = mainprog_ptr->author;
-				++num_text;
-			}
-			if (mainprog_ptr->have_text & TEXT_DESC) {
-				text[num_text].compression = PNG_TEXT_COMPRESSION_NONE;
-				text[num_text].key = "Description";
-				text[num_text].text = mainprog_ptr->desc;
-				++num_text;
-			}
-			if (mainprog_ptr->have_text & TEXT_COPY) {
-				text[num_text].compression = PNG_TEXT_COMPRESSION_NONE;
-				text[num_text].key = "Copyright";
-				text[num_text].text = mainprog_ptr->copyright;
-				++num_text;
-			}
-			if (mainprog_ptr->have_text & TEXT_EMAIL) {
-				text[num_text].compression = PNG_TEXT_COMPRESSION_NONE;
-				text[num_text].key = "E-mail";
-				text[num_text].text = mainprog_ptr->email;
-				++num_text;
-			}
-			if (mainprog_ptr->have_text & TEXT_URL) {
-				text[num_text].compression = PNG_TEXT_COMPRESSION_NONE;
-				text[num_text].key = "URL";
-				text[num_text].text = mainprog_ptr->url;
-				++num_text;
-			}
-			png_set_text(png_ptr, png_ptr.info_ptr, text, num_text);
-		}
-#endif
-
-		// write all chunks up to (but not including) first IDAT
-
-		png_write_info(png_ptr, png_ptr.info_ptr);
-
-
-		/* set up the transformations:  for now, just pack low-bit-depth pixels
-		 * into bytes (one, two or four pixels per byte) */
-
-		png_set_packing(png_ptr);
-		/*  png_set_shift(png_ptr, &sig_bit);  to scale low-bit-depth values */
-//		png_read_update_info(png_ptr, png_ptr.info_ptr);
-
-		png_uint_32	i, rowbytes, channels;
-		png_byte	**row_pointers = NULL;
-
-//		rowbytes = png_get_rowbytes(png_ptr, png_ptr.info_ptr);
-		channels = (int)png_get_channels(png_ptr, png_ptr.info_ptr);
-		rowbytes = channels * width;
-
-		if ((png_ptr.image_data = (png_byte*)iso::malloc(rowbytes * height)) == NULL)
-			return NULL;
-
-		if ((row_pointers = (png_byte**)iso::malloc(height * sizeof(png_byte*))) == NULL)
-			return NULL;
-
-		for (i = 0; i < height; i++) {
-			ISO_rgba	*srce = bm->ScanLine(i);
-			png_byte	*dest = row_pointers[i] = png_ptr.image_data + i*rowbytes;
-			unsigned int x;
-			switch(channels) {
-			case 1:
-				for (x = 0; x < width; x++, srce++ )
-					*dest++ = srce->r;
-				break;
-			case 2:
-				for (x = 0; x < width; x++, srce++ ) {
-					*dest++ = srce->r;
-					*dest++ = srce->a;
-				}
-				break;
-			case 3:
-				for (x = 0; x < width; x++, srce++ ) {
-					*dest++ = srce->r;
-					*dest++ = srce->g;
-					*dest++ = srce->b;
-				}
-				break;
-			case 4:
-				for (x = 0; x < width; x++, srce++ ) {
-					*dest++ = srce->r;
-					*dest++ = srce->g;
-					*dest++ = srce->b;
-					*dest++ = srce->a;
-				}
-				break;
-			}
-		}
-
-		png_write_image(png_ptr, row_pointers);
-		png_write_end(png_ptr, NULL);
-
-		iso::free(row_pointers);
-		png_destroy_write_struct(&png_ptr, &png_ptr.info_ptr);
 		return true;
 	}
 } png;
+
+

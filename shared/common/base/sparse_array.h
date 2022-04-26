@@ -64,8 +64,10 @@ public:
 	sparse_array_base(size_t u)		{ to_dense = allocate<S>(num_dense = u); }
 	sparse_array_base(sparse_array_base&& b) : A((A&&)b), to_dense(b.to_dense), first_dense(b.first_dense), num_dense(b.num_dense) { b.to_dense = nullptr; }
 	~sparse_array_base()			{ deallocate(to_dense, num_dense); }
+	
+	sparse_array_base& operator=(sparse_array_base&& b) = default;
 
-	void	resize(size_t u)		{ ISO_ASSERT(0);}// to_dense.resize(u); }
+	void	resize(size_t u)		{ ISO_ASSERT(!to_dense); to_dense = allocate<S>(num_dense = u); }
 };
 
 template<typename T, typename I> struct sparse_element {

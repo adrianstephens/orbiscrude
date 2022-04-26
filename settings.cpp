@@ -407,10 +407,10 @@ SettingsWindow *SettingsWindow::me;
 LRESULT SettingsWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 		case WM_CREATE: {
-			treecolumn.Create(GetChildWindowPos(), NULL, CHILD | VISIBLE | HSCROLL | TCS_GRIDLINES | TCS_HEADERAUTOSIZE, CLIENTEDGE);
-			treecolumn.GetTreeControl().style = CHILD | VISIBLE | CLIPSIBLINGS | TVS_NOHSCROLL | TVS_HASLINES | TVS_HASBUTTONS | TVS_LINESATROOT | TVS_SHOWSELALWAYS | TVS_FULLROWSELECT;
+			treecolumn.Create(GetChildWindowPos(), NULL, CHILD | VISIBLE | HSCROLL | treecolumn.GRIDLINES | treecolumn.HEADERAUTOSIZE, CLIENTEDGE);
+			treecolumn.GetTreeControl().style = CHILD | VISIBLE | CLIPSIBLINGS | TreeControl::NOHSCROLL | TreeControl::HASLINES | TreeControl::HASBUTTONS | TreeControl::LINESATROOT | TreeControl::SHOWSELALWAYS | TreeControl::FULLROWSELECT;
 			HeaderControl	header	= treecolumn.GetHeaderControl();
-			header.style = CHILD | VISIBLE | HDS_FULLDRAG;
+			header.style = CHILD | VISIBLE | HeaderControl::FULLDRAG;
 			HeaderControl::Item("Setting").	Format(HDF_LEFT).Width(200).Insert(header, 0);
 			HeaderControl::Item("").		Format(HDF_LEFT | HDF_FIXEDWIDTH).Width( 20).Insert(header, 1);
 			HeaderControl::Item("Value").	Format(HDF_LEFT).Width(100).Insert(header, 2);
@@ -446,7 +446,7 @@ LRESULT SettingsWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 									if (b2.GetType() == ISO::STRING)
 										((ISO::TypeString*)b2.GetTypeDef())->set(b2, buffer);
 									else
-										ISO::ScriptRead(b, lvalue(memory_reader(buffer)), ISO::SCRIPT_KEEPEXTERNALS | ISO::SCRIPT_DONTCONVERT);
+										ISO::ScriptRead(b, memory_reader(buffer), ISO::SCRIPT_KEEPEXTERNALS | ISO::SCRIPT_DONTCONVERT);
 									v.Update(spec);
 									treecolumn.Invalidate();
 								} catch (const char *s) {
@@ -582,7 +582,7 @@ void SettingsWindow::EditItem(HTREEITEM h) {
 
 	s[int(m.tell())] = 0;
 
-	edit_control.Create(treecolumn, NULL, CHILD | VISIBLE | CLIPSIBLINGS | ES_AUTOHSCROLL | ES_WANTRETURN, CLIENTEDGE, treecolumn.GetItemRect(h, 2), ID_EDIT);
+	edit_control.Create(treecolumn, NULL, CHILD | VISIBLE | CLIPSIBLINGS | EditControl::AUTOHSCROLL | EditControl::WANTRETURN, CLIENTEDGE, treecolumn.GetItemRect(h, 2), ID_EDIT);
 	edit_control.SetFont(treecolumn.GetTreeControl().GetFont());
 	edit_control.MoveAfter(HWND_TOP);
 	edit_control	= s;

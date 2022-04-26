@@ -855,8 +855,13 @@ public:
 				if (WND::Resize(win::Point(lParam)))
 					DeInit();
 				break;
+
 			case WM_LBUTTONDOWN:
+				return Parent().Notify(*this, NM_CLICK);
+
 			case WM_RBUTTONDOWN:
+				return Parent().Notify(*this, NM_RCLICK);
+
 			case WM_MOUSEMOVE:
 			case WM_MOUSEWHEEL:
 			case WM_NOTIFY:

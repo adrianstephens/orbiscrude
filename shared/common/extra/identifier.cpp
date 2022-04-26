@@ -394,7 +394,7 @@ void	FieldPutter::AddArray(const field *pf, const uint32le *p, uint32 stride, ui
 	}
 }
 
-void	FieldPutter::AddField(const field *pf, const uint32 *p, uint32 addr, uint32 offset) {
+void FieldPutter::AddField(const field *pf, const uint32 *p, uint32 addr, uint32 offset) {
 	if (pf->num == 0) {
 		switch (pf->offset) {
 			case field::MODE_CALL:
@@ -448,6 +448,17 @@ void	FieldPutter::AddField(const field *pf, const uint32 *p, uint32 addr, uint32
 				}
 				break;
 			}
+			case field::MODE_CUSTOM_PTR: {
+				buffer_accum<64>	ba(FieldName(pf));
+				ba << "->";
+				Open(ba, addr);
+				if (format & IDFMT_FOLLOWPTR) {
+					if (auto ret = make_unique(((field_follow_func)pf->values)(pf, p, offset)))
+						AddFields(ret->pf, ret->p, 0, 0);
+				}
+				Close();
+				break;
+			}
 		}
 
 	} else if (pf->offset == field::MODE_CUSTOM) {
@@ -460,7 +471,7 @@ void	FieldPutter::AddField(const field *pf, const uint32 *p, uint32 addr, uint32
 	}
 }
 
-void	FieldPutter::AddFields(const field* pf, const uint32* p, uint32 addr, uint32 offset) {
+void FieldPutter::AddFields(const field* pf, const uint32* p, uint32 addr, uint32 offset) {
 	if (pf == float_field) {
 		Line(0, buffer_accum<256>() << (float&)p[offset / 32], addr);
 
@@ -641,6 +652,12 @@ const field *_Index(const field *pf, int &i, const uint32 *&p, uint32 &offset, b
 						}
 						break;
 					}
+					case field::MODE_CUSTOM_PTR:
+						if (follow_ptr) {
+							if (auto ret = make_unique(((field_follow_func)pf->values)(pf, p, offset)))
+								return ret->pf;
+						}
+						break;
 				}
 
 			} else {

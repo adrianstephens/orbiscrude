@@ -346,7 +346,7 @@ DXCapturer::~DXCapturer() {
 filename DXCapturer::GetDLLPath(const char *dll_name) {
 	filename	dll_path	= get_exec_dir().add_dir(dll_name);
 	Resource	r(0, dll_name, "BIN");
-	if (!check_writebuff(lvalue(FileOutput(dll_path)), r, r.length())) {
+	if (!check_writebuff(FileOutput(dll_path), r, r.length())) {
 		ISO_OUTPUTF("Cannot write to ") << dll_path << '\n';
 	}
 	return dll_path;
@@ -628,14 +628,15 @@ struct type_converter {
 					case CV::LF_MEMBER: {
 						auto	*m	= i.as<CV::Member>();
 						auto	bf	= save(bitfield, nullptr);
-						auto	*t	= procTI(m->index);
-						int64	offset	= m->offset;
-						if (bitfield) {
-							ISO_ASSERT(t->type == C_type::INT);
-							auto		*t1 = (const C_type_int*)t;
-							ptype->add_atbit(m->name(), ctypes.add(C_type_int(bitfield->length, t1->flags)), (uint32)offset * 8 + bitfield->position);
-						} else {
-							ptype->add_atoffset(m->name(), t, (uint32)offset);
+						if (auto *t	= procTI(m->index)) {;
+							int64	offset	= m->offset;
+							if (bitfield) {
+								ISO_ASSERT(t->type == C_type::INT);
+								auto		*t1 = (const C_type_int*)t;
+								ptype->add_atbit(m->name(), ctypes.add(C_type_int(bitfield->length, t1->flags & ~C_type_int::ENUM)), (uint32)offset * 8 + bitfield->position);
+							} else {
+								ptype->add_atoffset(m->name(), t, (uint32)offset);
+							}
 						}
 						break;
 					}
@@ -775,7 +776,7 @@ const C_type *const type_converter::special_types[] = {
 	0,	//"nbasicstr",
 	0,	//"fbasicstr",
 	0,	//"nottrans",
-	0,	//"HRESULT",
+	CT(HRESULT),	//"HRESULT",
 };
 const C_type *const type_converter::special_types2[] = {
 	0,	//"bit",

@@ -463,8 +463,7 @@ template<bool be, int bits> bool MACH<be, bits>::Write(ISO::Browser b, ostream_r
 	file.write(syms.strings);
 
 	file.seek(sizeof(header));
-	write(file, seg, sections, ver, sym);
-	return true;
+	return file.write(seg, sections, ver, sym);
 }
 
 struct ISO_MACH : mapped_anything {

@@ -954,7 +954,7 @@ ISO_ptr<void>	TTFFileHandler::Read(tag id, istream_ref file) {
 				auto e = pub_dict.lookup(cff::Private);
 				if (!e.empty()) {
 					prvt	= (uint8*)h + e[0].data;
-					prv_dict.add(lvalue(memory_reader(const_memory_block(prvt, e[0].data))));
+					prv_dict.add(memory_reader(const_memory_block(prvt, e[0].data)));
 
 					cff::dictionary_with_defaults	prv_dict2(prv_dict, cff::dict_pvr_defaults());
 					e = prv_dict2.lookup(cff::nominalWidthX);

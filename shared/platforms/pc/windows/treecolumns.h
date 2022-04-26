@@ -6,8 +6,6 @@
 //-----------------------------------------------------------------------------
 //	TreeColumnControl
 //-----------------------------------------------------------------------------
-#define TCS_GRIDLINES		0x10000
-#define TCS_HEADERAUTOSIZE	0x20000
 #define TCN_GETDISPINFO		(NM_LAST + 0)
 
 // display info
@@ -91,6 +89,10 @@ protected:
 	void	AdjustRect(HTREEITEM hItem, int iSubItem, RECT *pRect, uint32 style)	const;
 
 public:
+	static const Style
+		GRIDLINES		= Style(0x10000),
+		HEADERAUTOSIZE	= Style(0x20000);
+
 //	static HBRUSH		get_class_background()	{ return GetSysColorBrush(COLOR_WINDOW); }
 						TreeColumnControl();
 	LRESULT				Proc(UINT message, WPARAM wParam, LPARAM lParam);

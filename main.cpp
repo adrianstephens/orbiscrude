@@ -206,10 +206,10 @@ struct HomeView : win::Dialog<HomeView> {
 		for (auto i : vertical_split(dc.rect.Subbox(50, 0, 400, 400), 4)) {
 			Rect	r = i.b.Subbox(0, 0, 0, 14);
 			switch (i.a) {
-				case 0: AddLabelControl(dc, r, 100, "Executable",		win::DialogBoxCreator::Control(DLG_EDIT,	"", ID_EDIT + 0, BORDER | ES_AUTOHSCROLL)); break;
-				case 1: AddLabelControl(dc, r, 100, "Arguments",		win::DialogBoxCreator::Control(DLG_EDIT,	"", ID_EDIT + 1, BORDER | ES_AUTOHSCROLL)); break;
-				case 2: AddLabelControl(dc, r, 100, "Working Directory", win::DialogBoxCreator::Control(DLG_EDIT,	"", ID_EDIT + 2, BORDER | ES_AUTOHSCROLL)); break;
-				case 3: AddLabelControl(dc, r, 100, "Options",			win::DialogBoxCreator::Control(DLG_EDIT,	"", ID_EDIT + 3, BORDER | ES_AUTOHSCROLL)); break;
+				case 0: AddLabelControl(dc, r, 100, "Executable",		win::DialogBoxCreator::Control(DLG_EDIT,	"", ID_EDIT + 0, BORDER | EditControl::AUTOHSCROLL)); break;
+				case 1: AddLabelControl(dc, r, 100, "Arguments",		win::DialogBoxCreator::Control(DLG_EDIT,	"", ID_EDIT + 1, BORDER | EditControl::AUTOHSCROLL)); break;
+				case 2: AddLabelControl(dc, r, 100, "Working Directory", win::DialogBoxCreator::Control(DLG_EDIT,	"", ID_EDIT + 2, BORDER | EditControl::AUTOHSCROLL)); break;
+				case 3: AddLabelControl(dc, r, 100, "Options",			win::DialogBoxCreator::Control(DLG_EDIT,	"", ID_EDIT + 3, BORDER | EditControl::AUTOHSCROLL)); break;
 			}
 		}
 		Modeless(pos.parent, dc.GetTemplate());
@@ -265,7 +265,7 @@ OrbisCrude::OrbisCrude(const Rect &rect, bool licensed) {
 #if 0
 	LoadLibraryA("RICHED20.DLL");
 	Resource		r(0, "ORBISCRUDE.RTF", "BIN");
-	RichEditControl	re(*this, 0, CHILD | VISIBLE | ES_MULTILINE, 0, GetChildRect());
+	RichEditControl	re(*this, 0, CHILD | VISIBLE | EditControl::MULTILINE, 0, GetChildRect());
 	re.SendMessage(EM_EXLIMITTEXT, 0, ~0);
 	re.SetText2(r);
 	re.SetMargins(100, 100);
@@ -839,7 +839,7 @@ int __stdcall WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, char *cmdlin
 		try {
 			if (!exists(f))
 				throw_accum(str("Custom type file \"") << f << "\" not found");
-			ReadCTypes(lvalue(FileInput(f)), user_ctypes);
+			ReadCTypes(FileInput(f), user_ctypes);
 		} catch (const char *error) {
 			MessageBox(NULL, error, "Custom Type Error", MB_ICONERROR | MB_OK);
 		}

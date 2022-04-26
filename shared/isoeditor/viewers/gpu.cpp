@@ -28,7 +28,7 @@ Cursor	app::CURSOR_LINKBATCH = Cursor::LoadSystem(IDC_HAND),
 #endif
 
 Control app::ErrorControl(const WindowPos &wpos, const char *error) {
-	StaticControl	err(wpos, error, Control::CHILD | Control::VISIBLE | SS_CENTER);
+	StaticControl	err(wpos, error, Control::CHILD | Control::VISIBLE | StaticControl::CENTER);
 	err.Class().style |= CS_HREDRAW;
 	err.SetFont(win::Font("Segoe UI", 32));
 	return err;
@@ -255,7 +255,7 @@ struct BufferWindow : public Window<BufferWindow> {
 	LRESULT Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 		switch (message) {
 			case WM_CREATE: {
-				vw.Create(GetChildWindowPos(), "verts", CHILD | CLIPSIBLINGS | VISIBLE | LVS_OWNERDATA);
+				vw.Create(GetChildWindowPos(), "verts", CHILD | CLIPSIBLINGS | VISIBLE | vw.OWNERDATA);
 				vw.id	= id;
 				return 0;
 			}
@@ -282,7 +282,7 @@ struct BufferWindow : public Window<BufferWindow> {
 #endif
 					if (LOWORD(wParam) == ID_EDITFORMAT) {
 						fixed_string<256>	text = edit_format.GetText();
-						if (const C_type *type = ReadCType(lvalue(memory_reader(text.begin())), builtin_ctypes(), 0)) {
+						if (const C_type *type = ReadCType(memory_reader(text.begin()), builtin_ctypes(), 0)) {
 							Busy				bee;
 							WithDisabledRedraw	h(*this);
 							buffer.format = type;
@@ -373,7 +373,7 @@ struct BufferWindow : public Window<BufferWindow> {
 		hc.GetItem(0).Width(100).Format(LVCFMT_FIXED_WIDTH).Set(hc, 0);
 
 		win::Rect headerRect = hc.GetItemRect(0);
-		edit_format.Create(*this, "format", CHILD | VISIBLE | CLIPSIBLINGS | ES_AUTOHSCROLL | ES_WANTRETURN, NOEX, headerRect, ID_EDITFORMAT);
+		edit_format.Create(*this, "format", CHILD | VISIBLE | CLIPSIBLINGS | EditControl::AUTOHSCROLL | EditControl::WANTRETURN, NOEX, headerRect, ID_EDITFORMAT);
 		edit_format.SetFont(hc.GetFont());
 		edit_format.MoveBefore(vw);
 
@@ -428,7 +428,7 @@ template<typename C> auto max_over(const C &c) {
 LRESULT VertexWindow::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 		case WM_CREATE:
-			vw.Create(GetChildWindowPos(), "verts", CHILD | CLIPSIBLINGS | LVS_OWNERDATA);
+			vw.Create(GetChildWindowPos(), "verts", CHILD | CLIPSIBLINGS | vw.OWNERDATA);
 			vw.id	= id;
 			return 0;
 
@@ -1542,7 +1542,7 @@ LRESULT MeshWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 		case WM_CREATE:
 			addref();
-			toolbar.Create(*this, NULL, CHILD | CLIPSIBLINGS | VISIBLE | CCS_NORESIZE | TBSTYLE_FLAT | TBSTYLE_TOOLTIPS);
+			toolbar.Create(*this, NULL, CHILD | CLIPSIBLINGS | VISIBLE | toolbar.NORESIZE | toolbar.FLAT | toolbar.TOOLTIPS);
 			toolbar.Init(IDR_TOOLBAR_MESH);
 			toolbar.CheckButton(ID_MESH_BACKFACE, cull == BFC_FRONT);
 			toolbar.CheckButton(ID_MESH_BOUNDS, flags.test(BOUNDING_EDGES));
@@ -2448,6 +2448,14 @@ public:
 				return 0;
 			}
 
+			case WM_RBUTTONDOWN:
+				if (~selected) {
+					NMITEMACTIVATE	nm;
+					nm.iItem	= selected;
+					return SendNotification(nm.hdr, *this, NM_RCLICK);
+				}
+				return 0;
+
 			case WM_MOUSEMOVE: {
 				Point	mouse	= Point(lParam);
 				if (wParam & MK_LBUTTON) {
@@ -2472,9 +2480,8 @@ public:
 				delete this;
 				return 0;
 
-			default:
-				return d2d::Window::Proc(message, wParam, lParam);
 		}
+		return d2d::Window::Proc(message, wParam, lParam);
 	}
 
 	ComputeGrid(const WindowPos &wpos, const char *title, ID id, const uint3p &dim, const uint3p &group) : pos(0, 0), dim(dim), group(group), font(write, L"Arial", 0.75f) {
@@ -2589,7 +2596,7 @@ void ComputeGrid::Paint() const {
 				}
 			}
 #endif
-			if (z == selected_dim.z) {
+			if (~selected && z == selected_dim.z) {
 				auto	rect = zrect.Subbox(
 					slack * 2 + selected_dim.x * (group.x + slack),
 					slack * 2 + selected_dim.y * (group.y + slack),
@@ -2621,7 +2628,7 @@ void ComputeGrid::Paint() const {
 					DrawText(zrect.Subbox(dim.x * (group.x + slack) + slack, dy, 1.95f, 1), to_string(y), font, black);
 			}
 
-			if (z == selected_dim.z) {
+			if (~selected && z == selected_dim.z) {
 				Fill(
 					zrect.Subbox(
 						slack * 2 + selected_dim.x * (group.x + slack),
@@ -2652,7 +2659,7 @@ void ComputeGrid::Paint() const {
 					}
 				}
 
-				if (z == selected_dim.z && z1 == selected_group.z) {
+				if (~selected && z == selected_dim.z && z1 == selected_group.z) {
 					d2d::rect	rect = zrect.Subbox(
 						slack * 2 + selected_dim.x * (group.x + slack) + slack - zf + selected_group.x,
 						slack * 2 + selected_dim.y * (group.y + slack) + slack - zf + selected_group.y,
@@ -2731,13 +2738,15 @@ bool ComputeGrid::GetLoc(position2 mouse, uint3p &dim_loc, uint3p &group_loc) co
 Control app::MakeComputeGrid(const WindowPos &wpos, const char *title, ID id, const uint3p &dim, const uint3p &group) {
 	return *new ComputeGrid(wpos, title, id, dim, group);//constructable<uint3p>(2,3,4), constructable<uint3p>(4,3,8));//dim, group);
 }
-
+/*
 uint32 app::GetComputeIndex(Control c, const Point &pt) {
 	ComputeGrid	*cg = (ComputeGrid*)ComputeGrid::Cast(c);
 	if (!cg)
 		return ~0;
 	return cg->GetLoc(cg->ClientToWorld(pt));
 }
+*/
+
 //-----------------------------------------------------------------------------
 //	TimingWindow
 //-----------------------------------------------------------------------------

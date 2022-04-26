@@ -596,13 +596,15 @@ struct Transferer : Waiter {
 	com_ptr<ID3D12CommandAllocator>		cmd_alloc;
 	com_ptr<ID3D12GraphicsCommandList>	cmd_list;
 
-	Transferer(ID3D12Device *_device) : Waiter(_device), device(_device) {
+	bool	Init() {
 		D3D12_COMMAND_QUEUE_DESC	qdesc = {D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_COMMAND_QUEUE_PRIORITY_NORMAL, D3D12_COMMAND_QUEUE_FLAG_NONE, 1};
-
-		ISO_VERIFY(SUCCEEDED(device->CreateCommandQueue(&qdesc, __uuidof(ID3D12CommandQueue), (void**)&cmd_queue)));
-		ISO_VERIFY(SUCCEEDED(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), (void**)&cmd_alloc)));
-		ISO_VERIFY(SUCCEEDED(device->CreateCommandList(1, D3D12_COMMAND_LIST_TYPE_DIRECT, cmd_alloc, 0, __uuidof(ID3D12GraphicsCommandList), (void**)&cmd_list)));
+		bool	ret = SUCCEEDED(device->CreateCommandQueue(&qdesc, __uuidof(ID3D12CommandQueue), (void**)&cmd_queue))
+			&& SUCCEEDED(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), (void**)&cmd_alloc))
+			&& SUCCEEDED(device->CreateCommandList(1, D3D12_COMMAND_LIST_TYPE_DIRECT, cmd_alloc, 0, __uuidof(ID3D12GraphicsCommandList), (void**)&cmd_list));
+		return ret;
 	}
+
+	Transferer(ID3D12Device *device) : Waiter(device), device(device) {}
 
 	void Transition(ID3D12Resource *res, D3D12_RESOURCE_STATES from, D3D12_RESOURCE_STATES to) {
 		if (from != to) {
@@ -624,9 +626,48 @@ struct Transferer : Waiter {
 ID3D12Resource* Transferer::Transfer(ID3D12Resource *res, D3D12_RESOURCE_STATES state, uint64 *total_size) {
 	RESOURCE_DESC	desc		= res->GetDesc();
 	uint32			nsub		= desc.MipLevels * desc.ArraySize() * desc.PlaneCount(device);
-	auto			*footprints = alloc_auto(D3D12_PLACED_SUBRESOURCE_FOOTPRINT, nsub);
 
+	if (desc.SampleDesc.Count > 1) {
+		return nullptr;
+
+		D3D12_RESOURCE_DESC	desc1	= desc;
+		//desc1.DepthOrArraySize			= 1;
+		//desc1.MipLevels					= 1;
+		desc1.SampleDesc.Count			= 1;
+
+		D3D12_HEAP_PROPERTIES	heap_props1;
+		heap_props1.Type				= D3D12_HEAP_TYPE_DEFAULT;
+		heap_props1.CPUPageProperty		= D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+		heap_props1.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+		heap_props1.CreationNodeMask	= 1;
+		heap_props1.VisibleNodeMask		= 1;
+
+		com_ptr<ID3D12Resource>		res1;
+		device->CreateCommittedResource(&heap_props1, D3D12_HEAP_FLAG_NONE, &desc1, D3D12_RESOURCE_STATE_RESOLVE_DEST, 0, __uuidof(ID3D12Resource), (void**)&res1);
+
+		Transition(res, state, D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
+
+		for (int i = 0; i < nsub; i++)
+			cmd_list->ResolveSubresource(res1, i, res, i, desc.Format);
+
+		Transition(res, D3D12_RESOURCE_STATE_RESOLVE_SOURCE, state);
+
+		cmd_list->Close();
+
+		ID3D12CommandList	*cmd_list0 = cmd_list;
+		cmd_queue->ExecuteCommandLists(1, &cmd_list0);
+
+		ISO_VERIFY(Wait());
+		return nullptr;
+		//return Transfer(res1, D3D12_RESOURCE_STATE_RESOLVE_DEST, total_size);
+
+	}
+	
+	auto	*footprints = alloc_auto(D3D12_PLACED_SUBRESOURCE_FOOTPRINT, nsub);
 	device->GetCopyableFootprints(&desc, 0, nsub, 0, footprints, 0, 0, total_size);
+
+
+	Transition(res, state, D3D12_RESOURCE_STATE_COPY_SOURCE);
 
 	D3D12_RESOURCE_DESC	desc2;
 	clear(desc2);
@@ -647,7 +688,6 @@ ID3D12Resource* Transferer::Transfer(ID3D12Resource *res, D3D12_RESOURCE_STATES 
 	heap_props2.VisibleNodeMask		= 1;
 	device->CreateCommittedResource(&heap_props2, D3D12_HEAP_FLAG_NONE, &desc2, D3D12_RESOURCE_STATE_COPY_DEST, 0, __uuidof(ID3D12Resource), (void**)&res2);
 
-	Transition(res, state, D3D12_RESOURCE_STATE_COPY_SOURCE);
 
 	D3D12_TEXTURE_COPY_LOCATION	srcloc, dstloc;
 	srcloc.pResource		= res;
@@ -692,42 +732,54 @@ void TransferResource(ID3D12Resource *res, const memory_block &out) {
 	}
 }
 
+malloc_block TransferResource(ID3D12Resource *res, size_t size) {
+	if (res) {
+		void			*p;
+		D3D12_RANGE		range	= {0, size};
+		if (SUCCEEDED(res->Map(0, &range, &p))) {
+			malloc_block	out(size);
+			memcpy(out, p, out.length());
+			res->Unmap(0, 0);
+			return out;
+		}
+	}
+	return none;
+}
+
 template<> class Wrap<ID3D12Resource> : public Wrap2<ID3D12Resource, ID3D12Pageable>, public RecResource {
 public:
     D3D12_RESOURCE_STATES state;
+	Wrap<ID3D12Heap> *heap;
 
 	Wrap() { type = Resource; }
 
-	void	init(Wrap<ID3D12DeviceLatest> *_device, const D3D12_HEAP_PROPERTIES *pHeapProperties, D3D12_HEAP_FLAGS HeapFlags, const D3D12_RESOURCE_DESC *desc, D3D12_RESOURCE_STATES InitialState, const D3D12_CLEAR_VALUE *pOptimizedClearValue, ID3D12ProtectedResourceSession* pProtectedSession = nullptr) {
+	template<typename D> void	init(Wrap<ID3D12DeviceLatest> *_device, Allocation _alloc, const D *desc, D3D12_RESOURCE_STATES InitialState) {
 		RecObjectLink::init(_device);
-		RecResource::init(_device->orig, Committed, *desc);
+		RecResource::init(_device->orig, _alloc, *desc);
 		state	= InitialState;
 		if (desc->Dimension == D3D12_RESOURCE_DIMENSION_BUFFER)
 			gpu		= orig->GetGPUVirtualAddress();
+	}
+
+	void	init(Wrap<ID3D12DeviceLatest> *_device, const D3D12_HEAP_PROPERTIES *pHeapProperties, D3D12_HEAP_FLAGS HeapFlags, const D3D12_RESOURCE_DESC *desc, D3D12_RESOURCE_STATES InitialState, const D3D12_CLEAR_VALUE *pOptimizedClearValue, ID3D12ProtectedResourceSession* pProtectedSession = nullptr) {
+		init(_device, Committed, desc, InitialState);
 	}
 	void	init(Wrap<ID3D12DeviceLatest> *_device, const D3D12_HEAP_PROPERTIES *pHeapProperties, D3D12_HEAP_FLAGS HeapFlags, const D3D12_RESOURCE_DESC1 *desc, D3D12_RESOURCE_STATES InitialState, const D3D12_CLEAR_VALUE *pOptimizedClearValue, ID3D12ProtectedResourceSession* pProtectedSession = nullptr) {
-		RecObjectLink::init(_device);
-		RecResource::init(_device->orig, Committed, *desc);
-		state	= InitialState;
-		if (desc->Dimension == D3D12_RESOURCE_DIMENSION_BUFFER)
-			gpu		= orig->GetGPUVirtualAddress();
+		init(_device, Committed, desc, InitialState);
 	}
 	void	init(Wrap<ID3D12DeviceLatest> *_device, ID3D12Heap *pHeap, UINT64 HeapOffset, const D3D12_RESOURCE_DESC *desc, D3D12_RESOURCE_STATES InitialState, const D3D12_CLEAR_VALUE *pOptimizedClearValue) {
-		RecObjectLink::init(_device);
-		RecResource::init(_device->orig, Placed, *desc);
-		state	= InitialState;
-		gpu		= ((Wrap<ID3D12Heap>*)pHeap)->gpu + HeapOffset;
+		heap	= (Wrap<ID3D12Heap>*)pHeap;
+		init(_device, Placed, desc, InitialState);
+		if (desc->Dimension == D3D12_RESOURCE_DIMENSION_BUFFER)
+			heap->gpu = gpu - HeapOffset;
+		gpu = HeapOffset;
 	}
 	void	init(Wrap<ID3D12DeviceLatest> *_device, ID3D12Heap* pHeap, UINT64 HeapOffset, const D3D12_RESOURCE_DESC1* desc, D3D12_RESOURCE_STATES InitialState, const D3D12_CLEAR_VALUE* pOptimizedClearValue) {
-		RecObjectLink::init(_device);
-		RecResource::init(_device->orig, Committed, *desc);
-		state	= InitialState;
-		gpu		= ((Wrap<ID3D12Heap>*)pHeap)->gpu + HeapOffset;
+		init(_device, Committed, desc, InitialState);
+		//gpu		= ((Wrap<ID3D12Heap>*)pHeap)->gpu + HeapOffset;
 	}
 	void	init(Wrap<ID3D12DeviceLatest> *_device, const D3D12_RESOURCE_DESC *desc, D3D12_RESOURCE_STATES InitialState, const D3D12_CLEAR_VALUE *pOptimizedClearValue, ID3D12ProtectedResourceSession* pProtectedSession = nullptr) {
-		RecObjectLink::init(_device);
-		RecResource::init(_device->orig, Reserved, *desc);
-		state	= InitialState;
+		init(_device, Reserved, desc, InitialState);
 		//mapping = new TileMapping[div_round_up(data_size, D3D12_TILED_RESOURCE_TILE_SIZE_IN_BYTES)];
 	}
 	void	init(Wrap<ID3D12DeviceLatest> *_device, HANDLE handle) {
@@ -741,7 +793,10 @@ public:
 	};
 
 	virtual	malloc_block get_info() {
-		return memory_block(static_cast<RecResource*>(this));
+		RecResource	temp = *this;
+		if (alloc == Placed)
+			temp.gpu += heap->gpu;
+		return memory_block(&temp);
 	}
 
 	HRESULT						STDMETHODCALLTYPE Map(UINT sub, const D3D12_RANGE *read, void **data)	{ return orig->Map(sub, read, data); }
@@ -1739,44 +1794,34 @@ with_size<dynamic_array<RecObject2>> Capture::GetObjects() {
 
 malloc_block_all Capture::ResourceData(uintptr_t _res) {
 	auto	res	= (Wrap<ID3D12Resource>*)_res;
-	malloc_block	out;
 
 	if (res->orig && res->device) {
-		out.resize(res->data_size);
-
 		bool			done	= false;
 		if (res->alloc != RecResource::Reserved) {
 			D3D12_HEAP_PROPERTIES	heap_props;
 			D3D12_HEAP_FLAGS		heap_flags;
 			res->GetHeapProperties(&heap_props, &heap_flags);
 
-			if (heap_props.Type == D3D12_HEAP_TYPE_UPLOAD) {
-				TransferResource(res, out);
-				done = true;
-			} else  if (heap_props.Type == D3D12_HEAP_TYPE_READBACK) {
-				TransferResource(res, out);
-				done = true;
-			}
+			if (heap_props.Type == D3D12_HEAP_TYPE_UPLOAD || heap_props.Type == D3D12_HEAP_TYPE_READBACK)
+				return TransferResource(res, res->data_size);
 		}
-		if (!done) {
-			Transferer	trans(res->device->orig);
-			uint64		total_size = 0;
+		Transferer	trans(res->device->orig);
+		uint64		total_size = 0;
+		if (trans.Init()) {
 			com_ptr<ID3D12Resource>	res2 = trans.Transfer(res->orig, res->state, &total_size);
-			ISO_ASSERT(total_size == out.size());
-			TransferResource(res2, out);
+			ISO_ASSERT(!res2 || total_size == res->data_size);
+			return TransferResource(res2, total_size);
 		}
 	}
-	return out;
+	return none;
 }
 
 malloc_block_all Capture::HeapData(uintptr_t _heap) {
 	Wrap<ID3D12Heap> *heap	= (Wrap<ID3D12Heap>*)_heap;
-	malloc_block	out;
 
 	if (heap->orig && heap->device) {
 		D3D12_HEAP_DESC	desc	= heap->GetDesc();
 		uint64			size	= desc.SizeInBytes;
-		out.resize(size);
 
 		if (desc.Properties.Type == D3D12_HEAP_TYPE_UPLOAD || desc.Properties.Type == D3D12_HEAP_TYPE_READBACK) {
 
@@ -1794,10 +1839,9 @@ malloc_block_all Capture::HeapData(uintptr_t _heap) {
 
 			com_ptr<ID3D12Resource>	buffer;
 			if (SUCCEEDED(heap->device->orig->CreatePlacedResource(heap->orig, 0, &rdesc, D3D12_RESOURCE_STATE_COPY_SOURCE, 0, __uuidof(ID3D12Resource), (void**)&buffer)))
-				TransferResource(buffer, out);
+				return TransferResource(buffer, size);
 
 		} else if (!(desc.Flags & D3D12_HEAP_FLAG_DENY_BUFFERS)) {
-			Transferer	trans(heap->device->orig);
 			D3D12_RESOURCE_DESC	rdesc;
 			clear(rdesc);
 			rdesc.Dimension			= D3D12_RESOURCE_DIMENSION_BUFFER;
@@ -1813,48 +1857,54 @@ malloc_block_all Capture::HeapData(uintptr_t _heap) {
 			com_ptr<ID3D12Resource>	buffer;
 			if (SUCCEEDED(heap->device->orig->CreatePlacedResource(heap->orig, 0, &rdesc, D3D12_RESOURCE_STATE_COPY_SOURCE, 0, __uuidof(ID3D12Resource), (void**)&buffer))) {
 				uint64	total_size		= 0;
-				com_ptr<ID3D12Resource>	res2 = trans.Transfer(buffer, D3D12_RESOURCE_STATE_COPY_SOURCE, &total_size);
-				ISO_ASSERT(total_size == size);
-				TransferResource(res2, out);
+				Transferer	trans(heap->device->orig);
+				if (trans.Init()) {
+					com_ptr<ID3D12Resource>	res2 = trans.Transfer(buffer, D3D12_RESOURCE_STATE_COPY_SOURCE, &total_size);
+					ISO_ASSERT(total_size == size);
+					return TransferResource(res2, size);
+				}
 			}
 
 		} else {
-			Transferer	trans(heap->device->orig);
+			Transferer		trans(heap->device->orig);
+			if (trans.Init()) {
+				malloc_block	out(size);
 
-			uint64	offset = 0;
-			while (size) {
-				uint64				pixels	= size / 16;
-				//uint64			width	= min(isqrt(pixels), D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION);
-				uint64				width	= min(pixels, D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION);
-				uint32				array	= 1;//min(pixels / width, D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION);
-				//uint64	rsize			= min(size, 1 << 27);
-				uint64		rsize			= width * array * 16;
+				uint64	offset = 0;
+				while (size) {
+					uint64				pixels	= size / 16;
+					//uint64			width	= min(isqrt(pixels), D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION);
+					uint64				width	= min(pixels, D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION);
+					uint32				array	= 1;//min(pixels / width, D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION);
+					//uint64	rsize			= min(size, 1 << 27);
+					uint64		rsize			= width * array * 16;
 
-				D3D12_RESOURCE_DESC	rdesc;
-				clear(rdesc);
-				rdesc.Dimension			= D3D12_RESOURCE_DIMENSION_TEXTURE1D;
-//				rdesc.Layout			= D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-				rdesc.Format			= DXGI_FORMAT_R32G32B32A32_TYPELESS;
-				rdesc.Width				= width;
-				rdesc.Height			= 1;
-				rdesc.DepthOrArraySize	= array;
-				rdesc.MipLevels			= 1;
-				rdesc.SampleDesc.Count	= 1;
-				//rdesc.Flags				= desc.Flags & D3D12_HEAP_FLAG_SHARED_CROSS_ADAPTER ? D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER : D3D12_RESOURCE_FLAG_NONE;
+					D3D12_RESOURCE_DESC	rdesc;
+					clear(rdesc);
+					rdesc.Dimension			= D3D12_RESOURCE_DIMENSION_TEXTURE1D;
+	//				rdesc.Layout			= D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+					rdesc.Format			= DXGI_FORMAT_R32G32B32A32_TYPELESS;
+					rdesc.Width				= width;
+					rdesc.Height			= 1;
+					rdesc.DepthOrArraySize	= array;
+					rdesc.MipLevels			= 1;
+					rdesc.SampleDesc.Count	= 1;
+					//rdesc.Flags				= desc.Flags & D3D12_HEAP_FLAG_SHARED_CROSS_ADAPTER ? D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER : D3D12_RESOURCE_FLAG_NONE;
 
-				com_ptr<ID3D12Resource>	buffer;
-				if (FAILED(heap->device->orig->CreatePlacedResource(heap->orig, offset, &rdesc, D3D12_RESOURCE_STATE_COPY_SOURCE, 0, __uuidof(ID3D12Resource), (void**)&buffer)))
-					break;
+					com_ptr<ID3D12Resource>	buffer;
+					if (FAILED(heap->device->orig->CreatePlacedResource(heap->orig, offset, &rdesc, D3D12_RESOURCE_STATE_COPY_SOURCE, 0, __uuidof(ID3D12Resource), (void**)&buffer)))
+						break;
 
-				uint64	total_size		= 0;
-				com_ptr<ID3D12Resource>	res2 = trans.Transfer(buffer, D3D12_RESOURCE_STATE_COPY_SOURCE, &total_size);
-				ISO_ASSERT(total_size == rsize);
-				TransferResource(res2, out.slice(offset, rsize));
+					uint64	total_size		= 0;
+					com_ptr<ID3D12Resource>	res2 = trans.Transfer(buffer, D3D12_RESOURCE_STATE_COPY_SOURCE, &total_size);
+					ISO_ASSERT(total_size == rsize);
+					TransferResource(res2, out.slice(offset, rsize));
 
-				offset	+= rsize;
-				size	-= rsize;
+					offset	+= rsize;
+					size	-= rsize;
+				}
 			}
 		}
+		return none;
 	}
-	return out;
 }

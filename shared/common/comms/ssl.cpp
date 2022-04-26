@@ -425,7 +425,7 @@ template<typename T, int S> struct chunk_array<T, S, true> : dynamic_array<T> {
 	bool read(PacketReader &r) {
 		uint32 len = r.get<ST>();
 		for (streamptr end = r.tell() + len; r.tell() < end;) {
-			if (!iso::read(r, B::push_back()))
+			if (!r.read(B::push_back()))
 				return false;
 		}
 		return true;
@@ -632,8 +632,8 @@ struct Extension {
 	Extension(Type _type) : type(_type)	{}
 	template<Type T> Extension(const Struct<T> &s) : type(T), data(serialise(s)) {}
 
-	bool write(PacketBuilder &w) const	{ return iso::write(w, type, data); }
-	bool read(PacketReader &r)			{ return iso::read(r, type, data); }
+	bool write(PacketBuilder &w) const	{ return w.write(type, data); }
+	bool read(PacketReader &r)			{ return r.read(type, data); }
 };
 
 struct Extensions : chunk<dynamic_array<Extension>, 16> {
@@ -652,8 +652,8 @@ struct Hello {
 	TimeRandom		random;
 	SessionID		session_id;
 	Hello(Version _version) : version(_version)	{}
-	bool write(PacketBuilder &w) const	{ return iso::write(w, version, random, session_id); }
-	bool read(PacketReader &r)			{ return iso::read(r, version, random, session_id); }
+	bool write(PacketBuilder &w) const	{ return w.write(version, random, session_id); }
+	bool read(PacketReader &r)			{ return r.read(version, random, session_id); }
 };
 
 struct ClientHello : Hello {
@@ -661,8 +661,8 @@ struct ClientHello : Hello {
 	chunk<dynamic_array<Compression>, 8>			compressions;
 	optional<Extensions>							extensions;
 	ClientHello(Version _version = VER_CURRENT) : Hello(_version) {}
-	bool write(PacketBuilder &w) const	{ return iso::write(w, (const Hello&)*this, cipher_suites, compressions, extensions); }
-	bool read(PacketReader &r)			{ return iso::read(r, (Hello&)*this, cipher_suites, compressions, extensions); }
+	bool write(PacketBuilder &w) const	{ return w.write((const Hello&)*this, cipher_suites, compressions, extensions); }
+	bool read(PacketReader &r)			{ return r.read((Hello&)*this, cipher_suites, compressions, extensions); }
 };
 
 struct ServerHello : Hello {
@@ -670,16 +670,16 @@ struct ServerHello : Hello {
 	Compression										compression;
 	optional<Extensions>							extensions;
 	ServerHello(Version _version = VER_CURRENT) : Hello(_version)	{}
-	bool write(PacketBuilder &w) const	{ return iso::write(w, (const Hello&)*this, cipher_suite, compression, extensions); }
-	bool read(PacketReader &r)			{ return iso::read(r, *(Hello*)this, cipher_suite, compression, extensions); }
+	bool write(PacketBuilder &w) const	{ return w.write((const Hello&)*this, cipher_suite, compression, extensions); }
+	bool read(PacketReader &r)			{ return r.read(*(Hello*)this, cipher_suite, compression, extensions); }
 };
 
 struct CertificateRequest {
 	chunk<dynamic_array<CertificateType>, 8>			types;
 	chunk<dynamic_array<SignatureAndHashAlgorithm>, 16>	sig_hash;
 	chunk<dynamic_array<chunk<ASN1T<CertificateAuthority>, 16> >, 16>	authorities;
-	bool write(PacketBuilder &w) const	{ return iso::write(w, types, sig_hash, authorities); }
-	bool read(PacketReader &r)			{ return iso::read(r, types, sig_hash, authorities); }
+	bool write(PacketBuilder &w) const	{ return w.write(types, sig_hash, authorities); }
+	bool read(PacketReader &r)			{ return r.read(types, sig_hash, authorities); }
 };
 
 struct SupplementalData {
@@ -759,7 +759,7 @@ template<> struct Extension::Struct<Extension::server_name> {
 		Type				type;
 		opaque_array<16>	name;
 		Entry(Type type, const char *name) : type(type), name(const_memory_block(name, strlen(name))) {}
-		bool write(PacketBuilder &w) const { return iso::write(w, type, name); }
+		bool write(PacketBuilder &w) const { return w.write(type, name); }
 	};
 	chunk<dynamic_array<Entry>, 16>	names;
 	Struct(const char *name) { names.emplace_back(host_name, name); }
@@ -1014,7 +1014,7 @@ template<typename... TT> malloc_block HMAC(HashInterface &&h, const const_memory
 		pad[i] ^= 0x36;
 
 	h.writebuff(pad, h.block_size);		// start with inner pad
-	write(h, tt...);					// then text of datagram
+	h.write(tt...);					// then text of datagram
 	malloc_block code = h.digest();		// finish up 1st pass
 
 	// perform outer MD5
@@ -1420,8 +1420,8 @@ struct signature {
 	opaque_array<16>			data;
 	signature()								{}
 	signature(SignatureAlgorithm sig, HashAlgorithm hash, malloc_block &&_data)	: data(move(_data)) { algorithm.sig = sig; algorithm.hash = hash; }
-	bool	write(PacketBuilder &w) const	{ return iso::write(w, algorithm, data); }
-	bool	read(PacketReader &r)			{ return iso::read(r, algorithm, data); }
+	bool	write(PacketBuilder &w) const	{ return w.write(algorithm, data); }
+	bool	read(PacketReader &r)			{ return r.read(algorithm, data); }
 };
 
 struct Signer {
@@ -1646,7 +1646,7 @@ template<> struct KeyExchangerT<xchg_dh> : KeyExchanger {
 		return true;
 	}
 	virtual bool	write_server(PacketBuilder &w, Connection *con, const ClientHello *hello)	{
-		return write(w,
+		return w.write(
 			opaque_array<16>(dh.p),
 			opaque_array<16>(dh.g),
 			opaque_array<16>(dh.get_public())
@@ -1724,7 +1724,7 @@ template<> struct KeyExchangerT<xchg_rsa> : KeyExchanger {
 		return true;
 	}
 	virtual bool	write_server(PacketBuilder &w, Connection *con, const ClientHello *hello)	{
-		return write(w,
+		return w.write(
 			opaque_array<16>(rsa.N),
 			opaque_array<16>(rsa.E)
 		);
@@ -1791,7 +1791,7 @@ template<> struct KeyExchangerT<xchg_srp> : KeyExchanger {
 		srp	= SRP(*SRP_group::Find("1024"));
 		B	= srp.ServerCalcB(entry->verifier);
 
-		return write(w, 
+		return w.write(
 			opaque_array<16>(srp.p.save_all()),
 			opaque_array<16>(srp.g.save_all()),
 			opaque_array<8>(entry->salt.save_all()),
@@ -2060,11 +2060,11 @@ template<> struct KeyExchangerT<xchg_ecdh> : KeyExchanger {
 				uint16be				m;
 				ECBasisType				basis = trinomial;
 				opaque_array<8>			k[3];
-				write(w, m, basis);
+				w.write(m, basis);
 				writen(w, k, basis == pentanomial ? 3 : 1);
 			}
 			opaque_array<8>		a = ecdh.a, b = ecdh.b, g = ecdh.save(ecdh.g), q = ecdh.q, h = ecdh.h;
-			write(w,
+			w.write(
 				opaque_array<8>(ecdh.a),
 				opaque_array<8>(ecdh.b),
 				opaque_array<8>(ecdh.save(ecdh.g)),
@@ -2110,7 +2110,7 @@ template<> struct KeyExchangerT<xchg_fortezza> : KeyExchanger {
 		);
 	}
 	virtual bool	write_client(PacketBuilder &w, Connection *con)	{
-		return write(w, Yc, Rc, y_signature
+		return w.write(Yc, Rc, y_signature
 			, wrapped_client_write_key, wrapped_server_write_key
 			, client_write_iv, server_write_iv, master_secret_iv, pre_master_secret
 		);

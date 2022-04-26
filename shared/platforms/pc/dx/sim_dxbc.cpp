@@ -700,8 +700,8 @@ struct RawTextureReader {
 				stride	= _stride ? _stride : t->width;
 				stride2 = 0;
 			} else {
-				tsize	= t->format.Size();
-				stride	= aligned_stride(tsize, adjust_size(t->format, t->width));
+				tsize	= t->format.Bytes();
+				stride	= dxgi_align(tsize * adjust_size(t->format, t->width));
 				stride2 = t->depth ? stride * adjust_size(t->format, t->height) : 0; 
 			}
 		}
@@ -724,7 +724,7 @@ struct TextureReader : SimulatorDXBC::Resource {
 	int				maxlod;
 	MIP				mips[16];
 
-	TextureReader(SimulatorDXBC::Resource *t, uint8 swizzle, TexelOffset _offset = 0);
+	TextureReader(SimulatorDXBC::Resource *t, uint8 swizzle, TexelOffset offset = 0);
 
 	bool	check(uint32 x, uint32 y, uint32 z, uint32 mip) {
 		return p && (is_buffer(dim) ? x < height : mip <= maxlod && x < max(width >> mip, 1) && y < max(height >> mip, 1));
@@ -762,7 +762,7 @@ struct TextureReader : SimulatorDXBC::Resource {
 	float4	gather4_c(SimulatorDXBC::Sampler *samp, const float4p &i, float ref, float lod);
 };
 
-TextureReader::TextureReader(SimulatorDXBC::Resource *t, uint8 swizzle, TexelOffset _offset) : SimulatorDXBC::Resource(*t), block(format.IsBlock()), offset(_offset) {
+TextureReader::TextureReader(SimulatorDXBC::Resource *t, uint8 swizzle, TexelOffset offset) : SimulatorDXBC::Resource(*t), block(format.IsBlock()), offset(offset) {
 	format.chans = Rearrange((DXGI_COMPONENTS::SWIZZLE)format.chans, Swizzle(
 		DXGI_COMPONENTS::CHANNEL((swizzle >> 0) & 3),
 		DXGI_COMPONENTS::CHANNEL((swizzle >> 2) & 3),
@@ -773,9 +773,9 @@ TextureReader::TextureReader(SimulatorDXBC::Resource *t, uint8 swizzle, TexelOff
 	int	dbl		= format.layout == DXGI_COMPONENTS::BC1;
 
 	maxlod		= t->mips - 1;
-	tsize		= format.Size() << dbl;
+	tsize		= format.Bytes() << dbl;
 
-	if (is_buffer(t->dim)) {
+	if (is_buffer(dim)) {
 		mips[0].base		= *this;
 		mips[0].stride		= 0;
 		mips[0].stride2		= 0;
@@ -783,8 +783,8 @@ TextureReader::TextureReader(SimulatorDXBC::Resource *t, uint8 swizzle, TexelOff
 		uint8		*base	= *this;
 		for (int i = 0; i <= maxlod; i++) {
 			mips[i].base	= (uint8*)((uintptr_t)base << dbl);
-			mips[i].stride	= mip_stride(format, width, i, true);
-			mips[i].stride2	= mips[i].stride * mip_size(format, height, i);
+			mips[i].stride	= dxgi_align(mip_stride(format, width, i));
+			mips[i].stride2	= uses_z(dim) ? mips[i].stride * mip_size(format, height, i) : 0;
 			base			+= mips[i].stride2 * max(depth >> i, 1);
 		}
 	}
@@ -1667,7 +1667,7 @@ void SimulatorDXBC::Resource::init(ResourceDimension _dim, DXGI_COMPONENTS _form
 		default:
 			break;
 	}
-	n -= stride_padding(format, width, mips - 1);
+	n -= dxgi_padding(mip_stride(format, width, mips - 1));
 }
 
 void SimulatorDXBC::Resource::set_mips(uint32 first, uint32 num) {
@@ -1711,14 +1711,14 @@ void SimulatorDXBC::Resource::set_mips(uint32 first, uint32 num) {
 	}
 
 	p	= (uint8*)p + offset;
-	n	= size2 - stride_padding(format, width, num - 1);
+	n	= size2 - dxgi_padding(mip_stride(format, width, num - 1));
 	mips	= num;
 }
 
 void SimulatorDXBC::Resource::set_slices(uint32 first, uint32 num) {
 	size_t	stride2	= size2D(format, width, height, 1);
 	p	= (uint8*)p + stride2 * first;
-	n	= stride2 * num  - stride_padding(format, width, mips - 1);
+	n	= stride2 * num  - dxgi_padding(mip_stride(format, width, mips - 1));
 	depth	= num;
 }
 

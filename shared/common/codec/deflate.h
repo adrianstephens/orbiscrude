@@ -47,7 +47,7 @@ struct deflate_base {
 //  deflate_decoder
 //-----------------------------------------------------------------------------
 
-class deflate_decoder : deflate_base {
+class deflate_decoder : deflate_base, public codec_defaults {
 protected:
 public:
 	struct code {
@@ -58,13 +58,13 @@ public:
 
 	enum MODE {
 		HEAD,				// i: waiting for magic header
+		DONE,				// done -- remain here until reset
+		BAD,				// got a data error -- remain here until reset
 		BLOCK,				// block type
 			COPY,			// i/o: waiting for input or output to copy stored block
 			LEN,			// i: waiting for length/lit code
 			MATCH,			// o: waiting for output space to copy string
 			LIT,			// o: waiting for output space to write literal
-		DONE,				// done -- remain here until reset
-		BAD,				// got a data error -- remain here until reset
 	};
 
 	static const uint8	len_ops[];
@@ -72,7 +72,7 @@ public:
 	static code			static_len[512];
 	static code			static_dist[32];
 
-	typedef vlc_in<uint32, false, reader_intf> VLC;
+	typedef vlc_in<uint32, false> VLC;
 	VLC::state_t	vlc0;
 
 	MODE			mode;
@@ -98,8 +98,8 @@ public:
 	template<typename WIN> uint8*	process1(VLC &vlc, uint8 *dst, uint8 *dst_end, WIN win);
 
 public:
-	uint8*			process(uint8* dst, uint8 *dst_end, reader_intf file, TRANSCODE_FLAGS flags);
-	void			restore_unused(reader_intf file)		{ file.seek_cur(-int(vlc0.bits_held()) / 8); vlc0.reset(); }
+	uint8*			process(uint8* dst, uint8 *dst_end, istream_ref file, TRANSCODE_FLAGS flags);
+	void			restore_unused(istream_ref file)		{ file.seek_cur(-int(vlc0.bits_held()) / 8); vlc0.reset(); }
 
 	deflate_decoder(int wbits = 15) : mode(BLOCK), last(false), offset(0), wbits(wbits) {
 		static bool unused = make_static_tables();
@@ -110,7 +110,7 @@ public:
 //  deflate_encoder
 //-----------------------------------------------------------------------------
 
-class deflate_encoder : deflate_base {
+class deflate_encoder : deflate_base, public codec_defaults {
 public:
 	enum LEVEL {
 		NO_COMPRESSION		= 0,
@@ -128,6 +128,10 @@ public:
 
 	typedef vlc_out<uint32, false>	VLC;
 
+	struct entry {
+		uint8	lc;
+		uint16	dist;
+	};
 	// Data structure describing a single value and its code string
 	struct ct_data {
 		union {
@@ -171,14 +175,13 @@ public:
 
 	static const TreeDesc	len_desc, dist_desc, bl_desc;
 	static ct_data			static_len_tree[L_CODES_STATIC], static_dist_tree[D_CODES];
-	static const uint8		_dist_code[];
-	static const uint8		_length_code[];
+//	static const uint8		_dist_code[512];
+	static const uint8		_length_code[256];
 	static const SearchParams configuration_table[];
 
 	// Mapping from a distance to a distance code
-	static constexpr uint8 dist_code(uint32 dist) {
-		return dist <= 256 ? _dist_code[dist - 1] : _dist_code[256 + ((dist - 1) >> 7)];
-	}
+	static constexpr uint8 dist_code(uint32 dist);
+	static constexpr uint8 length_code(uint32 len);
 	
 	SearchParams	params;
 
@@ -189,29 +192,26 @@ public:
 	//hash
 	uint32			hash_size;				// number of elements in hash table
 	uint32			hash_shift;				// Number of bits by which ins_h must be shifted at each input step
-	temp_array<uint16>	head;				// Heads of the hash chains or NIL
-	temp_array<uint16>	prev;				// Link to older string with same hash index
+	temp_array<uint32>	head;				// Heads of the hash chains or NIL
+	temp_array<uint32>	prev;				// Link to older string with same hash index
 
 	int32			block_start;			// offset of the beginning of the current output block
 	uint32			match_length;			// length of best match
 	uint32			match_start;			// start of matching string
 	bool			match_available;		// set if previous match exists
 
-	temp_array<uint8>	l_buf;				// buffer for literals or lengths
-	temp_array<uint16>	d_buf;				// Buffer for distances
-	uint32			num_lits;				// running index in l_buf
-
+	temp_array<entry>	buf;
+	uint32			num_lits;				// running index in buf
 	uint32			offset;
 
 	bool		tally_lit(uint8 c) {
-		d_buf[num_lits]	= 0;
-		l_buf[num_lits]	= c;
-		return ++num_lits == l_buf.size() - 1;
+		buf[num_lits]	= {c, 0};
+		return ++num_lits == buf.size() - 1;
 	}
 	bool		tally_dist(uint32 dist, uint32 length) {
-		d_buf[num_lits]	= dist;
-		l_buf[num_lits]	= length - MIN_MATCH;
-		return ++num_lits == l_buf.size() - 1;
+		ISO_ASSERT(length <= MAX_MATCH);
+		buf[num_lits]	= {uint8(length - MIN_MATCH), uint16(dist)};
+		return ++num_lits == buf.size() - 1;
 	}
 
 	// hash
@@ -223,15 +223,15 @@ public:
 	}
 	uint32 insert_string(uint32 h, uint32 pos) {
 		auto	r	= prev[pos & (wsize - 1)] = head[h];
-		head[h]		= (uint16)pos;
+		head[h]		= pos;
 		return r;
 	}
 
-	constexpr size_t	MAX_DIST() { return wsize - MIN_LOOKAHEAD; }
+	constexpr size_t	MAX_DIST() { return min(wsize - MIN_LOOKAHEAD, 32768); }
 
-	void	compress_block(VLC &vlc, const ct_data *ltree, const ct_data *dtree, uint32 num_lits);
-	void	flush_block(VLC &vlc, const uint8* src, external_window win, bool last);
-	uint32	longest_match(const uint8 *src, const uint8 *src_end, int best_len, uint32 cur_start, external_window win, uint32 max_match, uint32 max_chain);
+	static void	compress_block(VLC &vlc, const ct_data *ltree, const ct_data *dtree, entry *buf, uint32 num_lits);
+	void	flush_block(VLC &vlc, const uint8* src, const uint8* base, bool last);
+	void	longest_match(const uint8 *src, uint32 lookahead, uint32 match_pos, external_window win, uint32 best_len, uint32 nice_len, uint32 max_chain);
 
 	const uint8* deflate_stored	(VLC &vlc, const uint8* src, const uint8* src_end, TRANSCODE_FLAGS flags, external_window win);
 	const uint8* deflate_fast	(VLC &vlc, const uint8* src, const uint8* src_end, TRANSCODE_FLAGS flags, external_window win);
@@ -246,6 +246,9 @@ public:
 	void			flush(ostream_ref file)		{ VLC(file).flush(); }
 
 	deflate_encoder(int level = BEST_COMPRESSION, int wbits = 15, int mem_level = 8);
+	deflate_encoder(deflate_encoder&&) = default;
+	deflate_encoder(deflate_encoder&) : deflate_encoder() { ISO_ASSERT(0); }
+
 };
 
 //-----------------------------------------------------------------------------
@@ -256,6 +259,15 @@ struct zlib_base {
 	struct header {
 		uint8	method:4, info:4;
 		uint8	check:5, dict:1, level:2;
+		bool	verify() const {
+			uint8	*p	= (uint8*)this;
+			return (((p[0] << 8) + p[1]) % 31) == 0;
+		}
+		void	set_check() {
+			uint8	*p	= (uint8*)this;
+			check	= 0;
+			check	= 31 - (((p[0] << 8) + p[1]) % 31);
+		}
 	};
 	enum {
 		METHOD_DEFLATED = 8
@@ -266,7 +278,8 @@ struct zlib_base {
 		LEVEL_DEFAULT	= 2,
 		LEVEL_MAXIMUM	= 3,
 	};
-	uint32			adler;
+
+	uint32	adler = 1;
 };
 
 class zlib_decoder : public deflate_decoder, zlib_base {
@@ -279,12 +292,15 @@ class zlib_encoder : public deflate_encoder, zlib_base {
 	header	h;
 public:
 	const uint8*	process(ostream_ref file, const uint8* src, const uint8 *src_end, TRANSCODE_FLAGS flags);
-	zlib_encoder(int wbits = 15, bool do_adler = false) : deflate_encoder(wbits) {
+	zlib_encoder(int wbits = 15, bool dict = false, int level = BEST_COMPRESSION) : deflate_encoder(level, wbits) {
 		h.method	= METHOD_DEFLATED;
 		h.info		= wbits - 8;
-		h.dict		= 1;
+		h.dict		= dict;
 		h.level		= LEVEL_DEFAULT;
+		h.set_check();
 	}
+	zlib_encoder(zlib_encoder&)		= default;
+	zlib_encoder(zlib_encoder&&)	= default;
 };
 
 } // namespace iso

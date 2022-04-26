@@ -39,7 +39,7 @@ struct ALADPCMloop {
 	short		state[FRAMESIZE];
 };
 
-inline double abs(double a) { return a < 0 ? -a : a; }
+//inline double abs(double a) { return a < 0 ? -a : a; }
 
 // Calculate autocorrelation of a signal
 void acf(short *sig, int len, double *ac, int nlags)

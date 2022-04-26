@@ -441,6 +441,7 @@ void TextDisplay::ReplaceText(const interval<uint32> &r, const wchar_t *s, const
 		auto	&chunk	= text.push_back("");
 		chunk.tabs		= i0->tabs;
 		chunk.offset	= i0->offset + (e - s);
+		back			= &chunk;
 	}
 
 	if (i0 != back) {
@@ -816,19 +817,23 @@ class D2DEditControlImp : public Window<D2DEditControlImp>, public WindowTimer<D
 		return false;
 	}
 
-	const chunk*	HitTestFromWindow(const POINT &p, DWRITE_HIT_TEST_METRICS *hit) {
-		float	x = p.x / zoom - drawrect.left - margins[0] + sih.Pos();
-		float	y = p.y / zoom - drawrect.top + si.Pos();
+	const chunk*	HitTestFromWindow(float x, float y, DWRITE_HIT_TEST_METRICS *hit) {
+		x = x / zoom - drawrect.left - margins[0] + sih.Pos();
+		y = y / zoom - drawrect.top + si.Pos();
 		UpdateTo(y, 0);
 		return d2d::TextDisplay::HitTestFromWindow(x, y, hit);
 	}
-
-	uint32	OffsetFromWindow(const POINT &p) {
+	uint32	OffsetFromWindow(float x, float y) {
 		DWRITE_HIT_TEST_METRICS	hit;
-		if (const chunk *i = HitTestFromWindow(p, &hit))
+		if (const chunk *i = HitTestFromWindow(x, y, &hit))
 			return i->offset + hit.textPosition;
 		return Length();
 	}
+
+	const chunk*	HitTestFromWindow(const POINT &p, DWRITE_HIT_TEST_METRICS *hit)		{ return HitTestFromWindow(p.x, p.y, hit); }
+	const chunk*	HitTestFromWindow(const POINTL &p, DWRITE_HIT_TEST_METRICS *hit)	{ return HitTestFromWindow(p.x, p.y, hit); }
+	uint32			OffsetFromWindow(const POINT &p)									{ return OffsetFromWindow(p.x, p.y); }
+	uint32			OffsetFromWindow(const POINTL &p)									{ return OffsetFromWindow(p.x, p.y); }
 
 	bool	Visible(uint32 a) const {
 		DWRITE_HIT_TEST_METRICS	hit;
@@ -877,11 +882,11 @@ class D2DEditControlImp : public Window<D2DEditControlImp>, public WindowTimer<D
 
 		float	x, y;
 		DWRITE_HIT_TEST_METRICS	hit;
-		TextPosition(offset, &x, &y, &hit);
+		ISO_VERIFY(TextPosition(offset, &x, &y, &hit, false));
 
 		float	height	= drawrect.Height();
 		uint32	s		= style;
-		if ((s & ES_AUTOHSCROLL) && !(s & WS_HSCROLL) && !flags.test(WORDWRAP))
+		if ((s & EditControl::AUTOHSCROLL) && !(s & WS_HSCROLL) && !flags.test(WORDWRAP))
 			height -= SystemMetrics::HScrollHeight();
 
 		si.SetMax(EstimatedHeight());
@@ -1465,7 +1470,7 @@ LRESULT D2DEditControlImp::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 
 		case EM_SETREADONLY:
 			flags.set(READONLY, wParam);
-			style = (style & ~ES_READONLY) | (wParam ? ES_READONLY : 0);
+			style = (style - EditControl::READONLY) | (!!wParam * EditControl::READONLY);
 			break;
 
 		case EM_LINESCROLL: {
@@ -1483,8 +1488,10 @@ LRESULT D2DEditControlImp::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 			return 0;
 		}
 
+//		case EM_CHARFROMPOS:
+//			return OffsetFromWindow(*(POINT*)lParam);
 		case EM_CHARFROMPOS:
-			return OffsetFromWindow(*(POINT*)lParam);
+			return OffsetFromWindow(*(POINTL*)lParam);
 
 		case EM_LINEFROMCHAR:
 			return LineFromChar(wParam);
@@ -1634,7 +1641,7 @@ LRESULT D2DEditControlImp::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 				if (!flags.test(WORDWRAP)) {
 					float	h	= drawrect.Height();
 					uint32	s	= style;
-					if ((s & ES_AUTOHSCROLL) && !(s & WS_HSCROLL))
+					if ((s & EditControl::AUTOHSCROLL) && !(s & WS_HSCROLL))
 						h -= SystemMetrics::HScrollHeight();
 					sih.SetMax(Width(si.Pos(), h));
 					SetScroll(sih, false);
@@ -1681,6 +1688,10 @@ D2DTextWindow::D2DTextWindow(const WindowPos &pos, const char *_title, Style sty
 
 LRESULT D2DTextWindow::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
+		case WM_CREATE:
+			Parent().SendMessage(WM_PARENTNOTIFY, WM_SETTEXT, hWnd);
+			break;
+
 		case WM_GETTEXT:
 			if (title) {
 				int	n = min(wParam, title.length() + 1);
@@ -1701,7 +1712,7 @@ LRESULT D2DTextWindow::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 
 HWND D2DTextWindow::Create(const WindowPos &pos, const char *_title, Style style, StyleEx styleEx, ID id) {
 	title = _title;
-	Subclass<D2DTextWindow, D2DEditControl>::Create(pos, _title, style | ES_MULTILINE | ES_AUTOHSCROLL | ES_AUTOVSCROLL | ES_NOHIDESEL | HSCROLL | VSCROLL, styleEx, id);
+	Subclass<D2DTextWindow, D2DEditControl>::Create(pos, _title, style | EditControl::MULTILINE | EditControl::AUTOHSCROLL | EditControl::AUTOVSCROLL | EditControl::NOHIDESEL | HSCROLL | VSCROLL, styleEx, id);
 	return *this;
 }
 
@@ -1710,6 +1721,11 @@ void D2DTextWindow::Online(bool enable) {
 		Rebind(this);
 //	else
 //		Unbind();
+}
+
+void D2DTextWindow::SetTitle(const char *_title) {
+	title = _title;
+	Parent().SendMessage(WM_PARENTNOTIFY, WM_SETTEXT, hWnd);
 }
 
 Control iso::win::CreateD2DEditControl(const WindowPos &pos) {
@@ -1723,6 +1739,10 @@ Control iso::win::CreateD2DEditControl(const WindowPos &pos) {
 
 LRESULT TextWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
+		case WM_CREATE:
+			Parent().SendMessage(WM_PARENTNOTIFY, WM_SETTEXT, hWnd);
+			break;
+
 		case WM_GETTEXT:
 			if (title) {
 				int	n = min(wParam, title.length() + 1);
@@ -1786,7 +1806,7 @@ TextWindow::TextWindow(const WindowPos &pos, const char *_title, Style style, St
 
 HWND TextWindow::Create(const WindowPos &pos, const char *_title, Style style, StyleEx styleEx, ID id) {
 	title = _title;
-	Subclass<TextWindow, RichEditControl>::Create(pos, NULL, style | ES_MULTILINE | ES_AUTOHSCROLL | ES_AUTOVSCROLL | ES_NOHIDESEL | CHILD | HSCROLL | VSCROLL, styleEx, id);
+	Subclass<TextWindow, RichEditControl>::Create(pos, NULL, style | EditControl::MULTILINE | EditControl::AUTOHSCROLL | EditControl::AUTOVSCROLL | EditControl::NOHIDESEL | CHILD | HSCROLL | VSCROLL, styleEx, id);
 	SetFormat(CharFormat().Font("Courier New").Weight(FW_NORMAL).Size(12 * 15), SCF_DEFAULT);
 	return *this;
 }
@@ -1799,6 +1819,10 @@ void TextWindow::Online(bool enable) {
 	SetUndoLimit(enable ? 100 : 0);
 }
 
+void TextWindow::SetTitle(const char *_title) {
+	title = _title;
+	Parent().SendMessage(WM_PARENTNOTIFY, WM_SETTEXT, hWnd);
+}
 
 static const win::Colour ansi_cols[] = {
 	{0,0,0},

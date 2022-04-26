@@ -1462,7 +1462,7 @@ template<typename T> struct repeat_s {
 		template<typename T1> iterator(T1 &&t, int i) : iterator_wrapper<iterator, int>(i), t(forward<T1>(t))	{}
 		const T&		operator*()						const	{ return t; }
 		ref_helper<T&>	operator->()					const	{ return t; }
-		iterator		operator+ (const iterator &b)	const	{ return {t, int(i + b.i)}; }
+		iterator		operator+ (const iterator &b)	const	{ return {t, int(n + b.n)}; }
 	};
 
 	repeat_s(T &&t, int n) : t(forward<T>(t)), n(n) {}

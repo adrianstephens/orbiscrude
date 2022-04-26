@@ -196,7 +196,17 @@ struct field_bit {
 
 struct field_custom {};
 
-typedef string_accum& (*field_callback_func)(string_accum&, const field*, const uint32le*, uint32, uint32);
+typedef string_accum&	(*field_callback_func)(string_accum&, const field*, const uint32le*, uint32, uint32);
+
+struct field_thing {
+	uint32		*p;
+	const field	*pf;
+	field_thing() {}
+	field_thing(uint32 *p, const field *pf) : p(p), pf(pf) {}
+	virtual ~field_thing()	{}
+};
+typedef field_thing* (*field_follow_func)(const field*, const uint32le*, uint32);
+
 template<typename T> struct field_callback;
 
 template<typename T> struct field_dot : T {};
@@ -301,7 +311,7 @@ struct field {
 		MODE_CALL		= 0,
 		MODE_POINTER	= 1,
 		MODE_RELPTR		= 2,
-		MODE_RELPTR_BASE= 3,
+		MODE_CUSTOM_PTR	= 3,
 	};
 	const char	*name;
 	uint32		start:15, num:8, offset:4, shift:5;

@@ -889,7 +889,7 @@ template<> struct Coding::T<Coding::QUANTIZATION> : Coding {
 	#endif
 	#ifdef DRACO_ENABLE_WRITER
 		bool	Write(ostream_ref file) override {
-			return write(file, min_values, range, quantization_bits);
+			return file.write(min_values, range, quantization_bits);
 		}
 		void	Encode(int32 *out, const void *in, uint32 num_values) override {
 			vec<float, N>	vmin(infinity), vmax(-infinity);
@@ -940,7 +940,7 @@ template<> struct Coding::T<Coding::QUANTIZATION> : Coding {
 #endif
 #ifdef DRACO_ENABLE_WRITER
 	bool	Write(ostream_ref file) override {
-		return write(file, min_values, range, quantization_bits);
+		return file.write(min_values, range, quantization_bits);
 	}
 	void	Encode(int32 *out, const void *in, uint32 num_values) override {
 		uint32	num_components = min_values.size32();
@@ -1073,7 +1073,7 @@ template<> struct PredictionTransform::T<PredictionTransform::WRAP> : Prediction
 #endif
 #ifdef DRACO_ENABLE_WRITER
 	bool Write(ostream_ref file) override {
-		return write(file, wrap_min, wrap_max);
+		return file.write(wrap_min, wrap_max);
 	}
 	void Encode(const int32 *pred, const int32 *in, int32 *out) override {
 		auto	dif = wrap_max - wrap_min + 1;
@@ -3550,7 +3550,7 @@ bool Writer::WriteMeshEdgebreaker(ostream_ref file) {
 	file.putc(dec.size());
 
 	for (auto &d : dec)
-		iso::write(file, d.id, d.type, d.traversal);
+		file.write(d.id, d.type, d.traversal);
 
 	for (auto& d : dec) {
 		d.WriteAttributes(file);
@@ -4171,7 +4171,7 @@ bool Writer::WritePointCloudKD(ostream_ref file) {
 			flat.add(a.values, a.num_components);
 		}
 
-		iso::write(file, uint8(d.kd_compression), bit_length, num_points);
+		file.write(uint8(d.kd_compression), bit_length, num_points);
 
 		switch (d.kd_compression) {
 			case 0:	case 1: KDEncodePoints(KDEncodersN<0>(file), flat.dimension, bit_length, flat); break;

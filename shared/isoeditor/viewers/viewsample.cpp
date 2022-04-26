@@ -348,7 +348,7 @@ class EditorSample : public Editor {
 			|| type->Is("SampleBuffer");
 	}
 	virtual Control Create(MainWindow &main, const WindowPos &wpos, const ISO_ptr_machine<void> &p) {
-		ToolBarControl	tb(main, NULL, Control::CHILD | CCS_NODIVIDER | CCS_NORESIZE | TBSTYLE_FLAT | TBSTYLE_TRANSPARENT | TBSTYLE_TOOLTIPS);
+		ToolBarControl	tb(main, NULL, Control::CHILD | ToolBarControl::NODIVIDER | ToolBarControl::NORESIZE | ToolBarControl::FLAT | ToolBarControl::TRNSPARENT | ToolBarControl::TOOLTIPS);
 		tb.Init(GetLocalInstance(), IDR_TOOLBAR_SAMPLE);
 		main.AddToolbar(tb);
 		return *new ViewSample(wpos, FileHandler::ExpandExternals(p), tb);

@@ -815,7 +815,7 @@ class IsoEditor2 : public IsoEditor, com<IDropTarget> {//}; , Composition11{
 		void	Create(IsoEditor2 *main, HTREEITEM _item, int _subitem) {
 			item			= _item;
 			subitem			= _subitem;
-			EditControl2::Create(main->treecolumn, NULL, CHILD | VISIBLE | CLIPSIBLINGS | ES_AUTOHSCROLL | ES_WANTRETURN, CLIENTEDGE, main->treecolumn.GetItemRect(item, subitem, false, true), ID_EDIT);
+			EditControl2::Create(main->treecolumn, NULL, CHILD | VISIBLE | CLIPSIBLINGS | EditControl::AUTOHSCROLL | EditControl::WANTRETURN, CLIENTEDGE, main->treecolumn.GetItemRect(item, subitem, false, true), ID_EDIT);
 			SetFont(main->treecolumn.GetTreeControl().GetFont());
 			MoveAfter(HWND_TOP);
 			SetOwner(*main);
@@ -1573,15 +1573,15 @@ LRESULT IsoEditor2::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 			arrangement.Class().background = Brush::White();
 			splitter.SetPane(0, arrangement);
 
-			ToolBarControl	tb(arrangement, NULL, CHILD | VISIBLE | CCS_NORESIZE | CCS_NODIVIDER | TBSTYLE_FLAT | TBSTYLE_TRANSPARENT | TBSTYLE_TOOLTIPS, 0);
+			ToolBarControl	tb(arrangement, NULL, CHILD | VISIBLE | CCS_NORESIZE | CCS_NODIVIDER | ToolBarControl::FLAT | ToolBarControl::TRNSPARENT | TBSTYLE_TOOLTIPS, 0);
 			tb.Init(IDR_TOOLBAR_MAIN);
 			ToolBarControl::Item().Style(BTNS_DROPDOWN).Param((void*)add_menu).Set(tb, ID_ADD_DUMMY);
 			AddToolbar(tb);
-			treecolumn.Create(arrangement, NULL, CHILD | VISIBLE | HSCROLL | TCS_GRIDLINES | TCS_HEADERAUTOSIZE, CLIENTEDGE | ACCEPTFILES);
+			treecolumn.Create(arrangement, NULL, CHILD | VISIBLE | HSCROLL | treecolumn.GRIDLINES | treecolumn.HEADERAUTOSIZE, CLIENTEDGE | ACCEPTFILES);
 #else
 			ToolBarControl	tb = CreateToolbar(IDR_TOOLBAR_MAIN);
 			ToolBarControl::Item().Style(BTNS_DROPDOWN).Param((void*)add.menu).Set(tb, ID_ADD_DUMMY);
-			treecolumn.Create(GetChildWindowPos(), NULL, CHILD | VISIBLE | HSCROLL | TCS_GRIDLINES | TCS_HEADERAUTOSIZE, ACCEPTFILES);
+			treecolumn.Create(GetChildWindowPos(), NULL, CHILD | VISIBLE | HSCROLL | treecolumn.GRIDLINES | treecolumn.HEADERAUTOSIZE, ACCEPTFILES);
 			SetChildImmediate(treecolumn);
 #endif
 
@@ -1591,7 +1591,7 @@ LRESULT IsoEditor2::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 			HeaderControl::Item("Type").	Format(HDF_LEFT).Width(100).Insert(header, 1);
 			HeaderControl::Item("Value").	Format(HDF_LEFT).Width(100).Insert(header, 2);
 			treecolumn.SetMinWidth(2, 100);
-			treecolumn.GetTreeControl().style = CHILD | VISIBLE | CLIPSIBLINGS | TVS_NOHSCROLL | TVS_HASLINES | TVS_HASBUTTONS | TVS_LINESATROOT | TVS_SHOWSELALWAYS | TVS_FULLROWSELECT;
+			treecolumn.GetTreeControl().style = CHILD | VISIBLE | CLIPSIBLINGS | TreeControl::NOHSCROLL | TreeControl::HASLINES | TreeControl::HASBUTTONS | TreeControl::LINESATROOT | TreeControl::SHOWSELALWAYS | TreeControl::FULLROWSELECT;
 
 			tree_imagelist = ImageList::CreateSmallIcons(ILC_COLOR32, 1, 1);
 			tree_imagelist.ScaleAdd(LoadPNG("IDB_DOT"));

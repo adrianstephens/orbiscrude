@@ -281,7 +281,7 @@ ID3D11ShaderResourceView *_MakeTexture(ID3D11Device *device, DX11Texture *pc, vo
 	D3D11_SUBRESOURCE_DATA	*data	= alloc_auto(D3D11_SUBRESOURCE_DATA, pc->mips * pc->depth), *p = data;
 	uint8					*src	= (uint8*)physram + pc->offset;
 	DXGI_COMPONENTS			comp	= desc.Format;
-	uint32					bpp		= comp.Size();
+	uint32					bpp		= comp.Bytes();
 	uint32					blockx	= comp.IsBlock() ? 4 : 1, blocky = blockx;
 
 	for (int a = 0; a < desc.ArraySize; a++) {

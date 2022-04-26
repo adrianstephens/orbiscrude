@@ -3,6 +3,7 @@
 
 #include "pe.h"
 #include "base/algorithm.h"
+#include "stream.h"
 
 //-----------------------------------------------------------------------------
 //	CLR

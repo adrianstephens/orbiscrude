@@ -2,6 +2,8 @@
 #define KD_TREE_H
 
 #include "base/defs.h"
+#include "base/vector.h"
+#include "base/interval.h"
 
 namespace iso {
 

@@ -462,7 +462,7 @@ struct dictionary : dynamic_array<dict_entry> {
 	dictionary()	{}
 	dictionary(index *ind) {
 		for (int i = 0, n = ind->count; i < n; i++)
-			add(lvalue(memory_reader((*ind)[i])));
+			add(memory_reader((*ind)[i]));
 	}
 
 	auto	end() const { return dynamic_array<dict_entry>::end() - 1; }

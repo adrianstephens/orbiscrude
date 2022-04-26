@@ -320,7 +320,7 @@ public:
 	LRESULT Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 		switch (message) {
 			case WM_CREATE: {
-				toolbar.Create(*this, NULL, CHILD | CLIPSIBLINGS | VISIBLE | CCS_NORESIZE | TBSTYLE_FLAT | TBSTYLE_TOOLTIPS);
+				toolbar.Create(*this, NULL, CHILD | CLIPSIBLINGS | VISIBLE | toolbar.NORESIZE | toolbar.FLAT | toolbar.TOOLTIPS);
 				toolbar.Init("IDR_TOOLBAR_MESH");
 //				toolbar.Add(Menu("IDR_MENU_VIEWMODEL"));
 				toolbar.CheckButton(ID_MESH_BACKFACE, cull == BFC_FRONT);

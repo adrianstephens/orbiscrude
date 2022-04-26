@@ -236,10 +236,10 @@ LRESULT TabWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 			return TRUE;
 		 }
 
-		case WM_PARENTNOTIFY:
+		case WM_PARENTNOTIFY: {
+			Control	c = lParam;
 			switch (LOWORD(wParam)) {
 				case WM_DESTROY: {
-					Control	c	= lParam;
 					int		i	= FindControl(c);
 					if (i >= 0) {
 						Parent()(message, wParam, lParam);
@@ -249,7 +249,6 @@ LRESULT TabWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 					break;
 				}
 				case WM_CREATE: {
-					Control	c = lParam;
 					if (c.Class().name() == "msctls_updown32")
 						break;
 					if (FindControl(lParam) < 0) {
@@ -269,8 +268,17 @@ LRESULT TabWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 					}
 					break;
 				}
+				case WM_SETTEXT: {
+					int		i	= FindControl(c);
+					if (i >= 0) {
+						GetItem(i).Text(c.GetText()).Set(*this, i);
+						return 0;
+					}
+					break;
+				}
 			}
 			break;
+		}
 
 		default:
 			if (message < WM_USER || message >= WM_USER + 0x100)
@@ -889,7 +897,7 @@ ToolBarControl SeparateWindow::CreateToolbar(ID id, ID bmid) {
 			return i;
 	}
 
-	ToolBarControl	tb(*this, NULL, CHILD | CCS_NODIVIDER | CCS_NORESIZE | TBSTYLE_FLAT | TBSTYLE_TRANSPARENT | TBSTYLE_TOOLTIPS, NOEX, id);
+	ToolBarControl	tb(*this, NULL, CHILD | ToolBarControl::NODIVIDER | ToolBarControl::NORESIZE | ToolBarControl::FLAT | ToolBarControl::TRNSPARENT | ToolBarControl::TOOLTIPS, NOEX, id);
 	tb.id = id;
 	tb.Init(GetLocalInstance(), id, bmid);
 	tb(TB_SETMAXTEXTROWS, 0);
@@ -1108,7 +1116,7 @@ LRESULT SeparateWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 
 				case TCN_SELCHANGE:
 					TabControl2(nmh->hwndFrom).ShowSelectedControl();
-					break;
+					return 1;
 
 				default:
 					return owner(message, wParam, lParam);

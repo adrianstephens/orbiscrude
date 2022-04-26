@@ -631,7 +631,7 @@ class DiagSessionprojectFileHandler : public FileHandler {
 		ZIPreader	zip(file);
 		ZIPfile		zf;
 		if (zip.Next(zf))
-			return vsglog.Read(id, lvalue(zf.Reader(file)));
+			return vsglog.Read(id, zf.Reader(file));
 
 		file.seek(0);
 		CompDocHeader	header = file.get();

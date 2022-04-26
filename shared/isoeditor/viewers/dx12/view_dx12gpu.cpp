@@ -64,14 +64,25 @@ DECLARE_VALUE_FIELD(D3D12_SHADING_RATE_COMBINER);
 
 void MakeDefaultDescriptor(D3D12_SHADER_RESOURCE_VIEW_DESC &view, const D3D12_RESOURCE_DESC &res) {
 	clear(view);
-	view.Format						= res.Format;
 	view.Shader4ComponentMapping	= D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	view.Format						= res.Format;
+
+	DXGI_COMPONENTS	format(res.Format);
+	if (format.Type() == DXGI_COMPONENTS::TYPELESS) {
+		view.Format = format.Type(DXGI_COMPONENTS::UINT).GetFormat();
+		if (!view.Format) {
+			view.Format = format.Type(DXGI_COMPONENTS::UNORM).GetFormat();
+			if (!view.Format)
+				view.Format	= res.Format;
+		}
+	}
+
 	switch (res.Dimension) {
 		case D3D12_RESOURCE_DIMENSION_BUFFER:
-			view.ViewDimension				= D3D12_SRV_DIMENSION_BUFFER;
-			view.Buffer.FirstElement		= 0;
-			view.Buffer.NumElements			= res.Width;
-			view.Buffer.StructureByteStride	= DXGI_COMPONENTS(res.Format).Size();
+			view.ViewDimension					= D3D12_SRV_DIMENSION_BUFFER;
+			view.Buffer.FirstElement			= 0;
+			view.Buffer.NumElements				= res.Width;
+			view.Buffer.StructureByteStride		= format.Bytes();
 			break;
 		case D3D12_RESOURCE_DIMENSION_TEXTURE1D:
 			if (res.DepthOrArraySize == 1) {
@@ -92,8 +103,8 @@ void MakeDefaultDescriptor(D3D12_SHADER_RESOURCE_VIEW_DESC &view, const D3D12_RE
 			}
 			break;
 		case D3D12_RESOURCE_DIMENSION_TEXTURE3D:
-			view.ViewDimension			= D3D12_SRV_DIMENSION_TEXTURE3D;
-			view.Texture3D.MipLevels	= res.MipLevels;
+			view.ViewDimension					= D3D12_SRV_DIMENSION_TEXTURE3D;
+			view.Texture3D.MipLevels			= res.MipLevels;
 			break;
 	}
 }
@@ -111,64 +122,64 @@ DESCRIPTOR MakeDefaultDescriptor(RecObject2 *obj) {
 namespace iso {
 
 template<typename W> bool write(W &w, const D3D12_SHADER_RESOURCE_VIEW_DESC &srv) {
-	write(w, srv.Format, srv.ViewDimension, srv.Shader4ComponentMapping);
+	w.write(srv.Format, srv.ViewDimension, srv.Shader4ComponentMapping);
 	switch (srv.ViewDimension) {
-		case D3D12_SRV_DIMENSION_BUFFER:			{ auto &t = srv.Buffer;				return write(w, t.FirstElement, t.NumElements, t.StructureByteStride, t.Flags); }
-		case D3D12_SRV_DIMENSION_TEXTURE1D:			{ auto &t = srv.Texture1D;			return write(w, t.MostDetailedMip, t.MipLevels, t.ResourceMinLODClamp); }
-		case D3D12_SRV_DIMENSION_TEXTURE1DARRAY:	{ auto &t = srv.Texture1DArray;		return write(w, t.MostDetailedMip, t.MipLevels, t.FirstArraySlice, t.ArraySize, t.ResourceMinLODClamp); }
-		case D3D12_SRV_DIMENSION_TEXTURE2D:			{ auto &t = srv.Texture2D;			return write(w, t.MostDetailedMip, t.MipLevels, t.PlaneSlice, t.ResourceMinLODClamp); }
-		case D3D12_SRV_DIMENSION_TEXTURE2DARRAY:	{ auto &t = srv.Texture2DArray;		return write(w, t.MostDetailedMip, t.MipLevels, t.FirstArraySlice, t.ArraySize, t.PlaneSlice, t.ResourceMinLODClamp); }
+		case D3D12_SRV_DIMENSION_BUFFER:			{ auto &t = srv.Buffer;				return w.write(t.FirstElement, t.NumElements, t.StructureByteStride, t.Flags); }
+		case D3D12_SRV_DIMENSION_TEXTURE1D:			{ auto &t = srv.Texture1D;			return w.write(t.MostDetailedMip, t.MipLevels, t.ResourceMinLODClamp); }
+		case D3D12_SRV_DIMENSION_TEXTURE1DARRAY:	{ auto &t = srv.Texture1DArray;		return w.write(t.MostDetailedMip, t.MipLevels, t.FirstArraySlice, t.ArraySize, t.ResourceMinLODClamp); }
+		case D3D12_SRV_DIMENSION_TEXTURE2D:			{ auto &t = srv.Texture2D;			return w.write(t.MostDetailedMip, t.MipLevels, t.PlaneSlice, t.ResourceMinLODClamp); }
+		case D3D12_SRV_DIMENSION_TEXTURE2DARRAY:	{ auto &t = srv.Texture2DArray;		return w.write(t.MostDetailedMip, t.MipLevels, t.FirstArraySlice, t.ArraySize, t.PlaneSlice, t.ResourceMinLODClamp); }
 		case D3D12_SRV_DIMENSION_TEXTURE2DMS:		return true;
-		case D3D12_SRV_DIMENSION_TEXTURE2DMSARRAY:	{ auto &t = srv.Texture2DMSArray;	return write(w, t.FirstArraySlice, t.ArraySize); }
-		case D3D12_SRV_DIMENSION_TEXTURE3D:			{ auto &t = srv.Texture3D;			return write(w, t.MostDetailedMip, t.MipLevels, t.ResourceMinLODClamp); }
-		case D3D12_SRV_DIMENSION_TEXTURECUBE:		{ auto &t = srv.TextureCube;		return write(w, t.MostDetailedMip, t.MipLevels, t.ResourceMinLODClamp); }
-		case D3D12_SRV_DIMENSION_TEXTURECUBEARRAY:	{ auto &t = srv.TextureCubeArray;	return write(w, t.MostDetailedMip, t.MipLevels, t.First2DArrayFace, t.NumCubes, t.ResourceMinLODClamp); }
+		case D3D12_SRV_DIMENSION_TEXTURE2DMSARRAY:	{ auto &t = srv.Texture2DMSArray;	return w.write(t.FirstArraySlice, t.ArraySize); }
+		case D3D12_SRV_DIMENSION_TEXTURE3D:			{ auto &t = srv.Texture3D;			return w.write(t.MostDetailedMip, t.MipLevels, t.ResourceMinLODClamp); }
+		case D3D12_SRV_DIMENSION_TEXTURECUBE:		{ auto &t = srv.TextureCube;		return w.write(t.MostDetailedMip, t.MipLevels, t.ResourceMinLODClamp); }
+		case D3D12_SRV_DIMENSION_TEXTURECUBEARRAY:	{ auto &t = srv.TextureCubeArray;	return w.write(t.MostDetailedMip, t.MipLevels, t.First2DArrayFace, t.NumCubes, t.ResourceMinLODClamp); }
 		default: return false;
 	}
 }
 template<typename W> bool write(W &w, const D3D12_UNORDERED_ACCESS_VIEW_DESC &uav) {
-	write(w, uav.Format, uav.ViewDimension);
+	w.write(uav.Format, uav.ViewDimension);
 	switch (uav.ViewDimension) {
-		case D3D12_UAV_DIMENSION_BUFFER:			{ auto &t = uav.Buffer;				return write(w, t.FirstElement, t.NumElements, t.StructureByteStride, t.CounterOffsetInBytes, t.Flags); }
-		case D3D12_UAV_DIMENSION_TEXTURE1D:			{ auto &t = uav.Texture1D;			return write(w, t.MipSlice); }
-		case D3D12_UAV_DIMENSION_TEXTURE1DARRAY:	{ auto &t = uav.Texture1DArray;		return write(w, t.MipSlice, t.FirstArraySlice, t.ArraySize); }
-		case D3D12_UAV_DIMENSION_TEXTURE2D:			{ auto &t = uav.Texture2D;			return write(w, t.MipSlice, t.PlaneSlice); }
-		case D3D12_UAV_DIMENSION_TEXTURE2DARRAY:	{ auto &t = uav.Texture2DArray;		return write(w, t.MipSlice, t.FirstArraySlice, t.ArraySize, t.PlaneSlice); }
-		case D3D12_UAV_DIMENSION_TEXTURE3D:			{ auto &t = uav.Texture3D;			return write(w, t.MipSlice, t.FirstWSlice, t.WSize); }
+		case D3D12_UAV_DIMENSION_BUFFER:			{ auto &t = uav.Buffer;				return w.write(t.FirstElement, t.NumElements, t.StructureByteStride, t.CounterOffsetInBytes, t.Flags); }
+		case D3D12_UAV_DIMENSION_TEXTURE1D:			{ auto &t = uav.Texture1D;			return w.write(t.MipSlice); }
+		case D3D12_UAV_DIMENSION_TEXTURE1DARRAY:	{ auto &t = uav.Texture1DArray;		return w.write(t.MipSlice, t.FirstArraySlice, t.ArraySize); }
+		case D3D12_UAV_DIMENSION_TEXTURE2D:			{ auto &t = uav.Texture2D;			return w.write(t.MipSlice, t.PlaneSlice); }
+		case D3D12_UAV_DIMENSION_TEXTURE2DARRAY:	{ auto &t = uav.Texture2DArray;		return w.write(t.MipSlice, t.FirstArraySlice, t.ArraySize, t.PlaneSlice); }
+		case D3D12_UAV_DIMENSION_TEXTURE3D:			{ auto &t = uav.Texture3D;			return w.write(t.MipSlice, t.FirstWSlice, t.WSize); }
 		default: return false;
 	}
 }
 template<typename W> bool write(W &w, const D3D12_RENDER_TARGET_VIEW_DESC &rtv) {
-	write(w, rtv.Format, rtv.ViewDimension);
+	w.write(rtv.Format, rtv.ViewDimension);
 	switch (rtv.ViewDimension) {
-		case D3D12_RTV_DIMENSION_BUFFER:			{ auto &t = rtv.Buffer;				return write(w, t.FirstElement, t.NumElements); }
-		case D3D12_RTV_DIMENSION_TEXTURE1D:			{ auto &t = rtv.Texture1D;			return write(w, t.MipSlice); }
-		case D3D12_RTV_DIMENSION_TEXTURE1DARRAY:	{ auto &t = rtv.Texture1DArray;		return write(w, t.MipSlice, t.FirstArraySlice, t.ArraySize); }
-		case D3D12_RTV_DIMENSION_TEXTURE2D:			{ auto &t = rtv.Texture2D;			return write(w, t.MipSlice, t.PlaneSlice); }
-		case D3D12_RTV_DIMENSION_TEXTURE2DARRAY:	{ auto &t = rtv.Texture2DArray;		return write(w, t.MipSlice, t.FirstArraySlice, t.ArraySize, t.PlaneSlice); }
+		case D3D12_RTV_DIMENSION_BUFFER:			{ auto &t = rtv.Buffer;				return w.write(t.FirstElement, t.NumElements); }
+		case D3D12_RTV_DIMENSION_TEXTURE1D:			{ auto &t = rtv.Texture1D;			return w.write(t.MipSlice); }
+		case D3D12_RTV_DIMENSION_TEXTURE1DARRAY:	{ auto &t = rtv.Texture1DArray;		return w.write(t.MipSlice, t.FirstArraySlice, t.ArraySize); }
+		case D3D12_RTV_DIMENSION_TEXTURE2D:			{ auto &t = rtv.Texture2D;			return w.write(t.MipSlice, t.PlaneSlice); }
+		case D3D12_RTV_DIMENSION_TEXTURE2DARRAY:	{ auto &t = rtv.Texture2DArray;		return w.write(t.MipSlice, t.FirstArraySlice, t.ArraySize, t.PlaneSlice); }
 		case D3D12_RTV_DIMENSION_TEXTURE2DMS:		return true;
-		case D3D12_RTV_DIMENSION_TEXTURE2DMSARRAY:	{ auto &t = rtv.Texture2DMSArray;	return write(w, t.FirstArraySlice, t.ArraySize); }
-		case D3D12_RTV_DIMENSION_TEXTURE3D:			{ auto &t = rtv.Texture3D;			return write(w, t.MipSlice, t.FirstWSlice, t.WSize); }
+		case D3D12_RTV_DIMENSION_TEXTURE2DMSARRAY:	{ auto &t = rtv.Texture2DMSArray;	return w.write(t.FirstArraySlice, t.ArraySize); }
+		case D3D12_RTV_DIMENSION_TEXTURE3D:			{ auto &t = rtv.Texture3D;			return w.write(t.MipSlice, t.FirstWSlice, t.WSize); }
 		default: return false;
 	}
 }
 template<typename W> bool write(W &w, const D3D12_DEPTH_STENCIL_VIEW_DESC &dsv) {
-	write(w, dsv.Format, dsv.ViewDimension, dsv.Flags);
+	w.write(dsv.Format, dsv.ViewDimension, dsv.Flags);
 	switch (dsv.ViewDimension) {
-		case D3D12_DSV_DIMENSION_TEXTURE1D:			{ auto &t = dsv.Texture1D;			return write(w, t.MipSlice); }
-		case D3D12_DSV_DIMENSION_TEXTURE1DARRAY:	{ auto &t = dsv.Texture1DArray;		return write(w, t.MipSlice, t.FirstArraySlice, t.ArraySize); }
-		case D3D12_DSV_DIMENSION_TEXTURE2D:			{ auto &t = dsv.Texture2D;			return write(w, t.MipSlice); }
-		case D3D12_DSV_DIMENSION_TEXTURE2DARRAY:	{ auto &t = dsv.Texture2DArray;		return write(w, t.MipSlice, t.FirstArraySlice, t.ArraySize); }
+		case D3D12_DSV_DIMENSION_TEXTURE1D:			{ auto &t = dsv.Texture1D;			return w.write(t.MipSlice); }
+		case D3D12_DSV_DIMENSION_TEXTURE1DARRAY:	{ auto &t = dsv.Texture1DArray;		return w.write(t.MipSlice, t.FirstArraySlice, t.ArraySize); }
+		case D3D12_DSV_DIMENSION_TEXTURE2D:			{ auto &t = dsv.Texture2D;			return w.write(t.MipSlice); }
+		case D3D12_DSV_DIMENSION_TEXTURE2DARRAY:	{ auto &t = dsv.Texture2DArray;		return w.write(t.MipSlice, t.FirstArraySlice, t.ArraySize); }
 		case D3D12_DSV_DIMENSION_TEXTURE2DMS:		return true;
-		case D3D12_DSV_DIMENSION_TEXTURE2DMSARRAY:	{ auto &t = dsv.Texture2DMSArray;	return write(w, t.FirstArraySlice, t.ArraySize); }
+		case D3D12_DSV_DIMENSION_TEXTURE2DMSARRAY:	{ auto &t = dsv.Texture2DMSArray;	return w.write(t.FirstArraySlice, t.ArraySize); }
 		default: return false;
 	}
 }
 template<typename W> bool write(W &w, const D3D12_CONSTANT_BUFFER_VIEW_DESC &cbv) {
-	return write(w, cbv.BufferLocation, cbv.SizeInBytes);
+	return w.write(cbv.BufferLocation, cbv.SizeInBytes);
 }
 template<typename W> bool write(W &w, const DESCRIPTOR &d) {
-	write(w, d.type, d.res);
+	w.write(d.type, d.res);
 	switch (d.type) {
 		case DESCRIPTOR::SRV:	return w.write(d.srv);
 		case DESCRIPTOR::CBV:	return w.write(d.cbv);
@@ -293,9 +304,9 @@ struct DX12Assets {
 			uint32	u;
 		};
 		RecObject::TYPE	Type() const { return RecObject::TYPE(type); }
-		use(const ShaderRecord*, uint32 index)		: index(index), type(RecObject::Shader) { ISO_ASSERT(index < 0x80000000u); }
-		use(const ObjectRecord *p, uint32 index)	: index(index), type(p->type)			{ ISO_ASSERT(index < 0x80000000u); }
-		use(uint32 u) : u(u) {}
+		use(uint32 index, RecObject::TYPE type)		: index(index), type(type) { ISO_ASSERT(index < 0x80000000u); }
+		use(const ShaderRecord*, uint32 index)		: use(index, RecObject::Shader) {}
+		use(const ObjectRecord *p, uint32 index)	: use(index, p->type)			{}
 	};
 
 	filename								shader_path;
@@ -342,6 +353,9 @@ struct DX12Assets {
 		return r;
 	}
 
+	ObjectRecord*	AddObject(RecObject::TYPE type, string16 &&name, malloc_block &&info, void *obj, dx::cache_type &cache, memory_interface *mem);
+
+
 	const BatchRecord*	GetBatchByTime(uint64 timestamp) const {
 		return first_not(batches, [timestamp](const BatchRecord &r) { return r.timestamp < timestamp; });
 	}
@@ -365,14 +379,26 @@ struct DX12Assets {
 	template<typename T> int GetIndex(const T *e) {
 		return e - GetTable<T>();
 	}
-
+	
 	template<typename T> void AddUse(const T *e, dynamic_array<use> &uses) {
-		if (e)
-			uses.emplace_back(e, GetIndex(e));
+		if (e) {
+			use	u(e, GetIndex(e));
+			if (uses.empty() || uses.back().index != u.index || uses.back().type != u.type)
+				uses.push_back(u);
+		}
 	}
 	template<typename T> void AddUse(const T *e) {
-		if (e)
-			uses.emplace_back(e, GetIndex(e));
+		AddUse(e, uses);
+	}
+
+	void GetUsedAt(BatchListArray &usedat, RecObject::TYPE type) const {
+		for (uint32 b = 0, nb = batches.size32() - 1; b < nb; b++) {
+			auto	usage = GetUsage(b);
+			for (const DX12Assets::use *u = usage.begin(), *ue = usage.end(); u != ue; ++u) {
+				if (u->type == type)
+					usedat[u->index].push_back(b);
+			}
+		}
 	}
 
 	ObjectRecord*		FindObject(uint64 addr) {
@@ -390,6 +416,16 @@ struct DX12Assets {
 	ObjectRecord*		FindByGPUAddress(D3D12_GPU_VIRTUAL_ADDRESS a) {
 		auto	i = vram_tree.lower_bound(a);
 		return a >= i.key().a ? *i : 0;
+	}
+	ObjectRecord*		FindHeapByGPUAddress(D3D12_GPU_VIRTUAL_ADDRESS a) {
+		for (auto &i : objects) {
+			if (i.type == RecObject::Heap) {
+				const RecHeap	*r = i.info;
+				if (r->contains(a))
+					return &i;
+			}
+		}
+		return nullptr;
 	}
 	const RecResource*	FindRecResource(ID3D12Resource *res) {
 		if (auto *obj = FindObject((uint64)res))
@@ -419,7 +455,7 @@ struct DX12Assets {
 		return 0;
 	}
 
-	ObjectRecord	*AddObject(RecObject::TYPE type, string16 &&name, malloc_block &&info, void *obj, dx::cache_type &cache, memory_interface *mem);
+
 	void operator()(string_accum &sa, const field *pf, const uint32le *p, uint32 offset);
 	void operator()(RegisterTree &tree, HTREEITEM h, const field *pf, const uint32le *p, uint32 offset, uint32 addr);
 
@@ -473,7 +509,7 @@ struct DX12Assets {
 	}
 };
 
-DX12Assets::ShaderRecord*	DX12Assets::AddShader(const D3D12_SHADER_BYTECODE &b, dx::SHADERSTAGE stage, memory_interface *mem) {
+DX12Assets::ShaderRecord* DX12Assets::AddShader(const D3D12_SHADER_BYTECODE &b, dx::SHADERSTAGE stage, memory_interface *mem) {
 	if (!b.pShaderBytecode || !b.BytecodeLength)
 		return 0;
 	ShaderRecord *r = FindShader((uint64)b.pShaderBytecode);
@@ -503,9 +539,10 @@ DX12Assets::ObjectRecord* DX12Assets::AddObject(RecObject::TYPE type, string16 &
 	ObjectRecord	*p	= new (objects) ObjectRecord(type, move(name), obj);
 	p->info	= move(info);
 	object_map[uint64(obj)] = p;
+
 	switch (p->type) {
 		case RecObject::Device:
-			device_object			= p;
+			device_object	= p;
 			break;
 
 		case RecObject::GraphicsCommandList:
@@ -526,6 +563,7 @@ DX12Assets::ObjectRecord* DX12Assets::AddObject(RecObject::TYPE type, string16 &
 			RecResource	*r	= p->info;
 			switch (r->alloc) {
 				case RecResource::Committed:
+				case RecResource::Placed:
 					vram_tree.insert(r->gpu, r->gpu + r->data_size, p);
 					break;
 
@@ -550,7 +588,7 @@ DX12Assets::ObjectRecord* DX12Assets::AddObject(RecObject::TYPE type, string16 &
 		}
 
 		case RecObject::PipelineState: {
-			auto	uses	= pipeline_uses[p->info];
+			auto	uses	= pipeline_uses[p->info].put();
 			switch (*(int*)p->info) {
 				case 0: {
 					auto	t = rmap_unique<KM, D3D12_GRAPHICS_PIPELINE_STATE_DESC>(p->info + 8);
@@ -727,16 +765,16 @@ template<> const char *field_names<RecResource::Allocation>::s[]	= {
 };
 
 template<> field	fields<RecResource>::f[] = {
+	field::make<RecResource>("gpu",		&RecResource::gpu),
 	field::make<RecResource>("size",	&RecResource::data_size),
 	field::make<RecResource>("alloc",	&RecResource::alloc),
-	field::make<RecResource>("gpu",		&RecResource::gpu),
 	field::call<D3D12_RESOURCE_DESC>(0, 0),
 	0,
 };
 
 template<> field	fields<RecHeap>::f[] = {
-	field::call<D3D12_HEAP_DESC>(0, 0),
 	field::make<RecHeap>("gpu",	&RecHeap::gpu),
+	field::call<D3D12_HEAP_DESC>(0, 0),
 	0,
 };
 
@@ -751,6 +789,26 @@ template<> field	fields<RecPipelineState>::f[] = {
 	0,
 };
 
+struct RecRootSignature {
+	struct field_thing2 : field_thing {
+		com_ptr<ID3D12RootSignatureDeserializer>	deserializer;
+		field_thing2(const dx::DXBC* dxbc) {
+			D3D12CreateRootSignatureDeserializer(dxbc, dxbc->size, deserializer.uuid(), (void**)&deserializer);
+			const D3D12_ROOT_SIGNATURE_DESC	*desc = deserializer->GetRootSignatureDesc();
+			p	= (uint32*)desc;
+			pf	= fields<D3D12_ROOT_SIGNATURE_DESC>::f;
+		}
+	};
+	static field_thing* f(const field *pf, const uint32le* p, uint32 offset) {
+		return new field_thing2((dx::DXBC*)p);
+	}
+};
+
+template<> field	fields<RecRootSignature>::f[] = {
+	{"deserializer", 0, 0, field::MODE_CUSTOM_PTR, 0, (char**)&RecRootSignature::f},
+	0,
+};
+
 MAKE_FIELDS(RecDescriptorHeap, type, count, stride, cpu, gpu);
 
 DECLARE_VALUE_FIELD(D3D12_COMMAND_LIST_TYPE);
@@ -761,14 +819,14 @@ template<> field	fields<DX12Assets::ObjectRecord>::f[] = {
 	field::make("obj",	element_cast<uint64>(container_cast<DX12Assets::ObjectRecord>(&DX12Assets::ObjectRecord::obj))),
 	field::call_union<
 		void,										// Unknown,
-		void,										// RootSignature,
+		RecRootSignature*,							// RootSignature,
 		RecHeap*,									// Heap,
 		RecResource*,								// Resource,
 		D3D12_COMMAND_LIST_TYPE*,					// CommandAllocator,
 		void,										// Fence,
 		RecPipelineState*,							// PipelineState,
 		RecDescriptorHeap*,							// DescriptorHeap,
-		D3D12_QUERY_HEAP_DESC,						// QueryHeap,
+		D3D12_QUERY_HEAP_DESC*,						// QueryHeap,
 		map_t<KM, D3D12_COMMAND_SIGNATURE_DESC>*,	// CommandSignature,
 		void,										// GraphicsCommandList,
 		D3D12_COMMAND_QUEUE_DESC*,					// CommandQueue,
@@ -787,69 +845,6 @@ template<> field	fields<DX12Assets::ShaderRecord>::f[] = {
 	field::make<DX12Assets::ShaderRecord>("stage",	&DX12Assets::ShaderRecord::stage),
 	0,
 };
-//-----------------------------------------------------------------------------
-//	D3D12_COMMAND_SIGNATURE_DESC
-//-----------------------------------------------------------------------------
-
-const C_type *GetSignatureType(const D3D12_COMMAND_SIGNATURE_DESC *desc) {
-	C_type_struct	comp;
-	auto	uint32_type	= ctypes.get_type<uint32>();
-	auto	uint64_type	= ctypes.get_type<uint64>();
-
-	for (auto &i : make_range_n(desc->pArgumentDescs, desc->NumArgumentDescs)) {
-		switch (i.Type) {
-			case D3D12_INDIRECT_ARGUMENT_TYPE_DRAW:
-				comp.add("VertexCountPerInstance", uint32_type);
-				comp.add("VertexCountPerInstance", uint32_type);
-				comp.add("InstanceCount", uint32_type);
-				comp.add("StartIndexLocation", uint32_type);
-				comp.add("StartInstanceLocation", uint32_type);
-				break;
-
-			case D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED:
-				comp.add("IndexCountPerInstance", uint32_type);
-				comp.add("InstanceCount", uint32_type);
-				comp.add("StartIndexLocation", uint32_type);
-				comp.add("BaseVertexLocation", uint32_type);
-				comp.add("StartInstanceLocation", uint32_type);
-				break;
-
-			case D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH:
-				comp.add("ThreadGroupCountX", uint32_type);
-				comp.add("ThreadGroupCountY", uint32_type);
-				comp.add("ThreadGroupCountZ", uint32_type);
-				break;
-
-			case D3D12_INDIRECT_ARGUMENT_TYPE_VERTEX_BUFFER_VIEW:
-				comp.add("BufferLocation", uint64_type);
-				comp.add("SizeInBytes", uint32_type);
-				comp.add("StrideInBytes", uint32_type);
-				break;
-
-			case D3D12_INDIRECT_ARGUMENT_TYPE_INDEX_BUFFER_VIEW:
-				comp.add("BufferLocation", uint64_type);
-				comp.add("SizeInBytes", uint32_type);
-				//DXGI_FORMAT Format;
-				break;
-
-			case D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT:
-				comp.add("Value", uint32_type);
-				break;
-			case D3D12_INDIRECT_ARGUMENT_TYPE_CONSTANT_BUFFER_VIEW:
-				comp.add("BufferLocation", uint64_type);
-				comp.add("SizeInBytes", uint32_type);
-				break;
-			case D3D12_INDIRECT_ARGUMENT_TYPE_SHADER_RESOURCE_VIEW:
-				//D3D12_SHADER_RESOURCE_VIEW_DESC;
-				break;
-
-			case D3D12_INDIRECT_ARGUMENT_TYPE_UNORDERED_ACCESS_VIEW:
-				//D3D12_UNORDERED_ACCESS_VIEW_DESC;
-				break;
-		}
-	}
-	return ctypes.add(move(comp));
-}
 
 auto IndirectFields = union_fields<
 	D3D12_DRAW_ARGUMENTS,
@@ -938,7 +933,6 @@ DX12Assets::BatchInfo GetCommand(const D3D12_COMMAND_SIGNATURE_DESC *desc, const
 	return info;
 }
 
-
 //-----------------------------------------------------------------------------
 //	DX12State
 //-----------------------------------------------------------------------------
@@ -959,8 +953,8 @@ DESCRIPTOR MakeDescriptor(D3D12_GPU_DESCRIPTOR_HANDLE h) {
 }
 
 struct DX12PipelineBase {
-	DX12Assets::ObjectRecord *obj	= 0;
-
+	DX12Assets::ObjectRecord	*obj			= 0;
+	ID3D12RootSignature			*root_signature	= 0;
 	com_ptr<ID3D12RootSignatureDeserializer>	deserializer;
 	dynamic_array<uint32>						offset;
 	malloc_block								data;
@@ -968,6 +962,13 @@ struct DX12PipelineBase {
 	UINT							NodeMask	= 0;
 	D3D12_CACHED_PIPELINE_STATE		CachedPSO	= {0, 0};
 	D3D12_PIPELINE_STATE_FLAGS		Flags		= D3D12_PIPELINE_STATE_FLAG_NONE;
+
+	void	Clear() {
+		NodeMask	= 0;
+		CachedPSO.CachedBlobSizeInBytes	= 0;
+		CachedPSO.pCachedBlob			= 0;
+		Flags		= D3D12_PIPELINE_STATE_FLAG_NONE;
+	}
 
 	void				SetRootSignature(DX12Assets *assets, ID3D12RootSignature *p);
 	DESCRIPTOR			GetBound(dx::SHADERSTAGE stage, DESCRIPTOR::TYPE type, int bind, int space, const RecDescriptorHeap *dh) const;
@@ -978,6 +979,10 @@ struct DX12PipelineBase {
 };
 
 void DX12PipelineBase::SetRootSignature(DX12Assets *assets, ID3D12RootSignature *p) {
+	if (p == root_signature)
+		return;
+
+	root_signature	= p;
 	deserializer.clear();
 	if (auto *obj2 = assets->FindObject(uint64(p)))
 		D3D12CreateRootSignatureDeserializer(obj2->info, obj2->info.length(), deserializer.uuid(), (void**)&deserializer);
@@ -1101,7 +1106,8 @@ struct DX12ComputePipeline : DX12PipelineBase {
 
 	void	Set(DX12Assets::ObjectRecord *obj, DX12Assets *assets, const D3D12_COMPUTE_PIPELINE_STATE_DESC *d) {
 		this->obj	= obj;
-		SetRootSignature(assets, d->pRootSignature);
+		if (!root_signature) 
+			SetRootSignature(assets, d->pRootSignature);
 		CS			= d->CS;
 		NodeMask	= d->NodeMask;
 		CachedPSO	= d->CachedPSO;
@@ -1109,11 +1115,12 @@ struct DX12ComputePipeline : DX12PipelineBase {
 	}
 
 	void Set(DX12Assets::ObjectRecord *obj, DX12Assets *assets, const D3D12_PIPELINE_STATE_STREAM_DESC *d) {
-		*this		= DX12ComputePipeline();//clear();
+		DX12PipelineBase::Clear();
+		clear(CS);
 		this->obj	= obj;
 		for (auto &sub : make_next_range<D3D12_PIPELINE_STATE_STREAM_DESC_SUBOBJECT>(const_memory_block(d->pPipelineStateSubobjectStream, d->SizeInBytes))) {
 			switch (sub.t.u.t) {
-				case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE:	SetRootSignature(assets, get<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE>(sub)); break;
+				case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE:	if (!root_signature) SetRootSignature(assets, get<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE>(sub)); break;
 				case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS:				CS			= get<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS>(sub); break;
 				case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_NODE_MASK:			NodeMask	= get<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_NODE_MASK>(sub); break;
 				case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CACHED_PSO:		CachedPSO	= get<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CACHED_PSO>(sub); break;
@@ -1126,7 +1133,7 @@ struct DX12ComputePipeline : DX12PipelineBase {
 };
 
 
-struct DX12GraphicsPipeline : DX12PipelineBase {
+struct _DX12GraphicsPipeline {
 	struct STREAM_OUTPUT_DESC {
 		dynamic_array<D3D12_SO_DECLARATION_ENTRY> declarations;
 		dynamic_array<UINT> strides;
@@ -1217,13 +1224,15 @@ struct DX12GraphicsPipeline : DX12PipelineBase {
 	DXGI_SAMPLE_DESC					SampleDesc;
 	VIEW_INSTANCING_DESC				ViewInstancing;
 
-	DX12GraphicsPipeline() {}
-
 	auto	&shader(int i) const { return (&VS)[i]; }
+};
+
+struct DX12GraphicsPipeline : DX12PipelineBase, _DX12GraphicsPipeline {
 
 	void Set(DX12Assets::ObjectRecord *obj, DX12Assets *assets, const D3D12_GRAPHICS_PIPELINE_STATE_DESC *d) {
 		this->obj	= obj;
-		SetRootSignature(assets, d->pRootSignature);
+		if (!root_signature)
+			SetRootSignature(assets, d->pRootSignature);
 		VS						= d->VS;
 		PS						= d->PS;
 		DS						= d->DS;
@@ -1247,11 +1256,11 @@ struct DX12GraphicsPipeline : DX12PipelineBase {
 	}
 
 	void Set(DX12Assets::ObjectRecord *obj, DX12Assets *assets, const D3D12_PIPELINE_STATE_STREAM_DESC *d) {
-		*this		= DX12GraphicsPipeline();
+		*(_DX12GraphicsPipeline*)this = _DX12GraphicsPipeline();
 		this->obj	= obj;
 		for (auto &sub : make_next_range<D3D12_PIPELINE_STATE_STREAM_DESC_SUBOBJECT>(const_memory_block(d->pPipelineStateSubobjectStream, d->SizeInBytes))) {
 			switch (sub.t.u.t) {
-				case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE:		SetRootSignature(assets, get<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE>(sub)); break;
+				case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE:		if (!root_signature) SetRootSignature(assets, get<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE>(sub)); break;
 				case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_VS:					VS						= get<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_VS>(sub); break;
 				case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS:					PS						= get<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS>(sub); break;
 				case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DS:					DS						= get<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DS>(sub); break;
@@ -1326,7 +1335,7 @@ struct DX12State : DX12Assets::BatchInfo {
 
 	indices	GetIndexing(dx::cache_type &cache, const DX12Assets::BatchInfo &batch) const {
 		if (batch.op == RecCommandList::tag_DrawIndexedInstanced) {
-			int		size	= DXGI_COMPONENTS(ibv.Format).Size();
+			int		size	= DXGI_COMPONENTS(ibv.Format).Bytes();
 			return indices(cache(ibv.BufferLocation + batch.draw.index_offset * size, batch.draw.vertex_count * size), size, batch.draw.vertex_offset, batch.draw.vertex_count);
 		}
 		return indices(0, 0, batch.draw.vertex_offset, batch.draw.vertex_count);
@@ -2214,17 +2223,18 @@ struct DX12Replay : COMReplay<DX12Replay> {
 	}
 
 	D3D12_GPU_VIRTUAL_ADDRESS lookup(D3D12_GPU_VIRTUAL_ADDRESS a, size_t size = 0) {
-		auto						*obj	= assets.FindByGPUAddress(a);
-		const RecResource			*r		= obj->info;
-		ISO_ASSERT(a >= r->gpu && a + size <= r->gpu + r->data_size);
-		auto						r2		= (ID3D12Resource*)obj2local[obj->obj].or_default();
-		D3D12_GPU_VIRTUAL_ADDRESS	a2		= r2->GetGPUVirtualAddress();
-		return a2 + (a - r->gpu);
+		if (auto *obj = assets.FindByGPUAddress(a)) {
+			const RecResource			*r		= obj->info;
+			ISO_ASSERT(a >= r->gpu && a + size <= r->gpu + r->data_size);
+			auto						r2		= (ID3D12Resource*)_lookup(obj->obj);
+			D3D12_GPU_VIRTUAL_ADDRESS	a2		= r2->GetGPUVirtualAddress();
+			return a2 + (a - r->gpu);
+		}
+		return 0;
 	}
 
 	const void *lookup_shader(const void *p) {
-		auto *r = assets.FindShader((uint64)p);
-		if (r)
+		if (auto *r = assets.FindShader((uint64)p))
 			return r->data;
 		return 0;
 	}
@@ -2441,23 +2451,43 @@ struct DX12Replay : COMReplay<DX12Replay> {
 		void		*r	= 0;
 		switch (obj->type) {
 			case RecObject::Resource: {
-				D3D12_RESOURCE_DESC			desc = *obj->info;
-				if (desc.Alignment && desc.Alignment != 0x10000)
-					desc.Alignment = 0;
+				RecResource		*rec	= obj->info;
+				RESOURCE_DESC	desc	= *rec;
 
-				D3D12_HEAP_PROPERTIES	heap;
-				heap.Type					= D3D12_HEAP_TYPE_DEFAULT;
-				heap.CPUPageProperty		= D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-				heap.MemoryPoolPreference	= D3D12_MEMORY_POOL_UNKNOWN;
-				heap.CreationNodeMask		= 1;
-				heap.VisibleNodeMask		= 1;
+				switch (rec->alloc) {
+					case RecResource::Placed: {
+						auto		hobj	= assets.FindHeapByGPUAddress(rec->gpu);
+						auto		heap	= (ID3D12Heap*)lookup(hobj->obj);
+						RecHeap*	rh		= hobj->info;
+						auto	offset = rec->gpu - rh->gpu;
+						hr	= device->CreatePlacedResource(
+							heap, offset,
+							&desc, D3D12_RESOURCE_STATE_COMMON, 0,
+							__uuidof(ID3D12Resource), &r
+						);
 
-				hr	= device->CreateCommittedResource(
-					&heap, D3D12_HEAP_FLAG_NONE,
-					&desc, D3D12_RESOURCE_STATE_COMMON, 0,
-					__uuidof(ID3D12Resource), &r
-				);
-				unconst(*obj->info) = ((ID3D12Resource*)r)->GetDesc();
+						break;
+					}
+					case RecResource::Committed: {
+						if (desc.Alignment && desc.Alignment != 0x10000)
+							desc.Alignment = 0;
+
+						D3D12_HEAP_PROPERTIES	heap;
+						heap.Type					= D3D12_HEAP_TYPE_DEFAULT;
+						heap.CPUPageProperty		= D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+						heap.MemoryPoolPreference	= D3D12_MEMORY_POOL_UNKNOWN;
+						heap.CreationNodeMask		= 1;
+						heap.VisibleNodeMask		= 1;
+
+						hr	= device->CreateCommittedResource(
+							&heap, D3D12_HEAP_FLAG_NONE,
+							&desc, D3D12_RESOURCE_STATE_COMMON, 0,
+							__uuidof(ID3D12Resource), &r
+						);
+						unconst(*obj->info) = ((ID3D12Resource*)r)->GetDesc();
+						break;
+					}
+				}
 				break;
 			}
 			case RecObject::Handle:
@@ -2486,7 +2516,16 @@ struct DX12Replay : COMReplay<DX12Replay> {
 				break;
 
 			case RecObject::RootSignature:			hr = device->CreateRootSignature(1, obj->info, obj->info.length(), __uuidof(ID3D12RootSignature), &r); break;
-			case RecObject::Heap:					hr = device->CreateHeap(obj->info, __uuidof(ID3D12Heap), &r); break;
+			case RecObject::Heap: {
+				RecHeap	*rec = obj->info;
+				if (rec->Properties.CPUPageProperty > D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE && (rec->Flags & D3D12_HEAP_FLAG_SHARED)) {
+					auto	dummy = VirtualAlloc(nullptr, rec->SizeInBytes, MEM_COMMIT, PAGE_READWRITE);
+					hr =	query<ID3D12Device3>(device)->OpenExistingHeapFromAddress(dummy, __uuidof(ID3D12Heap), &r);
+				} else {
+					hr = device->CreateHeap(rec, __uuidof(ID3D12Heap), &r);
+				}
+				break;
+			}
 			case RecObject::CommandAllocator:		hr = device->CreateCommandAllocator(*obj->info, __uuidof(ID3D12CommandAllocator), &r); break;
 			case RecObject::Fence:					hr = device->CreateFence(*obj->info, D3D12_FENCE_FLAG_NONE, __uuidof(ID3D12Fence), &r); break;
 			case RecObject::DescriptorHeap:	{
@@ -3083,6 +3122,7 @@ void DX12Connection::Load(const DX12Capture *cap) {
 }
 
 void GetDescriptorsForBatch(DX12Assets &assets, const DX12State &state, DX12Assets::ShaderRecord *shader) {
+#if 0
 	D3D12_SHADER_DESC				desc;
 	com_ptr<ID3D12ShaderReflection>	refl;
 
@@ -3108,6 +3148,29 @@ void GetDescriptorsForBatch(DX12Assets &assets, const DX12State &state, DX12Asse
 				assets.AddUse(assets.FindObject((uint64)bound.res));
 		}
 	}
+
+#else
+	auto	stage	= shader->stage;
+	dx::DeclReader	decl(((dx::DXBC*)shader->data)->GetUCode());
+
+	for (auto &i : decl.cb) {
+		auto	desc = state.GetBound(stage, DESCRIPTOR::CBV, i.index, 0);
+		if (desc.res)
+			assets.AddUse(assets.FindObject((uint64)desc.res));
+	}
+
+	for (auto &i : decl.srv) {
+		auto	desc = state.GetBound(stage, DESCRIPTOR::SRV, i.index, 0);
+		if (desc.res)
+			assets.AddUse(assets.FindObject((uint64)desc.res));
+	}
+
+	for (auto &i : decl.uav) {
+		auto	desc = state.GetBound(stage, DESCRIPTOR::UAV, i.index, 0);
+		if (desc.res)
+			assets.AddUse(assets.FindObject((uint64)desc.res));
+	}
+#endif
 }
 
 struct PIX : const_memory_block {
@@ -3198,13 +3261,13 @@ void DX12Connection::GetAssets(progress prog, uint64 total) {
 				case RecDevice::tag_CommandQueueSetMarker: COMParse(p->data(), [&](UINT Metadata, counted<char, 2> pData, UINT Size) {
 					PIX	pix(Metadata, pData, Size);
 					AddMarker(pix.get_string(), offset, offset, pix.get_colour());
-					});
-					break;
+				}); break;
+
 				case RecDevice::tag_CommandQueueBeginEvent: COMParse(p->data(), [&](UINT Metadata, counted<char, 2> pData, UINT Size) {
 					PIX	pix(Metadata, pData, Size);
 					marker_tos = AddMarker(pix.get_string(), offset, marker_tos, pix.get_colour());
-					});
-					break;
+				}); break;
+
 				case RecDevice::tag_CommandQueueEndEvent: COMParse(p->data(), [&]() {
 					if (marker_tos >= 0) {
 						if (marker_tos < markers.size()) {
@@ -3215,10 +3278,9 @@ void DX12Connection::GetAssets(progress prog, uint64 total) {
 					} else {
 						marker_tos = 0;
 					}
-					});
-					break;
-				case RecDevice::tag_CommandQueueExecuteCommandLists:
-					COMParse(p->data(), [&,this](UINT NumCommandLists, counted<CommandRange,0> pp) {
+				}); break;
+
+				case RecDevice::tag_CommandQueueExecuteCommandLists: COMParse(p->data(), [&,this](UINT NumCommandLists, counted<CommandRange,0> pp) {
 						for (int i = 0; i < NumCommandLists; i++) {
 							const CommandRange	&r	= pp[i];
 							if (ObjectRecord *rec = FindObject(uint64(&*r))) {
@@ -3226,9 +3288,10 @@ void DX12Connection::GetAssets(progress prog, uint64 total) {
 									AddCall(offset, rec->index + r.begin());
 							}
 						}
-					});
-					break;
+				}); break;
 			}
+		} else {
+			state.ProcessDevice(this, p->id, p->data());
 		}
 	}
 
@@ -3489,7 +3552,7 @@ ISO_ptr_machine<void> DX12Connection::GetBitmap(const DESCRIPTOR &d) {
 
 	if (auto obj = FindObject((uint64)d.res)) {
 		auto	res = MakeSimulatorResource(*this, cache, d);
-		if (is_texture(res.dim)) {
+		if (res && is_texture(res.dim)) {
 			p = dx::GetBitmap(obj->GetName(), res, res.format, res.width, res.height, res.depth, res.mips, 0);
 			return p;
 		}
@@ -3934,7 +3997,7 @@ DX12ShaderWindow::DX12ShaderWindow(const WindowPos &wpos, DX12Connection *con, c
 	}
 
 	// tree
-	split2->SetPanes(*tabs[0], tree.Create(split2->_GetPanePos(1), 0, CHILD | VISIBLE | TVS_HASLINES | TVS_HASBUTTONS | TVS_LINESATROOT), 100);
+	split2->SetPanes(*tabs[0], tree.Create(split2->_GetPanePos(1), 0, CHILD | VISIBLE | tree.HASLINES | tree.HASBUTTONS | tree.LINESATROOT), 100);
 	tree.AddShader(TVI_ROOT, shader);
 	tabs[0]->Show();
 
@@ -4016,7 +4079,7 @@ DX12ShaderDebuggerWindow::DX12ShaderDebuggerWindow(const WindowPos &wpos, const 
 	, DebugWindow(HLSLcolourerRE(), none, mode)
 	, accel(GetAccelerator())
 	, tree(con)
-	, spdb(lvalue(memory_reader(shader.DXBC()->GetBlob(dx::DXBC::ShaderPDB))))
+	, spdb(memory_reader(shader.DXBC()->GetBlob(dx::DXBC::ShaderPDB)))
 	, step_count(0), thread(0), stage(shader.stage)
 {
 	MultiSplitterWindow::Create(wpos, title, CHILD | CLIPCHILDREN | CLIPSIBLINGS | VISIBLE, CLIENTEDGE);// | COMPOSITED);
@@ -4030,7 +4093,7 @@ DX12ShaderDebuggerWindow::DX12ShaderDebuggerWindow(const WindowPos &wpos, const 
 	DebugWindow::FixLocations(shader.GetUCodeAddr());
 	DebugWindow::SetDisassembly(shader.Disassemble(), true);
 
-	tree.Create(split2->_GetPanePos(0), 0, CHILD | VISIBLE | TVS_HASLINES | TVS_HASBUTTONS | TVS_LINESATROOT);
+	tree.Create(split2->_GetPanePos(0), 0, CHILD | VISIBLE | tree.HASLINES | tree.HASBUTTONS | tree.LINESATROOT);
 	tree.AddShader(TVI_ROOT, shader);
 
 	split2->SetPanes(DebugWindow::hWnd, tree, 100);
@@ -4059,7 +4122,7 @@ DX12ShaderDebuggerWindow::DX12ShaderDebuggerWindow(const WindowPos &wpos, const 
 	regs	= new DXBCRegisterWindow(regs_title->GetChildWindowPos());
 	locals	= new DXBCLocalsWindow(locals_title->GetChildWindowPos(), ctypes);
 #if 1
-	thread_control.Create(control(), "thread", CHILD | OVERLAPPED | VISIBLE | VSCROLL | CBS_DROPDOWNLIST | CBS_HASSTRINGS, NOEX,
+	thread_control.Create(control(), "thread", CHILD | OVERLAPPED | VISIBLE | VSCROLL | thread_control.DROPDOWNLIST | thread_control.HASSTRINGS, NOEX,
 		Rect(wpos.rect.Width() - 64, 0, 64 - GetNonClientMetrics().iScrollWidth, GetNonClientMetrics().iSmCaptionHeight),
 		'TC'
 	);
@@ -4220,8 +4283,8 @@ public:
 	DX12Connection	*GetConnection() const {
 		return con;
 	}
-	void AddView(Control c, bool new_tab) {
-		Dock(new_tab ? DOCK_ADDTAB : DOCK_PUSH, c);
+	WindowPos AddView(bool new_tab) {
+		return Dock(new_tab ? DOCK_ADDTAB : DOCK_PUSH);
 	}
 	void SelectBatch(BatchList &b, bool always_list = false) {
 		int		batch	= ::SelectBatch(*this, GetMousePos(), b, always_list);
@@ -4230,16 +4293,14 @@ public:
 	}
 	Control ShowBitmap(ISO_ptr_machine<void> p, bool new_tab) {
 		Control	c;
-		if (p) {
-			c = BitmapWindow(GetChildWindowPos(), p, tag(p.ID()), true);
-			AddView(c, new_tab);
-		}
+		if (p)
+			c = BitmapWindow(AddView(new_tab), p, tag(p.ID()), true);
 		return c;
 	}
 	DX12BatchWindow(const WindowPos &wpos, text title, DX12Connection *con, const DX12State &state, DX12Replay *replay);
 	LRESULT		Proc(MSG_ID message, WPARAM wParam, LPARAM lParam);
 	int			InitSimulator(dx::SimulatorDXBC &sim, DX12ShaderState &shader, int thread, dynamic_array<uint16> &indices, Topology2 &top);
-	Control		MakeShaderOutput(dx::SHADERSTAGE stage, bool mesh);
+	Control		MakeShaderOutput(const WindowPos &wpos, dx::SHADERSTAGE stage, bool mesh);
 	void		VertexMenu(dx::SHADERSTAGE stage, int i, ListViewControl lv);
 	Control		DebugPixel(uint32 target, const Point &pt);
 };
@@ -4380,7 +4441,7 @@ DX12BatchWindow::DX12BatchWindow(const WindowPos &wpos, text title, DX12Connecti
 					offset = d->AlignedByteOffset;
 
 				i.a = TypedBuffer(con->cache(view.BufferLocation + offset, view.SizeInBytes - offset), view.StrideInBytes, dx::to_c_type(d->Format));
-				offset += uint32(DXGI_COMPONENTS(d->Format).Size());
+				offset += uint32(DXGI_COMPONENTS(d->Format).Bytes());
 				++d;
 			}
 
@@ -4389,11 +4450,11 @@ DX12BatchWindow::DX12BatchWindow(const WindowPos &wpos, text title, DX12Connecti
 			split2->SetClientPos(400);
 
 			split2->SetPanes(
-				tree.Create(split2->_GetPanePos(0), 0, CHILD | CLIPSIBLINGS | VISIBLE | TVS_HASLINES | TVS_HASBUTTONS | TVS_LINESATROOT),
+				tree.Create(split2->_GetPanePos(0), 0, CHILD | CLIPSIBLINGS | VISIBLE | tree.HASLINES | tree.HASBUTTONS | tree.LINESATROOT),
 				*MakeMeshView(split2->_GetPanePos(1), topology, vbv[0].a, ix, one, culling, MeshWindow::PERSPECTIVE)
 			);
 		} else {
-			tree.Create(GetChildWindowPos(), 0, CHILD | CLIPSIBLINGS | VISIBLE | TVS_HASLINES | TVS_HASBUTTONS | TVS_LINESATROOT);
+			tree.Create(GetChildWindowPos(), 0, CHILD | CLIPSIBLINGS | VISIBLE | tree.HASLINES | tree.HASBUTTONS | tree.LINESATROOT);
 		}
 
 		RegisterTree	rt(tree, &tree, IDFMT_FOLLOWPTR);
@@ -4508,10 +4569,11 @@ DX12BatchWindow::DX12BatchWindow(const WindowPos &wpos, text title, DX12Connecti
 
 		SplitterWindow	*split2 = new SplitterWindow(SplitterWindow::SWF_VERT | SplitterWindow::SWF_DELETE_ON_DESTROY);
 		split2->Create(GetChildWindowPos(), 0, CHILD | CLIPSIBLINGS | VISIBLE);
-		split2->SetClientPos(400);
-
-		split2->SetPane(0, tree.Create(split2->_GetPanePos(0), 0, CHILD | CLIPSIBLINGS | VISIBLE | TVS_HASLINES | TVS_HASBUTTONS | TVS_LINESATROOT));
-		split2->SetPane(1, app::MakeComputeGrid(split2->_GetPanePos(1), 0, 'CG', dim, decls.thread_group));
+		split2->SetPanes(
+			tree.Create(split2->_GetPanePos(0), 0, CHILD | CLIPSIBLINGS | VISIBLE | tree.HASLINES | tree.HASBUTTONS | tree.LINESATROOT),
+			app::MakeComputeGrid(split2->_GetPanePos(1), 0, 'CG', dim, decls.thread_group),
+			400
+		);
 
 		RegisterTree	rt(tree, &tree, IDFMT_FOLLOWPTR);
 
@@ -4544,13 +4606,6 @@ DX12BatchWindow::DX12BatchWindow(const WindowPos &wpos, text title, DX12Connecti
 
 		if (state.indirect.arguments) {
 			const RecResource	*rr		= state.indirect.arguments->info;
-		#if 0
-			const C_type		*type	= GetSignatureType(desc);
-			verts.emplace_back(con->cache(rr->gpu + state.indirect.arguments_offset, count * desc->ByteStride), desc->ByteStride, type);
-			rt.AddFields(TreeControl::Item("Arguments").Image(tree.ST_VERTICES).StateImage(verts.size32()).Insert(tree, h), (const RecResource*)state.indirect.arguments->info);
-			auto&	v	= verts.back();
-			StructureHierarchy(rt, h2, ctypes, format_string("[%i]", i), type, 0, v[i]);
-		#else
 			auto	args = con->cache(rr->gpu + state.indirect.arguments_offset, count * desc->ByteStride);
 			const uint8*	p	= args;
 			auto	h2	= TreeControl::Item("Arguments").Image(tree.ST_VERTICES).StateImage(verts.size32()).Insert(tree, h);
@@ -4564,7 +4619,6 @@ DX12BatchWindow::DX12BatchWindow(const WindowPos &wpos, text title, DX12Connecti
 				}
 
 			}
-		#endif
 		}
 
 	}
@@ -4574,11 +4628,11 @@ LRESULT DX12BatchWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 		case WM_COMMAND:
 			switch (LOWORD(wParam)) {
-				case DebugWindow::ID_DEBUG_PIXEL:
+				case DebugWindow::ID_DEBUG_PIXEL: {
 					auto	*p = (pair<uint64,Point>*)lParam;
-					if (Control c = DebugPixel(p->a, p->b))
-						AddView(c, false);
+					DebugPixel(p->a, p->b);
 					return 0;
+				}
 			}
 			break;
 
@@ -4599,23 +4653,22 @@ LRESULT DX12BatchWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 									if (auto p = targets[t].p) {
 										Menu menu	= Menu::Popup();
 										Menu::Item("Debug this Pixel", DebugWindow::ID_DEBUG_PIXEL).Param(t).AppendTo(menu);
-										Control	c =	BitmapWindow(GetChildWindowPos(), p, tag(p.ID()), true);
+										Control	c =	BitmapWindow(AddView(new_tab), p, tag(p.ID()), true);
 										c(WM_ISO_CONTEXTMENU, (HMENU)menu);
-										AddView(c, new_tab);
 									}
 									break;
 								}
 								case DX12StateControl::ST_OBJECT:
-									AddView(MakeObjectView(GetChildWindowPos(), con, i.Param()), new_tab);
+									MakeObjectView(AddView(new_tab), con, i.Param());
 									break;
 
 								case DX12StateControl::ST_SHADER: {
-									AddView(MakeShaderViewer(GetChildWindowPos(), con, shaders[(int)i.Param()], con->shader_path), new_tab);
+									MakeShaderViewer(AddView(new_tab), con, shaders[(int)i.Param()], con->shader_path);
 									break;
 								}
 								case DX12StateControl::ST_VERTICES:
 									if (int x = i.StateImage()) {
-										AddView(MakeBufferWindow(GetChildWindowPos(), "Vertices", 'VI', verts[x - 1]), new_tab);
+										MakeBufferWindow(AddView(new_tab), "Vertices", 'VI', verts[x - 1]);
 
 									} else {
 										int			nb		= verts.size32();
@@ -4623,21 +4676,20 @@ LRESULT DX12BatchWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 										for (int i = 0; i < nb; i++)
 											buffers[i]	= {none, verts[i]};
 
-										MeshVertexWindow	*m	= new MeshVertexWindow(GetChildWindowPos(), "Vertices");
+										MeshVertexWindow	*m	= new MeshVertexWindow(AddView(new_tab), "Vertices");
 										VertexWindow		*vw	= MakeVertexWindow(GetChildWindowPos(), "Vertices", 'VI', buffers, nb, ix);
 										MeshWindow			*mw	= MakeMeshView(m->GetPanePos(1), topology, vbv[0].a, ix, one, culling, MeshWindow::PERSPECTIVE);
 										m->SetPanes(*vw, *mw, 50);
-										AddView(*m, new_tab);
 									}
 									break;
 
 								case DX12StateControl::ST_OUTPUTS:
-									AddView(MakeShaderOutput(i.Param(), ctrl), new_tab);
+									MakeShaderOutput(AddView(new_tab), i.Param(), ctrl);
 									break;
 
 								case DX12StateControl::ST_DESCRIPTOR: {
 									DESCRIPTOR	*d = i.Param();
-									AddView(MakeDescriptorView(GetChildWindowPos(), "Desc", con, *d), new_tab);
+									MakeDescriptorView(AddView(new_tab), "Desc", con, *d);
 									break;
 								}
 							}
@@ -4654,6 +4706,7 @@ LRESULT DX12BatchWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 						case 'HO': VertexMenu(dx::HS, ((NMITEMACTIVATE*)nmh)->iItem, nmh->hwndFrom); return 0;
 						case 'GO': VertexMenu(dx::GS, ((NMITEMACTIVATE*)nmh)->iItem, nmh->hwndFrom); return 0;
 						case 'CO': VertexMenu(dx::CS, ((NMITEMACTIVATE*)nmh)->iItem, nmh->hwndFrom); return 0;
+						case 'CG': VertexMenu(dx::CS, ((NMITEMACTIVATE*)nmh)->iItem, nmh->hwndFrom); return 0;
 					}
 					break;
 
@@ -4852,13 +4905,55 @@ int DX12BatchWindow::InitSimulator(dx::SimulatorDXBC &sim, DX12ShaderState &shad
 			return 0;
 		}
 
+		case dx::CS: {
+			uint32x3	group		= sim.thread_group;
+			uint32x3	dim2		= dim;
+			uint32		group_size	= group.x * group.y * group.z;
+			uint32x3	total		= group * dim2;
+			uint32		start		= 0;
+
+			if (thread < 0) {
+				int	num	= total.x * total.y * total.z;
+				if (thread == -1) {
+					sim.SetNumThreads(min(num, 64));
+				} else {
+					sim.SetNumThreads(num);
+				}
+				thread = 0;
+			} else if (!sim.NumThreads()) {
+				sim.SetNumThreads(group_size);
+				start	= thread / group_size * group_size;
+				thread %= group_size;
+			}
+
+			shader.InitSimulator(sim, *con, con->cache);
+			if (sim.HasInput(dx::SimulatorDXBC::vThreadID))
+				rcopy(
+					element_cast<uint4p>(sim.GetRegFile(dx::Operand::TYPE_INPUT, dx::SimulatorDXBC::vThreadID)),
+					transform(int_iterator<int>(start), [&](int i) { return concat(split_index(i, total.xy), i); })
+				);
+			if (sim.HasInput(dx::SimulatorDXBC::vThreadGroupID))
+				rcopy(
+					element_cast<uint4p>(sim.GetRegFile(dx::Operand::TYPE_INPUT, dx::SimulatorDXBC::vThreadGroupID)),
+					scalar(split_index(start / group_size, dim2))
+				);
+			if (sim.HasInput(dx::SimulatorDXBC::vThreadIDInGroup))
+				rcopy(
+					element_cast<uint4p>(sim.GetRegFile(dx::Operand::TYPE_INPUT, dx::SimulatorDXBC::vThreadIDInGroup)),
+					transform(int_iterator<int>(start), [&](int i) { return concat(split_index(i, group.xy), i % group_size); })
+				);
+
+			return thread;
+		}
+
 		default:
+			sim.SetNumThreads(1);
 			shader.InitSimulator(sim, *con, con->cache);
 			return 0;
 	}
 }
 
-Control DX12BatchWindow::MakeShaderOutput(dx::SHADERSTAGE stage, bool mesh) {
+Control DX12BatchWindow::MakeShaderOutput(const WindowPos &wpos, dx::SHADERSTAGE stage, bool mesh) {
 	dx::SimulatorDXBC		sim;
 	dynamic_array<uint16>	ib;
 	Topology2				top;
@@ -4866,7 +4961,7 @@ Control DX12BatchWindow::MakeShaderOutput(dx::SHADERSTAGE stage, bool mesh) {
 	auto	&shader = shaders[stage == dx::CS ? 0 : stage];
 	InitSimulator(sim, shader, mesh ? -2 : -1, ib, top);
 
-	Control				c	= app::MakeShaderOutput(GetChildWindowPos(), sim, shader);
+	Control				c	= app::MakeShaderOutput(wpos, sim, shader);
 
 	if (!mesh)
 		return c;
@@ -4967,7 +5062,7 @@ Control DX12BatchWindow::MakeShaderOutput(dx::SHADERSTAGE stage, bool mesh) {
 }
 
 void DX12BatchWindow::VertexMenu(dx::SHADERSTAGE stage, int i, ListViewControl lv) {
-	auto	&shader = shaders[stage];
+	auto	&shader = shaders[stage == dx::CS ? 0 : stage];
 	Menu	menu	= Menu::Popup();
 
 	menu.Append("Debug", 1);
@@ -5100,7 +5195,7 @@ Control DX12BatchWindow::DebugPixel(uint32 target, const Point &pt) {
 	}
 	
 	auto	&ps			= shaders[dx::PS];
-	auto	*debugger	= new DX12ShaderDebuggerWindow(GetChildWindowPos(), "Debugger", ps, con, GetSettings("General/shader source").GetInt(1));
+	auto	*debugger	= new DX12ShaderDebuggerWindow(AddView(false), "Debugger", ps, con, GetSettings("General/shader source").GetInt(1));
 	auto	*ps_in		= ps.DXBC()->GetBlob<dx::ISGN>();
 
 	float2		pt1		= (qpt - viewport.y.xy + one) / viewport.x.xy;
@@ -5191,20 +5286,6 @@ public:
 };
 
 //-----------------------------------------------------------------------------
-//	ListViews
-//-----------------------------------------------------------------------------
-
-void GetUsedAt(BatchListArray &usedat, const DX12Assets *assets, RecObject::TYPE type) {
-	for (uint32 b = 0, nb = assets->batches.size32() - 1; b < nb; b++) {
-		auto	usage = assets->GetUsage(b);
-		for (const DX12Assets::use *u = usage.begin(), *ue = usage.end(); u != ue; ++u) {
-			if (u->type == type)
-				usedat[u->index].push_back(b);
-		}
-	}
-}
-
-//-----------------------------------------------------------------------------
 //	DX12DescriptorList
 //-----------------------------------------------------------------------------
 
@@ -5267,7 +5348,8 @@ struct DX12DescriptorHeapControl : CustomListView<DX12DescriptorHeapControl, Sub
 	DX12Assets &assets;
 	const RecDescriptorHeap	*heap;
 
-	DX12DescriptorHeapControl(const WindowPos &wpos, const char *caption, DX12Assets &assets, const RecDescriptorHeap *rec) : Base(wpos, caption, CHILD | CLIPSIBLINGS | VISIBLE | VSCROLL, CLIENTEDGE | OWNERDATA, ID), assets(assets), heap(rec) {
+	DX12DescriptorHeapControl(const WindowPos &wpos, const char *caption, DX12Assets &assets, const RecDescriptorHeap *rec) : Base(wpos, caption, CHILD | CLIPSIBLINGS | VISIBLE | VSCROLL | OWNERDATA, CLIENTEDGE, ID), assets(assets), heap(rec) {
+		auto	t = CLIENTEDGE | OWNERDATA;
 		addref();
 		InitDescriptorHeapView(*this);
 		SetCount(heap->count);//, LVSICF_NOINVALIDATEALL);
@@ -5307,7 +5389,7 @@ struct DX12DescriptorList : CustomListView<DX12DescriptorList, Subclass<DX12Desc
 	win::Font		bold;
 
 	DX12DescriptorList(const WindowPos &wpos, DX12Connection *_con) : con(_con) {
-		Create(wpos, "Descriptors", CHILD | CLIPSIBLINGS | VISIBLE | LVS_REPORT | LVS_AUTOARRANGE | LVS_SINGLESEL | LVS_SHOWSELALWAYS | LVS_OWNERDATA, NOEX, ID);
+		Create(wpos, "Descriptors", CHILD | CLIPSIBLINGS | VISIBLE | REPORT | AUTOARRANGE | SINGLESEL | SHOWSELALWAYS | OWNERDATA, GRIDLINES | DOUBLEBUFFER | FULLROWSELECT, ID);
 		InitDescriptorHeapView(*this);
 		//EnableGroups();
 		bold = GetFont().GetParams().Weight(FW_BOLD);
@@ -5409,7 +5491,23 @@ struct DX12ResourcesList :  EditableListView<DX12ResourcesList, Subclass<DX12Res
 	DX12Connection *con;
 	ImageList		images;
 
+	void SortOnColumn(int col) {
+		int	dir = SetColumn(GetHeader(), col);
+		switch (col) {
+			case 0:
+				SortByIndex(ColumnTextSorter(*this, col, dir));
+				break;
+			case 1:
+				SortByParam(UsageSorter<DX12Assets::ResourceRecord>(table, usedat, dir));
+				break;
+			default:
+				SortByParam(IndirectFieldSorter(fields<DX12Assets::ResourceRecord>::f, col, dir));
+				break;
+		}
+	}
 	void	LeftClick(Control from, int row, int col, const Point &pt, uint32 flags) {
+		Style	style1		= style;
+		StyleEx	exstyle1	= exstyle;
 		if (ViewDX12GPU *main = ViewDX12GPU::Cast(from)) {
 			switch (col) {
 	/*			case 0:
@@ -5435,30 +5533,13 @@ struct DX12ResourcesList :  EditableListView<DX12ResourcesList, Subclass<DX12Res
 		}
 	}
 
-	//void	GetDispInfo(string_accum &sa, int row, int col) {
-	//	row = sorted_order[row];
-	//	const T	&u = table[row];
-	//	switch (col) {
-	//		case 0:		sa << u.GetName(); break;
-	//		case 1:		WriteBatchList(sa, usedat[row]).term(); break;
-	//		case 2:		WriteBatchList(sa, writtenat[row]).term(); break;
-	//		case 3:		sa << GetSize((T&)u); break;
-	//		case 5:		sa << "0x" << hex(u.obj); break;
-	//		default: {
-	//			uint32	offset = 0;
-	//			const uint32 *p = (const uint32*)&u;
-	//			if (const field *pf = FieldIndex(fields<T>::f, col - 4, p, offset, true))
-	//				RegisterList(*this, this, format | (col > 5) * IDFMT_FIELDNAME).FillSubItem(sa, pf, p, offset).term();
-	//			break;
-	//		}
-	//	}
-	//}
-
 	DX12ResourcesList(const WindowPos &wpos, DX12Connection *_con) : Base(_con->resources), con(_con)
 		, images(ImageList::Create(DeviceContext::ScreenCaps().LogPixels() * (2 / 3.f), ILC_COLOR32, 1, 1))
 	{
-		//CreateNoColumns(wpos, "Resources", ID, CHILD | CLIPSIBLINGS | VISIBLE | LVS_REPORT | LVS_AUTOARRANGE | LVS_SINGLESEL | LVS_SHOWSELALWAYS);
-		Create(wpos, "Resources", CHILD | CLIPSIBLINGS | VISIBLE | LVS_REPORT | LVS_AUTOARRANGE | LVS_SINGLESEL | LVS_SHOWSELALWAYS, NOEX, ID);
+		//CreateNoColumns(wpos, "Resources", ID, CHILD | CLIPSIBLINGS | VISIBLE | REPORT | AUTOARRANGE | SINGLESEL | SHOWSELALWAYS);
+		Create(wpos, "Resources", CHILD | CLIPSIBLINGS | VISIBLE | REPORT | AUTOARRANGE | SINGLESEL | SHOWSELALWAYS, GRIDLINES | DOUBLEBUFFER | FULLROWSELECT, ID);
+		while (NumColumns())
+			DeleteColumn(0);
 		AddColumns(
 			"name",		200,
 			"used at",	100
@@ -5535,12 +5616,12 @@ struct DX12ShadersList : EditableListView<DX12ShadersList, Subclass<DX12ShadersL
 	}
 
 	DX12ShadersList(const WindowPos &wpos, DX12Connection *_con) : Base(_con->shaders), con(_con) {
-		Create(wpos, "Shaders", CHILD | CLIPSIBLINGS | VISIBLE | LVS_REPORT | LVS_AUTOARRANGE | LVS_SINGLESEL | LVS_SHOWSELALWAYS, NOEX, ID);
-		Init();
+		Create(wpos, "Shaders", CHILD | CLIPSIBLINGS | VISIBLE | REPORT | AUTOARRANGE | SINGLESEL | SHOWSELALWAYS, NOEX, ID);
+		//Init();
 
 		RunThread([this]{
 			addref();
-			GetUsedAt(usedat, con, RecObject::Shader);
+			con->GetUsedAt(usedat, RecObject::Shader);
 
 			for (auto *i = table.begin(), *e = table.end(); i != e; ++i) {
 				int		j	= i - table.begin();
@@ -5555,7 +5636,7 @@ struct DX12ShadersList : EditableListView<DX12ShadersList, Subclass<DX12ShadersL
 };
 
 //-----------------------------------------------------------------------------
-//	DX12ObjectsList
+//	DX12ObjectWindow
 //-----------------------------------------------------------------------------
 
 class DX12ObjectWindow : public StackWindow {
@@ -5570,18 +5651,18 @@ public:
 	void Init(DX12Assets::ObjectRecord *obj);
 	void Init(const DESCRIPTOR &desc);
 
-	void	AddView(Control c, bool new_tab) {
-		Dock(new_tab ? DOCK_ADDTAB : DOCK_PUSH, c);
+	WindowPos	AddView(bool new_tab) {
+		return Dock(new_tab ? DOCK_ADDTAB : DOCK_PUSH);
 	}
 
 	auto	Split() {
 		SplitterWindow	*split = new SplitterWindow(GetChildWindowPos(), 0, SplitterWindow::SWF_VERT | SplitterWindow::SWF_DELETE_ON_DESTROY);
-		tree.Create(split->_GetPanePos(0), 0, Control::CHILD | Control::CLIPSIBLINGS | Control::VISIBLE | Control::VSCROLL | TVS_HASLINES | TVS_HASBUTTONS | TVS_LINESATROOT | TVS_SHOWSELALWAYS, Control::CLIENTEDGE);
+		tree.Create(split->_GetPanePos(0), 0, Control::CHILD | Control::CLIPSIBLINGS | Control::VISIBLE | Control::VSCROLL | tree.HASLINES | tree.HASBUTTONS | tree.LINESATROOT | tree.SHOWSELALWAYS, Control::CLIENTEDGE);
 		return split;
 	}
 
 	auto	NotSplit() {
-		tree.Create(GetChildWindowPos(), 0, Control::CHILD | Control::CLIPSIBLINGS | Control::VISIBLE | Control::VSCROLL | TVS_HASLINES | TVS_HASBUTTONS | TVS_LINESATROOT | TVS_SHOWSELALWAYS, Control::CLIENTEDGE);
+		tree.Create(GetChildWindowPos(), 0, Control::CHILD | Control::CLIPSIBLINGS | Control::VISIBLE | Control::VSCROLL | tree.HASLINES | tree.HASBUTTONS | tree.LINESATROOT | tree.SHOWSELALWAYS, Control::CLIENTEDGE);
 	}
 	
 	LRESULT		Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
@@ -5599,11 +5680,11 @@ public:
 
 								switch (i.Image()) {
 									case DX12Assets::WT_OBJECT:
-										AddView(MakeObjectView(GetChildWindowPos(), con, i.Param()), new_tab);
+										MakeObjectView(AddView(new_tab), con, i.Param());
 										break;
 
 									case DX12Assets::WT_SHADER: {
-										AddView(MakeShaderViewer(GetChildWindowPos(), con, (DX12Assets::ShaderRecord*)i.Param(), con->shader_path), new_tab);
+										MakeShaderViewer(AddView(new_tab), con, (DX12Assets::ShaderRecord*)i.Param(), con->shader_path);
 										break;
 									}
 								}
@@ -5640,15 +5721,11 @@ public:
 
 void DX12ObjectWindow::Init(DX12Assets::ObjectRecord *obj) {
 	Rebind(this);
-	RegisterTree	rt(tree, con, IDFMT_FOLLOWPTR);
-	HTREEITEM		h	= rt.AddText(TVI_ROOT, obj->GetName(), 0);
 
 	switch (obj->type) {
 		case RecObject::Heap: {
 			const RecHeap	*r = obj->info;
 			auto			split = Split();
-
-			tree.ExpandItem(rt.AddFields(rt.AddText(TVI_ROOT, obj->GetName(), 0), obj));
 			split->SetPanes(tree, BinaryWindow(split->_GetPanePos(1), ISO::MakeBrowser(memory_block(con->cache(uint64(r->gpu), r->SizeInBytes)))), 350);
 			break;
 		}
@@ -5667,30 +5744,19 @@ void DX12ObjectWindow::Init(DX12Assets::ObjectRecord *obj) {
 			} else {
 				NotSplit();
 			}
-
-			tree.ExpandItem(rt.AddFields(rt.AddText(TVI_ROOT, obj->GetName(), 0), obj));
 			break;
 		}
 
 		case RecObject::DescriptorHeap: {
 			auto			split = Split();
 			split->SetPanes(tree, *new DX12DescriptorHeapControl(split->_GetPanePos(1), obj->GetName(), *con, obj->info), 350);
-			tree.ExpandItem(rt.AddFields(rt.AddText(TVI_ROOT, obj->GetName(), 0), obj));
 			break;
 		}
 
-		case RecObject::RootSignature: {
+		case RecObject::PipelineState: {
 			NotSplit();
-			com_ptr<ID3D12RootSignatureDeserializer>	ds;
-			HRESULT			hr = D3D12CreateRootSignatureDeserializer(obj->info, obj->info.length(), ds.uuid(), (void**)&ds);
-			const D3D12_ROOT_SIGNATURE_DESC *desc = ds->GetRootSignatureDesc();
-			tree.ExpandItem(rt.AddFields(rt.AddText(TVI_ROOT, obj->GetName(), 0), desc));
-			break;
-		}
-
-		case RecObject::PipelineState:
-			NotSplit();
-			h	= rt.AddText(TVI_ROOT, obj->GetName(), 0);
+			RegisterTree	rt(tree, con, IDFMT_FOLLOWPTR);
+			HTREEITEM		h	= rt.AddText(TVI_ROOT, obj->GetName(), 0);
 
 			switch (*(int*)obj->info) {
 				case 0:
@@ -5738,30 +5804,20 @@ void DX12ObjectWindow::Init(DX12Assets::ObjectRecord *obj) {
 					break;
 				}
 			}
-			break;
-
-		//case RecObject::CommandSignature:
-		//	rt.AddFields(h, (const map_t<RTM, D3D12_COMMAND_SIGNATURE_DESC>*)obj->info);
-		//	//rt.AddFields(h, (D3D12_COMMAND_SIGNATURE_DESC*)rmap_struct<RTM, D3D12_COMMAND_SIGNATURE_DESC>(obj->info));
-		//	break;
-
-		case RecObject::CommandQueue:
-			NotSplit();
-			tree.ExpandItem(rt.AddFields(rt.AddText(TVI_ROOT, obj->GetName(), 0), (const D3D12_COMMAND_QUEUE_DESC*)obj->info));
-			break;
+			tree.ExpandItem(h);
+			return;
+		}
 
 		default:
 			NotSplit();
-			tree.ExpandItem(rt.AddFields(rt.AddText(TVI_ROOT, obj->GetName(), 0), obj));
 			break;
 	}
+	
+	RegisterTree	rt(tree, con, IDFMT_FOLLOWPTR);
+	tree.ExpandItem(rt.AddFields(rt.AddText(TVI_ROOT, obj->GetName(), 0), obj));
 }
 
 void DX12ObjectWindow::Init(const DESCRIPTOR &desc) {
-	DX12Connection::ObjectRecord	*obj	= con->FindObject((uint64)desc.res);
-	const RecResource				*r		= 0;
-	if (obj)
-		r = obj->info;
 
 	if (auto bm = con->GetBitmap(desc)) {
 		auto	split = Split();
@@ -5788,8 +5844,8 @@ void DX12ObjectWindow::Init(const DESCRIPTOR &desc) {
 	RegisterTree	rt(tree, con, IDFMT_FOLLOWPTR);
 	rt.AddFields(rt.AddText(TVI_ROOT, "Descriptor"), &desc);
 
-	if (obj)
-		rt.AddFields(rt.AddText(TVI_ROOT, obj->GetName()), r);
+	if (auto obj = con->FindObject((uint64)desc.res))
+		rt.AddFields(rt.AddText(TVI_ROOT, obj->GetName()), (const RecResource*)obj->info);
 }
 
 
@@ -5805,6 +5861,9 @@ Control MakeDescriptorView(const WindowPos& wpos, const char* title, DX12Connect
 	return *win;
 }
 
+//-----------------------------------------------------------------------------
+//	DX12ObjectsList
+//-----------------------------------------------------------------------------
 
 struct DX12ObjectsList : EditableListView<DX12ObjectsList, Subclass<DX12ObjectsList, EntryTable<DX12Assets::ObjectRecord>>> {
 	enum {ID = 'OL'};
@@ -5854,27 +5913,8 @@ struct DX12ObjectsList : EditableListView<DX12ObjectsList, Subclass<DX12ObjectsL
 		}
 	}
 
-	//void	GetDispInfo(string_accum &sa, int row, int col) {
-	//	row = sorted_order[row];
-	//	const T	&u = table[row];
-	//	switch (col) {
-	//		case 0:		sa << u.GetName(); break;
-	//		case 1:		WriteBatchList(sa, usedat[row]).term(); break;
-	//		case 2:		WriteBatchList(sa, writtenat[row]).term(); break;
-	//		case 3:		sa << GetSize((T&)u); break;
-	//		case 5:		sa << "0x" << hex(u.obj); break;
-	//		default: {
-	//			uint32	offset = 0;
-	//			const uint32 *p = (const uint32*)&u;
-	//			if (const field *pf = FieldIndex(fields<T>::f, col - 4, p, offset, true))
-	//				RegisterList(*this, this, format | (col > 5) * IDFMT_FIELDNAME).FillSubItem(sa, pf, p, offset).term();
-	//			break;
-	//		}
-	//	}
-	//}
-
 	DX12ObjectsList(const WindowPos &wpos, DX12Connection *_con) : Base(_con->objects), con(_con) {
-		Create(wpos, "Objects", CHILD | CLIPSIBLINGS | VISIBLE | LVS_REPORT | LVS_AUTOARRANGE | LVS_SINGLESEL | LVS_SHOWSELALWAYS, NOEX, ID);
+		Create(wpos, "Objects", CHILD | CLIPSIBLINGS | VISIBLE | REPORT | AUTOARRANGE | SINGLESEL | SHOWSELALWAYS, GRIDLINES | DOUBLEBUFFER | FULLROWSELECT, ID);
 		addref();
 		int	nc = NumColumns();
 		for (int i = 0; i < 8; i++)
@@ -6160,7 +6200,7 @@ uint8 ViewDX12GPU::cursor_indices[][3] = {
 LRESULT ViewDX12GPU::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 		case WM_CREATE: {
-			tree.Create(_GetPanePos(0), NULL, CHILD | CLIPSIBLINGS | VISIBLE | VSCROLL | TVS_HASLINES | TVS_HASBUTTONS | TVS_LINESATROOT | TVS_SHOWSELALWAYS, CLIENTEDGE);
+			tree.Create(_GetPanePos(0), NULL, CHILD | CLIPSIBLINGS | VISIBLE | VSCROLL | tree.HASLINES | tree.HASBUTTONS | tree.LINESATROOT | tree.SHOWSELALWAYS, CLIENTEDGE);
 			italics = tree.GetFont().GetParams().Italic(true);
 			TabWindow	*t = new TabWindow;
 			SetPanes(tree, t->Create(_GetPanePos(1), "tabs", CHILD | CLIPCHILDREN | VISIBLE), 400);
@@ -6338,19 +6378,19 @@ LRESULT ViewDX12GPU::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 					break;
 
 				case TCN_SELCHANGE: {
-					TabControl2(nmh->hwndFrom).ShowSelectedControl();
+				//	TabControl2(nmh->hwndFrom).ShowSelectedControl();
 					break;
 				}
 
-				case TCN_DRAG:
-					DragTab(*this, nmh->hwndFrom, nmh->idFrom, !!(GetKeyState(VK_SHIFT) & 0x8000));
-					return 1;
-
-				case TCN_CLOSE:
-					TabControl2(nmh->hwndFrom).GetItemControl(nmh->idFrom).Destroy();
-					return 1;
+				//case TCN_DRAG:
+				//	DragTab(*this, nmh->hwndFrom, nmh->idFrom, !!(GetKeyState(VK_SHIFT) & 0x8000));
+				//	return 1;
+				//
+				//case TCN_CLOSE:
+				//	TabControl2(nmh->hwndFrom).GetItemControl(nmh->idFrom).Destroy();
+				//	return 1;
 			}
-			return 0;
+			break;//return 0;
 		}
 
 		case WM_MOUSEACTIVATE:
@@ -6432,7 +6472,7 @@ void ViewDX12GPU::TreeSelection(HTREEITEM hItem) {
 			uint64	pc		= i.Image2() ? *(uint64*)i.Param() : (uint64)i.Param();
 			auto	frame	= stack_dumper.GetFrame(pc);
 			if (frame.file && exists(frame.file)) {
-				EditControl	c = MakeSourceWindow(Dock(new_tab ? DOCK_TAB : DOCK_TABID, 'SC'), frame.file, HLSLcolourerRE(), malloc_block::unterminated(lvalue(FileInput(frame.file))), 0, 0, EditControl::READONLY);
+				EditControl	c = MakeSourceWindow(Dock(new_tab ? DOCK_TAB : DOCK_TABID, 'SC'), frame.file, HLSLcolourerRE(), malloc_block::unterminated(FileInput(frame.file)), 0, 0, EditControl::READONLY);
 				c.id	= 'SC';
 				ShowSourceLine(c, frame.line);
 			}
@@ -7195,16 +7235,33 @@ void EditorDX12::Grab(ViewDX12GPU *view, Progress &progress) {
 		switch (i.type) {
 			case RecObject::Resource: {
 				const RecResource	*res = i.info;
-				if (res->alloc == RecResource::Committed || res->alloc == RecResource::Reserved) {
-					ISO_OUTPUTF("VRAM: 0x") << hex(res->gpu) << " to 0x" << hex(res->gpu + res->data_size) << " (0x" << hex(res->data_size) << ")\n";
-					auto	mem = Call<malloc_block_all>(INTF_ResourceData, uintptr_t(i.obj));
-					view->cache.add_block(res->gpu, mem);
-					total_vram += mem.size();
-					progress.Set(total_vram);
+				switch (res->alloc) {
+					case RecResource::Committed:
+					case RecResource::Reserved: {
+					//if (res->alloc == RecResource::Committed || res->alloc == RecResource::Reserved) {
+						ISO_OUTPUTF("VRAM: 0x") << hex(res->gpu) << " to 0x" << hex(res->gpu + res->data_size) << " (0x" << hex(res->data_size) << ")\n";
+						auto	mem = Call<malloc_block_all>(INTF_ResourceData, uintptr_t(i.obj));
+						view->cache.add_block(res->gpu, mem);
+						total_vram += mem.size();
+						progress.Set(total_vram);
+						break;
+					}
+					case RecResource::Placed: {
+						auto p = view->cache(res->gpu);
+						if (!p || !p.contains(res->gpu + res->data_size)) {
+							ISO_ASSERT(res->gpu != 0x33E530000);
+							ISO_OUTPUTF("VRAM: 0x") << hex(res->gpu) << " to 0x" << hex(res->gpu + res->data_size) << " (0x" << hex(res->data_size) << ")\n";
+							auto	mem = Call<malloc_block_all>(INTF_ResourceData, uintptr_t(i.obj));
+							view->cache.add_block(res->gpu, mem);
+							total_vram += mem.size();
+							progress.Set(total_vram);
+						}
+						break;
+					}
 				}
 				break;
 			}
-
+#if 0
 			case RecObject::Heap: {
 				const RecHeap		*heap = i.info;
 				ISO_OUTPUTF("VRAM: 0x") << hex(heap->gpu) << " to 0x" << hex(heap->gpu + heap->SizeInBytes) << " (0x" << hex(heap->SizeInBytes) << ")\n";
@@ -7214,6 +7271,7 @@ void EditorDX12::Grab(ViewDX12GPU *view, Progress &progress) {
 				progress.Set(total_vram);
 				break;
 			}
+#endif
 		}
 	}
 

@@ -51,13 +51,13 @@ template<typename X, typename Y, typename Z> _ISO_DEFCOMP(field_vec<X COMMA Y CO
 template<typename X, typename Y, typename Z, typename W> _ISO_DEFCOMP(field_vec<X COMMA Y COMMA Z COMMA W>, 4, NONE) { ISO_SETFIELDS(0, x, y, z, w); }};
 
 template<typename X, typename Y> struct def<bitfield_vec<X, Y> > : TISO_bitpacked<2> {
-	def() { Add<X>("x", bitfields_size<X>); Add<Y>("y", bitfields_size<Y>); }
+	def() { Add<X>("x", BIT_COUNT<X>); Add<Y>("y", BIT_COUNT<Y>); }
 };
 template<typename X, typename Y, typename Z> struct def<bitfield_vec<X, Y, Z> > : TISO_bitpacked<3> {
-	def() { Add<X>("x", bitfields_size<X>); Add<Y>("y", bitfields_size<Y>); Add<Z>("z", bitfields_size<Z>);  }
+	def() { Add<X>("x", BIT_COUNT<X>); Add<Y>("y", BIT_COUNT<Y>); Add<Z>("z", BIT_COUNT<Z>);  }
 };
 template<typename X, typename Y, typename Z, typename W> struct def<bitfield_vec<X, Y, Z, W> > : TISO_bitpacked<4> {
-	def() { Add<X>("x", bitfields_size<X>); Add<Y>("y", bitfields_size<Y>); Add<Z>("z", bitfields_size<Z>); Add<W>("w", bitfields_size<W>);  }
+	def() { Add<X>("x", BIT_COUNT<X>); Add<Y>("y", BIT_COUNT<Y>); Add<Z>("z", BIT_COUNT<Z>); Add<W>("w", BIT_COUNT<W>);  }
 };
 
 template<typename V> struct def<V, enable_if_t<(is_simd<V> && num_elements_v<V> == 2)>> : TypeCompositeN<2> {

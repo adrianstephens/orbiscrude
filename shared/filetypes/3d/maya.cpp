@@ -613,7 +613,7 @@ ISO_ptr<void> MayaFileHandler::ReadWithFilename(tag id, const filename &fn) {
 class MBFileHandler : public MayaFileHandler {
 	const char*		GetExt() override { return "mb";		}
 	const char*		GetDescription() override { return "Maya binary (mb) container"; }
-	int	Check(iso::istream_ref file) {
+	int	Check(istream_ref file) override {
 		if (file.length() > 16) {
 			file.seek(0);
 			IFF_chunk	chunk(file);

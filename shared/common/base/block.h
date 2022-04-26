@@ -105,7 +105,7 @@ public:
 	constexpr B			operator[](int i)						const	{ return iblock_iterator(*this) += i; }
 	constexpr iblock_iterator	operator+(int i)				const	{ return iblock_iterator(*this) += i; }
 	constexpr iblock_iterator	operator-(int i)				const	{ return iblock_iterator(*this) -= i; }
-	constexpr int		operator-(const iblock_iterator &b)		const	{ return offset(b.buffer) / stride; }
+	constexpr int		operator-(const iblock_iterator &b)		const	{ return B::offset(b.buffer) / stride; }
 	constexpr iblock_iterator(const B &b, int32 stride) : B(b), stride(stride)	{}
 };
 
@@ -135,7 +135,7 @@ public:
 	template<typename C> iblock &operator=(const C &c) { assign(c); return *this; }
 
 	constexpr uint32		size()					const	{ return count; }
-	constexpr auto			end()					const	{ return begin() + count; }
+	constexpr auto			end()					const	{ return B::begin() + count; }
 	constexpr uint32		max_size()				const	{ return count; }
 	constexpr decltype(auto)operator[](int i)		const	{ return buffer[i]; }
 	constexpr int			index_of(const I e)		const	{ return e < buffer ? -1 : e - buffer; }
@@ -157,7 +157,7 @@ public:
 
 	template<typename S> void assign(const S &s) {
 		using iso::begin;
-		copy(begin(s), begin(s) + min(num_elements(s), size()), begin());
+		copy(begin(s), begin(s) + min(num_elements(s), size()), B::begin());
 	}
 	friend constexpr size_t num_elements(const iblock &c) {
 		return c.count;
@@ -190,6 +190,28 @@ public:
 	constexpr intptr_t	offset(const T *i) const	{ return (uint8*)i - (uint8*)buffer; }
 	constexpr iblock_buffer(T *buffer = nullptr) : buffer(buffer) {}
 };
+
+
+template<typename I>						constexpr auto	make_block(I p, uint32 w)												{ return iblock<I, 1>(p, w); }
+template<typename I, int N>					constexpr auto	make_block(const iblock<I, N> &p, uint32 w)								{ return iblock<I, N + 1>(p, p.pitch() * p.size(), w); }
+template<typename I, int N, typename... W>	constexpr auto	make_block(const iblock<I, N> &p, uint32 w0, W...w)						{ return make_block(make_block(p, w0), w...); }
+template<typename I, typename... W>			constexpr auto	make_block(I p, uint32 w0, W...w)										{ return make_block(make_block(p, w0), w...); }
+
+
+template<typename I, int N>					constexpr auto	make_strided_block(const iblock<I, N> &p, uint32 s, uint32 w)			{ return iblock<I, N + 1>(p, s, w); }
+template<typename I, int N, typename... W>	constexpr auto	make_strided_block(const iblock<I, N> &p, uint32 s0, uint32 w0, W...w)	{ return make_strided_block(make_strided_block(p, s0, w0), w...); }
+template<typename I, typename... W>			constexpr auto	make_strided_iblock(I p, uint32 w0, W...w)								{ return make_strided_block(make_block(p, w0), w...); }
+
+template<typename T, typename V, int N> void fill(iblock_iterator<T, N> s, iblock_iterator<T, N> e, const V &v) {
+	for (; s != e; ++s) fill(*s, v);
+}
+
+template<typename S, typename D, int N> void copy(iblock_iterator<S, N> s, iblock_iterator<S, N> e, iblock_iterator<D, N> d) {
+	for (; s != e; ++s, ++d)
+		copy(*s, *d);
+}
+template<typename S, typename D, int N> void copy(const iblock<S, N> &s, D &&d)	{ copy(unconst(s), d); }
+template<typename S, typename D, int N> void copy(iblock<S, N> &&s, D &&d)		{ copy(s, d); }
 
 
 //-----------------------------------------------------------------------------
@@ -246,12 +268,12 @@ public:
 		count /= i;
 	}
 
-	template<int N2> constexpr uint32	size()					const	{ return block<T, N2>::size(); }
-	template<int N2> constexpr int32	pitch()					const	{ return block<T, N2>::pitch(); }
-	template<int N2> constexpr temp		sub(int i, int n)		const	{ return temp(*this).template sub<N2>(i, n); }
+	template<int N2> constexpr uint32	size()				const	{ return block<T, N2>::size(); }
+	template<int N2> constexpr int32	pitch()				const	{ return block<T, N2>::pitch(); }
+	template<int N2> constexpr temp		sub(int i, int n)	const	{ return temp(*this).template sub<N2>(i, n); }
 	template<int N2> constexpr temp		slice(int i, int n)	const	{ return temp(*this).template slice<N2>(i, n); }
 	template<int N2> constexpr temp		slice(int i)		const	{ return temp(*this).template slice<N2>(i); }
-	template<int N2> constexpr auto		skip(int i)				const	{ return temp(*this).template skip<N2>(i); }
+	template<int N2> constexpr auto		skip(int i)			const	{ return temp(*this).template skip<N2>(i); }
 
 	template<typename S> void assign(const S &s) {
 		auto	j = begin();
@@ -392,28 +414,27 @@ template<typename T> struct block<T, 1>::temp : block<T, 1> {
 #endif
 
 template<typename T>						constexpr block<T, 1>	make_block(T *p, uint32 w)											{ return block<T, 1>(p, w); }
-
-template<typename T, int N>					constexpr block<T, N+1> make_block(const block<T,N> &p, uint32 w)							{ return block<T, N+1>(p, p.pitch() * p.size(), w); }
-template<typename T, int N, typename... W>	constexpr auto			make_block(const block<T, N> &p, uint32 w0, W...w)					{ return make_block(make_block(p, w0), w...); }
+//template<typename T, int N>					constexpr block<T, N+1> make_block(const block<T,N> &p, uint32 w)							{ return block<T, N+1>(p, p.pitch() * p.size(), w); }
+//template<typename T, int N, typename... W>	constexpr auto			make_block(const block<T, N> &p, uint32 w0, W...w)					{ return make_block(make_block(p, w0), w...); }
 template<typename T, typename... W>			constexpr auto			make_block(T *p, uint32 w0, W...w)									{ return make_block(make_block(p, w0), w...); }
 
-template<typename T, int N>					constexpr block<T, N+1> make_strided_block(const block<T,N> &p, uint32 s, uint32 w)			{ return block<T, N+1>(p, s, w); }
-template<typename T, int N, typename... W>	constexpr auto			make_strided_block(const block<T, N> &p, uint32 s0, uint32 w0, W...w){ return make_strided_block(make_strided_block(p, s0, w0), w...); }
+//template<typename T, int N>					constexpr block<T, N+1> make_strided_block(const block<T,N> &p, uint32 s, uint32 w)			{ return block<T, N+1>(p, s, w); }
+//template<typename T, int N, typename... W>	constexpr auto			make_strided_block(const block<T, N> &p, uint32 s0, uint32 w0, W...w){ return make_strided_block(make_strided_block(p, s0, w0), w...); }
 template<typename T, typename... W>			constexpr auto			make_strided_block(T *p, uint32 w0, W...w)							{ return make_strided_block(make_block(p, w0), w...); }
 
 template<int N>	struct block_maker {
-	template<typename T, int M, typename W> static constexpr auto f(const block<T,M> &p, W *w)	{ return block_maker<N - 1>::f(make_block(p, *w), w + 1); }
-	template<typename T, int M, typename W> static constexpr auto fs(const block<T,M> &p, W *w)	{ return block_maker<N - 1>::fs(make_strided_block(p, w[0], w[1]), w + 2); }
-	template<typename T, int M, typename W> static constexpr auto r(const block<T,M> &p, W *w)	{ return block_maker<N - 1>::r(make_block(p, w[N - 1]), w); }
+	template<typename I, int M, typename W> static constexpr auto f (const iblock<I,M> &p, W *w)	{ return block_maker<N - 1>::f(make_block(p, *w), w + 1); }
+	template<typename I, int M, typename W> static constexpr auto fs(const iblock<I,M> &p, W *w)	{ return block_maker<N - 1>::fs(make_strided_block(p, w[0], w[1]), w + 2); }
+	template<typename I, int M, typename W> static constexpr auto r (const iblock<I,M> &p, W *w)	{ return block_maker<N - 1>::r(make_block(p, w[N - 1]), w); }
 };
 template<>		struct block_maker<0> {
-	template<typename T, int M, typename W> static constexpr auto f(const block<T,M> &p, W *w)	{ return p; }
-	template<typename T, int M, typename W> static constexpr auto fs(const block<T,M> &p, W *w) { return p; }
-	template<typename T, int M, typename W> static constexpr auto r(const block<T,M> &p, W *w)	{ return p; }
+	template<typename I, int M, typename W> static constexpr auto f (const iblock<I,M> &p, W *w)	{ return p; }
+	template<typename I, int M, typename W> static constexpr auto fs(const iblock<I,M> &p, W *w)	{ return p; }
+	template<typename I, int M, typename W> static constexpr auto r (const iblock<I,M> &p, W *w)	{ return p; }
 };
-template<int N, typename T, typename W>		constexpr block<T, N>	make_block(T *p, W *w)			{ return block_maker<N - 1>::f(block<T, 1>(p, *w), w + 1); }
-template<int N, typename T, typename W>		constexpr block<T, N>	make_strided_block(T *p, W *w)	{ return block_maker<N - 1>::fs(block<T, 1>(p, *w), w + 1); }
-template<int N, typename T, typename W>		constexpr block<T, N>	make_block_rev(T *p, W *w)		{ return block_maker<N - 1>::r(block<T, 1>(p, w[N - 1]), w); }
+template<int N, typename I, typename W>		constexpr iblock<I, N>	make_block(I p, W *w)			{ return block_maker<N - 1>::f(make_block(p, *w), w + 1); }
+template<int N, typename I, typename W>		constexpr iblock<I, N>	make_strided_block(I p, W *w)	{ return block_maker<N - 1>::fs(make_block(p, *w), w + 1); }
+template<int N, typename I, typename W>		constexpr iblock<I, N>	make_block_rev(I p, W *w)		{ return block_maker<N - 1>::r(make_block(p, w[N - 1]), w); }
 
 template<typename T> block<T, 2> flip_vertical(const block<T, 2> &b) {
 	return make_strided_block(b[b.template size<2>() - 1].begin(), -b.template pitch<2>(), b.template size<1>(), b.template size<2>());
@@ -435,7 +456,7 @@ template<>				struct flatten_s<2, 2>	{ template<typename T> static constexpr aut
 template<int D, typename T, int N> constexpr auto flatten(const block<T, N> &b)		{ return flatten_s<D, N>::f(b); }
 
 template<int D, int N>	struct skip_s			{ template<typename T> static constexpr auto f(const block<T, N> &b, int s) { return make_strided_block(skip_s<D, N - 1>::f(b[0], s), b.pitch(), b.size()); }};
-template<int D>			struct skip_s<D, D>		{ template<typename T> static constexpr auto f(const block<T, D> &b, int s) { return make_strided_block<T, D - 1>(b, b.pitch() * s, b.size() / s); }};
+template<int D>			struct skip_s<D, D>		{ template<typename T> static constexpr auto f(const block<T, D> &b, int s) { return make_strided_block(b, b.pitch() * s, b.size() / s); }};
 template<>				struct skip_s<1, 1>		{ template<typename T> static constexpr auto f(const block<T, 1> &b, int s) { return make_strided_block(b.begin(), b.pitch() * s, 1, b.size() / s); }};
 template<int D, typename T, int N> constexpr auto skip(const block<T, N> &b, int s)	{ return skip_s<D, N>::f(b, s); }
 
@@ -604,17 +625,6 @@ template<int X, int Y, int Z, typename D,typename S> void encode_blocked(const S
 				d[y][x].Encode(s.template sub<1>(x * X, X).template sub<2>(y * Y, Y).template sub<3>(z * Z, Z));
 	}
 }
-
-template<typename T, typename V, int N> void fill(block_iterator<T, N> s, block_iterator<T, N> e, const V &v) {
-	for (; s != e; ++s) fill(*s, v);
-}
-
-template<typename S, typename D, int N> void copy(block_iterator<S, N> s, block_iterator<S, N> e, block_iterator<D, N> d) {
-	for (; s != e; ++s, ++d)
-		copy(*s, *d);
-}
-template<typename S, typename D, int N> void copy(const block<S, N> &s, D &&d)	{ copy(unconst(s), d); }
-template<typename S, typename D, int N> void copy(block<S, N> &&s, D &&d)		{ copy(s, d); }
 
 template<typename T, int N, class P> inline T *find_if(const block<T, N> &b, P pred) {
 	for (auto i : b) {

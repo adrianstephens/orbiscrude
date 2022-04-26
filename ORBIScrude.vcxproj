@@ -113,43 +113,7 @@
   <ImportGroup Label="PropertySheets">
     <Import Project="isopod.props" />
     <Import Project="sdk\SCE\ORBIS SDKs\6.000\orbis.props" />
-    <Import Project="sdk\directx\directx9.props" />
-  </ImportGroup>
-  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='DebugDX11-clang|x64'">
-    <Import Project="sdk\SCE\ps3tmapi\ps3tmapi.props" />
-  </ImportGroup>
-  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='ReleaseDX11|x64'">
-    <Import Project="sdk\SCE\ps3tmapi\ps3tmapi.props" />
-  </ImportGroup>
-  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseDX11-clang|x64'" Label="PropertySheets">
-    <Import Project="sdk\SCE\ps3tmapi\ps3tmapi.props" />
-  </ImportGroup>
-  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='ReleaseDX11|Win32'">
-    <Import Project="sdk\SCE\ps3tmapi\ps3tmapi.props" />
-  </ImportGroup>
-  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='ReleaseDX11-clang|Win32'" Label="PropertySheets">
-    <Import Project="sdk\SCE\ps3tmapi\ps3tmapi.props" />
-  </ImportGroup>
-  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='DebugDX11|Win32'">
-    <Import Project="sdk\SCE\ps3tmapi\ps3tmapi.props" />
-  </ImportGroup>
-  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='DebugDX11|x64'">
-    <Import Project="sdk\SCE\ps3tmapi\ps3tmapi.props" />
-  </ImportGroup>
-  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <Import Project="sdk\SCE\ps3tmapi\ps3tmapi.props" />
-  </ImportGroup>
-  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <Import Project="sdk\SCE\ps3tmapi\ps3tmapi.props" />
-  </ImportGroup>
-  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <Import Project="sdk\SCE\ps3tmapi\ps3tmapi.props" />
-  </ImportGroup>
-  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <Import Project="sdk\SCE\ps3tmapi\ps3tmapi.props" />
-  </ImportGroup>
-  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='DebugDX11-clang|Win32'">
-    <Import Project="sdk\SCE\ps3tmapi\ps3tmapi.props" />
+	<Import Project="sdk\SCE\ps3tmapi\ps3tmapi.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <ItemDefinitionGroup>

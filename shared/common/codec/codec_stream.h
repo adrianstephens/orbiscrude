@@ -75,6 +75,8 @@ template<typename T, typename S> class codec_reader<T, S, 0> : public reader_mix
 	S			file;
 	T			codec;
 public:
+	codec_reader(codec_reader&)		= default;
+	codec_reader(codec_reader&&)	= default;
 	template<typename S1, typename...P> codec_reader(S1&& file, P&&... p) : file(forward<S1>(file)), codec(forward<P>(p)...)  {}
 	size_t		readbuff(void *buffer, size_t size)	{ return (int)transcode_from_file(codec, memory_block(buffer, size), file);}
 	inline S&	get_stream()	{ return file; }
@@ -108,8 +110,8 @@ template<typename T, typename S> class codec_writer<T, S, 0> : public writer_mix
 	T	codec;
 public:
 	template<typename S1, typename...P> codec_writer(S1&& file, P&&... p) : file(forward<S1>(file)), codec(forward<P>(p)...)  {}
-	codec_writer(codec_writer&) = default;
-	codec_writer(codec_writer&&) = default;
+	codec_writer(codec_writer&)		= default;
+	codec_writer(codec_writer&&)	= default;
 	~codec_writer()				{ flush(); }
 	size_t		writebuff(const void *buffer, size_t size)	{ return (int)transcode_to_file(codec, file, const_memory_block(buffer, size), TRANSCODE_PARTIAL|TRANSCODE_SRC_VOLATILE); }
 	void		flush()			{ transcode_to_file(codec, file, none, TRANSCODE_NONE); }

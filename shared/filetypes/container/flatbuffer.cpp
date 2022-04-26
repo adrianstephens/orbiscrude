@@ -871,7 +871,7 @@ class FlatbufferScemaFileHandler : public FileHandler {
 
 	ISO_ptr<void> Read(tag id, istream_ref file) override {
 		flatbuffers::schema::Schema	schema;
-		flatbuffers::tokeniser(lvalue((file)), schema).Parse();
+		flatbuffers::tokeniser(file, schema).Parse();
 		return ISO_NULL;
 	}
 } fbs;

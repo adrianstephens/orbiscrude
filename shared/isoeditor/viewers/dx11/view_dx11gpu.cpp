@@ -851,7 +851,7 @@ struct DX11Replay : COMReplay<DX11Replay> {
 			for (int a = 0, i = 0; a < desc->ArraySize; a++) {
 				for (int m = 0; m < desc->MipLevels; m++, i++) {
 					blocks[i].set(p, 0);
-					p += mip_stride(comp, desc->Width, m, true);
+					p += dxgi_align(mip_stride(comp, desc->Width, m));
 				}
 			}
 		}
@@ -860,7 +860,7 @@ struct DX11Replay : COMReplay<DX11Replay> {
 			uint8			*p		= (uint8*)(desc + 1);
 			for (int a = 0, i = 0; a < desc->ArraySize; a++) {
 				for (int m = 0; m < desc->MipLevels; m++, i++) {
-					size_t	w = mip_stride(comp, desc->Width, m, true);
+					size_t	w = dxgi_align(mip_stride(comp, desc->Width, m));
 					blocks[i].set(p, uint32(w));
 					p += w * mip_size(comp, desc->Height, m);
 				}
@@ -870,7 +870,7 @@ struct DX11Replay : COMReplay<DX11Replay> {
 			DXGI_COMPONENTS	comp	= desc->Format;
 			uint8			*p		= (uint8*)(desc + 1);
 			for (int m = 0, i = 0; m < desc->MipLevels; m++, i++) {
-				size_t	w = mip_stride(comp, desc->Width, m, true);
+				size_t	w = dxgi_align(mip_stride(comp, desc->Width, m));
 				size_t	s = w * mip_size(comp, desc->Height, m);
 				blocks[i].set(p, uint32(w), uint32(s));
 				p += s * mip_size(comp, desc->Depth, m);
@@ -1522,7 +1522,7 @@ dx::SimulatorDXBC::Resource DX11Replay::GetResource(const DX11Assets::ItemRecord
 		ctx->Map(res2, 0, D3D11_MAP_READ, 0, &mapped);
 		r.set_mem(malloc_block(r.length()).detach());
 
-		uint32	rstride	= aligned_stride(format2, width);
+		uint32	rstride	= dxgi_align(stride(format2, width));
 		for (int y = 0; y < r.height; y++)
 			memcpy((uint8*)r + rstride * y, (uint8*)mapped.pData + mapped.RowPitch * y, mapped.RowPitch);
 
@@ -2193,7 +2193,7 @@ DX11ShaderState::SRV& DX11ShaderState::SRV::init(DX11Assets::ItemRecord	*_item, 
 				break;
 			}
 			case D3D11_SRV_DIMENSION_BUFFER: {
-				uint32	element_size = rdesc->buffer.MiscFlags & D3D11_RESOURCE_MISC_BUFFER_STRUCTURED ? rdesc->buffer.StructureByteStride : DXGI_COMPONENTS(vdesc->Format).Size();
+				uint32	element_size = rdesc->buffer.MiscFlags & D3D11_RESOURCE_MISC_BUFFER_STRUCTURED ? rdesc->buffer.StructureByteStride : DXGI_COMPONENTS(vdesc->Format).Bytes();
 				init(dx::RESOURCE_DIMENSION_BUFFER, vdesc->Format, 1, vdesc->Buffer.NumElements * element_size);
 				set_mem(slice(vdesc->Buffer.FirstElement * element_size));
 				break;
@@ -2272,7 +2272,7 @@ DX11ShaderState::UAV& DX11ShaderState::UAV::init(DX11Assets::ItemRecord *_item, 
 				break;
 			}
 			case D3D11_UAV_DIMENSION_BUFFER: {
-				uint32	element_size = rdesc->buffer.MiscFlags & D3D11_RESOURCE_MISC_BUFFER_STRUCTURED ? rdesc->buffer.StructureByteStride : DXGI_COMPONENTS(vdesc->Format).Size();
+				uint32	element_size = rdesc->buffer.MiscFlags & D3D11_RESOURCE_MISC_BUFFER_STRUCTURED ? rdesc->buffer.StructureByteStride : DXGI_COMPONENTS(vdesc->Format).Bytes();
 				init(dx::RESOURCE_DIMENSION_BUFFER, vdesc->Format, 1, vdesc->Buffer.NumElements * element_size);
 				set_mem(slice(vdesc->Buffer.FirstElement * element_size));
 				break;
@@ -2397,7 +2397,7 @@ struct DX11StateControl : public ColourTree {
 	HTREEITEM	AddShader(HTREEITEM h, const DX11ShaderState &shader);
 
 	HWND		Create(const WindowPos &wpos) {
-		return ColourTree::Create(wpos, "state", CHILD | CLIPSIBLINGS | VISIBLE | TVS_HASLINES | TVS_HASBUTTONS | TVS_LINESATROOT, NOEX, ID);
+		return ColourTree::Create(wpos, "state", CHILD | CLIPSIBLINGS | VISIBLE | HASLINES | HASBUTTONS | LINESATROOT, NOEX, ID);
 	}
 		
 	void operator()(RegisterTree &tree, HTREEITEM h, const field *pf, const uint32le *p, uint32 offset, uint32 addr) {
@@ -2756,7 +2756,7 @@ DX11ShaderDebuggerWindow::DX11ShaderDebuggerWindow(const WindowPos &wpos, const 
 	, DebugWindow(HLSLcolourerRE(), none, mode)
 	, accel(GetAccelerator())
 	, tree(con)
-	, shader(shader), spdb(lvalue(memory_reader(shader.DXBC()->GetBlob(dx::DXBC::ShaderPDB))))
+	, shader(shader), spdb(memory_reader(shader.DXBC()->GetBlob(dx::DXBC::ShaderPDB)))
 	, step_count(0), thread(0)
 	, stage(shader.stage)
 {
@@ -2809,7 +2809,7 @@ DX11ShaderDebuggerWindow::DX11ShaderDebuggerWindow(const WindowPos &wpos, const 
 	}
 
 #if 1
-	thread_control.Create(control(), "thread", CHILD | OVERLAPPED | VISIBLE | VSCROLL | CBS_DROPDOWNLIST | CBS_HASSTRINGS, NOEX,
+	thread_control.Create(control(), "thread", CHILD | OVERLAPPED | VISIBLE | VSCROLL | thread_control.DROPDOWNLIST | thread_control.HASSTRINGS, NOEX,
 		Rect(wpos.rect.Width() - 64, 0, 64 - GetNonClientMetrics().iScrollWidth, GetNonClientMetrics().iSmCaptionHeight),
 		'TC'
 	);
@@ -2995,8 +2995,8 @@ public:
 	static DX11BatchWindow*	Cast(Control c)	{
 		return (DX11BatchWindow*)StackWindow::Cast(c);
 	}
-	void AddView(Control c, bool new_tab) {
-		Dock(new_tab ? DOCK_ADDTAB : DOCK_PUSH, c);
+	WindowPos AddView(bool new_tab) {
+		return Dock(new_tab ? DOCK_ADDTAB : DOCK_PUSH);
 	}
 	void SelectBatch(BatchList &b, bool always_list = false) {
 		int		batch	= ::SelectBatch(*this, GetMousePos(), b, always_list);
@@ -3006,8 +3006,7 @@ public:
 	Control ShowBitmap(ISO_ptr_machine<void> p, bool new_tab) {
 		Control	c;
 		if (p) {
-			c = BitmapWindow(GetChildWindowPos(), p, tag(p.ID()), true);
-			AddView(c, new_tab);
+			c = BitmapWindow(AddView(new_tab), p, tag(p.ID()), true);
 		}
 		return c;
 	}
@@ -3015,7 +3014,7 @@ public:
 	LRESULT Proc(MSG_ID message, WPARAM wParam, LPARAM lParam);
 	DX11BatchWindow(const WindowPos &wpos, string_param title, DX11Connection *con, uint32 addr, DX11Replay *replay);
 	int		InitSimulator(dx::SimulatorDXBC &sim, const DX11ShaderState &shader, int thread, dynamic_array<uint16> &indices, Topology2 &top);
-	Control	ShaderOutputs(dx::SHADERSTAGE stage, bool mesh);
+	Control	MakeShaderOutputs(const WindowPos &wpos, dx::SHADERSTAGE stage, bool mesh);
 	void	VertexMenu(dx::SHADERSTAGE stage, int i, ListViewControl lv);
 	Control	DebugPixel(uint32 target, const Point &pt);
 };
@@ -3051,10 +3050,11 @@ DX11BatchWindow::DX11BatchWindow(const WindowPos &wpos, string_param title, DX11
 
 		SplitterWindow	*split2 = new SplitterWindow(SplitterWindow::SWF_VERT | SplitterWindow::SWF_DELETE_ON_DESTROY);
 		split2->Create(GetChildWindowPos(), 0, CHILD | CLIPSIBLINGS | VISIBLE);
-		split2->SetClientPos(400);
-
-		split2->SetPane(0, tree.Create(split2->_GetPanePos(0)));
-		split2->SetPane(1, app::MakeComputeGrid(split2->_GetPanePos(1), 0, 'CG', dim, decls.thread_group));
+		split2->SetPanes(
+			tree.Create(split2->_GetPanePos(0)),
+			app::MakeComputeGrid(split2->_GetPanePos(1), 0, 'CG', dim, decls.thread_group),
+			400
+		);
 
 		RegisterTree	rt(tree, &tree, IDFMT_FOLLOWPTR);
 		HTREEITEM	h1 = tree.AddShader(TreeControl::Item(buffer_accum<256>("Compute Shader: ") << shaders[0].name).Image(tree.ST_SHADER).StateImage(0).Insert(tree), shaders[0]);
@@ -3271,10 +3271,7 @@ LRESULT DX11BatchWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 			switch (int id = LOWORD(wParam)) {
 				case DebugWindow::ID_DEBUG_PIXEL: {
 					auto	*p = (pair<uint64,Point>*)lParam;
-					if (Control c = DebugPixel(p->a, p->b))
-						AddView(c, false);
-					else
-						MessageBoxA(*this, "Can't find pixel", "Error", MB_ICONERROR);
+					DebugPixel(p->a, p->b);
 					return 0;
 				}
 			}
@@ -3297,24 +3294,23 @@ LRESULT DX11BatchWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 									if (auto p = targets[t].p) {
 										Menu menu	= Menu::Popup();
 										Menu::Item("Debug this Pixel", DebugWindow::ID_DEBUG_PIXEL).Param(t).AppendTo(menu);
-										Control	c =	BitmapWindow(GetChildWindowPos(), p, tag(p.ID()), true);
+										Control	c =	BitmapWindow(AddView(new_tab), p, tag(p.ID()), true);
 										c(WM_ISO_CONTEXTMENU, (HMENU)menu);
-										AddView(c, new_tab);
 									}
 									return 0;
 								}
 								case DX11StateControl::ST_RESOURCE:
-									AddView(MakeItemView(GetChildWindowPos(), con, i.Param()), new_tab);
+									MakeItemView(AddView(new_tab), con, i.Param());
 									return 0;
 
 								case DX11StateControl::ST_BOUND_RESOURCE: {
 									int		index	= i.Param();
-									AddView(MakeBoundView(GetChildWindowPos(), GetShader(index / 256), index), new_tab);
+									MakeBoundView(AddView(new_tab), GetShader(index / 256), index);
 									return 0;
 								}
 
 								case DX11StateControl::ST_SHADER:
-									AddView(*new DX11ShaderWindow(GetChildWindowPos(), con, shaders[i.StateImage()]), new_tab);
+									new DX11ShaderWindow(AddView(new_tab), con, shaders[i.StateImage()]);
 									return 0;
 
 								case DX11StateControl::ST_VERTICES: {
@@ -3330,20 +3326,19 @@ LRESULT DX11BatchWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 										}
 
 										if (topology.type == Topology::UNKNOWN) {
-											AddView(*MakeVertexWindow(GetChildWindowPos(), title, 'VI', buffers, nb, ix, state.InstanceCount), new_tab);
+											MakeVertexWindow(AddView(new_tab), title, 'VI', buffers, nb, ix, state.InstanceCount);
 										} else {
-											MeshVertexWindow	*m	= new MeshVertexWindow(GetChildWindowPos(), title);
+											MeshVertexWindow	*m	= new MeshVertexWindow(AddView(new_tab), title);
 											VertexWindow		*vw	= MakeVertexWindow(m->_GetPanePos(0), 0, 'VI', buffers, nb, ix, state.InstanceCount);
 											MeshWindow			*mw	= MakeMeshView(m->GetPanePos(1), topology, verts[0].buffer, ix, one, culling, MeshWindow::PERSPECTIVE);
 											m->SetPanes(*vw, *mw, 50);
-											AddView(*m, new_tab);
 										}
 									}
 									return 0;
 								}
 
 								case DX11StateControl::ST_OUTPUTS:
-									Busy(), AddView(ShaderOutputs(i.Param(), ctrl), new_tab);
+									Busy(), MakeShaderOutputs(AddView(new_tab), i.Param(), ctrl);
 									return 0;
 							}
 						}
@@ -3361,6 +3356,7 @@ LRESULT DX11BatchWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 						case 'CO': VertexMenu(dx::CS, ((NMITEMACTIVATE*)nmh)->iItem, nmh->hwndFrom); return 0;
 						case 'HC': VertexMenu(dx::HS, ((NMITEMACTIVATE*)nmh)->iItem, nmh->hwndFrom); return 0;
 						case 'VI': VertexMenu(dx::VS, ((NMITEMACTIVATE*)nmh)->iItem, nmh->hwndFrom); return 0;
+						case 'CG': VertexMenu(dx::VS, ((NMITEMACTIVATE*)nmh)->iItem, nmh->hwndFrom); return 0;
 					}
 					break;
 
@@ -3375,7 +3371,7 @@ LRESULT DX11BatchWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 			}
 			return Parent()(message, wParam, lParam);
 		}
-
+/*
 		case WM_PARENTNOTIFY:
 			switch (LOWORD(wParam)) {
 				case WM_RBUTTONDOWN: {
@@ -3415,6 +3411,7 @@ LRESULT DX11BatchWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 				return 0;
 			}
 			break;
+*/
 
 		case WM_NCDESTROY:
 			delete this;
@@ -3685,7 +3682,7 @@ int DX11BatchWindow::InitSimulator(dx::SimulatorDXBC &sim, const DX11ShaderState
 	}
 }
 
-Control DX11BatchWindow::ShaderOutputs(dx::SHADERSTAGE stage, bool mesh) {
+Control DX11BatchWindow::MakeShaderOutputs(const WindowPos &wpos, dx::SHADERSTAGE stage, bool mesh) {
 	auto				&shader = GetShader(stage);
 	dx::SimulatorDXBC	sim;
 
@@ -3699,7 +3696,7 @@ Control DX11BatchWindow::ShaderOutputs(dx::SHADERSTAGE stage, bool mesh) {
 	
 	InitSimulator(sim, shader, mesh ? -2 : -1, ib, top);
 	
-	Control		c	= app::MakeShaderOutput(GetChildWindowPos(), sim, shader, ib);
+	Control		c	= app::MakeShaderOutput(wpos, sim, shader, ib);
 
 	if (!mesh)
 		return c;
@@ -3958,7 +3955,7 @@ Control DX11BatchWindow::DebugPixel(uint32 target, const Point &pt) {
 	}
 	
 	auto	&ps			= shaders[dx::PS];
-	auto	*debugger	= new DX11ShaderDebuggerWindow(GetChildWindowPos(), "Debugger", ps, con, GetSettings("General/shader source").GetInt(1));
+	auto	*debugger	= new DX11ShaderDebuggerWindow(AddView(false), "Debugger", ps, con, GetSettings("General/shader source").GetInt(1));
 	auto	*ps_in		= ps.DXBC()->GetBlob<dx::ISGN>();
 
 	float3x4	para	= tri3.inv_matrix();
@@ -4110,7 +4107,7 @@ Control MakeItemView(const WindowPos &wpos, DX11Connection *con, DX11Assets::Ite
 				return BitmapWindow(wpos, p, rec->GetName(), true);
 	}
 
-	TreeControl		tree(wpos, rec->GetName(), Control::CHILD | Control::CLIPSIBLINGS | Control::VISIBLE | Control::VSCROLL | TVS_HASLINES | TVS_HASBUTTONS | TVS_LINESATROOT | TVS_SHOWSELALWAYS, Control::CLIENTEDGE);
+	TreeControl		tree(wpos, rec->GetName(), Control::CHILD | Control::CLIPSIBLINGS | Control::VISIBLE | Control::VSCROLL | TreeControl::HASLINES | TreeControl::HASBUTTONS | TreeControl::LINESATROOT | TreeControl::SHOWSELALWAYS, Control::CLIENTEDGE);
 	RegisterTree	rt(tree, con, IDFMT_FOLLOWPTR);
 	rt.AddFields(rt.AddText(TVI_ROOT, rec->GetName(), 0), rec);
 	return tree;
@@ -4235,7 +4232,7 @@ struct DX11ItemsList : EditableListView<DX11ItemsList, Subclass<DX11ItemsList, E
 		: Base(con->items)
 		, con(con), writtenat(usedat.size()), sorted_order(int_range(usedat.size32()))
 	{
-		Create(wpos, "Items", CHILD | CLIPSIBLINGS | VISIBLE | LVS_REPORT | LVS_AUTOARRANGE | LVS_SINGLESEL | LVS_SHOWSELALWAYS | LVS_OWNERDATA, NOEX, ID);
+		Create(wpos, "Items", CHILD | CLIPSIBLINGS | VISIBLE | REPORT | AUTOARRANGE | SINGLESEL | SHOWSELALWAYS | OWNERDATA, NOEX, ID);
 
 		SetExtendedStyle(GRIDLINES | DOUBLEBUFFER | FULLROWSELECT);
 		Column("name").Width(200).Insert(*this, 0);
@@ -4410,8 +4407,7 @@ struct DX11ResourcesList : ResourceTable, EditableListView<DX11ResourcesList, Su
 	DX11ResourcesList(const WindowPos &wpos, DX11Connection *_con) : ResourceTable(_con->items), Base(records), con(_con)
 		, images(ImageList::Create(DeviceContext::ScreenCaps().LogPixels() * (2 / 3.f), ILC_COLOR32, 1, 1))
 	{
-		Create(wpos, "Resources", CHILD | CLIPSIBLINGS | VISIBLE | LVS_REPORT | LVS_AUTOARRANGE | LVS_SINGLESEL | LVS_SHOWSELALWAYS, NOEX, ID);
-		Init();
+		Create(wpos, "Resources", CHILD | CLIPSIBLINGS | VISIBLE | REPORT | AUTOARRANGE | SINGLESEL | SHOWSELALWAYS, NOEX, ID);
 
 		SetIcons(images);
 		SetSmallIcons(images);
@@ -4464,7 +4460,7 @@ struct DX11ShadersList : EditableListView<DX11ShadersList, Subclass<DX11ShadersL
 	}
 
 	DX11ShadersList(const WindowPos &wpos, DX11Connection *_con) : Base(_con->shaders), con(_con) {
-		CreateWithID(wpos, "Shaders", ID, CHILD | CLIPSIBLINGS | VISIBLE | LVS_REPORT | LVS_AUTOARRANGE | LVS_SINGLESEL | LVS_SHOWSELALWAYS);
+		Create(wpos, "Shaders", CHILD | CLIPSIBLINGS | VISIBLE | REPORT | AUTOARRANGE | SINGLESEL | SHOWSELALWAYS, GRIDLINES | DOUBLEBUFFER | FULLROWSELECT, ID);
 
 		RunThread([this]{
 			addref();
@@ -4741,7 +4737,7 @@ uint8 ViewDX11GPU::cursor_indices[][3] = {
 LRESULT ViewDX11GPU::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 		case WM_CREATE: {
-			tree.Create(_GetPanePos(0), NULL, CHILD | CLIPSIBLINGS | VISIBLE | VSCROLL | TVS_HASLINES | TVS_HASBUTTONS | TVS_LINESATROOT | TVS_SHOWSELALWAYS, CLIENTEDGE);
+			tree.Create(_GetPanePos(0), NULL, CHILD | CLIPSIBLINGS | VISIBLE | VSCROLL | tree.HASLINES | tree.HASBUTTONS | tree.LINESATROOT | tree.SHOWSELALWAYS, CLIENTEDGE);
 			italics = tree.GetFont().GetParams().Italic(true);
 			TabWindow	*t = new TabWindow;
 			SetPanes(tree, t->Create(_GetPanePos(1), "tabs", CHILD | CLIPCHILDREN | VISIBLE), 400);
@@ -4972,7 +4968,7 @@ void ViewDX11GPU::TreeSelection(HTREEITEM hItem) {
 			uint64	pc		= i.Image2() ? *(uint64*)i.Param() : (uint64)i.Param();
 			auto	frame	= stack_dumper.GetFrame(pc);
 			if (frame.file && exists(frame.file)) {
-				EditControl	c = MakeSourceWindow(Dock(new_tab ? DOCK_TAB : DOCK_TABID, 'SC'), frame.file, HLSLcolourerRE(), malloc_block::unterminated(lvalue(FileInput(frame.file))), 0, 0, EditControl::READONLY);
+				EditControl	c = MakeSourceWindow(Dock(new_tab ? DOCK_TAB : DOCK_TABID, 'SC'), frame.file, HLSLcolourerRE(), malloc_block::unterminated(FileInput(frame.file)), 0, 0, EditControl::READONLY);
 				c.id	= 'SC';
 				ShowSourceLine(c, frame.line);
 			}

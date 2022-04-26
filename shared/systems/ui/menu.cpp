@@ -892,7 +892,7 @@ struct mi_offset : _mi_offset, menu_item {
 	bool	CanBeSelected(MenuInstance *mi, InstanceData &d)	const { return mi_CanBeSelected(item, mi, d);	}
 	void	Draw(MenuInstance *mi, InstanceData &d, RenderRegion *rr, int state) const {
 		RenderRegion	rr2 = *rr;
-		float			s	= iso::abs(scle);
+		float			s	= abs(scle);
 		if (s) {
 			rr2.matrix		= rr->matrix * (translate(x, y, 0) * scale(scle, s, one));
 			rr2.size		/= s;
@@ -930,7 +930,7 @@ struct mi_box : _mi_box, menu_item {
 			float	newy	= y >= 0 ? y : max(rr->size.y + y, 0.f);
 			float	maxw	= rr->size.x - newx;
 			float	maxh	= rr->size.y - newy;
-			float	sx		= scale, sy = iso::abs(sx);
+			float	sx		= scale, sy = abs(sx);
 			float	offx, offy;
 			float	neww	= w > 0 ? min(w, maxw - rr->offset.x) : maxw + w;
 			float	newh	= h > 0 ? min(h, maxh - rr->offset.y) : maxh + h;
@@ -1159,7 +1159,7 @@ bool MenuIntVals::SetVal(int v) {
 		}
 		*pval = v;
 	} else {
-		int	numvals = maxval - minval + iso::abs(inc);
+		int	numvals = maxval - minval + abs(inc);
 		*pval = ((v - minval + numvals) % numvals) + minval;
 	}
 	return true;
@@ -2217,7 +2217,7 @@ struct mi_custom : _mi_custom, menu_item {
 			mreturn	r = mi->SendEvent(funcid, MMSG_CUSTOMDRAW, (MenuCustomDraw*)c, state);
 			if (!c.called && r >= 0)
 				c._Draw(mi, rr, r & 1 ? (state ^ 1) : state);
-			if (iso::abs((int)r) == 2)
+			if (abs((int)r) == 2)
 				mi->active = MenuInstance::ME;
 			//if (mi->active == MenuInstance::ME && c.my->init < 0)
 			//	mi->active = MenuInstance::DEFAULT;
@@ -2605,8 +2605,8 @@ RenderRegion &RenderRegion::SetField(REGION_PARAM i, float v) {
 		case REGION_HEIGHT1:		offset.y += v - size.y; size.y = v;					break;
 
 		case REGION_SCALE1:			matrix = matrix * scale(concat(float2(v), one, one)) * translate(position3(concat(size, zero)) * trans_scale(v)); break;
-		case REGION_SCALE_X:		if (v < 0) matrix = matrix * translate(size.x, 0, 0); matrix = matrix * scale(float4{v, one, one, one}); v = iso::abs(v); size.x /= v; offset.x /= v; break;
-		case REGION_SCALE_Y:		if (v < 0) matrix = matrix * translate(0, size.y, 0); matrix = matrix * scale(float4{one, v, one, one}); v = iso::abs(v); size.y /= v; offset.y /= v; break;
+		case REGION_SCALE_X:		if (v < 0) matrix = matrix * translate(size.x, 0, 0); matrix = matrix * scale(float4{v, one, one, one}); v = abs(v); size.x /= v; offset.x /= v; break;
+		case REGION_SCALE_Y:		if (v < 0) matrix = matrix * translate(0, size.y, 0); matrix = matrix * scale(float4{one, v, one, one}); v = abs(v); size.y /= v; offset.y /= v; break;
 		case REGION_SCALE_X1:		matrix = matrix * scale(float4{v, one, one, one}) * translate(size.x * trans_scale(v), 0, 0); break;
 		case REGION_SCALE_Y1:		matrix = matrix * scale(float4{one, v, one, one}) * translate(0, size.y * trans_scale(v), 0); break;
 

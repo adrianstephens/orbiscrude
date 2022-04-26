@@ -79,6 +79,9 @@ constexpr int dimensions(ResourceDimension d) {
 		: d == RESOURCE_DIMENSION_TEXTURE3D ? 3
 		: 2;
 }
+constexpr int uses_z(ResourceDimension d) {
+	return between(d, RESOURCE_DIMENSION_TEXTURE3D, RESOURCE_DIMENSION_TEXTURECUBEARRAY);
+}
 
 enum TextureAddressMode {
 	TEXTURE_ADDRESS_MODE_WRAP = 1,

@@ -14,7 +14,7 @@ using namespace iso;
 
 bool ZIPwriter::Entry::WriteLocal(ostream_ref file) {
 	file_header	h(fn);
-	return write(file, h.sig, h, fn);
+	return file.write(h.sig, h, fn);
 }
 
 bool ZIPwriter::Entry::WriteCD(ostream_ref file) {
@@ -34,7 +34,7 @@ bool ZIPwriter::Entry::WriteCD(ostream_ref file) {
 		cd.offset					= offset;
 	}
 
-	return write(file, centraldir_entry::sig, cd, fn) && (!needs64 || file.write(extension_zip64(uncompressed_size, compressed_size, offset)));
+	return file.write(centraldir_entry::sig, cd, fn) && (!needs64 || file.write(extension_zip64(uncompressed_size, compressed_size, offset)));
 }
 
 ZIPwriter::~ZIPwriter() {

@@ -252,7 +252,7 @@ string_accum &iso::DumpData(string_accum &sa, const void *data, const C_type *ty
 			sa << '{';
 			int	n	= 0;
 			for (auto *i = s->elements.begin(), *e = s->elements.end(); i != e; ++i) {
-				if (sa.remaining() < 20 + depth * 4)
+				if (sa.remaining() < 40 + depth * 4)
 					return sa << "...}";
 				if (!i->is_static())
 					DumpData(sa << onlyif(n++, ", "), (uint8*)data + i->offset, i->type, i->shift + shift, depth + 1, flags);

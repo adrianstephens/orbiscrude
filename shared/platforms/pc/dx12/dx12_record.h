@@ -130,9 +130,35 @@ template<template<class> class M> struct meta::map<M, D3D12_PIPELINE_STATE_STREA
 template<> struct RTM<ID3D12CommandList*>						: T_type<CommandRange> {};
 
 
+
+//struct D3D12_INDEX_BUFFER_VIEW {
+//	D3D12_GPU_VIRTUAL_ADDRESS BufferLocation;
+//	UINT SizeInBytes;
+//	DXGI_FORMAT Format;
+//};
+//struct D3D12_VERTEX_BUFFER_VIEW {
+//	D3D12_GPU_VIRTUAL_ADDRESS BufferLocation;
+//	UINT SizeInBytes;
+//	UINT StrideInBytes;
+//};
+//struct D3D12_CONSTANT_BUFFER_VIEW_DESC {
+//	D3D12_GPU_VIRTUAL_ADDRESS BufferLocation;
+//	UINT SizeInBytes;
+//};
+//struct D3D12_STREAM_OUTPUT_BUFFER_VIEW {
+//	D3D12_GPU_VIRTUAL_ADDRESS BufferLocation;
+//	UINT64 SizeInBytes;
+//	D3D12_GPU_VIRTUAL_ADDRESS BufferFilledSizeLocation;
+//};
+//struct D3D12_WRITEBUFFERIMMEDIATE_PARAMETER {
+//	D3D12_GPU_VIRTUAL_ADDRESS Dest;
+//	UINT32 Value;
+//};
+
+template<> struct PM<D3D12_SHADER_BYTECODE>									: T_type<lookup<D3D12_SHADER_BYTECODE>> {};
+
 // modify D3D12_GPU_VIRTUAL_ADDRESS
 
-template<> struct PM<D3D12_SHADER_BYTECODE>				: T_type<lookup<D3D12_SHADER_BYTECODE>> {};
 template<> struct PM<D3D12_CPU_DESCRIPTOR_HANDLE>							: T_type<lookup<D3D12_CPU_DESCRIPTOR_HANDLE>> {};
 template<> struct PM<D3D12_GPU_DESCRIPTOR_HANDLE>							: T_type<lookup<D3D12_GPU_DESCRIPTOR_HANDLE>> {};
 template<> struct PM<D3D12_INDEX_BUFFER_VIEW>								: T_type<lookup<D3D12_INDEX_BUFFER_VIEW>> {};
@@ -255,7 +281,7 @@ struct RecObject2 : RecObject {
 		return info.read(r, size);
 	}
 	template<typename W>	bool write(W &&w) const	{
-		return iso::write(w, type, name, obj, info.size32(), info);
+		return w.write(type, name, obj, info.size32(), info);
 	}
 };
 
@@ -271,7 +297,7 @@ struct D3D12BLOCK {
 	D3D12BLOCK(const D3D12_RESOURCE_DESC &desc, uint32 mip, uint32 slice, uint32 plane) {
 		DXGI_COMPONENTS	comp = desc.Format;
 		shift		= comp.IsBlock() ? 2 : 0;
-		psize		= comp.Size();
+		psize		= comp.Bytes();
 		offset		= align((desc.Width >> shift) * psize, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT) * (desc.Height >> shift) * slice;
 		width		= max(desc.Width >> mip, 1);
 		height		= max(desc.Height >> mip, 1);
@@ -281,7 +307,7 @@ struct D3D12BLOCK {
 	D3D12BLOCK(const D3D12_PLACED_SUBRESOURCE_FOOTPRINT &fp) {
 		DXGI_COMPONENTS	comp = fp.Footprint.Format;
 		offset		= fp.Offset;
-		psize		= fp.Footprint.Format == DXGI_FORMAT_UNKNOWN ? 1 : comp.Size();
+		psize		= fp.Footprint.Format == DXGI_FORMAT_UNKNOWN ? 1 : comp.Bytes();
 		shift		= comp.IsBlock() ? 2 : 0;
 		width		= fp.Footprint.Width;
 		height		= fp.Footprint.Height;
@@ -486,6 +512,9 @@ struct RecHeap : D3D12_HEAP_DESC {
 	RecHeap() { clear(*this); }
 	void	init(const D3D12_HEAP_DESC &desc) {
 		*static_cast<D3D12_HEAP_DESC*>(this) = desc;
+	}
+	bool	contains(D3D12_GPU_VIRTUAL_ADDRESS a) const {
+		return a >= gpu && a - gpu < SizeInBytes;
 	}
 };
 

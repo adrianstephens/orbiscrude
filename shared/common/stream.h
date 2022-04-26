@@ -183,10 +183,12 @@ template<typename S> struct reader_mixout : S, reader<reader_mixout<S>> {
 //-----------------------------------------------------------------------------
 
 template<class W, typename T>	inline bool write(W &w, const T &t);
-template<class W, typename T, typename... TT> bool write(W &w, const T &t, const TT&... tt) {
-	return write(w, t) && write(w, tt...);
+template<class W, typename T>	inline bool write_early(W &w, const T &t)	{ return write(w, t); }
+template<class W, typename T, typename... TT> bool write_early(W &w, const T &t, const TT&... tt) {
+	bool	b = write_early(w, t), unused[] = {(b = b && write_early(w, tt))...};
+	return b;
 }
-template<class W> inline bool check_writebuff(W &w, const void *buffer, size_t size) { return w.writebuff(buffer, size) == size; }
+template<class W> inline bool check_writebuff(W &&w, const void *buffer, size_t size) { return w.writebuff(buffer, size) == size; }
 
 template<class W, typename T> static meta::array<uint8,1>	write_type_test(...);
 template<class W, typename T> static meta::array<uint8,2>	write_type_test(decltype(declval<const T>().write(declval<W>()))*);
@@ -215,12 +217,10 @@ template<class W, typename T>			inline bool writen(W &w, const T *t, size_t n)		
 template<class W, typename I>			inline bool writen(W &w, I i, size_t n)				{ return write_s<write_type_v<W,it_element_t<I>>>::f(w, i, n); }
 template<class W, typename T, int N>	inline bool write(W &w, const T (&t)[N])			{ return write_s<write_type_v<W,T>>::f(w, t); }
 
-template<class W, typename T>			inline bool global_write(W &w, const T &t)			{ return write(w, t); }
-template<class W, int N>				inline bool	global_write(W &w, const char (&s)[N])	{ return w.writebuff(s, N - 1) == N - 1; }
 
 template<class S> struct writer {
 	S&							me()							{ return *static_cast<S*>(this); }
-	template<typename T>bool	write(const T &t)				{ return global_write(me(), t); }
+	template<typename...T>bool	write(const T&...t)				{ return write_early(me(), t...); }
 	void						align(int a, char pad = 0x55)	{ while (me().tell() % a) me().putc(pad);	}
 	uint32						tell32()						{ return uint32(me().tell()); }
 	uint32						size32()						{ return uint32(me().length()); }
@@ -228,7 +228,7 @@ template<class S> struct writer {
 
 template<class S> struct writer<const S> {
 	const S&					me()							const { return *static_cast<const S*>(this); }
-	template<typename T>bool	write(const T &t)				const { return global_write(me(), t); }
+	template<typename...T>bool	write(const T&...t)				const { return write_early(me(), t...); }
 	void						align(int a, char pad = 0x55)	const { while (me().tell() % a) me().putc(pad);	}
 	uint32						tell32()						const { return uint32(me().tell()); }
 	uint32						size32()						const { return uint32(me().length()); }
@@ -250,7 +250,7 @@ template<typename S> struct writer_mixout : S, writer<writer_mixout<S>> {
 
 template<class S> struct readwriter : writer<S> {
 	using writer<S>::me;
-	template<typename T>bool	read(T &t)		{ using iso::read; return read(me(), t);	}
+	template<typename...T> bool read(T&&...t)	{ return iso::read(me(), t...); }
 	template<typename T>T		get()			{ T t; read(t); return t;		}
 	getter<readwriter>			get()			{ return *this;	}
 	size_t						remaining()		{ return me().length() - me().tell(); }
@@ -258,7 +258,7 @@ template<class S> struct readwriter : writer<S> {
 
 template<class S> struct readwriter<const S> : writer<const S> {
 	using writer<const S>::me;
-	template<typename T>bool	read(T &t)		const { using iso::read; return read(me(), t);	}
+	template<typename...T> bool read(T&&...t)	const { return iso::read(me(), t...); }
 	template<typename T>T		get()			const { T t; ISO_VERIFY(read(t)); return t;		}
 	getter<readwriter>			get()			const { return *this;	}
 	size_t						remaining()		const { return me().length() - me().tell(); }
@@ -1357,7 +1357,7 @@ public:
 
 	int			putc(int c)									const { return ((vtable*)vt)->putc(p, c); }
 	size_t		writebuff(const void *buffer, size_t size)	const { return ((vtable*)vt)->writebuff(p, buffer, size); }
-	writer_ptr_intf	clone()									const	{ return ((vtable*)vt)->clone(p); }
+	writer_ptr_intf	clone()									const { return ((vtable*)vt)->clone(p); }
 	explicit operator bool()								const { return !!p; }
 };
 

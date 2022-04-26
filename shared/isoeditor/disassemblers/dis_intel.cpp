@@ -62,6 +62,7 @@ private:
 			R				= 1 << 2,	//no move
 			W				= 1 << 3,	//no move
 
+			EXT				= 1 << 4,
 			OperandSize		= 1 << 4,	//66\	extension 00:None, 01:66h, 10:F3h, 11:F2h
 			Repe			= 1 << 5,	//f3/	no move
 			L				= 1 << 6,	//no move
@@ -90,7 +91,7 @@ private:
 			value |= t;
 		}
 		void	addPP(uint8 x) {
-			add(TYPE((x & 3) << 4));
+			add(TYPE((x & 3) * EXT));
 		}
 		void	addVEX(const uint8 *p) {
 			add(TYPE(
@@ -101,7 +102,7 @@ private:
 			addPP(p[1]);
 		}
 		int		extension() const {
-			return value & Repne ? 3 : ((value >> 4) & 3);
+			return value & Repne ? 3 : ((value / EXT) & 3);
 		}
 	};
 
@@ -113,8 +114,6 @@ private:
 	struct SIB {
 		uint8 base:3, index:3, scale:2;
 	};
-
-//	Disassembler::SymbolFinder sym_finder;
 
 	ARCH		arch;
 	PREFIX		prefix;
@@ -402,6 +401,7 @@ enum OPFLAGS {
 	OPF_64(Kv),
 	OPF_64(M),
 	OPF_i64(EwGw),
+	OPF_i64(GvM),
 
 	OPF_VHWIb	= OPF_VHW,
 	OPF_VHEIb	= OPF_VHE,
@@ -424,7 +424,6 @@ struct Opcode {
 #define OP_BAD		{"???", OPF_0}
 #define OP(m,f)		{#m, OPF_##f}
 #define OPG(g,f)	{(const char*)g, OPFLAGS(OPF_##f | OPF_GROUP)}
-#define OPX(g)		{(const char*)g, OPFLAGS(OPF_NOT64 | OPF_ONLY64 | OPF_GROUP)}
 
 //							0					1					2					3					4					5					6					7
 Opcode group1[8]	= { OP(add, 0),			OP(or, 0),			OP(adc, 0),			OP(sbb, 0),			OP(and, 0),			OP(sub, 0),			OP(xor, 0),			OP(cmp, 0)			};
@@ -436,12 +435,17 @@ Opcode group5[8]	= { OP(inc, 0),			OP(dec, 0),			OP(call, 64),		OP(call, Mp),		O
 Opcode group11[8]	= { OP(mov, 0),			OP_BAD,				OP_BAD,				OP_BAD,				OP_BAD,				OP_BAD,				OP_BAD,				OP_BAD				};
 
 Opcode group6[8]	= { OP(sldt, Ev),		OP(str, Ev),		OP(lldt, Ew),		OP(ltr, Ew),		OP(verr, Ew),		OP(verw, Ew),		OP_BAD,				OP_BAD				};
-Opcode group7[8]	= { OP(sgdt, Ms),		OP(sidt, Ms),		OP(lgdt, Ms),		OP(lidt, Ms),		OP(smsw, Ev),		OP_BAD,				OP(lmsw, Ew),		OP(invlpg, Mb)		};
 
-Opcode group7_1[8]	= { OP(monitor, 0),		OP(mwait, 0),		OP_BAD,				OP_BAD,				OP_BAD,				OP_BAD,				OP_BAD,				OP_BAD				};
-Opcode group7_2[8]	= { OP(xgetbv, 0),		OP(xsetbv, 0),		OP_BAD,				OP_BAD,				OP_BAD,				OP_BAD,				OP_BAD,				OP_BAD				};
-Opcode group7_3[8]	= { OP(vmrun, 0),		OP(vmmvall, 0),		OP(vmload, 0),		OP(vmsave, Mp),		OP(stgi, 0),		OP(clgi, Mp),		OP(skinit, 0),		OP(invlpga, 0)		};
-Opcode group7_7[8]	= { OP(swapgs, 0),		OP(rdtscp, 0),		OP_BAD,				OP_BAD,				OP_BAD,				OP_BAD,				OP_BAD,				OP_BAD				};
+Opcode group7[72]	= { OP(sgdt, Ms),		OP(sidt, Ms),		OP(lgdt, Ms),		OP(lidt, Ms),		OP(smsw, Ev),		OP_BAD,				OP(lmsw, Ew),		OP(invlpg, Mb),
+/*rm=0*/				OP_BAD,				OP(monitor, 0),		OP(xgetbv, 0),		OP(vmrun, 0),		OP_BAD,				OP_BAD,				OP_BAD,				OP(swapgs, 0),
+/*rm=1*/				OP(vmcall, 0),		OP(mwait, 0),		OP(xsetbv, 0),		OP(vmmvall, 0),		OP_BAD,				OP_BAD,				OP_BAD,				OP(rdtscp, 0),
+/*rm=2*/				OP(vmlaunch, 0),	OP_BAD,				OP_BAD,				OP(vmload, 0),		OP_BAD,				OP_BAD,				OP_BAD,				OP_BAD,
+/*rm=3*/				OP(vmresume,0),		OP_BAD,				OP_BAD,				OP(vmsave, Mp),		OP_BAD,				OP_BAD,				OP_BAD,				OP_BAD,
+/*rm=4*/				OP(vmxoff, 0),		OP_BAD,				OP(vmfence,0),		OP(stgi, 0),		OP_BAD,				OP_BAD,				OP_BAD,				OP_BAD,
+/*rm=5*/				OP_BAD,				OP_BAD,				OP_BAD,				OP(clgi, Mp),		OP_BAD,				OP_BAD,				OP_BAD,				OP_BAD,
+/*rm=6*/				OP_BAD,				OP_BAD,				OP_BAD,				OP(skinit, 0),		OP_BAD,				OP_BAD,				OP_BAD,				OP_BAD,
+/*rm=7*/				OP_BAD,				OP_BAD,				OP_BAD,				OP(invlpga, 0),		OP_BAD,				OP_BAD,				OP_BAD,				OP_BAD,
+};
 
 Opcode group8[8]	= { OP_BAD,				OP_BAD,				OP_BAD,				OP_BAD,				OP(bt, EvIb),		OP(bts, EvIb),		OP(btr, EvIb),		OP(btc, EvIb)		};
 Opcode group9[8]	= { OP_BAD,				OP(cmpxchg8b,Mq),	OP_BAD,				OP_BAD,				OP_BAD,				OP_BAD,				OP_BAD,				OP_BAD				};
@@ -504,10 +508,10 @@ Opcode maps[][256] = { {
 /*3*/	OP(xor, EbGb),		OP(xor, EvGv),		OP(xor, GbEb),		OP(xor, GvEv),		OP(xor, alIb),		OP(xor, rAXIv),		OP(seg, ss),		OP(aaa, i64),		OP(cmp, EbGb),		OP(cmp, EvGv),		OP(cmp, GbEb),		OP(cmp, GvEv),		OP(cmp, alIb),		OP(cmp, rAXIv),		OP(seg, ds),		OP(aas, 0),
 /*4*/	OP(inc, Kv),		OP(inc, Kv),		OP(inc, Kv),		OP(inc, Kv),		OP(inc, Kv),		OP(inc, Kv),		OP(inc, Kv),		OP(inc, Kv),		OP(dec, Kv),		OP(dec, Kv),		OP(dec, Kv),		OP(dec, Kv),		OP(dec, Kv),		OP(dec, Kv),		OP(dec, Kv),		OP(dec, Kv),
 /*5*/	OP(push, Kv64),		OP(push, Kv64),		OP(push, Kv64),		OP(push, Kv64),		OP(push, Kv64),		OP(push, Kv64),		OP(push, Kv64),		OP(push, Kv64),		OP(pop, Kv64),		OP(pop, Kv64),		OP(pop, Kv64),		OP(pop, Kv64),		OP(pop, Kv64),		OP(pop, Kv64),		OP(pop, Kv64),		OP(pop, Kv64),
-/*6*/	OP(pushad, 0),		OP(popad, 0),		OP(bound, GvM),		OPX(arpl_movsx),	OP(seg, fs),		OP(seg, gs),		OP_BAD/*OpSize*/,	OP_BAD/*AdSize*/,	OP(push, Iv),		OP(imul, GvEvIv),	OP(push, Ib),		OP(imul, GvEvIb),	OP(Rinsb, 0),		OP(RinsW, 0),		OP(Routsb, 0),		OP(RoutsW, 0),
+/*6*/	OP(pushad, 0),		OP(popad, 0),		OP(bound, GvMi64),	OPG(arpl_movsx,64),	OP(seg, fs),		OP(seg, gs),		OP_BAD/*OpSize*/,	OP_BAD/*AdSize*/,	OP(push, Iv),		OP(imul, GvEvIv),	OP(push, Ib),		OP(imul, GvEvIb),	OP(Rinsb, 0),		OP(RinsW, 0),		OP(Routsb, 0),		OP(RoutsW, 0),
 /*7*/	OP(jo, Jb),			OP(jno, Jb),		OP(jc, Jb),			OP(jnc, Jb),		OP(je, Jb),			OP(jne, Jb),		OP(jbe, Jb),		OP(ja, Jb),			OP(js, Jb),			OP(jns, Jb),		OP(jp, Jb),			OP(jnp, Jb),		OP(jl, Jb),			OP(jge, Jb),		OP(jle, Jb),		OP(jg, Jb),
 /*8*/	OPG(group1, EbIb),	OPG(group1, EvIv),	OPG(group1, EbIb),	OPG(group1, EvIb),	OP(test, EbGb),		OP(test, EvGv),		OP(xchg, EbGb),		OP(xchg, EvGv),		OP(mov, EbGb),		OP(mov, EvGv),		OP(mov, GbEb),		OP(mov, GvEv),		OP(mov, EwS),		OP(lea, GvM),		OP(mov, SEw),		OPG(group1a, Ev),
-/*9*/	OP(xchg, rAXKv),	OP(xchg, rAXKv),	OP(xchg, rAXKv),	OP(xchg, rAXKv),	OP(xchg, rAXKv),	OP(xchg, rAXKv),	OP(xchg, rAXKv),	OP(xchg, rAXKv),	OP(cwde, 0),		OP(cdq, 0),			OP(call, Ja),		OP(fwait, 0),		OP(pushfd, 0),		OP(popfd, 0),		OP(sahf, 0),		OP(lahf, 0),
+/*9*/	OP(nop, 0),			OP(xchg, rAXKv),	OP(xchg, rAXKv),	OP(xchg, rAXKv),	OP(xchg, rAXKv),	OP(xchg, rAXKv),	OP(xchg, rAXKv),	OP(xchg, rAXKv),	OP(cwde, 0),		OP(cdq, 0),			OP(call, Ja),		OP(fwait, 0),		OP(pushfd, 0),		OP(popfd, 0),		OP(sahf, 0),		OP(lahf, 0),
 /*A*/	OP(mov, alOb),		OP(mov, rAXOv),		OP(mov, Obal),		OP(mov, OvrAX),		OP(Rmovsb, 0),		OP(RmovsW, 0),		OP(R?cmpsb, 0),		OP(R?cmpsW, 0),		OP(test, alIb),		OP(test, rAXIv),	OP(Rstosb, 0),		OP(RstosW, 0),		OP(Rlodsb, 0),		OP(RlodsW, 0),		OP(R?scasb, 0),		OP(R?scasW, 0),
 /*B*/	OP(mov, KbIb),		OP(mov, KbIb),		OP(mov, KbIb),		OP(mov, KbIb),		OP(mov, KbIb),		OP(mov, KbIb),		OP(mov, KbIb),		OP(mov, KbIb),		OP(mov, KvIv),		OP(mov, KvIv),		OP(mov, KvIv),		OP(mov, KvIv),		OP(mov, KvIv),		OP(mov, KvIv),		OP(mov, KvIv),		OP(mov, KvIv),
 /*C*/	OPG(group2, EbIb),	OPG(group2, EvIb),	OP(retn, Iw),		OP(ret, 0),			OP(les, GvM),		OP(lds, GvM),		OPG(group11, EbIb),	OPG(group11, EvIv),	OP(enter, IwIb),	OP(leave, 0),		OP(retf, Iw),		OP(retf, 0),		OP(int3, 0),		OP(int, Ib),		OP(into, 0),		OP(iret, 0),
@@ -518,7 +522,7 @@ Opcode maps[][256] = { {
 //-----------------------------------------------------------------------------
 //1:	SECONDARY	2 BYTE OPCODE MAP-->0Fxx	TABLE A3/A4
 //			0					1					2					3					4					5					6					7					8					9					A					B					C					D					E					F
-/*0*/	OPG(group6, 0),		OPG(group7, 0),		OP(lar, GvEw),		OP(lsl, GvEw),		OP_BAD,				OP(syscall, 0),		OP(clts, 0),		OP(sysret, 0),		OP(invd, 0),		OP(wbinvd, 0),		OP_BAD,				OP(ud2, 0),			OP_BAD,				OP(nop, Ev),		OP(femms, 0),		OP_BAD/*3dnow!*/,
+/*0*/	OPG(group6, 0),		OPG(group7, nop),	OP(lar, GvEw),		OP(lsl, GvEw),		OP_BAD,				OP(syscall, 0),		OP(clts, 0),		OP(sysret, 0),		OP(invd, 0),		OP(wbinvd, 0),		OP_BAD,				OP(ud2, 0),			OP_BAD,				OP(nop, Ev),		OP(femms, 0),		OP_BAD/*3dnow!*/,
 /*1*/	OP(movupS, VW),		OP(movupS, WV),		OP(movlpS, VM),		OP(movlpS, MV),		OP(unpcklpS, VW),	OP(unpckhpS, VW),	OP(movhpS, VM),		OP(movhpS, MV),		OPG(group16, 0),	OP(hint, nop),		OP(hint, nop),		OP(hint, nop),		OP(hint, nop),		OP(hint, nop),		OP(hint, nop),		OP(nop, Ev),
 /*2*/	OP(mov, RC),		OP(mov, RD),		OP(mov, CR),		OP(mov, DR),		OP_BAD,				OP_BAD,				OP_BAD,				OP_BAD,				OP(movapS, VW),		OP(movapS, WV),		OP(cvtpi2pS, VQ),	OP(movntpS, MoV),	OP(cvttps2pi, PW),	OP(cvtps2pi, PW),	OP(ucomiss, VW),	OP(comiss, VW),
 /*3*/	OP(wrmsr, 0),		OP(rdtsc, 0),		OP(rdmsr, 0),		OP(rdpmc, 0),		OP(sysenter, 0),	OP(sysexit, 0),		OP_BAD,				OP_BAD,				OP_BAD/*tableA4*/,	OP_BAD,				OP_BAD/*tableA5*/,	OP_BAD,				OP_BAD,				OP_BAD,				OP_BAD,				OP_BAD,
@@ -937,11 +941,6 @@ const uint8 *IntelOp::Parse(const uint8 *p) {
 	args		= 0;
 	mnemonic	= 0;
 
-	if (opcode == 0x90) {
-		mnemonic = "nop";
-		return p + 1;
-	}
-
 	// legacy prefixes (and REX)
 	for (bool legacy = true; legacy;) {
 		switch (opcode = *p++) {
@@ -1020,108 +1019,122 @@ const uint8 *IntelOp::Parse(const uint8 *p) {
 			break;
 	}
 
-	if (map < _MAP_TOTAL) {
-		Opcode	op		= maps[map][opcode];
-		uint32	flags	= op.flags;
+	if (map >= _MAP_TOTAL)
+		return p;
 
-		if (test_all(flags, OPF_NOT64 | OPF_ONLY64 | OPF_GROUP)) {
-			op		= ((Opcode*)op.mnemonic)[arch == X64];
-			flags	= op.flags;
-		}
+	Opcode	op		= maps[map][opcode];
+	uint32	flags	= op.flags;
 
-		bool	need_modrm	= !!(flags & OPF_GROUP);
-		for (uint32 f = flags & 0xffffff; f & 0xff; f >>= 8) {
-			OPFLAGS	t = OPFLAGS(f & OPF_TYPE);
-			if (t >= OPF_MODRM)
-				need_modrm = true;
-		}
+	if ((flags & OPF_64) == (arch == X64 ? OPF_NOT64 : OPF_ONLY64))
+		return p;
 
-		if (need_modrm) {
-			ModRM	modrm	= (ModRM&)*p++;
-			modrm_rm		= modrm.rm	| (prefix.test(PREFIX::B) << 3);
-			modrm_reg		= modrm.reg	| (prefix.test(PREFIX::R) << 3);
-			modrm_mod		= modrm.mod;
+	//if (test_all(flags, OPF_NOT64 | OPF_ONLY64 | OPF_GROUP)) {
+	//	op		= ((Opcode*)op.mnemonic)[arch == X64];
+	//	flags	= op.flags;
+	//}
 
-			if (arch == X16) {
-				displacement = modrm_mod == 1 ? int64(*p++)
-					: modrm_mod == 2 || (modrm_mod == 0 && modrm_rm == 6) ? get(*((packed<int16>*&)p)++)
-					: 0;
-			} else {
-				int	r = modrm_rm;
-				if (modrm.rm == 4 && modrm.mod != 3) {	// sib
-					SIB	sib		= (SIB&)*p++;
-					sib_base	= sib.base	| (prefix.test(PREFIX::B) << 3);
-					sib_index	= sib.index	| (prefix.test(PREFIX::X) << 3);
-					sib_scale	= sib.scale;
-					r			= sib_base;
-				}
-				displacement = modrm_mod == 1 ? int64(*p++)
-					: modrm_mod == 2 || (modrm_mod == 0 && r == 5) ? get(*((packed<int32>*&)p)++)
-					: 0;
-			}
-		}
-
-		if (flags & OPF_GROUP) {
-			int	i = modrm_reg & 7;
-			if (prefix.test(PREFIX::X87) && modrm_mod == ModRM::REGISTER)	// separate part of table for x87 if mod==11
-				i += 8;
-
-			op = ((Opcode*)op.mnemonic)[i];
-
-			if (op.flags & OPF_GROUP)
-				op = ((Opcode*)op.mnemonic)[modrm_rm];	//	2nd indirection (x87 only)
-
-			if (op.flags & 0xff)
-				flags = (flags & OPF_SIZE) * 0x0101;
-			flags |= op.flags;
-		}
-
-		if (/*arch == X64 &&*/ test_all(flags, OPF_64))
-			prefix.add(PREFIX::W);
-
-		noregs = true;
-		for (uint32 f = flags & 0xffffff, i = 0; f & 0xff; f >>= 8) {
-			switch (OPFLAGS(f & OPF_TYPE)) {
-				case OPF_I: case OPF_J: {
-					SIZE	size = GetSize(f);
-					immediate[i++]
-						= size == SIZE_1 ? int64(int8(*p++))
-						: size == SIZE_2 ? int64(*((packed<int16>*&)p)++)
-						: size == SIZE_4 || opcode < 0xb8 || opcode >= 0xc0 ? int64(*((packed<int32>*&)p)++)	// only mov can have 64 bit immediate
-						: int64(*((packed<int64>*&)p)++);
-				}
-				case OPF_F:case OPF_K:case OPF_B:case OPF_H:case OPF_G:case OPF_S:case OPF_V:case OPF_P:
-					noregs = false;
-					break;
-			}
-		}
-
-		if ((flags & OPF_TYPE) == OPF_J)
-			info |= Disassembler::FLAG_JMP | ((flags & OPF_SIZE) == OPF_d ? 0 : Disassembler::FLAG_RELATIVE);
-
-		if (map == MAP_PRIMARY) {
-			switch (opcode) {
-				case 0x9a: case 0xe8:										//call
-				case 0xc2: case 0xc3: case 0xca: case 0xcb: case 0xcf:		//ret
-					info |= Disassembler::FLAG_CALLRET;
-					break;
-				case 0xff:
-					switch (modrm_reg & 7) {
-						case 2: case 3: info |= Disassembler::FLAG_CALLRET;	//call
-						case 4:	case 5: info |= Disassembler::FLAG_INDIRECT | Disassembler::FLAG_JMP | ((modrm_reg & 1) == 0 && modrm_mod == 0 && modrm_rm == 5 ? Disassembler::FLAG_RELATIVE : 0);	//jmp;
-					}
-					break;
-			}
-			if (prefix.test(PREFIX::Repne) || prefix.test(PREFIX::Repe))
-				info |= Disassembler::FLAG_CONDITIONAL;
-		}
-		mnemonic	= op.mnemonic;
-		args		= flags & 0xffffff;
-
-		if (opcode == 0xc2 && (map == MAP_VEX || map == MAP_SECONDARY)) // vcmpCps and cmpCpS
-			args |= *p++ << 24;	// condition code
-
+	bool	need_modrm	= !!(flags & OPF_GROUP);
+	for (uint32 f = flags & 0xffffff; f & 0xff; f >>= 8) {
+		OPFLAGS	t = OPFLAGS(f & OPF_TYPE);
+		if (t >= OPF_MODRM)
+			need_modrm = true;
 	}
+
+	if (need_modrm) {
+		ModRM	modrm	= (ModRM&)*p++;
+		modrm_rm		= modrm.rm	| (prefix.test(PREFIX::B) << 3);
+		modrm_reg		= modrm.reg	| (prefix.test(PREFIX::R) << 3);
+		modrm_mod		= modrm.mod;
+
+		if (arch == X16) {
+			displacement = modrm_mod == 1 ? int64(*p++)
+				: modrm_mod == 2 || (modrm_mod == 0 && modrm_rm == 6) ? get(*((packed<int16>*&)p)++)
+				: 0;
+		} else {
+			int	r = modrm_rm;
+			if (modrm.rm == 4 && modrm.mod != 3) {	// sib
+				SIB	sib		= (SIB&)*p++;
+				sib_base	= sib.base	| (prefix.test(PREFIX::B) << 3);
+				sib_index	= sib.index	| (prefix.test(PREFIX::X) << 3);
+				sib_scale	= sib.scale;
+				r			= sib_base;
+			}
+			displacement = modrm_mod == 1 ? int64(*p++)
+				: modrm_mod == 2 || (modrm_mod == 0 && r == 5) ? get(*((packed<int32>*&)p)++)
+				: 0;
+		}
+	}
+
+	if (flags & OPF_GROUP) {
+		int	i = modrm_reg & 7;
+
+		if (test_all(flags, OPF_64))
+			i	= arch == X64;
+
+		if (modrm_mod == ModRM::REGISTER) {
+			if ((flags & OPF_TYPE) == OPF_nop)	// e.g. 0f 01 cx
+				i += (modrm_rm + 1) * 8;
+
+			else if (prefix.test(PREFIX::X87))	// separate part of table for x87 if mod==11
+				i += 8;
+		}
+
+		op = ((Opcode*)op.mnemonic)[i];
+
+		if (op.flags & OPF_GROUP)
+			op = ((Opcode*)op.mnemonic)[modrm_rm];	//	2nd indirection (x87 only)
+
+		if (op.flags & 0xff)
+			flags = (flags & OPF_SIZE) * 0x0101;
+
+		flags |= op.flags;
+	}
+
+	if (/*arch == X64 &&*/ test_all(flags, OPF_64))
+		prefix.add(PREFIX::W);
+
+	noregs = true;
+	for (uint32 f = flags & 0xffffff, i = 0; f & 0xff; f >>= 8) {
+		switch (OPFLAGS(f & OPF_TYPE)) {
+			case OPF_I: case OPF_J: {
+				SIZE	size = GetSize(f);
+				immediate[i++]
+					= size == SIZE_1 ? int64(int8(*p++))
+					: size == SIZE_2 ? int64(*((packed<int16>*&)p)++)
+					: size == SIZE_4 || opcode < 0xb8 || opcode >= 0xc0 ? int64(*((packed<int32>*&)p)++)	// only mov can have 64 bit immediate
+					: int64(*((packed<int64>*&)p)++);
+			}
+			case OPF_F:case OPF_K:case OPF_B:case OPF_H:case OPF_G:case OPF_S:case OPF_V:case OPF_P:
+				noregs = false;
+				break;
+		}
+	}
+
+	if ((flags & OPF_TYPE) == OPF_J)
+		info |= Disassembler::FLAG_JMP | ((flags & OPF_SIZE) == OPF_d ? 0 : Disassembler::FLAG_RELATIVE);
+
+	if (map == MAP_PRIMARY) {
+		switch (opcode) {
+			case 0x9a: case 0xe8:										//call
+			case 0xc2: case 0xc3: case 0xca: case 0xcb: case 0xcf:		//ret
+				info |= Disassembler::FLAG_CALLRET;
+				break;
+			case 0xff:
+				switch (modrm_reg & 7) {
+					case 2: case 3: info |= Disassembler::FLAG_CALLRET;	//call
+					case 4:	case 5: info |= Disassembler::FLAG_INDIRECT | Disassembler::FLAG_JMP | ((modrm_reg & 1) == 0 && modrm_mod == 0 && modrm_rm == 5 ? Disassembler::FLAG_RELATIVE : 0);	//jmp;
+				}
+				break;
+		}
+		if (prefix.test(PREFIX::Repne) || prefix.test(PREFIX::Repe))
+			info |= Disassembler::FLAG_CONDITIONAL;
+	}
+	mnemonic	= op.mnemonic;
+	args		= flags & 0xffffff;
+
+	if (opcode == 0xc2 && (map == MAP_VEX || map == MAP_SECONDARY)) // vcmpCps and cmpCpS
+		args |= *p++ << 24;	// condition code
+
 	return p;
 }
 

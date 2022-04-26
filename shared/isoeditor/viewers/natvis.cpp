@@ -659,10 +659,12 @@ NATVIS::Type *NATVIS::Find(const C_type *type, bool root) {
 	string	name;
 	DumpType(build(name), type, none, 0);
 
-	dynamic_array<string>	tparams;
-	for (auto i = lower_boundc(types, name), e = types.end(); i != e && *i <= name; ++i) {
-		if ((root || i->inheritable) && WildcardMatch(name, i->name, tparams))
-			return entry = new Type(*i, tparams);
+	if (name) {
+		dynamic_array<string>	tparams;
+		for (auto i = lower_boundc(types, name), e = types.end(); i != e && *i <= name; ++i) {
+			if ((root || i->inheritable) && WildcardMatch(name, i->name, tparams))
+				return entry = new Type(*i, tparams);
+		}
 	}
 
 	if (type->type == C_type::STRUCT) {
@@ -686,10 +688,12 @@ const NATVIS::Type *NATVIS::Find(const C_type *type) const {
 		string	name;
 		DumpType(build(name), type, none, 0);
 
-		dynamic_array<string>	params;
-		for (auto i = lower_boundc(types, name), e = types.end(); i != e && *i <= name; ++i) {
-			if (WildcardMatch(name, i->name, params))
-				return i;
+		if (name) {
+			dynamic_array<string>	params;
+			for (auto i = lower_boundc(types, name), e = types.end(); i != e && *i <= name; ++i) {
+				if (WildcardMatch(name, i->name, params))
+					return i;
+			}
 		}
 	}
 	return nullptr;
@@ -769,6 +773,9 @@ template<typename C> alloc_string<C> GetString(uint64 addr, ast::get_memory_t ge
 }
 
 void iso::DumpValue(string_accum &sa, uint64 addr, const C_type *type, uint32 flags, FORMAT::FLAGS format, ast::get_memory_t get_mem) {
+	if (!type)
+		return;
+
 	bool	ref = !!(flags & ast::ADDRESS);
 	if (auto rtype = IsReference(type)) {
 		if (ref)

@@ -39,7 +39,7 @@ struct DIBHEADER : public BITMAPINFOHEADER {
 		biPlanes		= planes;
 		biBitCount		= bits;
 		biCompression	= 0;
-		biSizeImage		= ScanWidth() * iso::abs(height);
+		biSizeImage		= ScanWidth() * abs(height);
 		biXPelsPerMeter	= 1;
 		biYPelsPerMeter	= 1;
 		biClrUsed		= clut;

@@ -39,7 +39,7 @@ template<> struct CRC_def_bits<16> : CRC16 {};
 template<> struct CRC_def_bits<32> : CRC32 {};
 template<> struct CRC_def_bits<64> : CRC64 {};
 
-template<int BITS> struct crc {
+template<int BITS> struct crc {//}; : writer_mixin<crc<BITS>> {
 	typedef size_t (*cb_t)(crc, char*, size_t);
 	static cb_t cb;
 
@@ -57,7 +57,7 @@ public:
 	void	clear()											{ id = 0; }
 	size_t	writebuff(const void *p, size_t size)			{ id = D::calc(p, size, id); return size; }
 
-	template<typename T> bool	write(const T &t)			{ return global_write(*this, t); }
+	template<typename T> bool	write(const T &t)			{ return write_early(*this, t); }
 	template<typename P> void	set(const P &p)				{ clear(); this->write(p); }
 	template<typename P> crc	operator+(const P &p) const	{ crc b(*this); b.write(p); return b; }
 	template<typename P> crc&	operator<<(const P &p)		{ write(p); return *this; }

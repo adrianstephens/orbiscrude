@@ -1034,7 +1034,7 @@ struct MOD {
 		return true;
 	}
 
-	MOD(MODI *_modi) : modi(_modi) {}
+	MOD(MODI *modi) : modi(modi) {}
 	auto			operator->()			const	{ return modi; }
 	auto			Symbols()				const	{ return modi->cbSyms ? make_next_range<const CV::SYMTYPE>(data.slice(4, modi->cbSyms - 4)) : none; }
 	auto			Lines()					const	{ return modi->cbLines ? data.slice(modi->cbSyms, modi->cbLines) : none; }
@@ -1376,12 +1376,12 @@ struct PDB_types : TPI {
 		return TPI::load(info, msf, snTpi);
 	}
 
-	auto		Types()								const	{ return with_param(int_range(MinTI(), MaxTI()), this); }
-	CV::TYPTYPE*	GetType(TI ti)						const	{ return load_ti(msf, snTpi, ti); }
-	size_t		GetTypeSize(TI ti)					const;
+	auto		Types()									const	{ return with_param(int_range(MinTI(), MaxTI()), this); }
+	CV::TYPTYPE* GetType(TI ti)							const	{ return load_ti(msf, snTpi, ti); }
+	size_t		GetTypeSize(TI ti)						const;
 	size_t		GetTypeSize(const CV::Leaf &type)		const;
-	uint32		GetTypeAlignment(TI ti)				const;
-	uint32		GetTypeAlignment(const CV::Leaf &type)const;
+	uint32		GetTypeAlignment(TI ti)					const;
+	uint32		GetTypeAlignment(const CV::Leaf &type)	const;
 
 	TI			LookupUDT(const count_string &s, bool case_sensitive = true) const {
 		if (!hash_chains)
@@ -1404,13 +1404,12 @@ struct PDB_types : TPI {
 struct PDB : PDB_types, DBI {
 	PDB() {}
 	PDB(PDB &&b) = default;
-	PDB& operator=(PDB &&b) = default;
 
 	bool	load(const PDBinfo &info, MSF::reader *msf) {
 		return PDB_types::load(info, msf) && DBI::load(info, msf, snDbi);
 	}
 
-	TI			GetSymbolTI(const CV::SYMTYPE *sym)		const;
+	TI				GetSymbolTI(const CV::SYMTYPE *sym)		const;
 	CV::TYPTYPE*	GetSymbolType(const CV::SYMTYPE *sym)	const	{ return GetType(GetSymbolTI(sym)); }
 
 	const CV::SYMTYPE*	LookupSym(const count_string &s, bool case_sensitive = true) const {

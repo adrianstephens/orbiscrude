@@ -51,50 +51,30 @@ const uint8 deflate_base::bl_extra[] = {
 
 // size of length codes in static tree
 const uint8 deflate_base::static_len_bits[] = {
-	8,	8,	8,	8,	8,	8,	8,	8,	//0x00
-	8,	8,	8,	8,	8,	8,	8,	8,
-	8,	8,	8,	8,	8,	8,	8,	8,	//0x10
-	8,	8,	8,	8,	8,	8,	8,	8,
-	8,	8,	8,	8,	8,	8,	8,	8,	//0x20
-	8,	8,	8,	8,	8,	8,	8,	8,
-	8,	8,	8,	8,	8,	8,	8,	8,	//0x30
-	8,	8,	8,	8,	8,	8,	8,	8,
-	8,	8,	8,	8,	8,	8,	8,	8,	//0x40
-	8,	8,	8,	8,	8,	8,	8,	8,
-	8,	8,	8,	8,	8,	8,	8,	8,	//0x50
-	8,	8,	8,	8,	8,	8,	8,	8,
-	8,	8,	8,	8,	8,	8,	8,	8,	//0x60
-	8,	8,	8,	8,	8,	8,	8,	8,
-	8,	8,	8,	8,	8,	8,	8,	8,	//0x70
-	8,	8,	8,	8,	8,	8,	8,	8,
-	8,	8,	8,	8,	8,	8,	8,	8,	//0x80
-	8,	8,	8,	8,	8,	8,	8,	8,
-	9,	9,	9,	9,	9,	9,	9,	9,	//0x90
-	9,	9,	9,	9,	9,	9,	9,	9,
-	9,	9,	9,	9,	9,	9,	9,	9,	//0xa0
-	9,	9,	9,	9,	9,	9,	9,	9,
-	9,	9,	9,	9,	9,	9,	9,	9,	//0xb0
-	9,	9,	9,	9,	9,	9,	9,	9,
-	9,	9,	9,	9,	9,	9,	9,	9,	//0xc0
-	9,	9,	9,	9,	9,	9,	9,	9,
-	9,	9,	9,	9,	9,	9,	9,	9,	//0xd0
-	9,	9,	9,	9,	9,	9,	9,	9,
-	9,	9,	9,	9,	9,	9,	9,	9,	//0xe0
-	9,	9,	9,	9,	9,	9,	9,	9,
-	9,	9,	9,	9,	9,	9,	9,	9,	//0xf0
-	9,	9,	9,	9,	9,	9,	9,	9,
-	7,	7,	7,	7,	7,	7,	7,	7,	//0x100
-	7,	7,	7,	7,	7,	7,	7,	7,
-	7,	7,	7,	7,	7,	7,	7,	7,	//0x110
-	8,	8,	8,	8,	8,	8,	8,	8
+	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	//0x00
+	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	//0x10
+	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	//0x20
+	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	//0x30
+	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	//0x40
+	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	//0x50
+	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	//0x60
+	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	//0x70
+	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	8,	//0x80
+	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	//0x90
+	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	//0xa0
+	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	//0xb0
+	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	//0xc0
+	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	//0xd0
+	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	//0xe0
+	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	9,	//0xf0
+	7,	7,	7,	7,	7,	7,	7,	7,	7,	7,	7,	7,	7,	7,	7,	7,	//0x100
+	7,	7,	7,	7,	7,	7,	7,	7,	8,	8,	8,	8,	8,	8,	8,	8	//0x110
 };
 
 // size of distance codes in static tree
 const uint8 deflate_base::static_dist_bits[] = {
-	5,	5,	5,	5,	5,	5,	5,	5,
-	5,	5,	5,	5,	5,	5,	5,	5,
-	5,	5,	5,	5,	5,	5,	5,	5,
-	5,	5,	5,	5,	5,	5
+	5,	5,	5,	5,	5,	5,	5,	5,	5,	5,	5,	5,	5,	5,	5,	5,
+	5,	5,	5,	5,	5,	5,	5,	5,	5,	5,	5,	5,	5,	5
 };
 
 //-----------------------------------------------------------------------------
@@ -390,20 +370,6 @@ bool deflate_decoder::make_static_tables() {
 template<typename WIN> uint8 *deflate_decoder::process1(VLC &vlc, uint8 *dst, uint8 *dst_end, WIN win) {
 
 	for (;;) switch (mode) {
-		//case COPY: {
-		//	if (uint32 copy = L) {
-		//		if (dst + copy > dst_end)
-		//			copy = dst_end - dst;
-		//		if (copy == 0)
-		//			return dst;
-		//		vlc.get_stream().readbuff(dst, copy);
-		//		dst		+= copy;
-		//		L		-= copy;
-		//		break;
-		//	}
-		//	mode = BLOCK;
-		//	return dst;
-		//}
 		case LIT:
 			if (dst == dst_end)
 				return dst;
@@ -474,11 +440,11 @@ template<typename WIN> uint8 *deflate_decoder::process1(VLC &vlc, uint8 *dst, ui
 	}
 }
 
-uint8 *deflate_decoder::process(uint8* dst, uint8 *dst_end, reader_intf file, TRANSCODE_FLAGS flags) {
-	auto	vlc		= make_vlc_in(copy(file), vlc0);
+uint8 *deflate_decoder::process(uint8* dst, uint8 *dst_end, istream_ref file, TRANSCODE_FLAGS flags) {
+	auto	vlc		= make_vlc_in(file, vlc0);
 	uint8*	dst0	= dst;
 
-	if (mode < BLOCK) {
+	if (mode > BLOCK) {
 		if (mode == COPY) {
 			uint32	n = min(L, dst_end - dst);
 			file.readbuff(dst, n);
@@ -501,7 +467,7 @@ uint8 *deflate_decoder::process(uint8* dst, uint8 *dst_end, reader_intf file, TR
 				uint32	n	= v & 0xffff;
 				if (n != ((v >> 16) ^ 0xffff)) {
 					mode	= BAD;
-					break;
+					return dst;
 				}
 				uint32	n1	= min(n, dst_end - dst);
 				file.readbuff(dst, n1);
@@ -515,10 +481,8 @@ uint8 *deflate_decoder::process(uint8* dst, uint8 *dst_end, reader_intf file, TR
 			}
 			case STATIC_TREES: {
 				lencode		= static_len;
-//				lencode		= _lenfix;
 				lenbits		= 9;
 				distcode	= static_dist;
-//				distcode	= _distfix;
 				distbits	= 5;
 				mode		= LEN;
 				break;
@@ -537,52 +501,52 @@ uint8 *deflate_decoder::process(uint8* dst, uint8 *dst_end, reader_intf file, TR
 
 				// build CODES table
 				uint32	codebits	= 7;
-				if (inflate_table(lens, BL_CODES, codes, codebits, work, 2048, 0, 0, BL_CODES) <= 0) {
-					mode = BAD;
-					break;
-				}
+				if (inflate_table(lens, BL_CODES, codes, codebits, work, 2048, 0, 0, BL_CODES) > 0) {
+					uint16	len;
+					for (int i = 0; i < nlen + ndist;) {
+						code	c = codes[vlc.peek(codebits)];
+						vlc.discard(c.bits);
 
-				uint16	len;
-				for (int i = 0; i < nlen + ndist;) {
-					code	c = codes[vlc.peek(codebits)];
-					vlc.discard(c.bits);
+						if (c.val < 16) {
+							lens[i++] = len = c.val;
 
-					if (c.val < 16) {
-						lens[i++] = len = c.val;
-
-					} else {
-						if (c.val == REP_3_6) {
-							if (i == 0)
-								return nullptr;
 						} else {
-							len = 0;
+							if (c.val == REP_3_6) {
+								if (i == 0)
+									return nullptr;
+							} else {
+								len = 0;
+							}
+
+							uint32	copy = c.val == REP_3_6 ? 3 + vlc.get(2) : c.val == REPZ_3_10 ? 3 + vlc.get(3) : 11 + vlc.get(7);
+							if (i + copy > nlen + ndist)
+								return nullptr;
+
+							while (copy--)
+								lens[i++] = len;
 						}
+					}
 
-						uint32	copy = c.val == REP_3_6 ? 3 + vlc.get(2) : c.val == REPZ_3_10 ? 3 + vlc.get(3) : 11 + vlc.get(7);
-						if (i + copy > nlen + ndist)
-							return nullptr;
+					// build LENS table
+					lencode		= codes;
+					lenbits		= 9;
+					int		ret	= inflate_table(lens, nlen, codes, lenbits, work, 2048 - MAXD, len_base, len_ops, 256);
 
-						while (copy--)
-							lens[i++] = len;
+					if (ret > 0) {
+						// build DISTS table
+						distcode	= codes + ret;
+						distbits	= 6;
+						if (inflate_table(lens + nlen, ndist, unconst(distcode), distbits, work, MAXD, dist_base, dist_ops, 0) > 0) {
+							mode = LEN;
+							break;
+						}
 					}
 				}
-
-				// build LENS table
-				lencode		= codes;
-				lenbits		= 9;
-				int		ret	= inflate_table(lens, nlen, codes, lenbits, work, 2048 - MAXD, len_base, len_ops, 256);
-				if (ret <= 0)
-					return nullptr;
-
-				// build DISTS table
-				distcode	= codes + ret;
-				distbits	= 6;
-				mode		= inflate_table(lens + nlen, ndist, unconst(distcode), distbits, work, MAXD, dist_base, dist_ops, 0) > 0 ? LEN : BAD;
-				break;
 			}
+			// fall through
 			case 3:
 				mode = BAD;
-				break;
+				return dst;
 		}
 
 		dst = process1(vlc, dst, dst_end, external_window(dst0 - offset, window));
@@ -594,7 +558,7 @@ uint8 *deflate_decoder::process(uint8* dst, uint8 *dst_end, reader_intf file, TR
 	offset	+= written;
 
 	// copy wsize or less output bytes into the circular window
-	if (written && (mode < BLOCK || !last))
+	if (written && (mode > BLOCK || !last))
 		extend_window(window, written, 1 << wbits);
 
 	return dst;
@@ -604,8 +568,8 @@ uint8 *deflate_decoder::process(uint8* dst, uint8 *dst_end, reader_intf file, TR
 //-----------------------------------------------------------------------------
 //  deflate_encoder
 //-----------------------------------------------------------------------------
-
-const uint8 deflate_encoder::_dist_code[] = {
+/*
+const uint8 _dist_code[512] = {
 	0,  1,  2,  3,  4,  4,  5,  5,  6,  6,  6,  6,  7,  7,  7,  7,
 	8,  8,  8,  8,	8,  8,  8,  8,  9,  9,  9,  9,  9,  9,  9,  9,
 	10, 10, 10, 10, 10, 10, 10, 10,	10, 10, 10, 10, 10, 10, 10, 10,
@@ -622,6 +586,7 @@ const uint8 deflate_encoder::_dist_code[] = {
 	15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15,	15, 15, 15, 15,
 	15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15,
 	15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15,
+	
 	0,  0,  16, 17,	18, 18, 19, 19, 20, 20, 20, 20, 21, 21, 21, 21,
 	22, 22, 22, 22, 22, 22, 22, 22,	23, 23, 23, 23, 23, 23, 23, 23,
 	24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24,	24, 24, 24, 24,
@@ -640,7 +605,7 @@ const uint8 deflate_encoder::_dist_code[] = {
 	29, 29, 29, 29,	29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29, 29
 };
 
-const uint8 deflate_encoder::_length_code[]= {
+const uint8 deflate_encoder::_length_code[256] = {
 	0,  1,  2,  3,  4,  5,  6,  7,  8,  8,  9,  9,  10, 10, 11, 11,
 	12, 12, 12, 12,	13, 13, 13, 13, 14, 14, 14, 14, 15, 15, 15, 15,
 	16, 16, 16, 16, 16, 16, 16, 16,	17, 17, 17, 17, 17, 17, 17, 17,
@@ -658,7 +623,36 @@ const uint8 deflate_encoder::_length_code[]= {
 	27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27,
 	27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 28
 };
+*/
+constexpr uint8 deflate_encoder::dist_code(uint32 dist) {
+	if (dist < 3)
+		return dist - 1;
+	auto	i	= highest_set_index(dist - 1);
+	return i * 2 - 2 + ((dist - 1) >> (i - 1));
+}
 
+constexpr uint8 deflate_encoder::length_code(uint32 len) {
+	if (len < 8)
+		return len + 1;
+	auto	i	= highest_set_index(len);
+	return i * 4 - 7 + (len >> (i - 2));
+}
+/*
+static struct test_dist_code {
+	test_dist_code() {
+		for (int dist = 0; dist < 0x8000; dist++) {
+			auto	c0 = dist <= 256 ? _dist_code[dist - 1] : _dist_code[256 + ((dist - 1) >> 7)];
+			auto	c1	= deflate_encoder::dist_code(dist);
+			ISO_ASSERT(c0 == c1);
+		}
+		for (int dist = 0; dist < 0xff; dist++) {
+			auto	c0 = deflate_encoder::_length_code[dist];
+			auto	c1	= length_code2(dist);
+			ISO_ASSERT(c0 == c1);
+		}
+	}
+} _test;
+*/
 
 const deflate_encoder::TreeDesc  deflate_encoder::len_desc	= {len_extra,	deflate_encoder::LITERALS,	deflate_encoder::L_CODES,	deflate_encoder::MAX_BITS};
 const deflate_encoder::TreeDesc  deflate_encoder::dist_desc	= {dist_extra,	0,							deflate_encoder::D_CODES,	deflate_encoder::MAX_BITS};
@@ -711,20 +705,18 @@ uint32 deflate_encoder::TreeDesc::total_len(const ct_data* tree) const {
 }
 
 // Construct one Huffman tree and assign the code bit strings and lengths
-// Update the total bit length for the current block.
-// IN assertion: the field freq is set for all tree elements.
+// Update the total bit length for the current block
+// IN assertion: the field freq is set for all tree elements
 // OUT assertions: the fields len and code are set to the optimal bit length and corresponding code
-//	returns max_code
+// returns max_code
 
 int deflate_encoder::TreeDesc::build_tree(ct_data* tree, uint32 &len) const {
-	enum {
-		HEAP_SIZE	= L_CODES * 2 + 1,	// maximum heap size
-	};
+	static const int	HEAP_SIZE	= L_CODES * 2 + 1;	// maximum heap size
 
-	int		heap[HEAP_SIZE];			// heap used to build the Huffman trees
+	int		heap[HEAP_SIZE];	// heap used to build the Huffman trees
 	int		heap_len	= 0;
 	int		heap_max	= HEAP_SIZE;
-	int		max_code	= -1; // largest code with non zero frequency
+	int		max_code	= -1;	// largest code with non zero frequency
 
 	for (int n = 0; n < num_elems; n++) {
 		if (tree[n].freq) {
@@ -735,8 +727,8 @@ int deflate_encoder::TreeDesc::build_tree(ct_data* tree, uint32 &len) const {
 		}
 	}
 
-	// The pkzip format requires that at least one distance code exists, and that at least one bit should be sent even if there is only one possible code.
-	//So to avoid special checks later on we force at least two codes of non zero frequency.
+	// The pkzip format requires that at least one distance code exists, and that at least one bit should be sent even if there is only one possible code
+	// To avoid special checks later on, force at least two codes of non zero frequency
 	while (heap_len < 2) {
 		int	n = heap[heap_len++] = max_code < 2 ? ++max_code : 0;
 		tree[n].freq	= 1;
@@ -750,12 +742,12 @@ int deflate_encoder::TreeDesc::build_tree(ct_data* tree, uint32 &len) const {
 	// Construct the Huffman tree by repeatedly combining the least two frequent nodes
 	uint16	node	= num_elems;	// next internal node of the tree
 	do {
-		int	n = heap[0];		// n = node of next least frequency
+		int	n = heap[0];			// n = node of next least frequency
 
 		heap[0] = heap[--heap_len];
 		heap_siftdown(heap_begin, heap_begin + heap_len, heap_begin);
 
-		int	m = heap[0];		// m = node of next least frequency
+		int	m = heap[0];			// m = node of next least frequency
 
 		heap[--heap_max] = n;
 		heap[--heap_max] = m;
@@ -780,7 +772,7 @@ int deflate_encoder::TreeDesc::build_tree(ct_data* tree, uint32 &len) const {
 	// In a first pass, compute the optimal bit lengths (which may overflow in the case of the bit length tree)
 	tree[heap[heap_max]].len = 0; // root of the heap
 
-	int overflow = 0;			// number of elements with bit length too large
+	int overflow = 0;				// number of elements with bit length too large
 	for (int h = heap_max + 1; h < HEAP_SIZE; h++) {
 		int		n		= heap[h];
 		uint16	bits	= tree[tree[n].parent].len + 1;
@@ -788,7 +780,7 @@ int deflate_encoder::TreeDesc::build_tree(ct_data* tree, uint32 &len) const {
 			bits = max_length;
 			++overflow;
 		}
-		tree[n].len = bits;		// We overwrite tree[n].parent which is no longer needed
+		tree[n].len = bits;			// overwrite tree[n].parent which is no longer needed
 
 		if (n <= max_code)
 			++counts[bits];
@@ -875,7 +867,7 @@ void deflate_encoder::TreeDesc::scan_tree(ct_data *tree, int max_code, ct_data *
 	}
 }
 
-// Send a literal or distance tree in compressed form, using the codes in bl_tree.
+// Send a literal or distance tree in compressed form, using the codes in bl_tree
 void deflate_encoder::TreeDesc::send_tree(VLC &vlc, const ct_data *tree, int max_code, const ct_data *bl_tree) {
 	int prevlen		= -1;			// last emitted length
 	int nextlen		= tree[0].len;	// length of next code
@@ -957,7 +949,7 @@ bool deflate_encoder::make_static_tables() {
 deflate_encoder::deflate_encoder(int level, int wbits, int mem_level)
 	: wsize(1 << wbits), hash_size(1 << (mem_level + 7)), hash_shift(div_round_up(mem_level + 7, MIN_MATCH)), head(hash_size), prev(wsize)
 	, block_start(0), match_length(MIN_MATCH - 1), match_available(false)
-	, l_buf(1 << (mem_level + 6)), d_buf(1 << (mem_level + 6)), num_lits(0)
+	, buf(1 << (mem_level + 6)), num_lits(0)
 	, offset(0)
 {
 	static bool unused = make_static_tables();
@@ -967,24 +959,23 @@ deflate_encoder::deflate_encoder(int level, int wbits, int mem_level)
 
 
 // Send the block data compressed using the given Huffman trees
-void deflate_encoder::compress_block(VLC &vlc, const ct_data *ltree, const ct_data *dtree, uint32 num_lits) {
-	for (uint32 lx = 0; lx < num_lits; ++lx) {
-		uint16	dist	= d_buf[lx];
-		uint8	lc		= l_buf[lx];
+void deflate_encoder::compress_block(VLC &vlc, const ct_data *ltree, const ct_data *dtree, entry *buf, uint32 num_lits) {
+	for (uint32 i = 0; i < num_lits; ++i) {
+		uint16	lc	= buf[i].lc;
 
-		if (dist == 0) {
-			ltree[lc].send(vlc); // send a literal byte
-
-		} else {
-			uint32	code = _length_code[lc] + 1;
-			ltree[code + LITERALS].send(vlc);	// send the length code
+		if (uint16 dist = buf[i].dist) {
+			uint32	code = length_code(lc);
+			ltree[code + LITERALS].send(vlc);						// send the length code
 			if (uint8 extra = len_extra[code])
 				vlc.put(lc + MIN_MATCH - len_base[code], extra);	// send the extra length bits
 
 			code = dist_code(dist);
-			dtree[code].send(vlc);				// send the distance code
+			dtree[code].send(vlc);									// send the distance code
 			if (uint8 extra = dist_extra[code])
-				vlc.put(dist - dist_base[code], extra);	// send the extra distance bits
+				vlc.put(dist - dist_base[code], extra);				// send the extra distance bits
+
+		} else {
+			ltree[lc].send(vlc);									// send a literal byte
 		}
 	}
 
@@ -992,13 +983,13 @@ void deflate_encoder::compress_block(VLC &vlc, const ct_data *ltree, const ct_da
 }
 
 
-void deflate_encoder::flush_block(VLC &vlc, const uint8* src, external_window win, bool last) {
+void deflate_encoder::flush_block(VLC &vlc, const uint8* src, const uint8 *base, bool last) {
 
-	const uint8 *buf		= win.base + block_start;
-	uint32		store		= src - buf;
+	const uint8 *start		= base + block_start;
+	uint32		store		= src - start;
 	uint32		num_lits	= exchange(this->num_lits, 0);
 	
-	block_start				= src - win.base;
+	block_start				= src - base;
 
 	// Determine the best encoding for the current block: dynamic trees, static trees or store, and output the encoded block
 
@@ -1018,11 +1009,11 @@ void deflate_encoder::flush_block(VLC &vlc, const uint8* src, external_window wi
 
 		dyn_ltree[END_BLOCK].freq = 1;
 
-		for (uint32 lx = 0; lx < num_lits; ++lx) {
-			uint16	lc	= l_buf[lx];
-			if (uint16 dist = d_buf[lx]) {
+		for (uint32 i = 0; i < num_lits; ++i) {
+			uint16	lc	= buf[i].lc;
+			if (uint16 dist = buf[i].dist) {
 				++dyn_dtree[dist_code(dist)].freq;
-				lc = _length_code[lc] + LITERALS + 1;
+				lc = length_code(lc) + LITERALS;
 			}
 			++dyn_ltree[lc].freq;
 		}
@@ -1044,8 +1035,9 @@ void deflate_encoder::flush_block(VLC &vlc, const uint8* src, external_window wi
 			TreeDesc::scan_tree(dyn_dtree, d_max_code, bl_tree);
 
 			bl_desc.build_tree(bl_tree, opt_len);
-			int		bl_max_index;
-			for (bl_max_index = BL_CODES - 1; bl_max_index >= 3 && bl_tree[order[bl_max_index]].len == 0; --bl_max_index);
+			int		bl_max_index = BL_CODES - 1;
+			while (bl_max_index >= 3 && bl_tree[order[bl_max_index]].len == 0)
+				--bl_max_index;
 
 			uint32	opt_lenb	= (opt_len + (bl_max_index + 1) * 3 + 5 + 5 + 4 + 3 + 7) >> 3;
 
@@ -1063,14 +1055,14 @@ void deflate_encoder::flush_block(VLC &vlc, const uint8* src, external_window wi
 				TreeDesc::send_tree(vlc, dyn_ltree, l_max_code, bl_tree);
 				TreeDesc::send_tree(vlc, dyn_dtree, d_max_code, bl_tree);
 
-				compress_block(vlc, dyn_ltree, dyn_dtree, num_lits);
+				compress_block(vlc, dyn_ltree, dyn_dtree, buf, num_lits);
 				return;
 			}
 		}
 		if (static_lenb < store + 4) {
 			//static trees
 			vlc.put((STATIC_TREES << 1) + last, 3);
-			compress_block(vlc, static_len_tree, static_dist_tree, num_lits);
+			compress_block(vlc, static_len_tree, static_dist_tree, buf, num_lits);
 			return;
 		}
 	}
@@ -1082,10 +1074,11 @@ void deflate_encoder::flush_block(VLC &vlc, const uint8* src, external_window wi
 	auto	file = vlc.get_stream();
 	file.write<uint16le>(store);
 	file.write<uint16le>(~store);
-	file.writebuff(buf, store);
+	file.writebuff(start, store);
 }
 
 const uint8* deflate_encoder::process(ostream_ref file, const uint8* src, const uint8* src_end, TRANSCODE_FLAGS flags) {
+	/*
 	if (offset > 0x80000000) {
 		uint32	delta = offset - wsize;
 		offset = wsize;
@@ -1100,7 +1093,7 @@ const uint8* deflate_encoder::process(ostream_ref file, const uint8* src, const 
 		for (int i = 0; i < wsize; i++)
 			prev[i] = prev[i] >= delta ? prev[i] - delta : 0;
 	}
-
+	*/
 	if (!(flags & TRANSCODE_PARTIAL))
 		flags |= TRANSCODE_FLUSH;
 
@@ -1123,7 +1116,7 @@ const uint8* deflate_encoder::process(ostream_ref file, const uint8* src, const 
 		if (flags & TRANSCODE_PARTIAL) {
 			if (flags & (TRANSCODE_FLUSH | TRANSCODE_ALIGN)) {
 				if (num_lits)
-					flush_block(vlc, src, win, false);
+					flush_block(vlc, src, win.base, false);
 
 				if (flags & TRANSCODE_FLUSH) {
 					vlc.put(STORED_BLOCK<<1, 3);
@@ -1139,7 +1132,7 @@ const uint8* deflate_encoder::process(ostream_ref file, const uint8* src, const 
 				}
 			}
 		} else {
-			flush_block(vlc, src, win, true);
+			flush_block(vlc, src, win.base, true);
 			vlc.flush();
 			window = none;
 			return src;
@@ -1157,36 +1150,36 @@ const uint8* deflate_encoder::process(ostream_ref file, const uint8* src, const 
 }
 
 
-// Set match_start to the longest match starting at the given string and return its length. Matches shorter or equal to prev_length are discarded, in which case the result is equal to prev_length and match_start is garbage.
-// IN assertions: cur_start is the head of the hash chain for the current string (strstart) and its distance is <= MAX_DIST, and prev_length >= 1
-// OUT assertion: the match length is not greater than lookahead.
+// Set match_start to the longest match starting at the given string and return its length
+// Matches shorter or equal to prev_length are discarded, in which case the result is equal to prev_length and match_start is garbage
+// IN assertions: match_pos is the head of the hash chain for the current string (strstart) and its distance is <= MAX_DIST, and prev_length >= 1
+// OUT assertion: the match length is not greater than lookahead
 
-uint32 deflate_encoder::longest_match(const uint8 *src, const uint8 *src_end, int best_len, uint32 cur_start, external_window win, uint32 max_match, uint32 max_chain) {
-	int		lookahead	= int(src_end - src);
-	uint32	limit		= 0;//strstart > MAX_DIST() ? strstart - MAX_DIST() : 0;
+void deflate_encoder::longest_match(const uint8 *src, uint32 lookahead, uint32 match_pos, external_window win, uint32 best_len, uint32 nice_len, uint32 max_chain) {
+	lookahead	= min(lookahead, MAX_MATCH);
+	nice_len	= min(nice_len, lookahead);	// stop if match long enough
 
+	uint32	limit		= src - win.base > MAX_DIST() ? src - win.base - MAX_DIST() : 0;
 	uint16	scan_start	= load_packed<uint16>(src);
 	uint16	scan_end	= load_packed<uint16>(src + best_len - 1);
 
-	max_match	= min(max_match, lookahead);	// stop if match long enough
-
 	do {
-		const uint8	*match = win.base + cur_start;
+		const uint8	*match = win.base + match_pos;
 		if (load_packed<uint16>(win.adjust_ref(match + best_len - 1)) == scan_end && load_packed<uint16>(win.adjust_ref(match)) == scan_start) {
-			int	len	= win.match_len(src, match, src_end);
+			int	len	= win.match_len(src, match, src + lookahead);
 			if (len > best_len) {
-				match_start = cur_start;
-				best_len	= len;
-				if (len >= max_match)
+				match_start		= match_pos;
+				best_len		= len;
+				if (len >= nice_len)
 					break;
 
 				scan_end = load_packed<uint16>(src + best_len - 1);
 			}
 		}
-		cur_start = prev[cur_start & (wsize - 1)];
-	} while (cur_start > limit && --max_chain);
+		match_pos = prev[match_pos & (wsize - 1)];
+	} while (match_pos > limit && --max_chain);
 
-	return min(best_len, lookahead);
+	match_length	= best_len;
 }
 
 
@@ -1199,7 +1192,7 @@ const uint8* deflate_encoder::deflate_stored(VLC &vlc, const uint8* src, const u
 		uint64	max_start = block_start + MAX_BLOCK_SIZE;
 		if (lookahead >= max_start) {
 			src = win.base + max_start;
-			flush_block(vlc, src, win, false);
+			flush_block(vlc, src, win.base, false);
 		} else {
 			src += lookahead;
 		}
@@ -1225,10 +1218,10 @@ const uint8* deflate_encoder::deflate_fast(VLC &vlc, const uint8* src, const uin
 			hash_head = insert_string(h, src - win.base);
 		}
 
-		// Find the longest match, discarding those <= prev_length. At this point we have always match_length < MIN_MATCH
+		// Find the longest match, discarding those <= prev_length. At this point always match_length < MIN_MATCH
 		if (hash_head && (src - win.base) - hash_head <= MAX_DIST()) {
-			// To simplify the code, we prevent matches with the string of window index 0 (in particular we have to avoid a match of the string with itself at the start of the input file)
-			match_length = longest_match(src, src_end, match_length, hash_head, win, params.nice_length, params.calc_max_chain(match_length));
+			// To simplify the code, prevent matches with the string of window index 0 (in particular avoid a match of the string with itself at the start of the input file)
+			longest_match(src, lookahead, hash_head, win, match_length, params.nice_length, params.calc_max_chain(match_length));
 		}
 
 		bool	bflush;
@@ -1254,7 +1247,7 @@ const uint8* deflate_encoder::deflate_fast(VLC &vlc, const uint8* src, const uin
 			bflush = tally_lit(*src++);
 		}
 		if (bflush)
-			flush_block(vlc, src, win, false);
+			flush_block(vlc, src, win.base, false);
 
 	}
 
@@ -1264,6 +1257,9 @@ const uint8* deflate_encoder::deflate_fast(VLC &vlc, const uint8* src, const uin
 // Uses a lazy evaluation for matches: a match is finally adopted only if there is no better match at the next window position
 const uint8* deflate_encoder::deflate_slow(VLC &vlc, const uint8* src, const uint8* src_end, TRANSCODE_FLAGS flags, external_window win, bool filtered) {
 	static const uint32	TOO_FAR		= 4096;		// Matches of length 3 are discarded if their distance exceeds TOO_FAR
+
+	if (src == src_end)
+		return src;
 
 	uint32	h = src_end - src >= MIN_LOOKAHEAD ? update_hash(src[0], src[1]) : 0;
 
@@ -1287,8 +1283,8 @@ const uint8* deflate_encoder::deflate_slow(VLC &vlc, const uint8* src, const uin
 		match_length	= MIN_MATCH-1;
 
 		if (hash_head && prev_length < params.max_lazy && (src - win.base) - hash_head <= MAX_DIST()) {
-			// To simplify the code, we prevent matches with the string of window index 0 (in particular we have to avoid a match of the string with itself at the start of the input file)
-			match_length	= longest_match(src, src_end, prev_length, hash_head, win, params.nice_length, params.calc_max_chain(prev_length));
+			// To simplify the code, prevent matches with the string of window index 0 (in particular avoid a match of the string with itself at the start of the input file)
+			longest_match(src, lookahead, hash_head, win, prev_length, params.nice_length, params.calc_max_chain(prev_length));
 
 			// If prev_start is also MIN_MATCH, match_start is garbage but we will ignore the current match anyway.
 			if (match_length <= 5 && (filtered || (match_length == MIN_MATCH && (src - win.base) - match_start > TOO_FAR)))
@@ -1315,17 +1311,17 @@ const uint8* deflate_encoder::deflate_slow(VLC &vlc, const uint8* src, const uin
 			++src;
 
 			if (bflush)
-				flush_block(vlc, src, win, false);
+				flush_block(vlc, src, win.base, false);
 
 		} else if (match_available) {
 			// If there was no match at the previous position, output a single literal. If there was a match but the current match is longer, truncate the previous match to a single literal
 			if (tally_lit(src[-1]))
-				flush_block(vlc, src, win, false);
+				flush_block(vlc, src, win.base, false);
 
 			++src;
 
 		} else {
-			// There is no previous match to compare with, wait for the next step to decide.
+			// There is no previous match to compare with, wait for the next step to decide
 			match_available = true;
 			++src;
 		}
@@ -1377,7 +1373,7 @@ const uint8* deflate_encoder::deflate_rle(VLC &vlc, const uint8* src, const uint
 			bflush = tally_lit(*src++);
 		}
 		if (bflush)
-			flush_block(vlc, src, win, false);
+			flush_block(vlc, src, win.base, false);
 	}
 
 	return src;
@@ -1388,9 +1384,8 @@ const uint8* deflate_encoder::deflate_huff(VLC &vlc, const uint8* src, const uin
 	while (src != src_end) {
 		// Output a literal byte
 		match_length = 0;
-		bool	bflush = tally_lit(*src++);
-		if (bflush)
-			flush_block(vlc, src, win, false);
+		if (tally_lit(*src++))
+			flush_block(vlc, src, win.base, false);
 	}
 
 	return src;
@@ -1403,7 +1398,7 @@ const uint8* deflate_encoder::deflate_huff(VLC &vlc, const uint8* src, const uin
 uint8 *zlib_decoder::process(uint8* dst, uint8 *dst_end, reader_intf file, TRANSCODE_FLAGS flags) {
 	if (mode == HEAD) {
 		auto	h	= file.get<header>();
-		if (h.check != 0x1c || h.method != METHOD_DEFLATED) {
+		if (!h.verify() || h.method != METHOD_DEFLATED) {
 			mode = BAD;
 			return 0;
 		}
@@ -1411,26 +1406,20 @@ uint8 *zlib_decoder::process(uint8* dst, uint8 *dst_end, reader_intf file, TRANS
 
 		if (h.dict)
 			adler = file.get<uint32be>();
-		else
-			adler = 0;
 		mode = BLOCK;
 	}
 
 	uint8	*dst0 = dst;
 	dst = deflate_decoder::process(dst, dst_end, file, flags);
 
-	if (adler)
-		adler = adler32(adler, dst0, dst - dst0);
+	adler = adler32(adler, dst0, dst - dst0);
 
 	if (mode == BLOCK && last) {
 		auto	vlc = make_vlc_in(copy(file), vlc0);
 		vlc.align(8);
 
-		if (adler) {
-			uint32	adler1 = vlc.get<uint32be>();
-			ISO_ASSERT(adler1 == adler);
-		}
-		mode = DONE;
+		uint32	adler1 = file.get<uint32be>();//vlc.get<uint32be>();
+		mode	= adler1 == adler ? DONE : BAD;
 	}
 
 	return dst;
@@ -1448,7 +1437,6 @@ const uint8* zlib_encoder::process(ostream_ref file, const uint8* src, const uin
 
 	if (src == src_end && !(flags & TRANSCODE_PARTIAL))
 		file.write<uint32be>(adler);
-
 	return src;
 }
 

@@ -27,7 +27,7 @@ inline uint8 Classify(int i) {
 	if (i == 0)
 		return 1;
 	return (int(i < 0) << 7)
-		| (int(iso::abs(i) > 1) << 6)
+		| (int(abs(i) > 1) << 6)
 		| 2;
 }
 

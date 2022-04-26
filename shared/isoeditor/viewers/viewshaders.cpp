@@ -72,7 +72,7 @@ LRESULT ViewTree::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 		case WM_CREATE: {
 			splitter.Create(GetChildWindowPos(), 0, CHILD | VISIBLE | CLIPSIBLINGS, NOEX);
-			treecolumn.Create(splitter._GetPanePos(0), NULL, CHILD | VISIBLE | HSCROLL | TCS_GRIDLINES | TCS_HEADERAUTOSIZE, ACCEPTFILES);
+			treecolumn.Create(splitter._GetPanePos(0), NULL, CHILD | VISIBLE | HSCROLL | treecolumn.GRIDLINES | treecolumn.HEADERAUTOSIZE, ACCEPTFILES);
 			splitter.SetPane(0, treecolumn);
 
 			HeaderControl	header	= treecolumn.GetHeaderControl();
@@ -81,7 +81,7 @@ LRESULT ViewTree::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 			HeaderControl::Item("Type").	Format(HDF_LEFT).Width(100).Insert(header, 1);
 			HeaderControl::Item("Value").	Format(HDF_LEFT).Width(100).Insert(header, 2);
 			treecolumn.SetMinWidth(2, 100);
-			treecolumn.GetTreeControl().style = CHILD | VISIBLE | CLIPSIBLINGS | TVS_NOHSCROLL | TVS_HASLINES | TVS_HASBUTTONS | TVS_LINESATROOT | TVS_SHOWSELALWAYS | TVS_FULLROWSELECT;
+			treecolumn.GetTreeControl().style = CHILD | VISIBLE | CLIPSIBLINGS | TreeControl::NOHSCROLL | TreeControl::HASLINES | TreeControl::HASBUTTONS | TreeControl::LINESATROOT | TreeControl::SHOWSELALWAYS | TreeControl::FULLROWSELECT;
 
 			break;
 		}

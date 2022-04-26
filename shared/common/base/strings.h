@@ -822,12 +822,12 @@ template<typename T> struct string_traits<const range<T*> > : container_traits<c
 //	string_base
 //-----------------------------------------------------------------------------
 
-template<class W, int N>				inline bool	write(W &w, const char (&s)[N])			{ return w.writebuff(s, N - 1) == N - 1; }
-template<class W>						inline bool	write(W &w, const char *s)				{ return !s || check_writebuff(w, s, string_len(s)); }
+template<class W, int N>				inline bool	write_early(W &w, const char (&s)[N])	{ return w.writebuff(s, N - 1) == N - 1; }
+template<class W>						inline bool	write(W &w, const char *s)				{ return !s || check_writebuff(w, s, string_len(s)); }	//ambiguous w/above
 template<class W>						inline bool	write(W &w, char *s)					{ return !s || check_writebuff(w, s, string_len(s)); }
 
-template<class W, int N>				inline bool	write(W &w, const char16 (&s)[N])		{ return w.writebuff(s, N - 1) == N - 1; }
-template<class W>						inline bool	write(W &w, const char16 *s)			{ return !s || check_writebuff(w, s, string_len(s)); }
+template<class W, int N>				inline bool	write_early(W &w, const char16 (&s)[N])	{ return w.writebuff(s, N - 1) == N - 1; }
+template<class W>						inline bool	write(W &w, const char16 *s)			{ return !s || check_writebuff(w, s, string_len(s)); }	//ambiguous w/above
 template<class W>						inline bool	write(W &w, char16 *s)					{ return !s || check_writebuff(w, s, string_len(s)); }
 
 template<typename B> class string_base {
@@ -1106,7 +1106,7 @@ typedef string_bufferT<char>	string_buffer;
 typedef string_bufferT<char16>	string_buffer16;
 
 //-----------------------------------------------------------------------------
-//	embedded_string
+//	embedded_string (zero terminated)
 //-----------------------------------------------------------------------------
 
 template<typename T> struct embedded { T t; };
@@ -1732,8 +1732,8 @@ inline auto					to_string(const range<const char*> &v)	{ return str(v); }
 
 
 // ensure only actual bools match these
-template<typename Bool, typename T = enable_if_t<same_v<Bool, bool>>> const char*	to_string(Bool v)			{ return v ? "true" : "false"; }
-template<typename Bool, typename T = enable_if_t<same_v<Bool, bool>>> size_t		to_string(char *s, Bool v)	{ string_copy(s, to_string(v)); return string_len(s); }
+template<typename B, typename = enable_if_t<same_v<B, bool>>> const char*	to_string(B v)			{ return v ? "true" : "false"; }
+template<typename B, typename = enable_if_t<same_v<B, bool>>> size_t		to_string(char *s, B v)	{ string_copy(s, to_string(v)); return string_len(s); }
 
 template<int B, typename T> inline fixed_string<baseint<B,T>::digits + 1>	to_string(baseint<B,T> v)	{ return _to_string<baseint<B,T>::digits + 1>(v); }
 
@@ -2768,7 +2768,7 @@ public:
 	}
 
 	builder() : curr_size(0), max_size(N) { startp = buffer; }
-	builder(const char *fmt, ...)						: builder()	{ va_list valist; va_start(valist, fmt); vformat(fmt, valist); }
+	builder(const char *fmt, ...)						: builder()	{ va_list valist; va_start(valist, fmt); this->vformat(fmt, valist); }
 	template<typename T> explicit builder(const T &t)	: builder()	{ *this << t; }
 
 	~builder() 							{ if (startp != buffer) free(startp); }
@@ -3178,6 +3178,8 @@ template<typename C> alloc_string<C> unescape(string_scanT<C> &&s) {
 template<typename B> auto unescape(const string_base<B> &s) {
 	return unescape(string_scanT<typename string_traits<B>::element>(s));
 }
+
+int numstring_cmp(const char *a, const char *b);
 
 }//namespace iso
 

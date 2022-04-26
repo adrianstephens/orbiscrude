@@ -431,8 +431,8 @@ class CAFFileHandler : public SampleFileHandler {
 		streamptr	length()		{ return int(endofchunk - istream_chain::tell());	}
 	};
 
-	const char*		GetExt()			{ return "caf";				}
-	const char*		GetDescription()	{ return "Core Audio File";	}
+	const char*		GetExt() override			{ return "caf";				}
+	const char*		GetDescription() override	{ return "Core Audio File";	}
 
 	ISO_ptr<void> Read(tag id, istream_ref file) override;
 

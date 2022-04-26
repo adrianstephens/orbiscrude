@@ -127,10 +127,14 @@ CallStackFrame CallStackDumper::GetFrame(uint64 addr) {
 //-----------------------------------------------------------------------------
 
 ProcessSymbols::PDB2::PDB2(istream_ref file) {
-	ref_ptr<MSF::reader>	msf = new MSF::reader(file, 0);
+	MSF::EC	ec;
+	ref_ptr<MSF::reader>	msf = new MSF::reader(file, &ec);
+	ISO_ASSERT(ec == MSF::EC_OK);
+
 	PDBinfo	info;
 	info.load(msf, snPDB);
 	PDB::load(info, msf);
+
 	for (auto &i : Symbols()) {
 		if (i.rectyp == CV::S_PUB32)
 			sorted_syms.push_back(i.as<CV::PUBSYM32>());
@@ -493,7 +497,7 @@ ProcessSymbols::PDB2 *ProcessSymbols::GetPdb(ModuleInfo *mod) const {
 		}
 	
 		ISO_TRACEF("Loading symbols ") << mod->fn_pdb << '\n';
-		mod->pdb = new ProcessSymbols::PDB2(lvalue(FileInput(mod->fn_pdb)));
+		mod->pdb = new ProcessSymbols::PDB2(FileInput(mod->fn_pdb));
 	}
 	return mod->pdb;
 }

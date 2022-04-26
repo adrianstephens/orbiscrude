@@ -36,7 +36,8 @@ struct socket_addr_head {
 	uint16		family;
 	uint16be	port;
 
-	socket_addr_head(size_t _len, int family = 0, PORT port = 0) : len(socklen_t(_len - sizeof(len))), family(family), port(port) { memset(this + 1, 0, _len - sizeof(socket_addr_head)); }
+	socket_addr_head(size_t _len) : len(socklen_t(_len - sizeof(len)))					{ memset(&len + 1, 0, len); }
+	socket_addr_head(size_t _len, int family, PORT port) : len(socklen_t(_len - sizeof(len))), family(family), port(port) { memset(this + 1, 0, _len - sizeof(socket_addr_head)); }
 	socket_addr_head(size_t _len, SOCKET sock)	: len(socklen_t(_len - sizeof(len)))	{ getpeername(sock, sockaddr(), &len); }
 #ifndef PLAT_PS4
 	socket_addr_head(const addrinfo *a)			: len(socklen_t(a->ai_addrlen))			{ memcpy(&family, a->ai_addr, len); }
@@ -196,11 +197,12 @@ namespace IP4 {
 			bool	leave(multicast_source v)	const	{ return me()->set(IP_DROP_SOURCE_MEMBERSHIP, v); }		//Drops membership to the given multicast group, interface, and source address
 		#endif
 		} multicast;
+	#ifdef PLAT_PC
 		struct _unicast {
 			auto	me()						const	{ return T_get_enclosing(this, &Options::unicast); }
 			bool	interfce(addr v)			const	{ return me()->set(IP_UNICAST_IF, v); }				//Gets or sets the outgoing interface for sending IPv4 traffic. This option does not change the default interface for receiving IPv4 traffic. This option is important for multihomed computers.
 		} unicast;
-
+	#endif
 		bool	ttl(bool v)								const	{ return set(IP_TTL, v); }						//Changes the default value set by the TCP/IP service provider in the TTL field of the IP header in outgoing datagrams
 		bool	include_header(bool v)					const	{ return set(IP_HDRINCL, v); }					//indicates the application provides the IP header (SOCK_RAW ony)
 
@@ -317,7 +319,7 @@ namespace IP6 {
 		addr	ip;
 		uint32	zone : 28, level : 4;
 
-		socket_addr()							: socket_addr_head(sizeof(*this))		{}
+		//socket_addr()							: socket_addr_head(sizeof(*this))		{}
 		socket_addr(const addrinfo *a)			: socket_addr_head(a)					{}
 		socket_addr(SOCKET sock)				: socket_addr_head(sizeof(*this), sock)	{}
 		socket_addr(const addr &ip, PORT port)	: socket_addr_head(sizeof(*this), AF_INET6, port), ip(ip) {}
@@ -344,17 +346,19 @@ namespace IP6 {
 		struct _unicast {
 			auto	me()						const	{ return T_get_enclosing(this, &Options::unicast); }
 			bool	hops(uint32 v)				const	{ return me()->set(IPV6_UNICAST_HOPS, v); }			//Gets or sets the current TTL value associated with IPv6 socket for unicast traffic. It is illegal to set the TTL to a value greater than 255.
+	#ifdef PLAT_PC
 			bool	interfce(uint32 v)			const	{ return me()->set(IPV6_UNICAST_IF, v); }			//Gets or sets the outgoing interface for sending IPv6 traffic. This option does not change the default interface for receiving IPv6 traffic. This option is important for multihomed computers.
+	#endif
 		} unicast;
 
 		Options(SOCKET s) : s(s)	{}
 		template<typename T> bool set(int opt, const T &val) const { return socket_setopt(s, IPPROTO_IPV6, opt, val); }
 
 		bool	v6_only(bool v)							const	{ return set(IPV6_V6ONLY, v); }				//Indicates if a socket created for the AF_INET6 address family is restricted to IPv6 communications only
+	#ifdef PLAT_PC
 		bool	include_header(bool v)					const	{ return set(IPV6_HDRINCL, v); }			//Indicates the application provides the IPv6 header on all outgoing data
 		bool	packet_info(bool v)						const	{ return set(IPV6_PKTINFO, v); }			//Indicates that packet information should be returned by the WSARecvMsg function.
 		bool	receive_interface(bool v)				const	{ return set(IPV6_RECVIF, v); }				//populate the control buffer with details about which interface received a packet with a datagram socket
-	#ifdef PLAT_PC
 		bool	original_arrival_interface(bool v)		const	{ return set(IP_ORIGINAL_ARRIVAL_IF, v); }	//return optional control data containing the original arrival interface where the packet was received for datagram sockets.
 		bool	hop_limit(bool v)						const	{ return set(IPV6_HOPLIMIT, v); }			//Indicates that hop (TTL) information should be returned in the WSARecvMsg function
 		bool	protection_level(int v)					const	{ return set(IPV6_PROTECTION_LEVEL, v); }	//Enables restriction of a socket to a specified scope, such as addresses with the same link local or site local prefix

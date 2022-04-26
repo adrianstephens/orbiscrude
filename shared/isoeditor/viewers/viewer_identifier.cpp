@@ -17,7 +17,7 @@ C_types&	iso::builtin_ctypes() {
 	static struct Read_C_types : C_types {
 		Read_C_types() {
 			win::Resource	r(0, "CTYPES.H", "BIN");
-			ReadCTypes(lvalue(memory_reader(r)), *this);
+			ReadCTypes(memory_reader(r), *this);
 
 			add("int", C_type_int::get<int>());
 			add("float", C_type_float::get<float>());
@@ -44,6 +44,13 @@ int RegisterList::MakeColumns(const field *pf, int nc, const char *prefix) {
 					case field::MODE_RELPTR:
 						if (format & IDFMT_FOLLOWPTR)
 							nc = MakeColumns(pf->get_call(), nc, pf->name);
+						break;
+
+					case field::MODE_CUSTOM_PTR:
+						if (format & IDFMT_FOLLOWPTR) {
+							if (auto ret = make_unique(((field_follow_func)pf->values)(pf, 0, 0)))
+								nc = MakeColumns(ret->pf, nc, pf->name);
+						}
 						break;
 				}
 			} else {
@@ -103,6 +110,13 @@ void RegisterList::FillRow(ListViewControl::Item &item, const field *pf, const u
 						}
 						break;
 					}
+
+					case field::MODE_CUSTOM_PTR:
+						if (format & IDFMT_FOLLOWPTR) {
+							if (auto ret = make_unique(((field_follow_func)pf->values)(pf, p, offset)))
+								FillRow(item, ret->pf, ret->p, 0);
+						}
+						break;
 				}
 
 			} else {
@@ -308,7 +322,7 @@ LRESULT ColourTree::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 			ti.uId			= (UINT_PTR)ti.hwnd;
 			oldtt(TTM_GETTOOLINFO, 0, (LPARAM)&ti);
 
-			ToolTipControl	tt(*this, NULL, POPUP |TTS_ALWAYSTIP);
+			ToolTipControl	tt(*this, NULL, POPUP |ToolTipControl::ALWAYSTIP);
 			tt(TTM_ADDTOOLA, 0, (LPARAM)&ti);
 			//tt.Attach(*this);
 			SetToolTipControl(tt);

@@ -46,9 +46,9 @@ Vector3d iso::SO3::ortho(const Vector3d &v) {
 }
 
 int iso::SO3::largestAbsComponent(const Vector3d &v) {
-	double xAbs = iso::abs(v.x);
-	double yAbs = iso::abs(v.y);
-	double zAbs = iso::abs(v.z);
+	double xAbs = abs(v.x);
+	double yAbs = abs(v.y);
+	double zAbs = abs(v.z);
 	if (xAbs > yAbs)
 		return xAbs > zAbs ? 0 : 2;
 	return yAbs > zAbs ? 1 : 2;

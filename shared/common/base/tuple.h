@@ -24,8 +24,8 @@ template<class TL, size_t...I> struct tuple1<TL, index_list<I...>> : tuple_field
 	tuple1()	{}
 	template<typename... U>	constexpr tuple1(U&&...u)	: tuple_field<TL, I>(forward<U>(u))... {}
 
-	template<typename R> bool read(R&& r)			{ return iso::read(r, get<I>()...); }
-	template<typename W> bool write(W&& w) const	{ return iso::write(w, get<I>()...); }
+	template<typename R> bool read(R&& r)			{ return r.read(get<I>()...); }
+	template<typename W> bool write(W&& w) const	{ return w.write(get<I>()...); }
 };
 
 template<> struct tuple1<type_list<>> {

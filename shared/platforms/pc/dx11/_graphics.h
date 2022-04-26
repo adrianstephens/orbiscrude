@@ -641,12 +641,12 @@ public:
 
 	bool	Init(TexFormat format, int width, Memory flags = MEM_DEFAULT) {
 		_Buffer	b;
-		return b.Init(width * DXGI_COMPONENTS((DXGI_FORMAT)format).Size(), Bind(D3D11_BIND_SHADER_RESOURCE) | flags)
+		return b.Init(width * DXGI_COMPONENTS((DXGI_FORMAT)format).Bytes(), Bind(D3D11_BIND_SHADER_RESOURCE) | flags)
 			&& b._Bind((DXGI_FORMAT)format, width, write());
 	}
 	bool	Init(TexFormat format, int width, Memory flags, void *data) {
 		_Buffer	b;
-		return b.Init(data, width * DXGI_COMPONENTS((DXGI_FORMAT)format).Size(), Bind(D3D11_BIND_SHADER_RESOURCE) | flags)
+		return b.Init(data, width * DXGI_COMPONENTS((DXGI_FORMAT)format).Bytes(), Bind(D3D11_BIND_SHADER_RESOURCE) | flags)
 			&& b._Bind((DXGI_FORMAT)format, width, write());
 	}
 

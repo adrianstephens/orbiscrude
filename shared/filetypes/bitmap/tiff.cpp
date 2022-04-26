@@ -586,7 +586,7 @@ protected:
 			count	= 1;
 			if (fits()) {
 				clear(data);
-				TIFF::write<be>(lvalue(memory_writer(data)), t);
+				TIFF::write<be>(memory_writer(data), t);
 			} else {
 				pos = writer.tell32();
 				TIFF::write<be>(writer, t);
@@ -598,7 +598,7 @@ protected:
 			count	= t.size32();
 			if (fits()) {
 				clear(data);
-				TIFF::write<be>(lvalue(memory_writer(data)), t);
+				TIFF::write<be>(memory_writer(data), t);
 			} else {
 				pos = writer.tell32();
 				TIFF::write<be>(writer, t);
@@ -607,7 +607,7 @@ protected:
 
 		template<bool be, typename T, typename R>	void read(R &reader, T &t) const {
 			if (fits())
-				return TIFF::read<be>(lvalue(memory_reader(data)), t, type, count);
+				return TIFF::read<be>(memory_reader(data), t, type, count);
 			reader.seek(*(endian_t<uint32, be>*)data);
 			return TIFF::read<be>(reader, t, type, count);
 		}

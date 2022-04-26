@@ -20,6 +20,7 @@ template<> float get_component<float>(uint32 v, uint8 nb, DXGI_COMPONENTS::TYPE 
 		case DXGI_COMPONENTS::SNORM:	return max(float(sign_extend(v & m, nb)) / (m >> 1), -1.f);
 		case DXGI_COMPONENTS::UINT:		return float(v & m);
 		case DXGI_COMPONENTS::SINT:		return float(sign_extend(v & m, nb));
+		default:
 		case DXGI_COMPONENTS::FLOAT:
 			switch (nb) {
 				case 10: return decode_float(v, 5, 5, 0);
@@ -31,8 +32,8 @@ template<> float get_component<float>(uint32 v, uint8 nb, DXGI_COMPONENTS::TYPE 
 			float	s = float(v & m) / m;
 			return s * (s * (s * 0.305306011f + 0.682171111f) + 0.012522878f);
 		}
-		default:
-			return 0.f;
+//		default:
+//			return 0.f;
 	}
 }
 
@@ -360,45 +361,36 @@ inline float GetComponent(DXGI_COMPONENTS format, const void *p) {
 	}
 }
 
-struct DXGI_Components {
-	DXGI_COMPONENTS	format;
-	void		*p;
-	DXGI_Components(DXGI_COMPONENTS _format, void *_p) : format(_format), p(_p) {}
-	void	get_swizzled(float *r)	const	{ float f[4]; if (p) GetComponents(format, p, f); ArrangeComponents(format.chans, f, r, 15); }
-
-	operator float()	const				{ float f[4]; if (p) GetComponents(format, p, f); return GetChannel(f, format.GetChan(0)); }
-	operator float4()	const				{ float4 r;  get_swizzled((float*)&r); return r; }
-#ifndef SIMD_CLANG_H
-//	operator float4p()	const				{ float4p r; get_swizzled(&r.x); return r; }
-#endif
-	void	operator=(const float4p &f)		{ PutComponents(format, p, (float*)&f); }
-};
-
 struct DXGI_ConstComponents {
 	DXGI_COMPONENTS	format;
 	const void	*p;
-	DXGI_ConstComponents(DXGI_COMPONENTS _format, const void *_p) : format(_format), p(_p) {}
+	DXGI_ConstComponents(DXGI_COMPONENTS format, const void *p) : format(format), p(p) {}
 	void	get_swizzled(float *r)	const	{ float f[4]; if (p) GetComponents(format, p, f); ArrangeComponents(format.chans, f, r, 15); }
 
 	operator float()	const				{ float f[4]; if (p) GetComponents(format, p, f); return GetChannel(f, format.GetChan(0)); }
 	operator float4()	const				{ float4 r;  get_swizzled((float*)&r); return r; }
 #ifndef SIMD_CLANG_H
-//	operator float4p()	const				{ float4p r; get_swizzled(&r.x); return r; }
+	//	operator float4p()	const				{ float4p r; get_swizzled(&r.x); return r; }
 #endif
 };
 
-template<typename T> void assign(array_vec<T, 4> &f, const DXGI_Components &c)		{ c.get_swizzled(&f.x); }
-template<typename T> void assign(array_vec<T, 3> &f, const DXGI_Components &c)		{ f = project(c); }
+struct DXGI_Components : DXGI_ConstComponents {
+	DXGI_Components(DXGI_COMPONENTS format, void *p) : DXGI_ConstComponents(format, p) {}
+	void	operator=(const float4p &f)		{ PutComponents(format, unconst(p), (float*)&f); }
+};
+
 template<typename T> void assign(array_vec<T, 4> &f, const DXGI_ConstComponents &c)	{ c.get_swizzled(&f.x); }
 template<typename T> void assign(array_vec<T, 3> &f, const DXGI_ConstComponents &c)	{ f = project(c); }
 
+inline void assign(ISO_rgba &f, const DXGI_ConstComponents &c)	{ HDRpixel h; assign(h, c); f = h; }
+
 template<> struct param_element<uint8&, DXGI_COMPONENTS> : DXGI_Components {
-	param_element(uint8 &_t, DXGI_COMPONENTS _p) : DXGI_Components(_p, &_t) {}
-	template<typename T> friend void assign(T &f, const param_element &c)		{ assign(f, (const DXGI_Components&)c); }
+	param_element(uint8 &t, DXGI_COMPONENTS p) : DXGI_Components(p, &t) {}
+	template<typename T> friend void assign(T &f, const param_element &c)		{ assign(f, (const DXGI_ConstComponents&)c); }
 };
 template<> struct param_element<const uint8&, DXGI_COMPONENTS> : DXGI_ConstComponents {
-	param_element(const uint8 &_t, DXGI_COMPONENTS _p) : DXGI_ConstComponents(_p, &_t) {}
-	template<typename T> friend void assign(T &f, const param_element &c)		{ assign(f, (const DXGI_Components&)c); }
+	param_element(const uint8 &t, DXGI_COMPONENTS p) : DXGI_ConstComponents(p, &t) {}
+	template<typename T> friend void assign(T &f, const param_element &c)		{ assign(f, (const DXGI_ConstComponents&)c); }
 };
 
 template<typename D> const void *copy_slices(const block<D, 3> &dest, const void *srce, DXGI_COMPONENTS::LAYOUT layout, DXGI_COMPONENTS::TYPE type, uint64 depth_stride);

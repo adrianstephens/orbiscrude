@@ -63,29 +63,9 @@ struct DXGI_COMPONENTS {
 		uint8	chanbits[4];
 	};
 	struct DXGIInfo {
-		uint32	dxgi:8, layout:8, type:4, chans:12;
+		uint32	layout:8, type:4, chans:12, dxgi:8;
 	};
-	/*
-	struct CHANNELS {
-		uint16	chans;
 
-		CHANNELS()	{}
-		constexpr CHANNELS(uint16 _chans) : chans(_chans) {}
-		constexpr CHANNELS(CHANNEL x, CHANNEL y, CHANNEL z, CHANNEL w) : chans(x | (y << 3) | (z << 6) | (w << 9)) {}
-
-		void		SetChan(int i, CHANNEL c)		{ chans = (chans & ~(7 << (i * 3))) | (c << (i * 3)); }
-		CHANNEL		GetChan(int i)			const	{ return CHANNEL((chans >> (i * 3)) & 7); }
-		CHANNEL		GetChan2(CHANNEL c)		const	{ return c < 4 ? GetChan(c) : c; }
-		CHANNELS	Rearranged(CHANNELS c)	const {
-			return CHANNELS(
-				GetChan2(c.GetChan(0)),
-				GetChan2(c.GetChan(1)),
-				GetChan2(c.GetChan(2)),
-				GetChan2(c.GetChan(3))
-			);
-		}
-	};
-	*/
 	uint32	layout:8, type:4, chans:12, dxgi:8;
 
 	static constexpr const LayoutInfo GetInfo(LAYOUT layout) {
@@ -132,137 +112,137 @@ struct DXGI_COMPONENTS {
 
 	range<const DXGIInfo*>	static GetDXGITable() {
 		static const DXGIInfo table[] = {
-		//	dxgi									layout			type		chans
-			{DXGI_FORMAT_UNKNOWN,					UNKNOWN,		TYPELESS,	RGBA,	},
-			{DXGI_FORMAT_R32G32B32A32_TYPELESS,		R32G32B32A32,	TYPELESS,	RGBA,	},
-			{DXGI_FORMAT_R32G32B32A32_FLOAT,		R32G32B32A32,	FLOAT,	    RGBA,	},
-			{DXGI_FORMAT_R32G32B32A32_UINT,			R32G32B32A32,	UINT,	    RGBA,	},
-			{DXGI_FORMAT_R32G32B32A32_SINT,			R32G32B32A32,	SINT,	    RGBA,	},
-			{DXGI_FORMAT_R32G32B32_TYPELESS,		R32G32B32,		TYPELESS,	RGBA,	},
-			{DXGI_FORMAT_R32G32B32_FLOAT,			R32G32B32,		FLOAT,	    RGB_,	},
-			{DXGI_FORMAT_R32G32B32_UINT,			R32G32B32,		UINT,	    RGB_,	},
-			{DXGI_FORMAT_R32G32B32_SINT,			R32G32B32,		SINT,	    RGB_,	},
-			{DXGI_FORMAT_R16G16B16A16_TYPELESS,		R16G16B16A16,	TYPELESS,	RGBA,	},
-			{DXGI_FORMAT_R16G16B16A16_FLOAT,		R16G16B16A16,	FLOAT,	    RGBA,	},
-			{DXGI_FORMAT_R16G16B16A16_UNORM,		R16G16B16A16,	UNORM,	    RGBA,	},
-			{DXGI_FORMAT_R16G16B16A16_UINT,			R16G16B16A16,	UINT,	    RGBA,	},
-			{DXGI_FORMAT_R16G16B16A16_SNORM,		R16G16B16A16,	SNORM,	    RGBA,	},
-			{DXGI_FORMAT_R16G16B16A16_SINT,			R16G16B16A16,	SINT,	    RGBA,	},
-			{DXGI_FORMAT_R32G32_TYPELESS,			R32G32,			TYPELESS,	RG__,	},
-			{DXGI_FORMAT_R32G32_FLOAT,				R32G32,			FLOAT,	    RG__,	},
-			{DXGI_FORMAT_R32G32_UINT,				R32G32,			UINT,	    RG__,	},
-			{DXGI_FORMAT_R32G32_SINT,				R32G32,			SINT,	    RG__,	},
-			{DXGI_FORMAT_R32G8X24_TYPELESS,			R32G8X24,		TYPELESS,	RG__,	},
-			{DXGI_FORMAT_D32_FLOAT_S8X24_UINT,		R32G8X24,		UINT,	    RG__,	},
-			{DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS,	R32G8X24,		TYPELESS,	R___,	},
-			{DXGI_FORMAT_X32_TYPELESS_G8X24_UINT,	R32G8X24,		UINT,	    RGBA,	},
-			{DXGI_FORMAT_R10G10B10A2_TYPELESS,		R10G10B10A2,	TYPELESS,	RGBA,	},
-			{DXGI_FORMAT_R10G10B10A2_UNORM,			R10G10B10A2,	UNORM,	    RGBA,	},
-			{DXGI_FORMAT_R10G10B10A2_UINT,			R10G10B10A2,	UINT,	    RGBA,	},
-			{DXGI_FORMAT_R11G11B10_FLOAT,			R11G11B10,		UFLOAT,	    RGB_,	},
-			{DXGI_FORMAT_R8G8B8A8_TYPELESS,			R8G8B8A8,		TYPELESS,	RGBA,	},
-			{DXGI_FORMAT_R8G8B8A8_UNORM,			R8G8B8A8,		UNORM,	    RGBA,	},
-			{DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,		R8G8B8A8,		SRGB,	    RGBA,	},
-			{DXGI_FORMAT_R8G8B8A8_UINT,				R8G8B8A8,		UINT,	    RGBA,	},
-			{DXGI_FORMAT_R8G8B8A8_SNORM,			R8G8B8A8,		SNORM,	    RGBA,	},
-			{DXGI_FORMAT_R8G8B8A8_SINT,				R8G8B8A8,		SINT,	    RGBA,	},
-			{DXGI_FORMAT_R16G16_TYPELESS,			R16G16,			TYPELESS,	RG__,	},
-			{DXGI_FORMAT_R16G16_FLOAT,				R16G16,			FLOAT,	    RG__,	},
-			{DXGI_FORMAT_R16G16_UNORM,				R16G16,			UNORM,	    RG__,	},
-			{DXGI_FORMAT_R16G16_UINT,				R16G16,			UINT,	    RG__,	},
-			{DXGI_FORMAT_R16G16_SNORM,				R16G16,			SNORM,	    RG__,	},
-			{DXGI_FORMAT_R16G16_SINT,				R16G16,			SINT,	    RG__,	},
-			{DXGI_FORMAT_R32_TYPELESS,				R32,			TYPELESS,	R___,	},
-			{DXGI_FORMAT_D32_FLOAT,					R32,			FLOAT,	    R___,	},
-			{DXGI_FORMAT_R32_FLOAT,					R32,			FLOAT,	    R___,	},
-			{DXGI_FORMAT_R32_UINT,					R32,			UINT,	    R___,	},
-			{DXGI_FORMAT_R32_SINT,					R32,			SINT,	    R___,	},
-			{DXGI_FORMAT_R24G8_TYPELESS,			R24G8,			TYPELESS,	RG__,	},
-			{DXGI_FORMAT_D24_UNORM_S8_UINT,			R24G8,			UINT,	    RG__,	},
-			{DXGI_FORMAT_R24_UNORM_X8_TYPELESS,		R24G8,			TYPELESS,	R___,	},
-			{DXGI_FORMAT_X24_TYPELESS_G8_UINT,		R24G8,			UINT,	    _G__,	},
-			{DXGI_FORMAT_R8G8_TYPELESS,				R8G8,			TYPELESS,	RG__,	},
-			{DXGI_FORMAT_R8G8_UNORM,				R8G8,			UNORM,	    RG__,	},
-			{DXGI_FORMAT_R8G8_UINT,					R8G8,			UINT,	    RG__,	},
-			{DXGI_FORMAT_R8G8_SNORM,				R8G8,			SNORM,	    RG__,	},
-			{DXGI_FORMAT_R8G8_SINT,					R8G8,			SINT,	    RG__,	},
-			{DXGI_FORMAT_R16_TYPELESS,				R16,			TYPELESS,	R___,	},
-			{DXGI_FORMAT_R16_FLOAT,					R16,			FLOAT,	    R___,	},
-			{DXGI_FORMAT_D16_UNORM,					R16,			UNORM,	    R___,	},
-			{DXGI_FORMAT_R16_UNORM,					R16,			UNORM,	    R___,	},
-			{DXGI_FORMAT_R16_UINT,					R16,			UINT,	    R___,	},
-			{DXGI_FORMAT_R16_SNORM,					R16,			SNORM,	    R___,	},
-			{DXGI_FORMAT_R16_SINT,					R16,			SINT,	    R___,	},
-			{DXGI_FORMAT_R8_TYPELESS,				R8,				TYPELESS,	R___,	},
-			{DXGI_FORMAT_R8_UNORM,					R8,				UNORM,	    R___,	},
-			{DXGI_FORMAT_R8_UINT,					R8,				UINT,	    R___,	},
-			{DXGI_FORMAT_R8_SNORM,					R8,				SNORM,	    R___,	},
-			{DXGI_FORMAT_R8_SINT,					R8,				SINT,	    R___,	},
-			{DXGI_FORMAT_A8_UNORM,					R8,				UNORM,	    ___A,	},
-			{DXGI_FORMAT_R1_UNORM,					R1,				UNORM,	    R___,	},
-			{DXGI_FORMAT_R9G9B9E5_SHAREDEXP,		R9G9B9E5,		FLOAT,	    RGBA,	},
-			{DXGI_FORMAT_R8G8_B8G8_UNORM,			R8G8_B8G8,		UNORM,	    RGBA,	},
-			{DXGI_FORMAT_G8R8_G8B8_UNORM,			G8R8_G8B8,		UNORM,	    RGBA,	},
-			{DXGI_FORMAT_BC1_TYPELESS,				BC1,			TYPELESS,	RGBA,	},
-			{DXGI_FORMAT_BC1_UNORM,					BC1,			UNORM,	    RGBA,	},
-			{DXGI_FORMAT_BC1_UNORM_SRGB,			BC1,			SRGB,	    RGBA,	},
-			{DXGI_FORMAT_BC2_TYPELESS,				BC2,			TYPELESS,	RGBA,	},
-			{DXGI_FORMAT_BC2_UNORM,					BC2,			UNORM,	    RGBA,	},
-			{DXGI_FORMAT_BC2_UNORM_SRGB,			BC2,			SRGB,	    RGBA,	},
-			{DXGI_FORMAT_BC3_TYPELESS,				BC3,			TYPELESS,	RGBA,	},
-			{DXGI_FORMAT_BC3_UNORM,					BC3,			UNORM,	    RGBA,	},
-			{DXGI_FORMAT_BC3_UNORM_SRGB,			BC3,			SRGB,	    RGBA,	},
-			{DXGI_FORMAT_BC4_TYPELESS,				BC4,			TYPELESS,	RGBA,	},
-			{DXGI_FORMAT_BC4_UNORM,					BC4,			UNORM,	    RGBA,	},
-			{DXGI_FORMAT_BC4_SNORM,					BC4,			SNORM,	    RGBA,	},
-			{DXGI_FORMAT_BC5_TYPELESS,				BC5,			TYPELESS,	RGBA,	},
-			{DXGI_FORMAT_BC5_UNORM,					BC5,			UNORM,	    RGBA,	},
-			{DXGI_FORMAT_BC5_SNORM,					BC5,			SNORM,	    RGBA,	},
-			{DXGI_FORMAT_B5G6R5_UNORM,				B5G6R5,			UNORM,	    BGRA,	},
-			{DXGI_FORMAT_B5G5R5A1_UNORM,			B5G5R5A1,		UNORM,	    BGRA,	},
-			{DXGI_FORMAT_B8G8R8A8_UNORM,			R8G8B8A8,		UNORM,	    BGRA,	},
-			{DXGI_FORMAT_B8G8R8X8_UNORM,			R8G8B8A8,		UNORM,	    BGRA,	},
-			{DXGI_FORMAT_R10G10B10_XR_BIAS_A2_UNORM,R10G10B10A2,	UNORM,	    RGBA,	},
-			{DXGI_FORMAT_B8G8R8A8_TYPELESS,			R8G8B8A8,		TYPELESS,	BGRA,	},
-			{DXGI_FORMAT_B8G8R8A8_UNORM_SRGB,		R8G8B8A8,		SRGB,	    BGRA,	},
-			{DXGI_FORMAT_B8G8R8X8_TYPELESS,			R8G8B8A8,		TYPELESS,	BGRA,	},
-			{DXGI_FORMAT_B8G8R8X8_UNORM_SRGB,		R8G8B8A8,		SRGB,	    BGRA,	},
-			{DXGI_FORMAT_BC6H_TYPELESS,				BC6,			TYPELESS,	RGBA,	},
-			{DXGI_FORMAT_BC6H_UF16,					BC6,			UFLOAT,	    RGBA,	},
-			{DXGI_FORMAT_BC6H_SF16,					BC6,			FLOAT,	    RGBA,	},
-			{DXGI_FORMAT_BC7_TYPELESS,				BC7,			TYPELESS,	RGBA,	},
-			{DXGI_FORMAT_BC7_UNORM,					BC7,			UNORM,	    RGBA,	},
-			{DXGI_FORMAT_BC7_UNORM_SRGB,			BC7,			SRGB,	    RGBA,	},
-			{DXGI_FORMAT_AYUV,						R8G8B8A8,		UNORM,		RGBA,	},
-			{DXGI_FORMAT_Y410,						R10G10B10A2,	UNORM,		RGBA,	},
-			{DXGI_FORMAT_Y416,						R16G16B16A16,	UNORM,		RGBA,	},
-			{DXGI_FORMAT_NV12,						YUV420_8,		UNORM,		RGBA,	},
-			{DXGI_FORMAT_P010,						YUV420_16,		UNORM,		RGBA,	},
-			{DXGI_FORMAT_P016,						YUV420_16,		UNORM,		RGBA,	},
-			{DXGI_FORMAT_420_OPAQUE,				YUV420_8,		UNORM,		RGBA,	},
-			{DXGI_FORMAT_YUY2,						R8G8B8A8,		UNORM,		RGBA,	},
-			{DXGI_FORMAT_Y210,						R16G16B16A16,	UNORM,		RGBA,	},
-			{DXGI_FORMAT_Y216,						R16G16B16A16,	UNORM,		RGBA,	},
-			{DXGI_FORMAT_NV11,						YUV411_8,		TYPELESS,	RGBA,	},
-			{DXGI_FORMAT_AI44,						R4G4,			TYPELESS,	RGBA,	},
-			{DXGI_FORMAT_IA44,						R4G4,			TYPELESS,	RGBA,	},
-			{DXGI_FORMAT_P8,						R8,				TYPELESS,	RGBA,	},
-			{DXGI_FORMAT_A8P8,						R8G8,			TYPELESS,	RGBA,	},
-			{DXGI_FORMAT_B4G4R4A4_UNORM,			R4G4B4A4,		TYPELESS,	BGRA,	},
+		//	 layout			type		chans	dxgi									
+			{UNKNOWN,		TYPELESS,	RGBA,	DXGI_FORMAT_UNKNOWN						},
+			{R32G32B32A32,	TYPELESS,	RGBA,	DXGI_FORMAT_R32G32B32A32_TYPELESS		},
+			{R32G32B32A32,	FLOAT,	    RGBA,	DXGI_FORMAT_R32G32B32A32_FLOAT			},
+			{R32G32B32A32,	UINT,	    RGBA,	DXGI_FORMAT_R32G32B32A32_UINT			},
+			{R32G32B32A32,	SINT,	    RGBA,	DXGI_FORMAT_R32G32B32A32_SINT			},
+			{R32G32B32,		TYPELESS,	RGBA,	DXGI_FORMAT_R32G32B32_TYPELESS			},
+			{R32G32B32,		FLOAT,	    RGB_,	DXGI_FORMAT_R32G32B32_FLOAT				},
+			{R32G32B32,		UINT,	    RGB_,	DXGI_FORMAT_R32G32B32_UINT				},
+			{R32G32B32,		SINT,	    RGB_,	DXGI_FORMAT_R32G32B32_SINT				},
+			{R16G16B16A16,	TYPELESS,	RGBA,	DXGI_FORMAT_R16G16B16A16_TYPELESS		},
+			{R16G16B16A16,	FLOAT,	    RGBA,	DXGI_FORMAT_R16G16B16A16_FLOAT			},
+			{R16G16B16A16,	UNORM,	    RGBA,	DXGI_FORMAT_R16G16B16A16_UNORM			},
+			{R16G16B16A16,	UINT,	    RGBA,	DXGI_FORMAT_R16G16B16A16_UINT			},
+			{R16G16B16A16,	SNORM,	    RGBA,	DXGI_FORMAT_R16G16B16A16_SNORM			},
+			{R16G16B16A16,	SINT,	    RGBA,	DXGI_FORMAT_R16G16B16A16_SINT			},
+			{R32G32,		TYPELESS,	RG__,	DXGI_FORMAT_R32G32_TYPELESS				},
+			{R32G32,		FLOAT,	    RG__,	DXGI_FORMAT_R32G32_FLOAT				},
+			{R32G32,		UINT,	    RG__,	DXGI_FORMAT_R32G32_UINT					},
+			{R32G32,		SINT,	    RG__,	DXGI_FORMAT_R32G32_SINT					},
+			{R32G8X24,		TYPELESS,	RG__,	DXGI_FORMAT_R32G8X24_TYPELESS			},
+			{R32G8X24,		UINT,	    RG__,	DXGI_FORMAT_D32_FLOAT_S8X24_UINT		},
+			{R32G8X24,		TYPELESS,	R___,	DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS	},
+			{R32G8X24,		UINT,	    RGBA,	DXGI_FORMAT_X32_TYPELESS_G8X24_UINT		},
+			{R10G10B10A2,	TYPELESS,	RGBA,	DXGI_FORMAT_R10G10B10A2_TYPELESS		},
+			{R10G10B10A2,	UNORM,	    RGBA,	DXGI_FORMAT_R10G10B10A2_UNORM			},
+			{R10G10B10A2,	UINT,	    RGBA,	DXGI_FORMAT_R10G10B10A2_UINT			},
+			{R11G11B10,		UFLOAT,	    RGB_,	DXGI_FORMAT_R11G11B10_FLOAT				},
+			{R8G8B8A8,		TYPELESS,	RGBA,	DXGI_FORMAT_R8G8B8A8_TYPELESS			},
+			{R8G8B8A8,		UNORM,	    RGBA,	DXGI_FORMAT_R8G8B8A8_UNORM				},
+			{R8G8B8A8,		SRGB,	    RGBA,	DXGI_FORMAT_R8G8B8A8_UNORM_SRGB			},
+			{R8G8B8A8,		UINT,	    RGBA,	DXGI_FORMAT_R8G8B8A8_UINT				},
+			{R8G8B8A8,		SNORM,	    RGBA,	DXGI_FORMAT_R8G8B8A8_SNORM				},
+			{R8G8B8A8,		SINT,	    RGBA,	DXGI_FORMAT_R8G8B8A8_SINT				},
+			{R16G16,		TYPELESS,	RG__,	DXGI_FORMAT_R16G16_TYPELESS				},
+			{R16G16,		FLOAT,	    RG__,	DXGI_FORMAT_R16G16_FLOAT				},
+			{R16G16,		UNORM,	    RG__,	DXGI_FORMAT_R16G16_UNORM				},
+			{R16G16,		UINT,	    RG__,	DXGI_FORMAT_R16G16_UINT					},
+			{R16G16,		SNORM,	    RG__,	DXGI_FORMAT_R16G16_SNORM				},
+			{R16G16,		SINT,	    RG__,	DXGI_FORMAT_R16G16_SINT					},
+			{R32,			TYPELESS,	R___,	DXGI_FORMAT_R32_TYPELESS				},
+			{R32,			FLOAT,	    R___,	DXGI_FORMAT_D32_FLOAT					},
+			{R32,			FLOAT,	    R___,	DXGI_FORMAT_R32_FLOAT					},
+			{R32,			UINT,	    R___,	DXGI_FORMAT_R32_UINT					},
+			{R32,			SINT,	    R___,	DXGI_FORMAT_R32_SINT					},
+			{R24G8,			TYPELESS,	RG__,	DXGI_FORMAT_R24G8_TYPELESS				},
+			{R24G8,			UINT,	    RG__,	DXGI_FORMAT_D24_UNORM_S8_UINT			},
+			{R24G8,			TYPELESS,	R___,	DXGI_FORMAT_R24_UNORM_X8_TYPELESS		},
+			{R24G8,			UINT,	    _G__,	DXGI_FORMAT_X24_TYPELESS_G8_UINT		},
+			{R8G8,			TYPELESS,	RG__,	DXGI_FORMAT_R8G8_TYPELESS				},
+			{R8G8,			UNORM,	    RG__,	DXGI_FORMAT_R8G8_UNORM					},
+			{R8G8,			UINT,	    RG__,	DXGI_FORMAT_R8G8_UINT					},
+			{R8G8,			SNORM,	    RG__,	DXGI_FORMAT_R8G8_SNORM					},
+			{R8G8,			SINT,	    RG__,	DXGI_FORMAT_R8G8_SINT					},
+			{R16,			TYPELESS,	R___,	DXGI_FORMAT_R16_TYPELESS				},
+			{R16,			FLOAT,	    R___,	DXGI_FORMAT_R16_FLOAT					},
+			{R16,			UNORM,	    R___,	DXGI_FORMAT_D16_UNORM					},
+			{R16,			UNORM,	    R___,	DXGI_FORMAT_R16_UNORM					},
+			{R16,			UINT,	    R___,	DXGI_FORMAT_R16_UINT					},
+			{R16,			SNORM,	    R___,	DXGI_FORMAT_R16_SNORM					},
+			{R16,			SINT,	    R___,	DXGI_FORMAT_R16_SINT					},
+			{R8,			TYPELESS,	R___,	DXGI_FORMAT_R8_TYPELESS					},
+			{R8,			UNORM,	    R___,	DXGI_FORMAT_R8_UNORM					},
+			{R8,			UINT,	    R___,	DXGI_FORMAT_R8_UINT						},
+			{R8,			SNORM,	    R___,	DXGI_FORMAT_R8_SNORM					},
+			{R8,			SINT,	    R___,	DXGI_FORMAT_R8_SINT						},
+			{R8,			UNORM,	    ___A,	DXGI_FORMAT_A8_UNORM					},
+			{R1,			UNORM,	    R___,	DXGI_FORMAT_R1_UNORM					},
+			{R9G9B9E5,		FLOAT,	    RGBA,	DXGI_FORMAT_R9G9B9E5_SHAREDEXP			},
+			{R8G8_B8G8,		UNORM,	    RGBA,	DXGI_FORMAT_R8G8_B8G8_UNORM				},
+			{G8R8_G8B8,		UNORM,	    RGBA,	DXGI_FORMAT_G8R8_G8B8_UNORM				},
+			{BC1,			TYPELESS,	RGBA,	DXGI_FORMAT_BC1_TYPELESS				},
+			{BC1,			UNORM,	    RGBA,	DXGI_FORMAT_BC1_UNORM					},
+			{BC1,			SRGB,	    RGBA,	DXGI_FORMAT_BC1_UNORM_SRGB				},
+			{BC2,			TYPELESS,	RGBA,	DXGI_FORMAT_BC2_TYPELESS				},
+			{BC2,			UNORM,	    RGBA,	DXGI_FORMAT_BC2_UNORM					},
+			{BC2,			SRGB,	    RGBA,	DXGI_FORMAT_BC2_UNORM_SRGB				},
+			{BC3,			TYPELESS,	RGBA,	DXGI_FORMAT_BC3_TYPELESS				},
+			{BC3,			UNORM,	    RGBA,	DXGI_FORMAT_BC3_UNORM					},
+			{BC3,			SRGB,	    RGBA,	DXGI_FORMAT_BC3_UNORM_SRGB				},
+			{BC4,			TYPELESS,	RGBA,	DXGI_FORMAT_BC4_TYPELESS				},
+			{BC4,			UNORM,	    RGBA,	DXGI_FORMAT_BC4_UNORM					},
+			{BC4,			SNORM,	    RGBA,	DXGI_FORMAT_BC4_SNORM					},
+			{BC5,			TYPELESS,	RGBA,	DXGI_FORMAT_BC5_TYPELESS				},
+			{BC5,			UNORM,	    RGBA,	DXGI_FORMAT_BC5_UNORM					},
+			{BC5,			SNORM,	    RGBA,	DXGI_FORMAT_BC5_SNORM					},
+			{B5G6R5,		UNORM,	    BGRA,	DXGI_FORMAT_B5G6R5_UNORM				},
+			{B5G5R5A1,		UNORM,	    BGRA,	DXGI_FORMAT_B5G5R5A1_UNORM				},
+			{R8G8B8A8,		UNORM,	    BGRA,	DXGI_FORMAT_B8G8R8A8_UNORM				},
+			{R8G8B8A8,		UNORM,	    BGRA,	DXGI_FORMAT_B8G8R8X8_UNORM				},
+			{R10G10B10A2,	UNORM,	    RGBA,	DXGI_FORMAT_R10G10B10_XR_BIAS_A2_UNORM	},
+			{R8G8B8A8,		TYPELESS,	BGRA,	DXGI_FORMAT_B8G8R8A8_TYPELESS			},
+			{R8G8B8A8,		SRGB,	    BGRA,	DXGI_FORMAT_B8G8R8A8_UNORM_SRGB			},
+			{R8G8B8A8,		TYPELESS,	BGRA,	DXGI_FORMAT_B8G8R8X8_TYPELESS			},
+			{R8G8B8A8,		SRGB,	    BGRA,	DXGI_FORMAT_B8G8R8X8_UNORM_SRGB			},
+			{BC6,			TYPELESS,	RGBA,	DXGI_FORMAT_BC6H_TYPELESS				},
+			{BC6,			UFLOAT,	    RGBA,	DXGI_FORMAT_BC6H_UF16					},
+			{BC6,			FLOAT,	    RGBA,	DXGI_FORMAT_BC6H_SF16					},
+			{BC7,			TYPELESS,	RGBA,	DXGI_FORMAT_BC7_TYPELESS				},
+			{BC7,			UNORM,	    RGBA,	DXGI_FORMAT_BC7_UNORM					},
+			{BC7,			SRGB,	    RGBA,	DXGI_FORMAT_BC7_UNORM_SRGB				},
+			{R8G8B8A8,		UNORM,		RGBA,	DXGI_FORMAT_AYUV						},
+			{R10G10B10A2,	UNORM,		RGBA,	DXGI_FORMAT_Y410						},
+			{R16G16B16A16,	UNORM,		RGBA,	DXGI_FORMAT_Y416						},
+			{YUV420_8,		UNORM,		RGBA,	DXGI_FORMAT_NV12						},
+			{YUV420_16,		UNORM,		RGBA,	DXGI_FORMAT_P010						},
+			{YUV420_16,		UNORM,		RGBA,	DXGI_FORMAT_P016						},
+			{YUV420_8,		UNORM,		RGBA,	DXGI_FORMAT_420_OPAQUE					},
+			{R8G8B8A8,		UNORM,		RGBA,	DXGI_FORMAT_YUY2						},
+			{R16G16B16A16,	UNORM,		RGBA,	DXGI_FORMAT_Y210						},
+			{R16G16B16A16,	UNORM,		RGBA,	DXGI_FORMAT_Y216						},
+			{YUV411_8,		TYPELESS,	RGBA,	DXGI_FORMAT_NV11						},
+			{R4G4,			TYPELESS,	RGBA,	DXGI_FORMAT_AI44						},
+			{R4G4,			TYPELESS,	RGBA,	DXGI_FORMAT_IA44						},
+			{R8,			TYPELESS,	RGBA,	DXGI_FORMAT_P8							},
+			{R8G8,			TYPELESS,	RGBA,	DXGI_FORMAT_A8P8						},
+			{R4G4B4A4,		TYPELESS,	BGRA,	DXGI_FORMAT_B4G4R4A4_UNORM				},
 		#ifdef D_PLATFORM_XBOXONE
-			{DXGI_FORMAT_R10G10B10_7E3_A2_FLOAT,	R10G10B10A2,	UFLOAT,		RGBA,	},
-			{DXGI_FORMAT_R10G10B10_6E4_A2_FLOAT,	R10G10B10A2,	UFLOAT2,	RGBA,	},
-			{DXGI_FORMAT_D16_UNORM_S8_UINT,			R16G8,			UNORM,		RGBA,	},
-			{DXGI_FORMAT_R16_UNORM_X8_TYPELESS,		R16G8,			UNORM,		RGBA,	},
-			{DXGI_FORMAT_X16_TYPELESS_G8_UINT,		R16G8,			UINT,		RGBA,	},
+			{R10G10B10A2,	UFLOAT,		RGBA,	DXGI_FORMAT_R10G10B10_7E3_A2_FLOAT		},
+			{R10G10B10A2,	UFLOAT2,	RGBA,	DXGI_FORMAT_R10G10B10_6E4_A2_FLOAT		},
+			{R16G8,			UNORM,		RGBA,	DXGI_FORMAT_D16_UNORM_S8_UINT			},
+			{R16G8,			UNORM,		RGBA,	DXGI_FORMAT_R16_UNORM_X8_TYPELESS		},
+			{R16G8,			UINT,		RGBA,	DXGI_FORMAT_X16_TYPELESS_G8_UINT		},
 		#endif
-			{DXGI_FORMAT_P208,						UNKNOWN,		TYPELESS,	RGBA,	},
-			{DXGI_FORMAT_V208,						UNKNOWN,		TYPELESS,	RGBA,	},
-			{DXGI_FORMAT_V408,						UNKNOWN,		TYPELESS,	RGBA,	},
+			{UNKNOWN,		TYPELESS,	RGBA,	DXGI_FORMAT_P208						},
+			{UNKNOWN,		TYPELESS,	RGBA,	DXGI_FORMAT_V208						},
+			{UNKNOWN,		TYPELESS,	RGBA,	DXGI_FORMAT_V408						},
 		#ifdef D_PLATFORM_XBOXONE
-			{DXGI_FORMAT_R10G10B10_SNORM_A2_UNORM,  UNKNOWN,		UNORM,		RGBA,	},
-			{DXGI_FORMAT_R4G4_UNORM,                R4G4,			UNORM,		RG__,	},
-			{DXGI_FORMAT_R24G8_UNORM,               R24G8,			UNORM,		RG__,	},
+			{UNKNOWN,		UNORM,		RGBA,	DXGI_FORMAT_R10G10B10_SNORM_A2_UNORM	},
+			{R4G4,			UNORM,		RG__,	DXGI_FORMAT_R4G4_UNORM					},
+			{R24G8,			UNORM,		RG__,	DXGI_FORMAT_R24G8_UNORM					},
 		#endif
 		};
 		return table;
@@ -296,29 +276,41 @@ struct DXGI_COMPONENTS {
 
 	constexpr LAYOUT		Layout()		const	{ return LAYOUT(layout); }
 	constexpr TYPE			Type()			const	{ return TYPE(type); }
-//	constexpr const CHANNELS		Channels()		const	{ return CHANNELS(chans); }
-//	CHANNELS&				Channels()				{ return (CHANNELS&)chans; }
 	constexpr LayoutInfo	GetLayoutInfo()	const	{ return GetInfo(Layout()); }
 	constexpr CHANNEL		GetChan(int i)	const	{ return CHANNEL((chans >> (i * 3)) & 7); }
 
 	DXGI_COMPONENTS&		Layout(LAYOUT x)		{ layout = x; return *this; }
 	DXGI_COMPONENTS&		Type(TYPE x)			{ type = x; return *this; }
-//	DXGI_COMPONENTS&		Channels(CHANNELS x)	{ chans = x.chans; return *this; }
 
 	constexpr int			Bits()			const	{ return GetLayoutInfo().bits; }
-	constexpr int			Size()			const	{ return Bits() / 8; }
+	constexpr int			Bytes()			const	{ return Bits() / 8; }
 	constexpr int			NumComps()		const	{ return GetLayoutInfo().comps; }
 	constexpr int			CompSize(int i)	const	{ return GetLayoutInfo().chanbits[i]; }
 	constexpr bool			IsHDR()			const	{ return GetLayoutInfo().hdr; }
 	constexpr bool			IsBlock()		const	{ return GetLayoutInfo().block; }
 
+	constexpr friend int	Bits(LAYOUT layout)				{ return GetInfo(layout).bits; }
+	constexpr friend int	Bytes(LAYOUT layout)			{ return GetInfo(layout).bits / 8; }
+	constexpr friend int	NumComps(LAYOUT layout)			{ return GetInfo(layout).comps; }
+	constexpr friend int	CompSize(LAYOUT layout, int i)	{ return GetInfo(layout).chanbits[i]; }
+	constexpr friend bool	IsHDR(LAYOUT layout)			{ return GetInfo(layout).hdr; }
+	constexpr friend bool	IsBlock(LAYOUT layout)			{ return GetInfo(layout).block; }
+
 	void	SetChan(int i, CHANNEL c)	{ chans = (chans & ~(7 << (i * 3))) | (c << (i * 3)); }
 };
 
+constexpr uint32 dxgi_align(uint32 x) {
+	return align_pow2(x, 8);
+}
+constexpr uint32 dxgi_padding(uint32 x) {
+	return -int(x) & 255;
+}
+constexpr uint32 dxgi_align(uint32 x, bool align) {
+	return align ? dxgi_align(x) : x;
+}
 constexpr uint32 adjust_size(DXGI_COMPONENTS fmt, uint32 x) {
 	return fmt.IsBlock() ? (x + 3) >> 2 : x;
 }
-
 constexpr uint32 mip_size(uint32 x, int mip) {
 	return max(x >> mip, 1);
 }
@@ -326,38 +318,28 @@ constexpr uint32 mip_size(DXGI_COMPONENTS fmt, uint32 x, int mip) {
 	return adjust_size(fmt, mip_size(x, mip));
 }
 constexpr uint32 stride(DXGI_COMPONENTS fmt, uint32 x) {
-	return fmt.Size() * adjust_size(fmt, x);
+	return fmt.Bytes() * adjust_size(fmt, x);
 }
-constexpr uint32 aligned_stride(uint32 tsize, uint32 x) {
-	return align_pow2(tsize * x, 8);
-}
-constexpr uint32 aligned_stride(DXGI_COMPONENTS fmt, uint32 x) {
-	return align_pow2(fmt.Size() * x, 8);
-}
-constexpr uint32 mip_stride(DXGI_COMPONENTS fmt, uint32 x, int mip, bool align) {
-	return align ? align_pow2(fmt.Size() * mip_size(fmt, x, mip), 8) : fmt.Size() * mip_size(fmt, x, mip);
-}
-
-inline uint32 stride_padding(DXGI_COMPONENTS fmt, uint32 x, int mip) {
-	return -int(fmt.Size() * mip_size(fmt, x, mip)) & 255;
+constexpr uint32 mip_stride(DXGI_COMPONENTS fmt, uint32 x, int mip) {
+	return fmt.Bytes() * mip_size(fmt, x, mip);
 }
 
 inline size_t size1D(DXGI_COMPONENTS fmt, int width, int mips, bool align = true) {
 	size_t	total	= 0;
 	for (int i = 0; i < mips; i++)
-		total += mip_stride(fmt, width, i, align);
+		total += dxgi_align(mip_stride(fmt, width, i), align);
 	return total;
 }
 inline size_t size2D(DXGI_COMPONENTS fmt, int width, int height, int mips, bool align = true) {
 	size_t	total	= 0;
 	for (int i = 0; i < mips; i++)
-		total += mip_stride(fmt, width, i, align) *  mip_size(fmt, height, i);
+		total += dxgi_align(mip_stride(fmt, width, i), align) *  mip_size(fmt, height, i);
 	return total;
 }
 inline size_t size3D(DXGI_COMPONENTS fmt, int width, int height, int depth, int mips, bool align = true) {
 	size_t	total	= 0;
 	for (int i = 0; i < mips; i++)
-		total += mip_stride(fmt, width, i, align) *  mip_size(fmt, height, i) *  mip_size(depth, i);
+		total += dxgi_align(mip_stride(fmt, width, i), align) *  mip_size(fmt, height, i) *  mip_size(depth, i);
 	return total;
 }
 

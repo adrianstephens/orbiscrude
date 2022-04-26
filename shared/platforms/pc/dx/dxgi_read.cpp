@@ -2,16 +2,52 @@
 
 namespace iso {
 
+#if 1
+
+template<>	constexpr	int		num_elements_v<param_element<const uint8&, DXGI_COMPONENTS>>			= 0;
+
+template<typename D> const void* copy_slices0(const block<D, 3> &dest, const void *srce, DXGI_COMPONENTS format, uint64 depth_stride) {
+	uint32		w	= dest.template size<1>(), h = dest.template size<2>(), d = dest.template size<3>();
+	uint32		s2	= dxgi_align(format.Bytes() * w);//, s3 = s2 * h;
+	copy(make_strided_iblock(make_param_iterator((const uint8*)srce, move(format)), w, s2, h, depth_stride, d), dest);
+	return (const uint8*)srce + s2 * h;//s3 * d;
+}
+
+
+template<typename D, int N> const void* copy_slices(const block<D, 3> &dest, const BC<N> *srce, uint64 depth_stride) {
+	uint32		w	= round_pow2(dest.template size<1>(), 2), h = round_pow2(dest.template size<2>(), 2), d = dest.template size<3>();
+	uint32		s2	= dxgi_align((uint32)sizeof(BC<N>) * w);//, s3 = s2 * h;
+	copy(make_strided_block(srce, w, s2, h, depth_stride, d), dest);
+	return (const uint8*)srce + s2 * h;//s3 * d;
+}
+
+template<> const void *copy_slices(const block<HDRpixel, 3> &dest, const void *srce, DXGI_COMPONENTS::LAYOUT layout, DXGI_COMPONENTS::TYPE type, uint64 depth_stride) {
+	return copy_slices0(dest, srce, DXGI_COMPONENTS(layout, type), depth_stride);
+}
+
+template<> const void *copy_slices(const block<ISO_rgba, 3> &dest, const void *srce, DXGI_COMPONENTS::LAYOUT layout, DXGI_COMPONENTS::TYPE type, uint64 depth_stride) {
+	switch (layout) {
+		case DXGI_COMPONENTS::BC1:	return copy_slices(dest, (const BC<1>*)srce, depth_stride);
+		case DXGI_COMPONENTS::BC2:	return copy_slices(dest, (const BC<2>*)srce, depth_stride);
+		case DXGI_COMPONENTS::BC3:	return copy_slices(dest, (const BC<3>*)srce, depth_stride);
+		case DXGI_COMPONENTS::BC4:	return copy_slices(dest, (const BC<4>*)srce, depth_stride);
+		case DXGI_COMPONENTS::BC5:	return copy_slices(dest, (const BC<5>*)srce, depth_stride);
+		default:
+			return copy_slices0(dest, srce, DXGI_COMPONENTS(layout, type), depth_stride);
+	}
+}
+
+#else
 template<typename D, typename S> const void* copy_slices(const block<D, 3> &dest, const S *srce, uint64 depth_stride) {
 	uint32		w	= dest.template size<1>(), h = dest.template size<2>(), d = dest.template size<3>();
-	uint32		s2	= aligned_stride(uint32(sizeof(S)), w);//, s3 = s2 * h;
+	uint32		s2	= dxgi_align((uint32)sizeof(S) * w);//, s3 = s2 * h;
 	copy(make_strided_block(srce, w, s2, h, depth_stride, d), dest);
 	return (const uint8*)srce + s2 * h;//s3 * d;
 }
 
 template<typename D, int N> const void* copy_slices(const block<D, 3> &dest, const BC<N> *srce, uint64 depth_stride) {
 	uint32		w	= round_pow2(dest.template size<1>(), 2), h = round_pow2(dest.template size<2>(), 2), d = dest.template size<3>();
-	uint32		s2	= aligned_stride(uint32(sizeof(BC<N>)), w);//, s3 = s2 * h;
+	uint32		s2	= dxgi_align((uint32)sizeof(BC<N>) * w);//, s3 = s2 * h;
 	copy(make_strided_block(srce, w, s2, h, depth_stride, d), dest);
 	return (const uint8*)srce + s2 * h;//s3 * d;
 }
@@ -22,7 +58,7 @@ template<> const void *copy_slices(const block<ISO_rgba, 3> &dest, const void *s
 		case DXGI_COMPONENTS::R8G8B8A8:		return copy_slices(dest, (Texel<TexelFormat<32,0,8,8,8,16,8,24,8>	>*)srce, depth_stride);
 		case DXGI_COMPONENTS::R8G8:			return copy_slices(dest, (Texel<TexelFormat<16,0,8,8,8,0,0>			>*)srce, depth_stride);
 		case DXGI_COMPONENTS::R8:			return copy_slices(dest, (Texel<TexelFormat< 8,0,8,0,0,0,0>			>*)srce, depth_stride);
-//		case DXGI_COMPONENTS::R1:			return copy_slices(dest, (Texel<TexelFormat< 1,0,1,0,0,0,0>			>*)srce, depth_stride);
+			//		case DXGI_COMPONENTS::R1:			return copy_slices(dest, (Texel<TexelFormat< 1,0,1,0,0,0,0>			>*)srce, depth_stride);
 		case DXGI_COMPONENTS::B5G6R5:		return copy_slices(dest, (Texel<TexelFormat<16,11,5,5,6,0,5>		>*)srce, depth_stride);
 		case DXGI_COMPONENTS::B5G5R5A1:		return copy_slices(dest, (Texel<TexelFormat<16,10,5,5,5,0,5,15,1>	>*)srce, depth_stride);
 		case DXGI_COMPONENTS::R4G4B4A4:		return copy_slices(dest, (Texel<TexelFormat<16,0,4,4,4,8,4,12,4>	>*)srce, depth_stride);
@@ -107,5 +143,5 @@ template<> const void *copy_slices(const block<HDRpixel, 3> &dest, const void *s
 
 	}
 }
-
+#endif
 }

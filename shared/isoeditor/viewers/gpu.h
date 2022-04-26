@@ -114,6 +114,10 @@ public:
 //-----------------------------------------------------------------------------
 
 struct BatchList : dynamic_array<uint32> {
+	void	push_back(uint32 a) {
+		if (empty() || back() != a)
+			dynamic_array<uint32>::push_back(a);
+	}
 	friend bool operator<(const BatchList &a, const BatchList &b) {
 		return (a.size() ? (int)a.front() : -1) < (b.size() ? (int)b.front() : -1);
 	}
@@ -435,7 +439,7 @@ Control			MakeBufferWindow(const WindowPos &wpos, const char *title, ID id, Type
 VertexWindow*	MakeVertexWindow(const WindowPos &wpos, const char *title, ID id, named<TypedBuffer> *buffers, uint32 nb, const indices &ix = 0, uint32 num_instances = 1);
 MeshWindow*		MakeMeshView(const WindowPos &wpos, Topology2 topology, const TypedBuffer &vb, const indices &ix, param(float3x2) viewport, BackFaceCull cull, MeshWindow::MODE mode);
 Control			MakeComputeGrid(const WindowPos &wpos, const char *title, ID id, const uint3p &dim, const uint3p &group);
-uint32			GetComputeIndex(Control c, const Point &pt);
+//uint32			GetComputeIndex(Control c, const Point &pt);
 
 } // namespace app
 

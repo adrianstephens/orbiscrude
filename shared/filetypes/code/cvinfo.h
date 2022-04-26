@@ -50,7 +50,7 @@ public:
 
 	decimal()			{}
 	decimal(double d) : scale(0), sign(d < 0 ? 0x80 : 0) {
-		d		= iso::abs(d);
+		d		= abs(d);
 		while (frac(d)) {
 			d *= 10;
 			++scale;
@@ -740,7 +740,7 @@ struct segmented16 {
 // ensure packed
 struct segmented32 {
 	uint32	off;
-	uint16		seg;
+	uint16	seg;
 
 	segmented32	operator+(uint32 x) const { return {off + x, seg}; }
 
@@ -3101,10 +3101,10 @@ template<> struct SubSectionT<DEBUG_S_LINES> : SubSection {
 	};
 
 	struct line {
-		uint32		offset;					// Offset to start of code bytes for line number
-		uint32		linenumStart	: 24;	// line where statement/expression starts
-		uint32		deltaLineEnd	: 7;	// delta to line where statement ends (optional)
-		uint32		fStatement		: 1;	// true if a statement linenumber, else an expression line num
+		uint32	offset;					// Offset to start of code bytes for line number
+		uint32	linenumStart	: 24;	// line where statement/expression starts
+		uint32	deltaLineEnd	: 7;	// delta to line where statement ends (optional)
+		uint32	fStatement		: 1;	// true if a statement linenumber, else an expression line num
 		bool	normal() const { return linenumStart < NEVER_STEPINTO; }
 	};
 	struct column {
@@ -3115,7 +3115,7 @@ template<> struct SubSectionT<DEBUG_S_LINES> : SubSection {
 		int32	offFile;
 		int32	nLines;
 		int32	cbBlock;
-		line		line[1];
+		line	line[1];
 		auto	lines()		const { return make_range_n(line, nLines); }
 		auto	next()		const { return (const entry*)&line[nLines]; }
 	};

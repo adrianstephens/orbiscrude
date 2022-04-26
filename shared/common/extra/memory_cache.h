@@ -13,15 +13,17 @@ namespace iso {
 
 	struct memory_interface : refs<memory_interface> {
 		virtual ~memory_interface()	{}
-		virtual bool				_get(void *buffer, uint64 size, uint64 address)=0;
-		bool						get(void *buffer, uint64 size, uint64 address)	{ return _get(buffer, size, address); }
-		bool						get(const memory_block &m, uint64 address)		{ return _get(m.p, m.size(), address); }
+		virtual bool	_get(void *buffer, uint64 size, uint64 address)	= 0;
+		virtual uint64	_next(uint64 addr, uint64 &size, bool dir)	{ return 0; };
 
-		malloc_block				get(uint64 address, uint64 size) {
+		bool			get(void *buffer, uint64 size, uint64 address)	{ return _get(buffer, size, address); }
+		bool			get(const memory_block &m, uint64 address)		{ return _get(m.p, m.size(), address); }
+
+		malloc_block	get(uint64 address, uint64 size) {
 			malloc_block	m(size);
 			return _get(m, size, address) ? m : none;
 		}
-		malloc_block				get(const memory_block &m) {
+		malloc_block	get(const memory_block &m) {
 			return get((uint64)(void*)m, m.size32());
 		}
 		template<typename T> bool	read(T &t, uint64 address) {
@@ -111,11 +113,12 @@ namespace iso {
 			cache_block(const memory_block &b)			: memory_block(b) {}
 			cache_block		slice(void *a, void *b)				const	{ return cache_block(r, memory_block::slice(a, b)); }
 			cache_block		slice(intptr_t a, intptr_t b = 0)	const	{ return cache_block(r, memory_block::slice(a, b)); }
-			cache_block		sub_block_to(intptr_t b)				const	{ return slice(0, b); }
-			cache_block		sub_block_to(void *b)					const	{ return slice(start, b); }
-			T				address(const void *a)					const	{ return r ? r->start + T((uint8*)a - r->data()) : 0; }
-			T				address()								const	{ return address(memory_block::p); }
-			arbitrary_ptr	at_address(T a)							const	{ return r->data() + (a - r->start); }
+			cache_block		sub_block_to(intptr_t b)			const	{ return slice(0, b); }
+			cache_block		sub_block_to(void *b)				const	{ return slice(start, b); }
+			T				address(const void *a)				const	{ return r ? r->start + T((uint8*)a - r->data()) : 0; }
+			T				address()							const	{ return address(memory_block::p); }
+			arbitrary_ptr	at_address(T a)						const	{ return r->data() + (a - r->start); }
+			bool			contains(T a)						const	{ return r && a >= r->start && a < r->end; }
 		};
 
 		template<typename U> struct typed_cache_block : cache_block {

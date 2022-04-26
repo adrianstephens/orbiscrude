@@ -1793,9 +1793,11 @@ public:
 		OVERLAPPEDWINDOW	= OVERLAPPED | CAPTION | SYSMENU | THICKFRAME | MINIMIZEBOX | MAXIMIZEBOX,
 		POPUPWINDOW			= POPUP | BORDER | SYSMENU,
 	};
-	template<typename T> friend constexpr Style operator|(Style a, T b)	{ return Style((int)a | (int)b); }
-	template<typename T> friend constexpr Style operator&(Style a, T b)	{ return Style((int)a & (int)b); }
-	template<typename T> friend constexpr Style operator^(Style a, T b)	{ return Style((int)a ^ (int)b); }
+	friend nodebug_inline constexpr Style operator|(Style a, Style b)	{ return Style((int)a | (int)b); }
+	friend nodebug_inline constexpr Style operator&(Style a, Style b)	{ return Style((int)a & (int)b); }
+	friend nodebug_inline constexpr Style operator^(Style a, Style b)	{ return Style((int)a ^ (int)b); }
+	friend nodebug_inline constexpr Style operator-(Style a, Style b)	{ return Style((int)a & ~(int)b); }
+	friend nodebug_inline constexpr Style operator*(bool a, Style b)	{ return a ? b : NOSTYLE; }
 
 	// Extended Window Styles
 	enum StyleEx {
@@ -1827,9 +1829,11 @@ public:
 		OVERLAPPEDWINDOWEX	= WINDOWEDGE | CLIENTEDGE,
 		PALETTEWINDOW		= WINDOWEDGE | TOOLWINDOW | TOPMOST,
 	};
-	template<typename T> friend constexpr StyleEx operator|(StyleEx a, T b) { return StyleEx((int)a | (int)b); }
-	template<typename T> friend constexpr StyleEx operator&(StyleEx a, T b) { return StyleEx((int)a & (int)b); }
-	template<typename T> friend constexpr StyleEx operator^(StyleEx a, T b)	{ return StyleEx((int)a ^ (int)b); }
+	friend nodebug_inline constexpr StyleEx operator|(StyleEx a, StyleEx b)	{ return StyleEx((int)a | (int)b); }
+	friend nodebug_inline constexpr StyleEx operator&(StyleEx a, StyleEx b)	{ return StyleEx((int)a & (int)b); }
+	friend nodebug_inline constexpr StyleEx operator^(StyleEx a, StyleEx b)	{ return StyleEx((int)a ^ (int)b); }
+	friend nodebug_inline constexpr StyleEx operator-(StyleEx a, StyleEx b)	{ return StyleEx((int)a & ~(int)b); }
+	friend nodebug_inline constexpr StyleEx operator*(bool a, StyleEx b)	{ return a ? b : NOEX; }
 
 	template<int I, typename T> struct value {
 		HWND	hWnd;
@@ -2080,6 +2084,15 @@ inline void InitNotification(NMHDR &nmh, Control from, uint32 code) {
 	nmh.hwndFrom	= from;
 	nmh.idFrom		= from.id.get().i;
 	nmh.code		= code;
+}
+
+inline int SendNotification(NMHDR &nmh, Control to) {
+	return to.SendMessage(WM_NOTIFY, nmh.idFrom, &nmh);
+}
+
+inline int SendNotification(NMHDR &nmh, Control from, uint32 code) {
+	InitNotification(nmh, from, code);
+	return from.Parent().SendMessage(WM_NOTIFY, nmh.idFrom, &nmh);
 }
 
 struct Notification : NMHDR {
@@ -3520,6 +3533,20 @@ class ComboControl : public control_mixin<ComboControl, CommonControl> {
 	};
 public:
 	static const char *ClassName()	{ return WC_COMBOBOXA; }
+	static const Style
+		SIMPLE				= Style(0x0001L),
+		DROPDOWN			= Style(0x0002L),
+		DROPDOWNLIST		= Style(0x0003L),
+		OWNERDRAWFIXED		= Style(0x0010L),
+		OWNERDRAWVARIABLE	= Style(0x0020L),
+		AUTOHSCROLL			= Style(0x0040L),
+		OEMCONVERT			= Style(0x0080L),
+		SORT				= Style(0x0100L),
+		HASSTRINGS			= Style(0x0200L),
+		NOINTEGRALHEIGHT	= Style(0x0400L),
+		DISABLENOSCROLL		= Style(0x0800L),
+		UPPERCASE			= Style(0x2000L),
+		LOWERCASE			= Style(0x4000L);
 	static const StyleEx
 		NOEDITIMAGE			= StyleEx(0x0001),
 		NOEDITIMAGEINDENT	= StyleEx(0x0002),
@@ -3609,6 +3636,8 @@ public:
 			EXPANDPARTIAL	= TVIS_EXPANDPARTIAL,
 			USER1			= TVIS_USERMASK & -TVIS_USERMASK, USER2 = USER1 << 1, USER3 = USER1 << 2, USER4 = USER1 << 3
 		};
+		static Item	TextCallback()						{ Item i(TVIF_TEXT); i.pszText = LPSTR_TEXTCALLBACK; return i; }
+
 		void		init(uint32 _mask)					{ mask = _mask; stateMask = 0; uStateEx = 0; }
 					Item(uint32 _mask = 0)				{ init(_mask); }
 					//Item(const char *s)					{ init(TVIF_TEXT); pszText = const_cast<char*>(s); }

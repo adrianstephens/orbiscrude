@@ -280,11 +280,11 @@ Control MakeFinderWindow(MainWindow &main, const ISO::Browser2 &b, const char *r
 LRESULT FinderWindow::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 		case WM_CREATE: {
-			label.Create(*this, NULL, CHILD | VISIBLE | SS_CENTERIMAGE);
-			value.Create(*this, NULL, CHILD | VISIBLE | BORDER | ES_AUTOHSCROLL, NOEX, 1);
-			depth.Create(*this, NULL, CHILD | VISIBLE | BORDER | ES_AUTOHSCROLL, NOEX, 1);
-			treecolumn.Create(WindowPos(*this, Rect(0,0,0,0)), NULL, CHILD | VISIBLE | BORDER | HSCROLL | TCS_GRIDLINES | TCS_HEADERAUTOSIZE);
-			toolbar.Create(*this, NULL, CHILD | VISIBLE | CCS_NORESIZE | CCS_NOPARENTALIGN);
+			label.Create(*this, NULL, CHILD | VISIBLE | label.CENTERIMAGE);
+			value.Create(*this, NULL, CHILD | VISIBLE | BORDER | value.AUTOHSCROLL, NOEX, 1);
+			depth.Create(*this, NULL, CHILD | VISIBLE | BORDER | value.AUTOHSCROLL, NOEX, 1);
+			treecolumn.Create(WindowPos(*this, Rect(0,0,0,0)), NULL, CHILD | VISIBLE | BORDER | HSCROLL | treecolumn.GRIDLINES | treecolumn.HEADERAUTOSIZE);
+			toolbar.Create(*this, NULL, CHILD | VISIBLE | toolbar.NORESIZE | toolbar.NOPARENTALIGN);
 			_value	= value;
 			_depth	= depth;
 			_tree	= treecolumn;
@@ -300,7 +300,7 @@ LRESULT FinderWindow::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 			HeaderControl::Item("Type").	Format(HDF_LEFT).Width(100).Insert(header, 1);
 			HeaderControl::Item("Value").	Format(HDF_LEFT).Width(100).Insert(header, 2);
 			treecolumn.SetMinWidth(2, 100);
-			treecolumn.GetTreeControl().style = CHILD | VISIBLE | CLIPSIBLINGS | TVS_NOHSCROLL | TVS_HASLINES | TVS_HASBUTTONS | TVS_LINESATROOT | TVS_SHOWSELALWAYS | TVS_FULLROWSELECT;
+			treecolumn.GetTreeControl().style = CHILD | VISIBLE | CLIPSIBLINGS | TreeControl::NOHSCROLL | TreeControl::HASLINES | TreeControl::HASBUTTONS | TreeControl::LINESATROOT | TreeControl::SHOWSELALWAYS | TreeControl::FULLROWSELECT;
 
 			label.SetText("value:");
 			label.SetFont(Font(Font::Caption()));

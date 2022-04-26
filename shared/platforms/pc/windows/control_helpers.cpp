@@ -39,7 +39,7 @@ public:
 		DialogBoxCreator	dc(Rect(0, 0, 276,46), "IsoEditor", POPUP|CAPTION|SYSMENU|DS_SETFONT|DS_MODALFRAME|DS_FIXEDSYS);
 		dc.SetFont(Font::Caption());
 		dc.AddControl(Rect(6, 2, 264, 12),	DLG_STATIC,	"Value");
-		dc.AddControl(Rect(6, 14, 264, 12), DLG_EDIT,	"", ID_EDIT, BORDER | ES_AUTOHSCROLL);
+		dc.AddControl(Rect(6, 14, 264, 12), DLG_EDIT,	"", ID_EDIT, BORDER | EditControl::AUTOHSCROLL);
 		dc.AddControl(Rect(6, 28, 50, 14),	DLG_BUTTON,	"OK", IDOK, Button::DEFPUSHBUTTON);
 		dc.AddControl(Rect(60, 28, 50, 14), DLG_BUTTON,	"Cancel");
 
@@ -103,7 +103,7 @@ LRESULT EditControl2::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 
 void EditLabelCommon(EditControl2 &edit, const WindowPos &wpos, string_param &&text, ID id) {
 	edit.Create(wpos, text,
-		Control::CHILD | Control::VISIBLE | Control::CLIPSIBLINGS | ES_AUTOHSCROLL | ES_WANTRETURN, Control::CLIENTEDGE,
+		Control::CHILD | Control::VISIBLE | Control::CLIPSIBLINGS | EditControl::AUTOHSCROLL | EditControl::WANTRETURN, Control::CLIENTEDGE,
 		id
 	);
 	edit.SetFont(wpos.Parent().GetFont());

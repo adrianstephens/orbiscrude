@@ -185,9 +185,6 @@ template<typename X, typename Y, typename Z, typename W> struct C_types::type_ge
 	}
 };
 
-
-
-
 #endif
 }
 
@@ -240,23 +237,23 @@ template<typename T, typename U> void FillTable(ListViewControl &c, dynamic_arra
 	}
 }
 
-struct ColumnSorter {
-	int				dir;
-	template<typename T> inline int compare(T a, T b) const { return a < b ? -dir : a > b ? dir : 0; }
-	ColumnSorter(int _dir) : dir(_dir) {}
-};
-
 struct FieldSorter : ColumnSorter {
 	const field	f;
 	int	operator()(uint32 *a, uint32 *b) const { return compare(f.get_value(a), f.get_value(b)); }
-	FieldSorter(const field &_f, int dir) : ColumnSorter(dir), f(_f) {}
+	FieldSorter(const field &f, int dir) : ColumnSorter(dir), f(f) {}
 };
 
-struct ColumnTextSorter : ColumnSorter {
-	ListViewControl	list;
-	int				col;
-	int	operator()(uint32 a, uint32 b) const { return compare(str<256>(list.GetItemText(a, col)), str<256>(list.GetItemText(b, col))); }
-	ColumnTextSorter(ListViewControl _list, int _col, int _dir) : ColumnSorter(_dir), list(_list), col(_col) {}
+struct IndirectFieldSorter : ColumnSorter {
+	const field*	pf;
+	int				index;
+	int	operator()(uint32 *a, uint32 *b) const {
+		const uint32	*pa = a, *pb = b;
+		uint32			offseta = 0, offsetb = 0;
+		const field* fa = FieldIndex(pf, index, pa, offseta, true);
+		const field* fb = FieldIndex(pf, index, pb, offsetb, true);
+		return compare(fa ? fa->get_value(pa, offseta) : 0, fb ? fb->get_value(pb, offsetb) : 0);
+	}
+	IndirectFieldSorter(const field *pf, int index, int dir) : ColumnSorter(dir), pf(pf), index(index) {}
 };
 
 //-----------------------------------------------------------------------------
@@ -465,7 +462,7 @@ template<typename T, typename U = T, typename A = dynamic_array<U>> struct Entry
 		return false;
 	}
 
-	int Init() {
+	int InitColumns() {
 		AddColumns(
 			"name",		200,
 			"used at",	100,
@@ -474,23 +471,15 @@ template<typename T, typename U = T, typename A = dynamic_array<U>> struct Entry
 		return MakeColumns(*this, fields<T>::f, IDFMT_CAMEL | IDFMT_FOLLOWPTR, 3);
 	}
 
-	HWND CreateNoColumns(const WindowPos &wpos, text title, ID id, Style style = CHILD | CLIPSIBLINGS | VISIBLE | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS, StyleEx styleEx = GRIDLINES | DOUBLEBUFFER | FULLROWSELECT) {
+	HWND Create(const WindowPos &wpos, text title, Style style = CHILD | CLIPSIBLINGS | VISIBLE | REPORT | SINGLESEL | SHOWSELALWAYS, StyleEx styleEx = GRIDLINES | DOUBLEBUFFER | FULLROWSELECT, ID id = ID()) {
 		HWND h = ListViewControl::Create(wpos, title, style, styleEx, id);
 		user = this;
+		SetExtendedStyle(styleEx);
+		InitColumns();
 		return h;
 	}
-	HWND CreateWithID(const WindowPos &wpos, text title, ID id, Style style = CHILD | CLIPSIBLINGS | VISIBLE | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS, StyleEx styleEx = GRIDLINES | DOUBLEBUFFER | FULLROWSELECT) {
-		HWND h = ListViewControl::Create(wpos, title, style, styleEx, id);
-		user = this;
-		Init();
-		return h;
-	}
-
-	HWND Create(const WindowPos &wpos, text title, Style style = CHILD | CLIPSIBLINGS | VISIBLE | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS, StyleEx styleEx = GRIDLINES | DOUBLEBUFFER | FULLROWSELECT, ID id = ID()) {
-		HWND h = ListViewControl::Create(wpos, title, style, styleEx, id);
-		user = this;
-		Init();
-		return h;
+	HWND CreateWithID(const WindowPos &wpos, text title, ID id, Style style = CHILD | CLIPSIBLINGS | VISIBLE | REPORT | SINGLESEL | SHOWSELALWAYS, StyleEx styleEx = GRIDLINES | DOUBLEBUFFER | FULLROWSELECT) {
+		return Create(wpos, title, style, styleEx, id);
 	}
 
 	U*			GetEntry(int i)			const	{ return GetItemParam(i); }

@@ -631,7 +631,7 @@ public:
 	ViewMessages(const win::WindowPos &wpos, ISOControl *c) {
 		static dll_function<decltype(SetHook)> _SetHook(LoadLibraryA(embedded_dll("hook.dll")), "SetHook");
 		Create(wpos, "Messages", CHILD | CLIPSIBLINGS | VISIBLE);
-		lv.Create(GetChildWindowPos(), 0, CHILD | CLIPSIBLINGS | VISIBLE | LVS_REPORT | LVS_AUTOARRANGE | LVS_SINGLESEL | LVS_SHOWSELALWAYS | LVS_OWNERDATA);
+		lv.Create(GetChildWindowPos(), 0, CHILD | CLIPSIBLINGS | VISIBLE | lv.REPORT | lv.AUTOARRANGE | lv.SINGLESEL | lv.SHOWSELALWAYS | lv.OWNERDATA);
 		lv.AddColumns("hWnd", 100, "Type", 100, "Message", 200, "wParam", 100, "lParam", 100, "Time/Result", 100, "Point", 100);
 		shared = _SetHook(*this, c->thread_id());
 	}

@@ -35,7 +35,7 @@ struct TrackBarControlF : TrackBarControl {
 TrackBarControlF DropDownTrackBar(ToolBarControl toolbar, uint16 id, uint32 height) {
 	toolbar.CheckButton(id,	true);
 	Rect	r	= toolbar.GetItemRectByID(id);
-	return TrackBarControlF(toolbar.Parent(), 0, Control::CHILD | Control::CLIPSIBLINGS | Control::VISIBLE | TBS_VERT, Control::NOEX, Rect(r.Left(), r.Bottom(), r.Width(), height), id);
+	return TrackBarControlF(toolbar.Parent(), 0, Control::CHILD | Control::CLIPSIBLINGS | Control::VISIBLE | TrackBarControl::BOTTOM, Control::NOEX, Rect(r.Left(), r.Bottom(), r.Width(), height), id);
 }
 
 class ViewBitmap : ViewBitmap_base, public Window<ViewBitmap>, public WindowTimer<ViewBitmap> {
@@ -167,7 +167,7 @@ public:
 LRESULT ViewBitmap::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 		case WM_CREATE:
-			toolbar.Create(*this, NULL, CHILD | CLIPSIBLINGS | VISIBLE | TBSTYLE_FLAT | TBSTYLE_TOOLTIPS);
+			toolbar.Create(*this, NULL, CHILD | CLIPSIBLINGS | VISIBLE | ToolBarControl::FLAT | ToolBarControl::TOOLTIPS);
 			toolbar.SetExtendedStyle(ToolBarControl::DRAWDDARROWS);
 			toolbar.Init(IDR_TOOLBAR_BITMAP);
 

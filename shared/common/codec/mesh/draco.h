@@ -314,7 +314,7 @@ struct Attribute {
 
 #ifdef DRACO_ENABLE_WRITER
 	bool	WriteHeader(ostream_ref file) {
-		return write(file, type, data_type, num_components, normalised, make_leb128(unique_id));
+		return file.write(type, data_type, num_components, normalised, make_leb128(unique_id));
 	}
 	bool	WriteCodingData(ostream_ref file) {
 		return !coding || coding->Write(file);

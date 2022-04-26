@@ -180,7 +180,7 @@ int CAMELLIA::init(const const_memory_block &key) {
 	double_int<uint64> k[4];
 	clear(k);
 
-	key_size = key.length32();
+	key_size = key.size32();
 
 	const uint64be	*key2 = key;
 	k[0].lo = key2[0];

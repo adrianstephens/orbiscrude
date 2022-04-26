@@ -118,7 +118,7 @@ struct SortColumn {
 
 	SortColumn() : sort_col(0) {}
 	int SetColumn(HeaderControl h, int col) {
-		int					prev	= iso::abs(sort_col) - 1;
+		int					prev	= abs(sort_col) - 1;
 		HeaderControl::Item	item(HDI_FORMAT);
 		if (col == prev) {
 			sort_col = -sort_col;
@@ -166,6 +166,34 @@ template<typename C> struct SortedListViewControl : ListViewControl, SortColumn 
 	uint32	NumItems() const { return sorted_order.size32(); }
 };
 
+struct ColumnSorter {
+	int				dir;
+	template<typename T> inline int compare(T a, T b) const { return a < b ? -dir : a > b ? dir : 0; }
+	ColumnSorter(int dir) : dir(dir) {}
+};
+
+template<typename T> struct _StructFieldSorter;
+template<typename C, typename T> struct _StructFieldSorter<T C::*> : ColumnSorter {
+	T C::*p;
+	int	operator()(uint32 *a, uint32 *b) const { return ColumnSorter::compare(((C*)a)->*p, ((C*)b)->*p); }
+	_StructFieldSorter(T C::*p, int dir) : ColumnSorter(dir), p(p) {}
+};
+
+template<typename T> _StructFieldSorter<T> StructFieldSorter(T t, int dir) {
+	return {t, dir};
+}
+
+struct ColumnTextSorter : ColumnSorter {
+	ListViewControl	list;
+	int				col;
+	int	operator()(uint32 a, uint32 b) const {
+		int	d = numstring_cmp(str<256>(list.GetItemText(a, col)), str<256>(list.GetItemText(b, col)));
+		return d < 0 ? -dir : d > 0 ? dir : 0;
+		//return compare(str<256>(list.GetItemText(a, col)), str<256>(list.GetItemText(b, col)));
+	}
+	ColumnTextSorter(ListViewControl list, int col, int dir) : ColumnSorter(dir), list(list), col(col) {}
+};
+
 //-----------------------------------------------------------------------------
 //	EditControl2
 //-----------------------------------------------------------------------------
@@ -188,7 +216,7 @@ void EditLabel(TreeColumnControl tc, EditControl2 &edit, HTREEITEM h, int col, I
 
 struct ListViewControl2 : public ListViewControl {
 	void Create(const WindowPos &wpos, const char *title, Style style = CHILD | CLIPSIBLINGS) {
-		ListViewControl::Create(wpos, title, style | LVS_REPORT | LVS_NOSORTHEADER |  LVS_SHOWSELALWAYS);
+		ListViewControl::Create(wpos, title, style | REPORT | NOSORTHEADER | SHOWSELALWAYS);
 		SetExtendedStyle(GRIDLINES | FULLROWSELECT | DOUBLEBUFFER | ONECLICKACTIVATE);
 	};
 	ListViewControl2() {}
@@ -377,13 +405,13 @@ public:
 	};
 	Timer() : h(0)	{}
 	~Timer()		{ DeleteTimerQueueTimer(0, h, INVALID_HANDLE_VALUE); }
-	void	Start(WAITORTIMERCALLBACK proc, float t, FLAGS flags = DEFAULT) {
+	bool	Start(WAITORTIMERCALLBACK proc, float t, FLAGS flags = DEFAULT) {
 		Stop();
-		CreateTimerQueueTimer(&h, 0, proc, this, 1000 * t, 1000 * t, flags);
+		return CreateTimerQueueTimer(&h, 0, proc, this, 1000 * t, 1000 * t, flags);
 	}
-	void	Next(WAITORTIMERCALLBACK proc, float t, FLAGS flags = DEFAULT) {
+	bool	Next(WAITORTIMERCALLBACK proc, float t, FLAGS flags = DEFAULT) {
 		Stop();
-		CreateTimerQueueTimer(&h, 0, proc, this, 1000 * t, 0, flags);
+		return CreateTimerQueueTimer(&h, 0, proc, this, 1000 * t, 0, flags);
 	}
 	void	Stop() {
 		if (HANDLE h0 = exchange(h, nullptr))
@@ -487,11 +515,11 @@ struct Progress : ProgressTaskBar {
 		prev	= 0;
 		if (total	= _total) {
 			SetMarquee(false);
-			style = style & ~PBS_MARQUEE;
+			style = style - MARQUEE;
 			SetRange(0, 100);
 		} else {
 			SetMarquee(true);
-			style = style | PBS_MARQUEE;
+			style = style | MARQUEE;
 		}
 	}
 	bool Changes(uint64 pos) {

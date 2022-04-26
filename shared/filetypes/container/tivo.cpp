@@ -159,7 +159,7 @@ struct fs_entry : bigendian_types	{
 uint32 mfs_compute_crc(void *data, uint32 size, uint32 off) {
 	static const uint8 deadfood[] = { 0xde, 0xad, 0xf0, 0x0d };
 	crc32	crc(~0);
-	write(crc, memory_block(data, off), deadfood, memory_block((uint8*)data + off + 4, size - off - 4));
+	crc.write(memory_block(data, off), deadfood, memory_block((uint8*)data + off + 4, size - off - 4));
 	return ~crc;
 }
 bool mfs_check_crc(void *data, uint32 size, uint32 &crc) {

@@ -406,7 +406,7 @@ public:
 
 	TextEditor(MainWindow &_main, const WindowPos &wpos, Control *c) : main(_main), cref(c) {
 		HINSTANCE	hInst	= LoadLibraryA("RICHED20.DLL");
-		Create(wpos, NULL, CHILD | VISIBLE | HSCROLL | VSCROLL | ES_MULTILINE | ES_AUTOHSCROLL | ES_AUTOVSCROLL, CLIENTEDGE);
+		Create(wpos, NULL, CHILD | VISIBLE | HSCROLL | VSCROLL | MULTILINE | AUTOHSCROLL | AUTOVSCROLL, CLIENTEDGE);
 		if (cref)
 			*cref = *this;
 

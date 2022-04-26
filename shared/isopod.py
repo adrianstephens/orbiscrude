@@ -88,120 +88,75 @@ class SYNTH_ISO_Type:
 def synth_index(name):
 	return int(name.lstrip('[').rstrip(']'))
 
-def synth_child(array, stride, type, num_children, index):
-	if index < 0 or index >= num_children:
-		return None
-	return array.CreateChildAtOffset('[{}]'.format(index), index * stride, type)
-
 #----------------------------------------------------------------
 #	array
 #----------------------------------------------------------------
 
-class SYNTH_static_array:
-	def __init__(self, val, dict):
-		self.val = val
-
+class SYNTH_array:
 	def has_children(self):
 		return True
 
 	def num_children(self):
-		return self.curr_size
+		return self.size
 
 	def get_child_at_index(self, index):
-		return synth_child(self.p, self.T_size, self.T, self.curr_size, index)
+		if index < 0 or index >= self.size:
+			return None
+		return self.p.CreateChildAtOffset('[{}]'.format(index), index * self.stride, self.type)
 
 	def get_child_index(self,name):
 		return synth_index(name)
 
-	def update(self):
-		self.p			= self.val.GetChildMemberWithName('t')
-		self.curr_size	= self.val.GetChildMemberWithName('curr_size').GetValueAsUnsigned(0)
-		self.T			= self.val.template_args[0]
-		self.T_size		= self.T.GetByteSize()
-		return True
-
 	def get_value(self):
-		return self.curr_size
+		return self.size
 
-class SYNTH_dynamic_array:
+
+class SYNTH_static_array(SYNTH_array):
 	def __init__(self, val, dict):
 		self.val = val
 
-	def has_children(self):
-		return True
-
-	def num_children(self):
-		return self.curr_size
-
-	def get_child_at_index(self, index):
-		return synth_child(self.p, self.T_size, self.T, self.curr_size, index)
-
-	def get_child_index(self,name):
-		return synth_index(name)
-
 	def update(self):
-		self.p			= self.val.GetChildMemberWithName('p')
-		self.curr_size	= self.val.GetChildMemberWithName('curr_size').GetValueAsUnsigned(0)
-		self.T			= self.p.GetType().GetPointeeType()
-		self.T_size		= self.T.GetByteSize()
+		self.p		= self.val.GetChildMemberWithName('t')
+		self.size	= self.val.GetChildMemberWithName('curr_size').GetValueAsUnsigned(0)
+		self.type	= self.val.GetType().GetTemplateArgumentType(0)
+		self.stride	= self.type.GetByteSize()
 		return True
 
-	def get_value(self):
-		return self.curr_size
-
-class SYNTH_compact_array:
+class SYNTH_dynamic_array(SYNTH_array):
 	def __init__(self, val, dict):
 		self.val = val
 
-	def has_children(self):
+	def update(self):
+		self.p		= self.val.GetChildMemberWithName('p')
+		self.size	= self.val.GetChildMemberWithName('curr_size').GetValueAsUnsigned(0)
+		self.type	= self.val.GetType().GetTemplateArgumentType(0)
+		self.stride	= self.type.GetByteSize()
 		return True
 
-	def num_children(self):
-		return self.curr_size
-
-	def get_child_at_index(self, index):
-		return synth_child(self.array, self.T_size, self.T, self.curr_size, index)
-
-	def get_child_index(self,name):
-		return synth_index(name)
+class SYNTH_compact_array(SYNTH_array):
+	def __init__(self, val, dict):
+		self.val = val
 
 	def update(self):
-		self.p			= self.val.GetChildMemberWithName('p')
-		self.array		= self.p.GetChildMemberWithName('array')
-		self.curr_size	= self.p.GetChildMemberWithName('curr_size').GetValueAsUnsigned(0)
-		self.T			= self.val.GetType().GetTemplateArgumentType(0)
-		self.T_size		= self.T.GetByteSize()
+		p			= self.val.GetChildMemberWithName('p')
+		self.p		= p.GetChildMemberWithName('array')
+		self.size	= p.GetChildMemberWithName('curr_size').GetValueAsUnsigned(0)
+		self.type	= self.val.GetType().GetTemplateArgumentType(0)
+		self.stride	= self.type.GetByteSize()
 		return True
-
-	def get_value(self):
-		return self.curr_size
 		
-class SYNTH_range:
+class SYNTH_range(SYNTH_array):
 	def __init__(self, val, dict):
 		self.val = val
 
-	def has_children(self):
-		return True
-
-	def num_children(self):
-		return self.curr_size
-
-	def get_child_at_index(self, index):
-		return synth_child(self.a, self.T_size, self.T, self.curr_size, index)
-
-	def get_child_index(self,name):
-		return synth_index(name)
-
 	def update(self):
-		self.a			= self.val.GetChildMemberWithName('a')
-		self.b			= self.val.GetChildMemberWithName('b')
-		self.T			= self.a.GetType().GetPointeeType()
-		self.T_size		= self.T.GetByteSize()
-		self.curr_size	= (self.b.GetValueAsUnsigned(0) - self.a.GetValueAsUnsigned(0)) // self.T_size
+		a	= self.val.GetChildMemberWithName('a')
+		b	= self.val.GetChildMemberWithName('b')
+		self.p		= a
+		self.type	= a.GetType().GetPointeeType()
+		self.stride	= self.type.GetByteSize()
+		self.size	= (b.GetValueAsUnsigned(0) - a.GetValueAsUnsigned(0)) // self.stride
 		return True
-
-	def get_value(self):
-		return self.curr_size
 
 
 #----------------------------------------------------------------

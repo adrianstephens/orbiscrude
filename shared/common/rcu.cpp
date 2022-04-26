@@ -86,7 +86,8 @@ void RCU::_synchronise() {
 			}
 		#else
 			list_base<per_thread>	quiescent_readers;
-			
+			quiescent_readers.push_front(_per_thread.unlink());
+
 			// next phase
 			uint32	phase = (ctr += PHASE_MASK);
 

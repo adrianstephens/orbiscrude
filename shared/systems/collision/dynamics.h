@@ -35,6 +35,27 @@ struct MassProperties {
 	}
 };
 
+
+auto rotate_inertia(const symmetrical3 &inertia, const float3x3 &rot) {
+	return rot * inertia * transpose(rot);
+}
+
+auto scale_inertia(const diagonal3 &inertia, float3 s) {
+	auto	d	= (inertia.trace() * half - inertia.d) * square(s);
+	return d.zxy + d.yzx;
+}
+
+auto scale_inertia(const symmetrical3 &inertia, float3 s) {
+	auto	d	= (inertia.trace() * half - inertia.d) * square(s);
+	return symmetrical3(d.zxy + d.yzx, inertia.o * s * s.yzx);
+}
+
+auto inertia_from_translation(float3 t, float mass) {
+	auto	t2 = square(t);
+	return symmetrical3(t2.yzx + t2.zxy, -(t * t.yzx) * mass);
+}
+
+
 MassProperties operator+(const MassProperties &m1, const MassProperties &m2);
 MassProperties operator-(const MassProperties &m1, const MassProperties &m2);
 MassProperties operator*(const float3x3 &mat, const MassProperties &m1);

@@ -1655,7 +1655,7 @@ struct tester {
 			fn += "/remotes";
 			fn += URLcomponents(uri).path;
 
-			val.read(lvalue(JSONreader(lvalue(FileInput(fn)))));
+			val.read(lvalue(JSONreader(FileInput(fn))));
 		}
 	}
 

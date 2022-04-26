@@ -1886,6 +1886,9 @@ namespace simd {
 #elif defined __ARM_NEON__
 #endif
 
+template<typename A, typename B> 	SIMD_FUNC auto saturated_add(A a, B b);
+template<typename A, typename B> 	SIMD_FUNC auto saturated_sub(A a, B b);
+
 #if defined __ARM_NEON__ || defined __SSE4_1__
 
 	template<typename E, int N>	SIMD_FUNC oversized_t<E, N, vec<E,N>>	saturated_add1(vec<E,N> x, vec<E,N> y)	{ return simd_lo_hi(saturated_add(x.lo, y.lo), saturated_add(x.hi, y.hi)); }

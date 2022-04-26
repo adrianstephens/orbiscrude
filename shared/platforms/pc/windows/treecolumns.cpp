@@ -98,7 +98,7 @@ void TreeColumnControl::Draw(DeviceContext dc, HTREEITEM hItem, const Rect &rect
 			}
 		}
 		// grid
-		if (style & TCS_GRIDLINES)
+		if (style & GRIDLINES)
 			dc.DrawEdge(columnRect, BDR_SUNKENINNER, BF_RIGHT | BF_BOTTOM);
 	}
 }
@@ -163,7 +163,7 @@ void TreeColumnControl::UpdateScrollInfo() {
 
 void TreeColumnControl::AdjustColumns() {
 	if (int count = header.Count()) {
-		if (style & TCS_HEADERAUTOSIZE) {
+		if (style & HEADERAUTOSIZE) {
 			Rect	rect		= header.GetItemRect(count - 1);
 			int		min_width	= int(HeaderControl::Item(TCIF_PARAM).Get(header, count - 1).Param());
 			int		width		= max(GetClientRect().Width() + siHoriz.nPos - rect.left, min_width);
@@ -195,7 +195,7 @@ Rect TreeColumnControl::GetItemRect(HTREEITEM hItem, int iSubItem, bool fromtree
 
 void TreeColumnControl::AdjustRect(HTREEITEM hItem, int iSubItem, RECT *rect, uint32 style) const {
 	// grid
-	if (style & TCS_GRIDLINES) {
+	if (style & GRIDLINES) {
 		--rect->right;
 		--rect->bottom;
 	}
@@ -256,7 +256,7 @@ LRESULT TreeColumnControl::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 		}
 		case WM_SIZE:
 			if (int count = header.Count()) {
-				if (style & TCS_HEADERAUTOSIZE) {
+				if (style & HEADERAUTOSIZE) {
 					Rect	rect		= header.GetItemRect(count - 1);
 					int		min_width	= int(HeaderControl::Item(TCIF_PARAM).Get(header, count - 1).Param());
 					int		width		= max(Point(lParam).x + siHoriz.nPos - rect.left, min_width);
@@ -365,11 +365,11 @@ LRESULT TreeColumnControl::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 				NMHEADER	*nmhd = (NMHEADER*)pnmh;
 				switch (pnmh->code) {
 //					case HDN_BEGINTRACK:
-//						return (GetValue(GWL_STYLE) & TCS_HEADERAUTOSIZE) && nmhd->iItem == header.GetCount() - 1;
+//						return (GetValue(GWL_STYLE) & HEADERAUTOSIZE) && nmhd->iItem == header.GetCount() - 1;
 
 					case HDN_ITEMCHANGING:
 						if (nmhd->pitem->mask & HDI_WIDTH) {
-							int min_width = style & TCS_HEADERAUTOSIZE ? int(HeaderControl::Item(TCIF_PARAM).Get(header, nmhd->iItem).Param()) : 0;
+							int min_width = style & HEADERAUTOSIZE ? int(HeaderControl::Item(TCIF_PARAM).Get(header, nmhd->iItem).Param()) : 0;
 							if (min_width)
 								nmhd->pitem->cxy = max(nmhd->pitem->cxy, min_width);
 							Rect	rect	= tree.GetClientRect();
@@ -383,7 +383,7 @@ LRESULT TreeColumnControl::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 						}
 						break;
 					case HDN_ITEMCHANGED:
-						if ((nmhd->pitem->mask & HDI_WIDTH) && (style & TCS_HEADERAUTOSIZE)) {
+						if ((nmhd->pitem->mask & HDI_WIDTH) && (style & HEADERAUTOSIZE)) {
 							int	last_index = header.Count() - 1;
 							if (nmhd->iItem != last_index) {
 								int	min_width	= int(HeaderControl::Item(TCIF_PARAM).Get(header, last_index).Param());

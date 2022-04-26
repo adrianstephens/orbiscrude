@@ -24,7 +24,7 @@ template<bool be> ISO_ptr<void>	ReadForm(_RIFF_chunk<be> &riff, int alignment = 
 class RIFFFileHandler : public FileHandler {
 	const char*		GetDescription() override { return "Generic RIFF container"; }
 
-	int	Check(istream_ref file) {
+	int	Check(istream_ref file) override {
 		file.seek(0);
 		return file.get<uint32>() == "RIFF"_u32 ? CHECK_POSSIBLE : CHECK_DEFINITE_NO;
 	}
@@ -40,7 +40,7 @@ class RIFFFileHandler : public FileHandler {
 class RIFXFileHandler : public FileHandler {
 	const char*		GetDescription() override { return "Generic RIFX container"; }
 
-	int	Check(istream_ref file) {
+	int	Check(istream_ref file) override {
 		file.seek(0);
 		return file.get<uint32>() == "RIFX"_u32 ? CHECK_POSSIBLE : CHECK_DEFINITE_NO;
 	}
