@@ -5,24 +5,25 @@
 
 namespace iso {
 
-template<> struct field_names<DXGI_FORMAT> 					{ static field_prefix<const char*> s; };
-template<> struct field_names<D3D_SHADER_VARIABLE_CLASS> 	{ static field_prefix<const char*> s; };
-template<> struct field_names<D3D_SHADER_VARIABLE_TYPE> 	{ static field_prefix<const char*> s; };
-template<> struct field_names<D3D_SHADER_INPUT_TYPE> 		{ static field_prefix<const char*> s; };
-template<> struct field_names<D3D_RESOURCE_RETURN_TYPE> 	{ static field_prefix<const char*> s; };
-template<> struct field_names<D3D_REGISTER_COMPONENT_TYPE> 	{ static field_prefix<const char*> s; };
-template<> struct field_names<D3D_TESSELLATOR_DOMAIN> 		{ static field_prefix<const char*> s; };
-template<> struct field_names<D3D_TESSELLATOR_PARTITIONING> { static field_prefix<const char*> s; };
-template<> struct field_names<D3D_TESSELLATOR_OUTPUT_PRIMITIVE>	{ static field_prefix<const char*> s; };
-template<> struct field_names<D3D_INTERPOLATION_MODE>		{ static field_prefix<const char*> s; };
-template<> struct field_names<D3D_PARAMETER_FLAGS>			{ static field_prefix<const char*> s; };
-template<> struct field_names<D3D_SRV_DIMENSION>			{ static field_prefix<const char*> s; };
+DECLARE_PREFIXED_ENUMS(DXGI_FORMAT);
+DECLARE_PREFIXED_ENUMS(D3D_SHADER_VARIABLE_CLASS);
+DECLARE_PREFIXED_ENUMS(D3D_SHADER_VARIABLE_TYPE);
+DECLARE_PREFIXED_ENUMS(D3D_SHADER_INPUT_TYPE);
+DECLARE_PREFIXED_ENUMS(D3D_RESOURCE_RETURN_TYPE);
+DECLARE_PREFIXED_ENUMS(D3D_REGISTER_COMPONENT_TYPE);
+DECLARE_PREFIXED_ENUMS(D3D_TESSELLATOR_DOMAIN);
+DECLARE_PREFIXED_ENUMS(D3D_TESSELLATOR_PARTITIONING);
+DECLARE_PREFIXED_ENUMS(D3D_TESSELLATOR_OUTPUT_PRIMITIVE);
+DECLARE_PREFIXED_ENUMS(D3D_INTERPOLATION_MODE);
+DECLARE_PREFIXED_ENUMS(D3D_PARAMETER_FLAGS);
+DECLARE_PREFIXED_ENUMS(D3D_SRV_DIMENSION);
 
-template<> struct field_names<D3D_SHADER_VARIABLE_FLAGS>	{ static field_prefix<field_bit> s; };
-template<> struct field_names<D3D_SHADER_INPUT_FLAGS>		{ static field_prefix<field_value> s; };
-template<> struct field_names<D3D_NAME>						{ static field_prefix<field_value> s; };
-template<> struct field_names<D3D_MIN_PRECISION>			{ static field_prefix<field_value> s; };
-template<> struct field_names<D3D_FEATURE_LEVEL>			{ static field_value s[]; };
+DECLARE_PREFIXED_BIT_ENUMS(D3D_SHADER_VARIABLE_FLAGS);
+DECLARE_PREFIXED_VALUE_ENUMS(D3D_SHADER_INPUT_FLAGS);
+DECLARE_PREFIXED_VALUE_ENUMS(D3D_NAME);
+DECLARE_PREFIXED_VALUE_ENUMS(D3D_MIN_PRECISION);
+DECLARE_PREFIXED_VALUE_ENUMS(D3D_FEATURE_LEVEL);
+
 template<> struct fields<D3D_FEATURE_LEVEL> : value_field<D3D_FEATURE_LEVEL> {};
 
 template<typename T> struct get_fields_s {
@@ -50,61 +51,25 @@ template<> struct field_maker<void*, false> {
 template<> struct field_maker<const void*, false> {
 	static constexpr field f(const char *name, uint32 start) { return field::make(name, start, sizeof(void*) * 8, 0, 0, sHex); }
 };
-template<> struct field_maker<rel_ptr<const char>, true> {
-	static constexpr field f(const char *name, uint32 start) { return field::make(name, start, 32, 0, 0, sRelString); }
-};
-template<> struct field_maker<rel_ptr<char>, true> {
-	static constexpr field f(const char *name, uint32 start) { return field::make(name, start, 32, 0, 0, sRelString); }
-};
-template<> struct field_maker<rel_ptr<const wchar_t>, true> {
-	static constexpr field f(const char *name, uint32 start) { return field::make(name, start, 32, 1, 0, sRelString); }
-};
-template<typename T> struct field_maker<rel_ptr<T>, true> {
-	static constexpr field f(const char *name, uint32 start) { return field::make(name, start, 0, field::MODE_RELPTR, 0, (const char**)get_fields_s<T>::f()); }
-};
-template<> struct field_maker<rel_ptr<void*>, false> {
-	static /*constexpr*/ field f(const char *name, uint32 start) { return field::make(name, start, 0, field::MODE_RELPTR, 0, (const char**)custom_ptr_field); }
-};
 
 template<bool COM> struct make_ptr_field_s {
 	template<typename T> static constexpr field f(const char *name, uint32 start) { return field::make(name, start, sizeof(void*) * 8, field::MODE_CUSTOM, 0, sCustom);	}
 };
 template<> struct make_ptr_field_s<false> {
-	template<typename T> static constexpr field f(const char *name, uint32 start) { return field::call<T, field::MODE_POINTER>(name, start);	}
+	template<typename T> static constexpr field f(const char *name, uint32 start) { return field::call<field::MODE_POINTER>(name, start, fields<T>::f);	}
 };
 template<typename T> struct field_maker<T*, false> {
 	static constexpr field f(const char *name, uint32 start) { return make_ptr_field_s<is_com<T>::value>::template f<T>(name, start); }
 };
-//template<typename T0, typename... T> struct field_maker<union_first<T0, T...>, true> : field_maker<T0> {};
 template<int I, typename T, size_t A> struct field_maker<rel_ptr<next_array<I, T, A>>, true> : field_maker<rel_ptr<void>> {};
 
-//template<int N, typename B, typename T> constexpr field make_field_idx(const char *name, T B::*p) {
-//	return field::make<B>(name, p);
-//}
-template<int N, typename B, typename T, int I, typename P> constexpr field make_field_idx(const char *name, counted<T,I,P> B::*p) {
-	return field::make(name, T_get_member_offset(p) * 8, 0, field::MODE_RELPTR, N - I, (const char**)get_fields_s<T>::f());
-}
-template<int N, typename B, typename T, int I> constexpr field make_field_idx(const char *name, counted<T,I> B::*p) {
-	return field::call<T, field::MODE_POINTER>(name, T_get_member_offset(p) * 8, N - I);
-}
-template<int N, typename B, int I, typename...TT> constexpr field make_field_idx(const char *name, selection<I,TT...> B::*p) {
-	return field::call_union<TT...>(name, T_get_member_offset(p) * 8, N - I);
-}
+template<typename T>	struct field_maker<dup_pointer<T>, true>	: field_maker<T>				{};
+template<typename T>	struct fields<dup_pointer<T>>				: value_field<dup_pointer<T>>	{};
 
+template<typename T>	struct field_maker<save_location<T>, true>	: field_maker<T>				{};
+template<typename T>	struct fields<save_location<T>>				: value_field<save_location<T>>	{};
 
-template<int N, typename B, typename T, int I, typename P> constexpr field make_field_idx_test(const char *name, counted<T,I,P> B::*p) {
-	return field::make(name, T_get_member_offset(p) * 8, 0, field::MODE_RELPTR, N - I, (const char**)get_fields_s<T>::f());
-}
-template<int N, typename B, typename T, int I> constexpr field make_field_idx_test(const char *name, counted<T,I> B::*p) {
-	return field::call<T, field::MODE_POINTER>(name, T_get_member_offset(p) * 8, N - I);
-}
-template<int N, typename B, int I, typename...TT> constexpr field make_field_idx_test(const char *name, selection<I,TT...> B::*p) {
-	return field::call_union<TT...>(name, T_get_member_offset(p) * 8, N - I);
-}
-
-#define	_MAKE_FIELDT(S,X,T)		field::make<S,T>(#X, &S::X)
 #define	_MAKE_FIELD_IDX(S,I,X)	make_field_idx<I,S>(#X, &S::X)
-#define	CALL_FIELD(X)			field::call<S>(#X, &S::X)
 #define	MAKE_UNION(F,O,N)		{0, iso_offset(S, F) * 8, 0, 0, O, (const char**)N}
 #define	TERMINATOR				field::terminator<S>()
 

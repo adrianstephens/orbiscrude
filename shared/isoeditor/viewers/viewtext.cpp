@@ -90,7 +90,7 @@ public:
 		return 0;
 	}
 public:
-	LRESULT Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+	LRESULT Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 		if (message == WM_NCDESTROY) {
 			delete this;
 			return 0;
@@ -117,7 +117,7 @@ public:
 		((ViewLocalTTY*)me)->debug_print(buffer);
 	}
 
-	LRESULT Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+	LRESULT Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 		if (message == WM_NCDESTROY) {
 			delete this;
 			return 0;
@@ -248,7 +248,7 @@ class EditIX : public TextWindow1, public refs<EditIX> {
 	bool				abort;
 	bool				writing;
 public:
-	LRESULT Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+	LRESULT Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 		switch (message) {
 			case WM_CREATE:
 				addref();
@@ -325,7 +325,7 @@ class TextEditor : public Subclass<TextEditor, RichEditControl> {
 public:
 	static Control	texteditor;
 
-	LRESULT Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+	LRESULT Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 		switch (message) {
 			case WM_GETTEXT: {
 				int	n = min(wParam, strlen(fn) + 1);
@@ -406,7 +406,7 @@ public:
 
 	TextEditor(MainWindow &_main, const WindowPos &wpos, Control *c) : main(_main), cref(c) {
 		HINSTANCE	hInst	= LoadLibraryA("RICHED20.DLL");
-		Create(wpos, NULL, CHILD | VISIBLE | HSCROLL | VSCROLL | MULTILINE | AUTOHSCROLL | AUTOVSCROLL, CLIENTEDGE);
+		Create(wpos, none, CHILD | VISIBLE | HSCROLL | VSCROLL | MULTILINE | AUTOHSCROLL | AUTOVSCROLL, CLIENTEDGE);
 		if (cref)
 			*cref = *this;
 

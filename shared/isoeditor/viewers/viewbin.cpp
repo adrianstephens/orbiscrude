@@ -197,7 +197,7 @@ uint64 Finder::FindChunkForward(FindPattern::Chunk &chunk, uint64 begin, uint64 
 		ISO_OUTPUTF("Trying load of ") << chunk.fh->GetDescription() << " from " << hex(begin) << '\n';
 		MemGetterStream	file(getter, begin, end);
 		try {
-			if (chunk.fh->Read(0, file))
+			if (chunk.fh->Read(tag(), file))
 				return begin + file.tell();
 		} catch (const char *err) {
 			ISO_OUTPUTF(err) << '\n';
@@ -347,7 +347,7 @@ Finder::Finder(FindPattern &_pattern, const Callback &_cb, MemGetter &_getter, c
 struct BinTextEffect : public com<d2d::TextEffect> {
 	com_ptr2<ID2D1SolidColorBrush>	bg, fg;
 
-	HRESULT DrawGlyphRun(void * context, ID2D1DeviceContext *device, D2D1_POINT_2F baseline, const DWRITE_GLYPH_RUN *glyphs, const DWRITE_GLYPH_RUN_DESCRIPTION *desc, DWRITE_MEASURING_MODE measure) {
+	STDMETHOD(DrawGlyphRun)(void * context, ID2D1DeviceContext *device, D2D1_POINT_2F baseline, const DWRITE_GLYPH_RUN *glyphs, const DWRITE_GLYPH_RUN_DESCRIPTION *desc, DWRITE_MEASURING_MODE measure) {
 		DWRITE_FONT_METRICS	metrics;
 		glyphs->fontFace->GetMetrics(&metrics);
 
@@ -364,7 +364,7 @@ struct BinTextEffect : public com<d2d::TextEffect> {
 		device->DrawGlyphRun(baseline, glyphs, desc, fg, measure);
 		return S_OK;
 	}
-	HRESULT	DrawGeometry(void * context, ID2D1DeviceContext *device, ID2D1Geometry *geometry) {
+	STDMETHOD(DrawGeometry)(void * context, ID2D1DeviceContext *device, ID2D1Geometry *geometry) {
 		if (bg) {
 			d2d::matrix			transform = float2x3(identity);
 			d2d::rect			bounds;
@@ -673,11 +673,6 @@ bool ViewBin_base::GetNumber(char *string, uint8 *mem) {
 	return true;
 }
 
-bool is_ansi(uint8 c) {
-	//return c >= ' ' && (c < 0x80 || c >= 0xa0);// || !(c == 0x81 || c == 0x8d || c == 0x8f || c == 0x90 || c == 0x9d));
-	return c >= ' ' && c < 0x7f;
-}
-
 void ViewBin_base::PutLine(string_accum &acc, uint64 address, const uint8 *mem0, size_t size0, const uint8 *mem1, size_t size1, int chars_per_element) {
 	if (!mem0)
 		size0 = 0;
@@ -691,17 +686,16 @@ void ViewBin_base::PutLine(string_accum &acc, uint64 address, const uint8 *mem0,
 		acc << ' ';
 	}
 	for (; j < bytes_per_line; j += bytes_per_element) {
-		acc.putc('-', chars_per_element);
-		acc << ' ';
+		acc << repeat('-', chars_per_element) << ' ';
 	}
 
 	if (flags.test(ASCII)) {
 		for (int j = 0; j < size; j++) {
 			uint8	t =  j < size0 ? mem0[j] : mem1[j - size0];
-			acc << (is_ansi(t) ? char(t) : '.');
+			acc << (is_print(t) ? char(t) : '.');
 		}
 		if (bytes_per_line - size > 0)
-			acc.putc(' ', int(bytes_per_line - size));
+			acc << repeat(' ', int(bytes_per_line - size));
 	}
 }
 
@@ -714,7 +708,7 @@ void ViewBin_base::PutLine(string_accum &acc, uint64 address, const uint8 *mem0,
 class DisassemblerHex : public Disassembler {
 public:
 	virtual	const char*	GetDescription()	{ return "Hex"; }
-	virtual void		Disassemble(const memory_block &block, uint64 start, dynamic_array<string> &lines, SymbolFinder sym_finder, const char *strings, uint32 strings_len);
+	virtual void		Disassemble(const_memory_block block, uint64 start, dynamic_array<string> &lines, SymbolFinder sym_finder, const char *strings, uint32 strings_len);
 	virtual State*		Disassemble(const iso::memory_block &block, uint64 addr, SymbolFinder sym_finder) {
 		StateDefault	*state = new StateDefault;
 		Disassemble(block, addr, state->lines, sym_finder, 0, 0);
@@ -722,7 +716,7 @@ public:
 	}
 } dishex;
 
-void DisassemblerHex::Disassemble(const memory_block &block, uint64 start, dynamic_array<string> &lines, SymbolFinder sym_finder, const char *strings, uint32 strings_len) {
+void DisassemblerHex::Disassemble(const_memory_block block, uint64 start, dynamic_array<string> &lines, SymbolFinder sym_finder, const char *strings, uint32 strings_len) {
 	ViewBinMode		mode	= ViewBinMode::Current();
 	uint32			bpl		= mode.flags.test(ViewBinMode::AUTOSIZE) ? 16 : mode.bytes_per_line;
 	int				cpe		= mode.CalcCharsPerElement2();
@@ -739,12 +733,12 @@ void DisassemblerHex::Disassemble(const memory_block &block, uint64 start, dynam
 		buffer_accum<1024>	ba("%08x    ", addr);
 		if (mode.bytes_per_element == 1) {
 			while (n--) {
-				uint8	b = ((uint8*)block)[offset++];
+				uint8	b = ((const uint8*)block)[offset++];
 				ba << to_digit(b >> 4) << to_digit(b & 15);
 			}
 		} else {
 			while (n > 0) {
-				uint64	v = mode.LoadNumber((uint8*)block + offset, n);
+				uint64	v = mode.LoadNumber((const uint8*)block + offset, n);
 				if (v && v < strings_len && strings[v - 1] == 0) {
 					ba << '"' << (strings + v) << '"';
 				} else {
@@ -761,7 +755,7 @@ void DisassemblerHex::Disassemble(const memory_block &block, uint64 start, dynam
 			}
 		}
 
-		lines.push_back((const char*)ba);
+		lines.push_back(ba);
 	}
 }
 /*

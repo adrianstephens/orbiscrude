@@ -44,7 +44,7 @@ ISO_ptr<void> COLLADA::Read() {
 
 	try {
 		while (xml.ReadNext(data, XMLreader::TAG_BEGIN) == XMLreader::TAG_BEGIN) {
-			if (auto f = table.h.check(data.Name()))
+			if (auto f = table.h.check(crc32(data.Name())))
 				(*f)(this);
 			xml.ReadNext(data, XMLreader::TAG_END);
 		}
@@ -312,17 +312,17 @@ template<> void COLLADA::process<COLLADA::library_geometries>() {
 
 COLLADA::fn_table COLLADA::table;
 COLLADA::fn_table::fn_table() {
-	h["library_images"]				= COLLADA::static_process<COLLADA::library_images>;
-	h["library_materials"]			= COLLADA::static_process<COLLADA::library_materials>;
-	h["library_effects"]			= COLLADA::static_process<COLLADA::library_effects>;
-	h["library_animation_clips"]	= COLLADA::static_process<COLLADA::library_animation_clips>;
-	h["library_animations"]			= COLLADA::static_process<COLLADA::library_animations>;
-	h["library_cameras"]			= COLLADA::static_process<COLLADA::library_cameras>;
-	h["library_controllers"]		= COLLADA::static_process<COLLADA::library_controllers>;
-	h["library_geometries"]			= COLLADA::static_process<COLLADA::library_geometries>;
-	h["library_lights"]				= COLLADA::static_process<COLLADA::library_lights>;
-	h["library_nodes"]				= COLLADA::static_process<COLLADA::library_nodes>;
-	h["library_visual_scenes"]		= COLLADA::static_process<COLLADA::library_visual_scenes>;
+	h["library_images"_crc32]				= COLLADA::static_process<COLLADA::library_images>;
+	h["library_materials"_crc32]			= COLLADA::static_process<COLLADA::library_materials>;
+	h["library_effects"_crc32]			= COLLADA::static_process<COLLADA::library_effects>;
+	h["library_animation_clips"_crc32]	= COLLADA::static_process<COLLADA::library_animation_clips>;
+	h["library_animations"_crc32]			= COLLADA::static_process<COLLADA::library_animations>;
+	h["library_cameras"_crc32]			= COLLADA::static_process<COLLADA::library_cameras>;
+	h["library_controllers"_crc32]		= COLLADA::static_process<COLLADA::library_controllers>;
+	h["library_geometries"_crc32]			= COLLADA::static_process<COLLADA::library_geometries>;
+	h["library_lights"_crc32]				= COLLADA::static_process<COLLADA::library_lights>;
+	h["library_nodes"_crc32]				= COLLADA::static_process<COLLADA::library_nodes>;
+	h["library_visual_scenes"_crc32]		= COLLADA::static_process<COLLADA::library_visual_scenes>;
 }
 
 class ColladaFileHandler : public FileHandler {

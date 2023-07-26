@@ -110,7 +110,7 @@ void StripTris::MakeStrip(Strip &strip, StripEdge *edge, int maxlen) {
 	}
 }
 
-StripList::StripList(range<array<uint16,3>*> faces, range<stride_iterator<float3p>> verts, int32 maxstriplen) : total(0) {
+StripList::StripList(range<array<uint32,3>*> faces, range<stride_iterator<float3p>> verts, int32 maxstriplen) : total(0) {
 //StripList::StripList(array<uint16,3> *faces, int32 num_faces, position3 *verts, int32 num_verts, int32 maxlen) : total(0) {
 	StripEdges	edges(verts.size32());
 	StripTris	tris;
@@ -269,8 +269,10 @@ StripListGroup::~StripListGroup() {
 		delete i;
 }
 
-ISO_ptr<Model3> Stripify(holder<ISO_ptr<Model3> > p) {
+ISO_ptr<Model> Stripify(holder<ISO_ptr<Model3> > p) {
 	Model3	&m = *p.t;
+	ISO_ptr<Model>	m2(p.t.ID());
+
 	for (auto s = m.submeshes.begin(), e = m.submeshes.end(); s != e; ++s) {
 		SubMesh					*sm		= (SubMesh*)(SubMeshBase*)s;
 		ISO_ptr<SubMeshN<1> >	sm1(0, *sm);
@@ -293,7 +295,7 @@ ISO_ptr<Model3> Stripify(holder<ISO_ptr<Model3> > p) {
 		if (!(numo & 1) && numf != 0)
 			numi++;
 
-		uint16	*p1	= sm1->indices.Create(uint32(numi)).begin()->begin(), *p0 = p1;
+		uint32	*p1	= sm1->indices.Create(uint32(numi)).begin()->begin(), *p0 = p1;
 
 		// all the unflipped even-length ones first
 		for (Strip *strip : strips) {
@@ -352,17 +354,18 @@ ISO_ptr<Model3> Stripify(holder<ISO_ptr<Model3> > p) {
 		}
 		ISO_ASSERT(p1 - p0 == numi);
 
-		*s = sm1;
+		m2->submeshes.Append(sm1);
 	}
-	return p.t;
+	return m2;
 }
 
 
-ISO_ptr<Model3> Quadify(holder<ISO_ptr<Model3> > p) {
+ISO_ptr<Model> Quadify(holder<ISO_ptr<Model3> > p) {
 	Model3	&m = *p.t;
-	for (auto s = m.submeshes.begin(), e = m.submeshes.end(); s != e; ++ s) {
-		SubMesh					*sm		= (SubMesh*)(SubMeshBase*)s;
-		ISO_ptr<SubMeshN<4> >	sm1(0, *sm);
+	ISO_ptr<Model>	m2(p.t.ID());
+
+	for (SubMesh *sm : m.submeshes) {
+		ISO_ptr<SubMeshN<4>>	sm1(0, *sm);
 		sm1->verts	= sm->verts;
 		sm1->SetVertsPerPrim(4);
 
@@ -373,7 +376,7 @@ ISO_ptr<Model3> Quadify(holder<ISO_ptr<Model3> > p) {
 		for (Strip *strip : strips)
 			numi += int(strip->size() - 1) / 2;
 
-		uint16	*p1		= sm1->indices.Create(uint32(numi)).begin()->begin();
+		uint32	*p1		= sm1->indices.Create(uint32(numi)).begin()->begin();
 		for (Strip *strip : strips) {
 			if (strip->dir) {
 				for (auto *si = strip->begin(), *se = strip->end() - 2; si < se; si += 2) {
@@ -393,10 +396,9 @@ ISO_ptr<Model3> Quadify(holder<ISO_ptr<Model3> > p) {
 				}
 			}
 		}
-
-		*s = sm1;
+		m2->submeshes.Append(sm1);
 	}
-	return p.t;
+	return m2;
 }
 
 static initialise init(

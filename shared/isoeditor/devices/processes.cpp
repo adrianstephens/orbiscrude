@@ -282,9 +282,9 @@ struct ProcessesDevice : app::DeviceT<ProcessesDevice>, app::DeviceCreateT<Proce
 	void			operator()(const app::DeviceAdd &add)	{ add("Processes", this, app::LoadPNG("IDB_DEVICE_PROCESSES")); }
 //	ISO_ptr<void>	operator()(const win::Control &main)	{ return ISO_ptr<RemoteProcesses>("Processes", "192.168.2.202"); }
 //	ISO_ptr<void>	operator()(const win::Control &main)	{ return ISO_ptr<RemoteProcesses>("Processes", "threadripper"); }
-	ISO_ptr<void>	operator()(const win::Control &main)	{ return ISO_ptr<RemoteProcesses>("Processes", "inspiron7000"); }
+//	ISO_ptr<void>	operator()(const win::Control &main)	{ return ISO_ptr<RemoteProcesses>("Processes", "inspiron7000"); }
 //	ISO_ptr<void>	operator()(const win::Control &main)	{ return ISO_ptr<RemoteProcesses>("Processes", (const char*)0); }
-//	ISO_ptr<void>	operator()(const win::Control &main)	{ return ISO_ptr<LocalProcesses>("Processes"); }
+	ISO_ptr<void>	operator()(const win::Control &main)	{ return ISO_ptr<LocalProcesses>("Processes"); }
 } processes_device;
 
 
@@ -593,7 +593,7 @@ class ViewMessages : public win::Window<ViewMessages> {
 	}
 
 public:
-	LRESULT Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+	LRESULT Proc(win::MSG_ID message, WPARAM wParam, LPARAM lParam) {
 		switch (message) {
 			case WM_SIZE:
 				lv.Resize(win::Point(lParam));

@@ -84,7 +84,12 @@ using namespace iso;
 	};
 
 	inline bezier_spline RoadSeg::GetSpline() const {
-		return bezier_spline(jtn[0]->pos, jtn[0]->pos + handle[0], jtn[1]->pos + handle[1], jtn[1]->pos);
+		return {
+			position3(jtn[0]->pos),
+			position3(jtn[0]->pos + handle[0]),
+			position3(jtn[1]->pos + handle[1]),
+			position3(jtn[1]->pos)
+		};
 	}
 
 } // namespace ent

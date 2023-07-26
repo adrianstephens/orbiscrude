@@ -393,7 +393,7 @@
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>$(IntDir)tensor.ib.obj;$(IntDir)dxt.ib.obj;d3d11.lib;dxguid.lib;d3d10_1.lib;d3dcompiler.lib;dinput8.lib;dsound.lib;dbghelp.lib;psapi.lib;winmm.lib;comctl32.lib;vfw32.lib;wmvcore.lib;wininet.lib;iphlpapi.lib;strmiids.lib;shcore.lib;windowsapp.lib;$(XEDK)\lib\x64\vs2010\xgraphics.lib;$(XEDK)\lib\x64\vs2010\d3d9.lib;$(XEDK)\lib\x64\vs2010\xbdm.lib;$(XEDK)\lib\x64\vs2010\xmaencoder.lib;$(SDK)PowerVR\Tools\PVRTexTool\Library\Windows_x86_64\Dynamic\PVRTexLib.lib;$(SCE_ROOT_DIR)\Common\External Tools\ATRAC9 Windows Library\at9\lib\libatrac9.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>$(IntDir)tensor.ib.obj;$(IntDir)dxt.ib.obj;dxcompiler.lib;d3d11.lib;dxguid.lib;d3d10_1.lib;d3dcompiler.lib;dinput8.lib;dsound.lib;dbghelp.lib;psapi.lib;winmm.lib;comctl32.lib;vfw32.lib;wmvcore.lib;wininet.lib;iphlpapi.lib;strmiids.lib;shcore.lib;windowsapp.lib;$(XEDK)\lib\x64\vs2010\xgraphics.lib;$(XEDK)\lib\x64\vs2010\d3d9.lib;$(XEDK)\lib\x64\vs2010\xbdm.lib;$(XEDK)\lib\x64\vs2010\xmaencoder.lib;$(SDK)PowerVR\Tools\PVRTexTool\Library\Windows_x86_64\Dynamic\PVRTexLib.lib;$(SCE_ROOT_DIR)\Common\External Tools\ATRAC9 Windows Library\at9\lib\libatrac9.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
       <AdditionalLibraryDirectories>$(xedk)\lib\x64\vs2010;$(XboxOneXDKLatest)PC\lib\amd64;$(DurangoXDK)PC\lib\amd64;$(WindowsSDK_LibraryPath_x64);D:\dev\Github\opencv\build\install\x64\vc14\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <DelayLoadDLLs>d3d9.dll;d3dx9.dll;d3dx9_43.dll;d3d10_1.dll;d3dcompiler_47.dll;XenonDX_x64.dll;libcgc_x64.dll;xbdm.dll;unrar.dll;hio2.dll;dtlib.dll;xg.dll;dbghelp.dll;XtfConsoleManager.dll;XtfConsoleControl.dll;XtfFileIO.dll;PVRTexLib.dll;libatrac9.dll;AVIFIL32.dll;SETUPAPI.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
@@ -404,7 +404,7 @@
       </DataExecutionPrevention>
       <LargeAddressAware>true</LargeAddressAware>
       <LinkTimeCodeGeneration>Default</LinkTimeCodeGeneration>
-      <AdditionalOptions>/verbose:incr /time /delayload:PVRTexLib.dll  /delayload:OpenMaya.dll  /delayload:foundation.dll  /delayload:xg.dll /delayload:libatrac9.dll /manifestdependency:"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'" %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/verbose:incr /time /delayload:PVRTexLib.dll  /delayload:OpenMaya.dll  /delayload:foundation.dll  /delayload:xg.dll /delayload:libatrac9.dll /manifestdependency:"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'" /DEBUG:GHASH %(AdditionalOptions)</AdditionalOptions>
       <StackReserveSize>16777216</StackReserveSize>
       <ManifestFile>$(ProjectName).manifest</ManifestFile>
     </Link>
@@ -449,7 +449,7 @@
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>$(IntDir)tensor.ib.obj;$(IntDir)dxt.ib.obj;d3d11.lib;dxguid.lib;d3d10_1.lib;d3dcompiler.lib;dinput8.lib;dsound.lib;dbghelp.lib;psapi.lib;winmm.lib;comctl32.lib;vfw32.lib;wmvcore.lib;wininet.lib;iphlpapi.lib;strmiids.lib;shcore.lib;windowsapp.lib;$(XEDK)\lib\x64\vs2010\xgraphics.lib;$(XEDK)\lib\x64\vs2010\d3d9.lib;$(XEDK)\lib\x64\vs2010\xbdm.lib;$(XEDK)\lib\x64\vs2010\xmaencoder.lib;$(SDK)PowerVR\Tools\PVRTexTool\Library\Windows_x86_64\Dynamic\PVRTexLib.lib;$(SCE_ROOT_DIR)\Common\External Tools\ATRAC9 Windows Library\at9\lib\libatrac9.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>$(IntDir)tensor.ib.obj;$(IntDir)dxt.ib.obj;dxcompiler.lib;d3d11.lib;dxguid.lib;d3d10_1.lib;d3dcompiler.lib;dinput8.lib;dsound.lib;dbghelp.lib;psapi.lib;winmm.lib;comctl32.lib;vfw32.lib;wmvcore.lib;wininet.lib;iphlpapi.lib;strmiids.lib;shcore.lib;windowsapp.lib;$(XEDK)\lib\x64\vs2010\xgraphics.lib;$(XEDK)\lib\x64\vs2010\d3d9.lib;$(XEDK)\lib\x64\vs2010\xbdm.lib;$(XEDK)\lib\x64\vs2010\xmaencoder.lib;$(SDK)PowerVR\Tools\PVRTexTool\Library\Windows_x86_64\Dynamic\PVRTexLib.lib;$(SCE_ROOT_DIR)\Common\External Tools\ATRAC9 Windows Library\at9\lib\libatrac9.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <OutputFile>$(OutDir)$(TargetName)$(TargetExt)</OutputFile>
       <AdditionalLibraryDirectories>$(xedk)\lib\x64\vs2010;$(XboxOneXDKLatest)PC\lib\amd64;$(DurangoXDK)PC\lib\amd64;$(WindowsSDK_LibraryPath_x64);D:\dev\Github\opencv\build\install\x64\vc14\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <DelayLoadDLLs>d3d9.dll;d3dx9.dll;d3dx9_43.dll;d3d10_1.dll;d3dcompiler_47.dll;XenonDX_x64.dll;libcgc_x64.dll;xbdm.dll;unrar.dll;hio2.dll;dtlib.dll;xg.dll;dbghelp.dll;XtfConsoleManager.dll;XtfConsoleControl.dll;XtfFileIO.dll;PVRTexLib.dll;libatrac9.dll;AVIFIL32.dll;SETUPAPI.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
@@ -656,11 +656,14 @@
     <ClCompile Include="..\common\codec\branch.cpp" />
     <ClCompile Include="..\common\codec\blake2.cpp" />
     <ClCompile Include="..\common\codec\des.cpp" />
+    <ClCompile Include="..\common\codec\video\h265.cpp" />
     <ClCompile Include="..\common\codec\lha.cpp" />
     <ClCompile Include="..\common\codec\lz4.cpp" />
     <ClCompile Include="..\common\codec\lzo.cpp" />
     <ClCompile Include="..\common\codec\lzx.cpp" />
     <ClCompile Include="..\common\codec\mesh\draco.cpp" />
+    <ClCompile Include="..\common\codec\mesh\meshopt.cpp" />
+    <ClCompile Include="..\common\codec\oodle.cpp" />
     <ClCompile Include="..\common\codec\pred_part_match.cpp" />
     <ClCompile Include="..\common\codec\rar.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DebugDX11-clang|x64'">false</ExcludedFromBuild>
@@ -674,6 +677,10 @@
     <ClCompile Include="..\common\codec\texels\dxt_compute.cpp" />
     <ClCompile Include="..\common\codec\texels\etc.cpp" />
     <ClCompile Include="..\common\codec\texels\pvrtc.cpp" />
+    <ClCompile Include="..\common\codec\video\nal.cpp" />
+    <ClCompile Include="..\common\codec\video\sei.cpp" />
+    <ClCompile Include="..\common\codec\video\vpx_decode.cpp" />
+    <ClCompile Include="..\common\codec\video\vpx_filter.cpp" />
     <ClCompile Include="..\common\comms\asn1.cpp" />
     <ClCompile Include="..\common\comms\asn1_objects.cpp" />
     <ClCompile Include="..\common\codec\base64.cpp" />
@@ -709,6 +716,7 @@
     <ClCompile Include="..\common\hashes\murmur.cpp" />
     <ClCompile Include="..\common\hashes\xxh.cpp" />
     <ClCompile Include="..\common\maths\bezier.cpp" />
+    <ClCompile Include="..\common\maths\bspline.cpp" />
     <ClCompile Include="..\common\maths\clipper2.cpp" />
     <ClCompile Include="..\common\maths\csg.cpp" />
     <ClCompile Include="..\common\maths\csg2.cpp" />
@@ -785,6 +793,7 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='ReleaseDX11-clang|x64'">true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="..\filetypes\3d\shader_gen.cpp" />
+    <ClCompile Include="..\filetypes\3d\stl.cpp" />
     <ClCompile Include="..\filetypes\3d\vertexcacheoptimizer.cpp" />
     <ClCompile Include="..\filetypes\3d\wavefront.cpp" />
     <ClCompile Include="..\filetypes\3d\xatg.cpp" />
@@ -885,6 +894,7 @@
     <ClCompile Include="..\filetypes\code\tundra.cpp" />
     <ClCompile Include="..\filetypes\code\unreal_script.cpp" />
     <ClCompile Include="..\filetypes\code\visualstudio.cpp" />
+    <ClCompile Include="..\filetypes\code\wasm_c.cpp" />
     <ClCompile Include="..\filetypes\code\webassembly.cpp" />
     <ClCompile Include="..\filetypes\code\xbf.cpp" />
     <ClCompile Include="..\filetypes\code\xcode.cpp" />
@@ -908,6 +918,7 @@
     <ClCompile Include="..\filetypes\container\flatbuffer.cpp" />
     <ClCompile Include="..\filetypes\container\fsarc.cpp" />
     <ClCompile Include="..\filetypes\container\garmin.cpp" />
+    <ClCompile Include="..\filetypes\container\hdf5.cpp" />
     <ClCompile Include="..\filetypes\container\hha.cpp" />
     <ClCompile Include="..\filetypes\container\iso9660.cpp" />
     <ClCompile Include="..\filetypes\container\lha_file.cpp" />
@@ -915,6 +926,7 @@
     <ClCompile Include="..\filetypes\container\lz4file.cpp" />
     <ClCompile Include="..\filetypes\container\matlab.cpp" />
     <ClCompile Include="..\filetypes\container\nif.cpp" />
+    <ClCompile Include="..\filetypes\container\oodle_file.cpp" />
     <ClCompile Include="..\filetypes\container\plist.cpp" />
     <ClCompile Include="..\filetypes\container\protocol_buffer.cpp" />
     <ClCompile Include="..\filetypes\container\ps3_files.cpp" />
@@ -926,7 +938,9 @@
     <ClCompile Include="..\filetypes\container\tivo.cpp" />
     <ClCompile Include="..\filetypes\container\unity.cpp" />
     <ClCompile Include="..\filetypes\container\unix.cpp" />
-    <ClCompile Include="..\filetypes\container\unreal.cpp" />
+    <ClCompile Include="..\filetypes\container\unreal.cpp">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='DebugDX11-clang|x64'">/clang:-ftemplate-backtrace-limit=0 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
     <ClCompile Include="..\filetypes\container\vmdk.cpp" />
     <ClCompile Include="..\filetypes\container\WEVR.cpp" />
     <ClCompile Include="..\filetypes\container\wiidisc.cpp" />
@@ -975,7 +989,7 @@
     <ClCompile Include="..\filetypes\txt.cpp" />
     <ClCompile Include="..\filetypes\video\avi.cpp" />
     <ClCompile Include="..\filetypes\video\directshow_files.cpp" />
-    <ClCompile Include="..\filetypes\video\h264.cpp" />
+    <ClCompile Include="..\common\codec\video\h264.cpp" />
     <ClCompile Include="..\filetypes\video\matroska.cpp" />
     <ClCompile Include="..\filetypes\video\movie.cpp" />
     <ClCompile Include="..\filetypes\video\mpeg.cpp" />
@@ -987,6 +1001,7 @@
     <ClCompile Include="..\filetypes\video\xvid.cpp">
       <ExcludedFromBuild>true</ExcludedFromBuild>
     </ClCompile>
+    <ClCompile Include="..\filetypes\video\y4m.cpp" />
     <ClCompile Include="..\filetypes\xml2.cpp" />
     <ClCompile Include="..\filetypes\yaml2.cpp" />
     <ClCompile Include="..\platforms\opengl\shared\glsl_hal.cpp" />
@@ -1135,6 +1150,7 @@
     <ClCompile Include="disassemblers\dis_6502.cpp" />
     <ClCompile Include="disassemblers\dis_arm.cpp" />
     <ClCompile Include="disassemblers\dis_atmel.cpp" />
+    <ClCompile Include="disassemblers\dis_bitcode.cpp" />
     <ClCompile Include="disassemblers\dis_cil.cpp" />
     <ClCompile Include="disassemblers\dis_intel.cpp" />
     <ClCompile Include="disassemblers\dis_mali.cpp" />
@@ -1146,6 +1162,7 @@
     <ClCompile Include="..\platforms\x360\shared\dis_x360ps.cpp" />
     <ClCompile Include="..\platforms\gcn\sim_gcn1.cpp" />
     <ClCompile Include="..\platforms\pc\dll.cpp" />
+    <ClCompile Include="disassemblers\dis_wasm.cpp" />
     <ClCompile Include="find.cpp" />
     <ClCompile Include="gnm.cpp">
       <ExcludedFromBuild>true</ExcludedFromBuild>
@@ -1173,7 +1190,9 @@
     <ClCompile Include="..\platforms\pc\windows\dib.cpp" />
     <ClCompile Include="..\platforms\pc\windows\splitter.cpp" />
     <ClCompile Include="..\platforms\pc\windows\treecolumns.cpp" />
-    <ClCompile Include="main.cpp" />
+    <ClCompile Include="main.cpp">
+      <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='DebugDX11-clang|x64'">-Xclang -ftemplate-backtrace-limit -Xclang 0 %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
     <ClCompile Include="perms.cpp">
       <ExcludedFromBuild>true</ExcludedFromBuild>
     </ClCompile>
@@ -1236,7 +1255,6 @@
     <ClInclude Include="..\common\base\atomic.h" />
     <ClInclude Include="..\common\base\bits.h" />
     <ClInclude Include="..\common\base\block.h" />
-    <ClInclude Include="..\common\base\colour.h" />
     <ClInclude Include="..\common\base\constants.h" />
     <ClInclude Include="..\common\base\deferred.h" />
     <ClInclude Include="..\common\base\defs.h" />
@@ -1261,6 +1279,7 @@
     <ClInclude Include="..\common\base\vector.h" />
     <ClInclude Include="..\common\codec\aes.h" />
     <ClInclude Include="..\common\codec\branch.h" />
+    <ClInclude Include="..\common\codec\cabac.h" />
     <ClInclude Include="..\common\codec\cbc.h" />
     <ClInclude Include="..\common\codec\ccm.h" />
     <ClInclude Include="..\common\codec\cfb.h" />
@@ -1271,6 +1290,7 @@
     <ClInclude Include="..\common\codec\des.h" />
     <ClInclude Include="..\common\codec\gost.h" />
     <ClInclude Include="..\common\codec\mesh\draco.h" />
+    <ClInclude Include="..\common\codec\mesh\meshopt.h" />
     <ClInclude Include="..\common\codec\pred_part_match.h" />
     <ClInclude Include="..\common\codec\rar.h" />
     <ClInclude Include="..\common\codec\reed_solomon.h" />
@@ -1281,6 +1301,10 @@
     <ClInclude Include="..\common\codec\texels\dxt_compute.h" />
     <ClInclude Include="..\common\codec\texels\etc.h" />
     <ClInclude Include="..\common\codec\texels\pvrtc.h" />
+    <ClInclude Include="..\common\codec\video\h265.h" />
+    <ClInclude Include="..\common\codec\video\h265_internal.h" />
+    <ClInclude Include="..\common\codec\video\nal.h" />
+    <ClInclude Include="..\common\codec\video\vpx_decode.h" />
     <ClInclude Include="..\common\codec\window.h" />
     <ClInclude Include="..\common\codec\fax3.h" />
     <ClInclude Include="..\common\codec\gcm.h" />
@@ -1310,6 +1334,7 @@
     <ClInclude Include="..\common\extra\ast.h" />
     <ClInclude Include="..\common\extra\c-types.h" />
     <ClInclude Include="..\common\extra\clipper.h" />
+    <ClInclude Include="..\common\extra\colour.h" />
     <ClInclude Include="..\common\extra\colourise.h" />
     <ClInclude Include="..\common\comms\compand.h" />
     <ClInclude Include="..\common\extra\cpp.h" />
@@ -1320,6 +1345,7 @@
     <ClInclude Include="..\common\extra\gjk.h" />
     <ClInclude Include="..\common\extra\gpu_helpers.h" />
     <ClInclude Include="..\common\codec\huffman.h" />
+    <ClInclude Include="..\common\extra\icc_profile.h" />
     <ClInclude Include="..\common\extra\identifier.h" />
     <ClInclude Include="..\common\extra\octree.h" />
     <ClInclude Include="..\common\extra\perlin_noise.h" />
@@ -1345,6 +1371,7 @@
     <ClInclude Include="..\common\maths\gpc.h" />
     <ClInclude Include="..\common\maths\gpc.orig.h" />
     <ClInclude Include="..\common\maths\martinez.h" />
+    <ClInclude Include="..\common\maths\bspline.h" />
     <ClInclude Include="..\common\maths\polygon.h" />
     <ClInclude Include="..\common\maths\polynomial.h" />
     <ClInclude Include="..\common\hashes\crc.h" />
@@ -1379,6 +1406,7 @@
     <ClInclude Include="..\common\utilities.h" />
     <ClInclude Include="..\filetypes\2d\cff.h" />
     <ClInclude Include="..\filetypes\2d\flash.h" />
+    <ClInclude Include="..\filetypes\2d\fonts.h" />
     <ClInclude Include="..\filetypes\2d\ttf.h" />
     <ClInclude Include="..\filetypes\3d\model_utils.h" />
     <ClInclude Include="..\filetypes\3d\shader_gen.h" />
@@ -1389,7 +1417,9 @@
     <ClInclude Include="..\filetypes\bitmap\hdr.h" />
     <ClInclude Include="..\filetypes\bitmap\bitmapfile.h" />
     <ClInclude Include="..\filetypes\bitmap\jpg.h" />
+    <ClInclude Include="..\filetypes\bitmap\tiff.h" />
     <ClInclude Include="..\filetypes\bitmap\tpl.h" />
+    <ClInclude Include="..\filetypes\code\bitcode.h" />
     <ClInclude Include="..\filetypes\code\cil.h" />
     <ClInclude Include="..\filetypes\code\clr.h" />
     <ClInclude Include="..\filetypes\code\cvconst.h" />
@@ -1412,6 +1442,7 @@
     <ClInclude Include="..\filetypes\container\plist.h" />
     <ClInclude Include="..\filetypes\container\unity_types.h" />
     <ClInclude Include="..\filetypes\container\unreal.h" />
+    <ClInclude Include="..\filetypes\ebml.h" />
     <ClInclude Include="..\filetypes\fx.h" />
     <ClInclude Include="..\filetypes\iff.h" />
     <ClInclude Include="..\filetypes\pid.h" />
@@ -1503,6 +1534,7 @@
     <ClInclude Include="..\common\disassembler.h" />
     <ClInclude Include="..\platforms\gcn\sim_gcn1.h" />
     <ClInclude Include="devices\directories.h" />
+    <ClInclude Include="disassemblers\dis_bitcode.h" />
     <ClInclude Include="main.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="..\common\crc32.h" />
@@ -1558,6 +1590,7 @@
   <ItemGroup>
     <IsoCmd Include="..\common\codec\texels\dxt.fx">
       <OutExt Condition="'$(Configuration)|$(Platform)'=='DebugDX11-clang|x64'">ib.obj</OutExt>
+      <OutExt Condition="'$(Configuration)|$(Platform)'=='ReleaseDX11-clang|x64'">ib.obj</OutExt>
     </IsoCmd>
     <IsoCmd Include="..\common\maths\tensor.fx">
       <OutExt>ib.obj</OutExt>

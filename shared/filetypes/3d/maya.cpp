@@ -208,12 +208,12 @@ static const char *maya_ids[] = {
 struct MayaLib {
 	MayaLib(const char *maya_dir) {
 		if (!getenv("MAYA_LOCATION"))
-			_putenv(buffer_accum<256>("MAYA_LOCATION=") << maya_dir);
+			_putenv((buffer_accum<256>("MAYA_LOCATION=") << maya_dir).term());
 
 		string	path = getenv("path");
-		_putenv(buffer_accum<256>("path=") << filename(maya_dir).add_dir("bin"));
+		_putenv((buffer_accum<256>("path=") << filename(maya_dir).add_dir("bin")).term());
 		HMODULE h = LoadLibraryA("openmaya.dll");
-		_putenv(buffer_accum<256>("path=") << path);
+		_putenv((buffer_accum<256>("path=") << path).term());
 
 		ISO_VERIFY(MLibrary::initialize("Isopod"));
 	}

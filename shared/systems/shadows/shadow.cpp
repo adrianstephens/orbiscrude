@@ -94,6 +94,7 @@ cuboid Align(param(frustum) f, float align) {
 //-----------------------------------------------------------------------------
 
 class Shadows : public DeleteOnDestroy<Shadows> {
+	static CreateWithWorld<Shadows> maker;
 public:
 	enum {
 		SET_NEAR,
@@ -181,13 +182,7 @@ public:
 
 ISO_ptr<fx>		Shadows::iso_fx;
 layout_shadow*	Shadows::shaders;
-
-struct ShadowsMaker : Handles2<ShadowsMaker, WorldEvent>  {
-	void	operator()(WorldEvent *ev) {
-		if (ev->state == WorldEvent::BEGIN)
-			::new Shadows(ev->world);
-	}
-} shadows_maker;
+CreateWithWorld<Shadows> Shadows::maker;
 
 Shadows::Shadows(World *w) : DeleteOnDestroy<Shadows>(w), dirty(1), world(w) {
 	if (!shaders)

@@ -365,7 +365,7 @@ ISO_ptr<void> IconCursorFileHelper::Read(tag id, istream_ref file) {
 
 		if (*(uint32be*)mb == 0x89504e47) {
 			if (FileHandler *png = FileHandler::Get("png"))
-				(*array)[i] = png->Read(0, mi);
+				(*array)[i] = png->Read(tag(), mi);
 		} else {
 			BITMAPINFOHEADER	bi		= mi.get();
 			ISO_ptr<bitmap> &bm		= (*array)[i];
@@ -539,7 +539,7 @@ ISO_ptr<void> ReadBmp(tag id, const memory_block &mb, bool icon) {
 
 		if (*(uint32be*)mb == 0x89504e47) {
 			if (FileHandler *png = FileHandler::Get("png"))
-				return png->Read(0, mi);
+				return png->Read(tag(), mi);
 		}
 
 		BmpFileHelper::BITMAPINFOHEADER	bi		= mi.get();
@@ -552,7 +552,7 @@ ISO_ptr<void> ReadBmp(tag id, const memory_block &mb, bool icon) {
 		return bm;
 
 	} catch (...) {
-		return ISO::MakePtr(0, mb);
+		return ISO::MakePtr(none, mb);
 	}
 };
 
@@ -613,7 +613,7 @@ class AniCursorFileHandler : public FileHandler {
 								switch (subchunk.id) {
 									case "icon"_u32: {
 										//if (header.Flags & anih::IconFlag) {
-											ISO_ptr<void> p = IconCursorFileHelper::Read(0, file);
+											ISO_ptr<void> p = IconCursorFileHelper::Read(tag(), file);
 											anim->Append(make_pair(p, 1 / 60.f));
 										//}
 										break;

@@ -1315,7 +1315,7 @@ struct xf_blob {
 	};
 
 	struct fields_t : range<iterator> {
-		fields_t(_none &) : range<iterator>(none) {}
+		fields_t(const _none&) : range<iterator>(none) {}
 		fields_t(iterator a, iterator b) : range<iterator>(a, b) {}
 		iterator	find(TYPE type) const {
 			for (auto i : with_iterator(*this)) {
@@ -1945,7 +1945,7 @@ struct APFSVol2 : ISO::VirtualDefaults {
 		}
 	};
 
-	APFSVol2(istream_ptr &&file, uint32 block_size, dynamic_array<entry2> &&table) : file(move(file)), block_size(block_size), table(move(table)) {}
+	APFSVol2(istream_ptr &&file, uint32 block_size, dynamic_array<entry2> &&table) : file(move(file)), table(move(table)), block_size(block_size) {}
 
 	auto find_it(const j_key &k, xid x) {
 		uint64	s = k.sortable;

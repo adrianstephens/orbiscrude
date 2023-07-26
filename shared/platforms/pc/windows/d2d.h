@@ -18,8 +18,8 @@
 #include "d3d10.h"
 #pragma comment(lib, "d2d1.lib")
 #else
-#define _D2D1_1HELPER_H_
-#include <d2d1_1.h>
+//#define _D2D1_1HELPER_H_
+#include <d2d1_3.h>
 #include <d2d1effects_2.h>
 #include <D2D1EffectAuthor.h>
 #include <d3d11_1.h>
@@ -68,32 +68,32 @@ struct texel {
 };
 
 struct colour : D2D1_COLOR_F {
-	colour()										{}
-	colour(float _r, float _g, float _b, float _a=1){ r = _r; g = _g; b = _b; a = _a; }
-	colour(COLORREF c)								{ r = GetRValue(c) / 255.f; g = GetGValue(c) / 255.f; b = GetBValue(c) / 255.f; a = 1; }
-	colour(win::Colour c)							{ *this = (COLORREF)c;		}
-	colour(param(iso::colour) c)					{ *this = (colour&)c;		}
+	colour()							{}
+	colour(float r, float g, float b, float a = 1)	: D2D1_COLOR_F{r, g, b, a} {}
+	colour(COLORREF c)					: colour(GetRValue(c) / 255.f, GetGValue(c) / 255.f, GetBValue(c) / 255.f) {}
+	colour(win::Colour c)				: colour((COLORREF)c) {}
+	colour(param(iso::colour) c)		: D2D1_COLOR_F((const D2D1_COLOR_F&)c) {}
 	template<typename R, typename G, typename B> colour(const iso::colour::colour_const<R, G, B>&) : colour(R(), G(), B()) {}
-	operator iso::colour() const					{ return iso::colour(load<float4>(&r));	}
-	operator COLORREF() const						{ return RGB(int(clamp(r, 0, 1) * 255), int(clamp(g, 0, 1) * 255), int(clamp(b, 0, 1) * 255));	}
+	operator iso::colour()	const		{ return iso::colour(load<float4>(&r));	}
+	operator COLORREF()		const		{ return RGB(int(clamp(r, 0, 1) * 255), int(clamp(g, 0, 1) * 255), int(clamp(b, 0, 1) * 255));	}
 };
 
 struct point : D2D_POINT_2F {
-	point()												{}
-	point(const D2D_POINT_2F &p)	: D2D_POINT_2F(p)	{}
-	point(const D2D_SIZE_F &p)		: D2D_POINT_2F((D2D_POINT_2F&)p)	{}
-	point(float _x, float _y)						{ x = _x; y = _y; }
-	point(param(position2) p)						{ x = p.v.x; y = p.v.y;	}
-	point(param(float2) p)							{ x = p.x; y = p.y; }
-	point(param(iso::point) p)						{ x = p.x; y = p.y; }
-	point(param(win::Point) p)						{ x = p.x; y = p.y; }
+	point()							{}
+	point(float x, float y)			: D2D_POINT_2F{x, y}			{}
+	point(const D2D_POINT_2F &p)	: D2D_POINT_2F(p)				{}
+	point(const D2D_SIZE_F &p)		: D2D_POINT_2F((const D2D_POINT_2F&)p)	{}
+	point(param(position2) p)		: D2D_POINT_2F{p.v.x, p.v.y}	{}
+	point(param(float2) p)			: D2D_POINT_2F{p.x, p.y}		{}
+	point(param(iso::point) p)		: D2D_POINT_2F{p.x, p.y}		{}
+	point(param(win::Point) p)		: D2D_POINT_2F{p.x, p.y}		{}
 #ifdef PLAT_WINRT
-	point(const iso_winrt::Platform::Point &p)		{ x = p.X; y = p.Y; }
+	point(const iso_winrt::Platform::Point &p) : point(p.X, p.Y) {}
 #endif
 	operator float2()						const	{ return {x, y}; }
 	operator position2()					const	{ return {x, y}; }
 	operator const D2D1_SIZE_F&()			const	{ return *(D2D1_SIZE_F*)this;	}
-	operator D2D1_SIZE_U() const					{ D2D1_SIZE_U u = {(UINT)x, (UINT)y}; return u;	}
+	operator D2D1_SIZE_U() const					{ return {(UINT)x, (UINT)y}; }
 
 	point	operator*(float b)				const	{ return {x * b, y * b}; }
 	point	operator/(float b)				const	{ return *this * reciprocal(b); }
@@ -104,7 +104,6 @@ struct point : D2D_POINT_2F {
 	friend point operator+(const point &a, const point &b)	{ return point(a.x + b.x, a.y + b.y); }
 	friend point align(const point &p, const point &a)		{ return point(p.x - mod(p.x, a.x), p.y - mod(p.y, a.y)); }
 	friend float2	as_vec(const point &p)					{ return {p.x, p.y}; }
-
 };
 
 struct rect : D2D_RECT_F {
@@ -112,12 +111,12 @@ struct rect : D2D_RECT_F {
 
 	rect()											{}
 	rect(decltype(infinity))						{ left = top = minimum; right = bottom = maximum; }
-	rect(float x0, float y0, float x1, float y1)	{ left = x0; top = y0; right = x1; bottom = y1; }
-	rect(const point &a, const point &b)			{ left = a.x; top = a.y; right = b.x; bottom = b.y; }
+	rect(float x0, float y0, float x1, float y1)	: D2D_RECT_F{x0, y0, x1, y1}	{}
+	rect(const point &a, const point &b)			: D2D_RECT_F{a.x, a.y, b.x, b.y}		{}
+	rect(param(win::Rect) r)						: D2D_RECT_F{r.Left(), r.Top(), r.Right(), r.Bottom()} {}
 	rect(param(rectangle) r)						{ memcpy(this, &r, sizeof(*this)); }
-	rect(param(win::Rect) r)						{ left = r.Left(); top = r.Top(); right = r.Right(); bottom = r.Bottom(); }
 #ifdef PLAT_WINRT
-	rect(const iso_winrt::Platform::Rect &p)		{ left = p.X; top = p.Y; right = p.X + p.Width; bottom = p.Y + p.Height; }
+	rect(const iso_winrt::Platform::Rect &p)		: rect(p.X, p.Y, p.X + p.Width, p.Y + p.Height) {}
 #endif
 	operator rectangle() const						{ return rectangle(*(float4p*)this); }
 
@@ -129,27 +128,18 @@ struct rect : D2D_RECT_F {
 	point		TopRight()					const	{ return point(right, top); }
 	point		Size()						const	{ return point(Width(), Height());	}
 	point		Centre()					const	{ return point((left + right) / 2, (top + bottom) / 2); }
-	rect		Grow(float x0, float y0, float x1, float y1) const {
-		return rect(left - x0, top - y0, right + x1, bottom + y1);
-	}
-	rect		Adjust(float xs, float ys, float xp, float yp) const {
-		float	w	= Width(), h = Height();
-		return rect(left + w * (1 - xs) * xp, top + h * (1 - ys) * yp, left + w * xs, top + h * ys);
-	}
+	bool		Overlaps(const rect &r)		const	{ return r.left < right && r.right > left && r.top < bottom && r.bottom > top; }
+	bool		Contains(const point &p)	const	{ return p.x >= left && p.x < right && p.y >= top && p.y < bottom; }
 
-	rect		Subbox(float x, float y, float w, float h) const {
+	rect		Grow(float x0, float y0, float x1, float y1)	const { return rect(left - x0, top - y0, right + x1, bottom + y1);	}
+	rect		Adjust(float xs, float ys, float xp, float yp)	const {	float w	= Width(), h = Height(); return rect(left + w * (1 - xs) * xp, top + h * (1 - ys) * yp, left + w * xs, top + h * ys);	}
+	rect		Subbox(float x, float y, float w, float h)		const {
 		rect r;
 		r.left		= x < 0 ? max(right  + x, left)		: min(left	 + x, right);
 		r.top		= y < 0 ? max(bottom + y, top)		: min(top	 + y, bottom);
 		r.right		= w > 0 ? min(r.left + w, right)	: max(right  + w, left);
 		r.bottom	= h > 0 ? min(r.top  + h, bottom)	: max(bottom + h, top);
 		return r;
-	}
-	bool		Overlaps(const rect &r)		const {
-		return r.left < right && r.right > left && r.top < bottom && r.bottom > top;
-	}
-	bool		Contains(const point &p)		const {
-		return p.x >= left && p.x < right && p.y >= top && p.y < bottom;
 	}
 
 	rect&	operator&=(const rect &r)	{ left = max(left, r.left); right = min(right, r.right); top = max(top, r.top); bottom = min(bottom, r.bottom); return *this; }
@@ -161,60 +151,56 @@ struct rect : D2D_RECT_F {
 };
 
 struct vector2 : D2D_VECTOR_2F {
-	vector2()											{}
-	vector2(const D2D_VECTOR_2F &p) : D2D_VECTOR_2F(p)	{}
-	vector2(float _x, float _y)							{ x = _x; y = _y; }
-	vector2(param(float2) p)							{ x = p.x; y = p.y; }
+	vector2()														{}
+	vector2(const D2D_VECTOR_2F &p)		: D2D_VECTOR_2F(p)			{}
+	vector2(float x, float y)			: D2D_VECTOR_2F{x, y}		{}
+	vector2(param(float2) p)			: D2D_VECTOR_2F{p.x, p.y}	{}
 };
 
 struct vector3 : D2D_VECTOR_3F {
-	vector3()											{}
-	vector3(const D2D_VECTOR_3F &p) : D2D_VECTOR_3F(p)	{}
-	vector3(float _x, float _y, float _z)				{ x = _x; y = _y; z = _z;	}
-	vector3(param(float3) p)							{ x = p.x; y = p.y;	z = p.z; }
+	vector3()															{}
+	vector3(const D2D_VECTOR_3F &p)		: D2D_VECTOR_3F(p)				{}
+	vector3(float x, float y, float z)	: D2D_VECTOR_3F{x, y, z}		{}
+	vector3(param(float3) p)			: D2D_VECTOR_3F{p.x, p.y, p.z}	{}
 };
 
 struct vector4 : D2D_VECTOR_4F {
 	vector4()											{}
-	vector4(const D2D_VECTOR_4F &p) : D2D_VECTOR_4F(p)	{}
-	vector4(float _x, float _y, float _z, float _w)		{ x = _x; y = _y; z = _z; w = _w; }
-	vector4(param(float4) p)							{ x = p.x; y = p.y;	z = p.z; w = p.w; }
-	float4 to_float4() const							{ return load<float4>(&x); }
+	vector4(const D2D_VECTOR_4F &p)		: D2D_VECTOR_4F(p)	{}
+	vector4(float x, float y, float z, float w)	: D2D_VECTOR_4F{x, y, z, w} {}
+	vector4(param(float4) p)			: D2D_VECTOR_4F{p.x, p.y, p.z, p.w} {}
 };
 
 struct ellipse : D2D1_ELLIPSE {
-	ellipse(param(rectangle) r)							{ float2 size = r.half_extent(); point = d2d::point(r.centre()); radiusX = size.x; radiusY = size.y; }
-	ellipse(param(circle) c)							{ point = d2d::point(c.centre()); radiusX = radiusY = c.radius(); }
-	ellipse(const d2d::point &c, float r)				{ point = c; radiusX = radiusY = r; }
-	ellipse(const d2d::point &c, float rx, float ry)	{ point = c; radiusX = rx; radiusY = ry; }
-	ellipse(const d2d::point &c, const d2d::point &r)	{ point = c; radiusX = r.x; radiusY = r.y; }
+	ellipse(const D2D1_ELLIPSE &e)		: D2D1_ELLIPSE(e) {}
+	ellipse(const d2d::point &c, float rx, float ry)	: D2D1_ELLIPSE{c, rx, ry}	{}
+	ellipse(const d2d::point &c, float r)				: ellipse(c, r, r)			{}
+	ellipse(const d2d::point &c, const d2d::point &r)	: ellipse(c, r.x, r.y)		{}
+	ellipse(param(rectangle) r)							: ellipse(r.centre(), r.half_extent())	{}
+	ellipse(param(circle) c)							: ellipse(c.centre(), c.radius())		{}
+};
+
+struct arc_segment : D2D1_ARC_SEGMENT {
+	arc_segment(const struct point& p1, const struct point& size, float angle = 0, bool cw = false, bool big = false) : D2D1_ARC_SEGMENT{p1, size, angle, cw ? D2D1_SWEEP_DIRECTION_CLOCKWISE : D2D1_SWEEP_DIRECTION_COUNTER_CLOCKWISE, big ? D2D1_ARC_SIZE_LARGE : D2D1_ARC_SIZE_SMALL} {}
+};
+
+struct bezier2_segment : D2D1_QUADRATIC_BEZIER_SEGMENT {
+	bezier2_segment(const point &p1, const point &p2) : D2D1_QUADRATIC_BEZIER_SEGMENT{p1, p2} {}
 };
 
 struct bezier_segment : D2D1_BEZIER_SEGMENT {
-	bezier_segment(const point &p1, const point &p2, const point &p3) {
-		point1 = p1;
-		point2 = p2;
-		point3 = p3;
-	};
+	bezier_segment(const point &p1, const point &p2, const point &p3) : D2D1_BEZIER_SEGMENT{p1, p2, p3} {}
 };
 
 struct triangle : D2D1_TRIANGLE {
-	triangle(param(iso::triangle) t) {
-		point1 = point(t.corner(0));
-		point2 = point(t.corner(1));
-		point3 = point(t.corner(2));
-	}
-	triangle(const point &p1, const point &p2, const point &p3) {
-		point1 = p1;
-		point2 = p2;
-		point3 = p3;
-	};
+	triangle(const point &p1, const point &p2, const point &p3) : D2D1_TRIANGLE{p1, p2, p3} {}
+	triangle(param(iso::triangle) t) : triangle(t.corner(0), t.corner(1), t.corner(2)) {}
 };
 
 struct matrix : D2D1_MATRIX_3X2_F {
-	matrix()											{}
-	matrix(const float2x3 &m)							{ *(D2D1_MATRIX_3X2_F*)this = (D2D1_MATRIX_3X2_F&)m; }
-	operator float2x3() const							{ return float2x3(load<float4>(&_11), load<float2>(&_31)); }
+	matrix()					{}
+	matrix(const float2x3 &m)	: D2D1_MATRIX_3X2_F((const D2D1_MATRIX_3X2_F&)m) {}
+	operator float2x3() const	{ return float2x3(load<float4>(&_11), load<float2>(&_31)); }
 };
 
 #ifdef _D2D1_1_H_
@@ -226,14 +212,8 @@ struct matrix5x4 : D2D1_MATRIX_5X4_F {
 		(float4p&)_41 = a;
 		(float4p&)_51 = add;
 	}
-	matrix5x4(param(float4x4) m, param(float4) offset) {
-		(float4p&)_11 = m.x;
-		(float4p&)_21 = m.y;
-		(float4p&)_31 = m.z;
-		(float4p&)_41 = m.w;
-		(float4p&)_51 = offset;
-	}
-	float4p&	operator[](int i) { return *(float4p*)m[i]; }
+	matrix5x4(param(float4x4) m, param(float4) offset) : matrix5x4(m.x, m.y, m.z, m.w, offset) {}
+	float4p&	operator[](int i) { return ((float4p*)m)[i]; }
 };
 #endif
 
@@ -254,21 +234,26 @@ struct GradientStops : com_ptr<ID2D1GradientStopCollection> {
 // CreateBitmap
 //-----------------------------------------------------------------------------
 
-template<typename T> bool CreateBitmap(ID2D1DeviceContext *device, ID2D1Bitmap **bm, const block<T, 2> &block) {
-	uint32			width	= block.template size<1>(), height = block.template size<2>();
-	malloc_block	buffer(sizeof(texel) * width * height);
-	copy(block, make_block((texel*)buffer, width, height));
-
-	D2D1_BITMAP_PROPERTIES	props	= {{DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED}, 0, 0};
-	D2D1_SIZE_U				size	= {width, height};
-	return SUCCEEDED(device->CreateBitmap(size, buffer, width * sizeof(texel), props, bm));
+inline bool CreateBitmap(ID2D1DeviceContext *device, ID2D1Bitmap **bm, const block<texel, 2> &block) {
+	return SUCCEEDED(device->CreateBitmap(
+		{block.template size<1>(), block.template size<2>()},
+		block.begin(),
+		block.pitch(),
+		{{DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED}, 0, 0},
+		bm
+	));
 }
 
-template<typename T> bool FillBitmap(ID2D1DeviceContext *device, ID2D1Bitmap *bm, const block<T, 2> &block) {
-	uint32			width	= block.template size<1>(), height = block.template size<2>();
-	malloc_block	buffer(sizeof(texel) * width * height);
-	copy(block, make_block((texel*)buffer, width, height));
-	return SUCCEEDED(bm->CopyFromMemory(0, buffer, width * sizeof(texel)));
+template<typename T> bool CreateBitmap(ID2D1DeviceContext *device, ID2D1Bitmap **bm, const block<T, 2> &block) {
+	return CreateBitmap(device, bm, to<texel>(block));
+}
+
+inline bool FillBitmap(ID2D1Bitmap *bm, const block<texel, 2> &block) {
+	return SUCCEEDED(bm->CopyFromMemory(0, block.begin(), block.pitch()));
+}
+
+template<typename T> bool FillBitmap(ID2D1Bitmap *bm, const iblock<T, 2> &block) {
+	return FillBitmap(bm, to<texel>(block));
 }
 
 //-----------------------------------------------------------------------------
@@ -292,12 +277,8 @@ struct Target {
 		return SUCCEEDED(device->CreateBitmap(size, props, bm));
 	}
 
-	template<typename T> bool CreateBitmap(ID2D1Bitmap **bm, const block<T, 2> &block) {
+	template<typename T> bool CreateBitmap(ID2D1Bitmap **bm, const iblock<T, 2> &block) {
 		return d2d::CreateBitmap(device, bm, block);
-	}
-
-	template<typename T> bool FillBitmap(ID2D1Bitmap *bm, const block<T, 2> &block) {
-		return d2d::FillBitmap(device, bm, block);
 	}
 
 	//-------------
@@ -364,7 +345,7 @@ struct Target {
 	//-------------
 	// Target
 	//-------------
-	Target()					{
+	Target() {
 #if 0//def _DEBUG
 		D2D1_FACTORY_OPTIONS options;
 		options.debugLevel = D2D1_DEBUG_LEVEL_INFORMATION;
@@ -374,28 +355,25 @@ struct Target {
 #endif
 	}
 
-	void		DeInit()			{ device.clear(); }
-	win::Point	PixelSize()	const	{ if (device) return force_cast<win::Point>(device->GetPixelSize()); return win::Point(0, 0); }
-	point		Size()		const	{ if (device) return device->GetSize(); return point(0, 0); }
-	void		UseDIPS()	const	{ device->SetUnitMode(D2D1_UNIT_MODE_DIPS); }
-	void		UsePixels() const	{ device->SetUnitMode(D2D1_UNIT_MODE_PIXELS); }
-
-#if 0
-	point		ToPixels(const point &p)			const	{ float x, y; factory->GetDesktopDpi(&x, &y); return point(p.x * x / 96, p.y * y / 96); }
-	point		FromPixels(const point &p)			const	{ float x, y; factory->GetDesktopDpi(&x, &y); return point(p.x * 96 / x, p.y * 96 / y); }
-	rect		ToPixels(const rect &p)				const	{ float x, y; factory->GetDesktopDpi(&x, &y); return rect(p.left * x / 96, p.top * y / 96, p.right * x / 96, p.bottom * y / 96); }
-	rect		FromPixels(const rect &p)			const	{ float x, y; factory->GetDesktopDpi(&x, &y); return rect(p.left * 96 / x, p.top * 96 / y, p.right * 96 / x, p.bottom * 96 / y); }
-#endif
+	void		DeInit()									{ device.clear(); }
+	win::Point	PixelSize()							const	{ if (device) return force_cast<win::Point>(device->GetPixelSize()); return win::Point(0, 0); }
+	point		Size()								const	{ if (device) return device->GetSize(); return point(0, 0); }
+	void		UseDIPS()							const	{ device->SetUnitMode(D2D1_UNIT_MODE_DIPS); }
+	void		UsePixels()							const	{ device->SetUnitMode(D2D1_UNIT_MODE_PIXELS); }
 	void		BeginDraw()							const	{ device->BeginDraw();	}
 	bool		EndDraw()							const	{ return device->EndDraw() == D2DERR_RECREATE_TARGET; }
 	void		SetTransform(const matrix &mat)		const	{ device->SetTransform(mat);	}
 	void		SetTransform(param(float2x3) mat)	const	{ device->SetTransform((matrix*)&mat);	}
+	matrix		GetTransform()						const	{ matrix mat; device->GetTransform(&mat); return mat; }
 
 	void	Clear(const colour &col) const {
 		device->Clear(&col);
 	}
 	void	Fill(const rect &r, ID2D1Brush *brush) const {
 		device->FillRectangle(&r, brush);
+	}
+	void	Draw(ID2D1Bitmap *bm, float alpha = 1, bool bilinear = true) const {
+		device->DrawBitmap(bm, nullptr, alpha, D2D1_BITMAP_INTERPOLATION_MODE(bilinear));
 	}
 	void	Draw(const rect &dest, ID2D1Bitmap *bm, float alpha = 1, bool bilinear = true) const {
 		device->DrawBitmap(bm, &dest, alpha, D2D1_BITMAP_INTERPOLATION_MODE(bilinear));
@@ -410,15 +388,25 @@ struct Target {
 		device->DrawGeometry(geom, brush, width, style);
 	}
 #ifdef _D2D1_1_H_
-	void	DrawImage(const point &dest, ID2D1Image *image,
-		const rect			&image_rect,
+	void	DrawImage(ID2D1Image *image,
+		D2D1_INTERPOLATION_MODE	interp	= D2D1_INTERPOLATION_MODE_LINEAR,
+		D2D1_COMPOSITE_MODE		comp	= D2D1_COMPOSITE_MODE_SOURCE_OVER
+	) const {
+		device->DrawImage(image, nullptr, nullptr, interp, comp);
+	}
+	void	DrawImage(const point &dest, ID2D1Image *image, const rect &image_rect,
 		D2D1_INTERPOLATION_MODE	interp	= D2D1_INTERPOLATION_MODE_LINEAR,
 		D2D1_COMPOSITE_MODE		comp	= D2D1_COMPOSITE_MODE_SOURCE_OVER
 	) const {
 		device->DrawImage(image, &dest, &image_rect, interp, comp);
 	}
-	void	DrawImage(ID2D1Effect *effect,
-		const rect			&image_rect,
+	void	DrawImage(const point &dest, ID2D1Image *image,
+		D2D1_INTERPOLATION_MODE	interp	= D2D1_INTERPOLATION_MODE_LINEAR,
+		D2D1_COMPOSITE_MODE		comp	= D2D1_COMPOSITE_MODE_SOURCE_OVER
+	) const {
+		device->DrawImage(image, &dest, 0, interp, comp);
+	}
+	void	DrawImage(ID2D1Effect *effect, const rect &image_rect,
 		D2D1_INTERPOLATION_MODE	interp	= D2D1_INTERPOLATION_MODE_LINEAR,
 		D2D1_COMPOSITE_MODE		comp	= D2D1_COMPOSITE_MODE_SOURCE_OVER
 	) const {
@@ -436,18 +424,11 @@ struct Target {
 	) const {
 		device->DrawImage(effect, &dest, 0, interp, comp);
 	}
-	void	DrawImage(const point &dest, ID2D1Effect *effect,
-		const rect			&image_rect,
+	void	DrawImage(const point &dest, ID2D1Effect *effect, const rect &image_rect,
 		D2D1_INTERPOLATION_MODE	interp	= D2D1_INTERPOLATION_MODE_LINEAR,
 		D2D1_COMPOSITE_MODE		comp	= D2D1_COMPOSITE_MODE_SOURCE_OVER
 	) const {
 		device->DrawImage(effect, &dest, &image_rect, interp, comp);
-	}
-	void	DrawImage(const point &dest, ID2D1Image *image,
-		D2D1_INTERPOLATION_MODE	interp	= D2D1_INTERPOLATION_MODE_LINEAR,
-		D2D1_COMPOSITE_MODE		comp	= D2D1_COMPOSITE_MODE_SOURCE_OVER
-	) const {
-		device->DrawImage(image, &dest, 0, interp, comp);
 	}
 #endif
 	void	FillEllipse(const ellipse &ellipse, ID2D1Brush *brush) const {
@@ -460,40 +441,37 @@ struct Target {
 	    device->DrawRectangle(r, brush, width, style);
 	}
 
-	void	DrawLine(const point &p0, const point &p1
-		, ID2D1Brush				*brush
+	void	DrawLine(const point &p0, const point &p1, ID2D1Brush *brush
 		, float						width	= 1
 		, ID2D1StrokeStyle			*style	= 0
 	) const {
 		device->DrawLine(p0, p1, brush, width, style);
 	}
 
-	void	DrawText(const rect &r, string_param16 &&s
-		, IDWriteTextFormat			*font
-		, ID2D1Brush				*brush
+	void	DrawText(const rect &r, string_ref16 s, IDWriteTextFormat *font, ID2D1Brush *brush
 		, D2D1_DRAW_TEXT_OPTIONS	opts	= D2D1_DRAW_TEXT_OPTIONS_NONE
 		, DWRITE_MEASURING_MODE		meas	= DWRITE_MEASURING_MODE_NATURAL
 	) const {
 		if (s)
 			device->DrawText(s, s.size32(), font, &r, brush, opts, meas);
     }
-	void	DrawText(const rect &r, const wchar_t *s, size_t len
-		, IDWriteTextFormat			*font
-		, ID2D1Brush				*brush
+	void	DrawText(const rect &r, const wchar_t *s, size_t len, IDWriteTextFormat *font, ID2D1Brush *brush
 		, D2D1_DRAW_TEXT_OPTIONS	opts	= D2D1_DRAW_TEXT_OPTIONS_NONE
 		, DWRITE_MEASURING_MODE		meas	= DWRITE_MEASURING_MODE_NATURAL
 	) const {
 		if (len)
 			device->DrawText(s, UINT(len), font, &r, brush, opts, meas);
     }
-	void	DrawText(const point &p
-		, IDWriteTextLayout			*layout
-		, ID2D1Brush				*brush
+	void	DrawText(const point &p, IDWriteTextLayout *layout, ID2D1Brush *brush
 		, D2D1_DRAW_TEXT_OPTIONS	opts	= D2D1_DRAW_TEXT_OPTIONS_NONE
 	) const {
 		device->DrawTextLayout(p, layout, brush, opts);
 	}
 };
+
+inline bool GradientStops::Create(ID2D1DeviceContext *device, const gradstop *cols, int num, D2D1_EXTEND_MODE extend) {
+	return SUCCEEDED(device->CreateGradientStopCollection((const D2D1_GRADIENT_STOP*)cols, num, D2D1_GAMMA_2_2, extend, get_addr()));
+}
 
 //-----------------------------------------------------------------------------
 //	single-shot classes
@@ -501,7 +479,7 @@ struct Target {
 
 struct Clipped {
 	com_ptr2<ID2D1DeviceContext>		device;
-	Clipped(ID2D1DeviceContext *_device, const rect &r, D2D1_ANTIALIAS_MODE mode = D2D1_ANTIALIAS_MODE_PER_PRIMITIVE) : device(_device) {
+	Clipped(ID2D1DeviceContext *device, const rect &r, D2D1_ANTIALIAS_MODE mode = D2D1_ANTIALIAS_MODE_PER_PRIMITIVE) : device(device) {
 		device->PushAxisAlignedClip(&r, mode);
 	}
 	~Clipped() { device->PopAxisAlignedClip(); }
@@ -509,43 +487,35 @@ struct Clipped {
 
 struct LayerParameters : D2D1_LAYER_PARAMETERS {
 	LayerParameters(
-		const rect				_contentBounds		= infinity,
-		ID2D1Geometry*			_geometricMask		= 0,
-		D2D1_ANTIALIAS_MODE		_maskAntialiasMode	= D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
-		matrix					_maskTransform		= float2x3(identity),
-		float					_opacity			= 1.0,
-		ID2D1Brush*				_opacityBrush		= 0,
-		D2D1_LAYER_OPTIONS		_layerOptions		= D2D1_LAYER_OPTIONS_NONE
-	) {
-		contentBounds		= _contentBounds;
-		geometricMask		= _geometricMask;
-		maskAntialiasMode	= _maskAntialiasMode;
-		maskTransform		= _maskTransform;
-		opacity				= _opacity;
-		opacityBrush		= _opacityBrush;
-		layerOptions		= _layerOptions;
-	}
+		const rect				contentBounds		= infinity,
+		ID2D1Geometry*			geometricMask		= nullptr,
+		D2D1_ANTIALIAS_MODE		maskAntialiasMode	= D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
+		matrix					maskTransform		= float2x3(identity),
+		float					opacity				= 1,
+		ID2D1Brush*				opacityBrush		= nullptr,
+		D2D1_LAYER_OPTIONS		layerOptions		= D2D1_LAYER_OPTIONS_NONE
+	)  : D2D1_LAYER_PARAMETERS{contentBounds, geometricMask, maskAntialiasMode, maskTransform, opacity, opacityBrush, layerOptions} {}
 };
 
 struct Layered {
 	com_ptr2<ID2D1DeviceContext>		device;
-	Layered(ID2D1DeviceContext *_device, ID2D1Layer *layer, const D2D1_LAYER_PARAMETERS &params = LayerParameters()) : device(_device) {
+	Layered(ID2D1DeviceContext *device, ID2D1Layer *layer, const D2D1_LAYER_PARAMETERS &params = LayerParameters()) : device(device) {
 		device->PushLayer(&params, layer);
 	}
 	~Layered() { device->PopLayer(); }
 };
 
-inline bool GradientStops::Create(ID2D1DeviceContext *device, const gradstop *cols, int num, D2D1_EXTEND_MODE extend) {
-	return SUCCEEDED(device->CreateGradientStopCollection((const D2D1_GRADIENT_STOP*)cols, num, D2D1_GAMMA_2_2, extend, get_addr()));
-}
-
 struct Geometry : com_ptr<ID2D1Geometry> {
 	struct Sink  : com_ptr<ID2D1GeometrySink> {
+		Sink(ID2D1PathGeometry *p) { p->Open(get_addr()); }
 		Sink(ID2D1GeometrySink *p) : com_ptr<ID2D1GeometrySink>(p) {}
 		Sink(Sink &&s) = default;
-		~Sink() { get()->Close(); }
+		~Sink() { if (auto p = get()) p->Close(); }
 	};
 
+	Geometry(const Target &t) {
+		t.factory->CreatePathGeometry((ID2D1PathGeometry**)get_addr());
+	}
 	Geometry(ID2D1Factory *factory, ID2D1Geometry *geom, const d2d::matrix &transform) {
 		factory->CreateTransformedGeometry(geom, transform, (ID2D1TransformedGeometry**)get_addr());
 	}
@@ -561,16 +531,13 @@ struct Geometry : com_ptr<ID2D1Geometry> {
 	Geometry(ID2D1Factory *factory, const ellipse &ellipse) {
 		factory->CreateEllipseGeometry(&ellipse, (ID2D1EllipseGeometry**)get_addr());
 	}
-	Geometry(const Target &t) {
-		t.factory->CreatePathGeometry((ID2D1PathGeometry**)get_addr());
-	}
 	Geometry(const Target &t, const rect &rect) {
 		t.factory->CreateRectangleGeometry(&rect, (ID2D1RectangleGeometry**)get_addr());
 	}
 	Geometry(const Target &t, const ellipse &ellipse) {
 		t.factory->CreateEllipseGeometry(&ellipse, (ID2D1EllipseGeometry**)get_addr());
 	}
-	Sink	Open() {
+	Sink	Open() const {
 		ID2D1GeometrySink	*sink;
 		query<ID2D1PathGeometry>()->Open(&sink);
 		return sink;
@@ -580,9 +547,7 @@ struct Geometry : com_ptr<ID2D1Geometry> {
 struct Bitmap : com_ptr<ID2D1Bitmap> {
 	Bitmap()	{}
 	Bitmap(ID2D1DeviceContext *device, uint32 width, uint32 height, DXGI_FORMAT format = DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE alpha = D2D1_ALPHA_MODE_PREMULTIPLIED) {
-		D2D1_BITMAP_PROPERTIES	props	= {{format, alpha}, 0, 0};
-		D2D1_SIZE_U				size	= {width, height};
-		device->CreateBitmap(size, props, get_addr());
+		device->CreateBitmap({width, height}, {{format, alpha}, 0, 0}, get_addr());
 	}
 	template<typename T> Bitmap(ID2D1DeviceContext *device, const block<T, 2> &block) {
 		d2d::CreateBitmap(device, get_addr(), block);
@@ -607,9 +572,8 @@ struct LinearGradientBrush : com_ptr<ID2D1LinearGradientBrush> {
 	LinearGradientBrush(ID2D1DeviceContext *device, const point &p0, const point &p1, ID2D1GradientStopCollection *grads) {
 		device->CreateLinearGradientBrush(&Props(p0, p1), NULL, grads, get_addr());
 	}
-	LinearGradientBrush(ID2D1DeviceContext *device, const point &p0, const point &p1, const range<gradstop*> &grads) {
-		device->CreateLinearGradientBrush(&Props(p0, p1), NULL, GradientStops(device, grads), get_addr());
-	}
+	LinearGradientBrush(ID2D1DeviceContext *device, const point &p0, const point &p1, const range<gradstop*> &grads)
+		: LinearGradientBrush(device, p0, p1, GradientStops(device, grads)) {}
 	void	SetTransform(const float2x3 &mat)		const	{ get()->SetTransform(matrix(mat));	}
 };
 
@@ -626,9 +590,8 @@ struct RadialGradientBrush : com_ptr<ID2D1RadialGradientBrush> {
 	RadialGradientBrush(ID2D1DeviceContext *device, const rect &rect, const point &offset, ID2D1GradientStopCollection* grads) {
 		device->CreateRadialGradientBrush(&Props(rect, offset), NULL, grads, get_addr());
 	}
-	RadialGradientBrush(ID2D1DeviceContext *device, const rect &rect, const point &offset, const range<gradstop*> &grads) {
-		device->CreateRadialGradientBrush(&Props(rect, offset), NULL, GradientStops(device, grads), get_addr());
-	}
+	RadialGradientBrush(ID2D1DeviceContext *device, const rect &rect, const point &offset, const range<gradstop*> &grads) :
+		RadialGradientBrush(device, rect, offset, GradientStops(device, grads)) {}
 	void	SetTransform(const float2x3 &mat)		const	{ get()->SetTransform(matrix(mat));	}
 };
 
@@ -644,7 +607,7 @@ struct BitmapBrush : com_ptr<ID2D1Brush> {
 	}
 	bool CreateDeviceResources(ID2D1DeviceContext *device) {
 		return get() || (
-			(d2d_bm || CreateBitmap(device, &d2d_bm, win_bm))
+			(d2d_bm || CreateBitmap(device, &d2d_bm, win_bm.GetParams()))
 				? SUCCEEDED(device->CreateBitmapBrush(d2d_bm, &props1, &props2, (ID2D1BitmapBrush**)get_addr()))
 				: SUCCEEDED(device->CreateSolidColorBrush(colour(0.5f,0.5f,0.5f), (ID2D1SolidColorBrush**)get_addr()))
 		);
@@ -654,7 +617,7 @@ struct BitmapBrush : com_ptr<ID2D1Brush> {
 		d2d_bm.clear();
 	}
 
-	BitmapBrush(win::Bitmap _bm, const matrix &transform) : win_bm(_bm) {
+	BitmapBrush(win::Bitmap bm, const matrix &transform) : win_bm(bm) {
 		props1.extendModeX			= props1.extendModeY = D2D1_EXTEND_MODE_WRAP;
 		props1.interpolationMode	= D2D1_BITMAP_INTERPOLATION_MODE_LINEAR;
 		props2.opacity				= 1;
@@ -666,15 +629,14 @@ struct BitmapBrush : com_ptr<ID2D1Brush> {
 
 #ifdef _D2D1_1_H_
 struct Effect : com_ptr<ID2D1Effect> {
+	Effect()	{}
 	Effect(ID2D1DeviceContext *device, const IID &iid)	{ device->CreateEffect(iid, get_addr()); }
-	Effect &SetInput(ID2D1Effect *b)					{ get()->SetInputEffect(0, b); return *this; }
-	Effect &SetInput(ID2D1Image *b)						{ get()->SetInput(0, b); return *this; }
+	Effect &Create(ID2D1DeviceContext *device, const IID &iid)	{ device->CreateEffect(iid, get_addr()); return *this; }
 	Effect &SetInput(int i, ID2D1Effect *b)				{ get()->SetInputEffect(i, b); return *this; }
 	Effect &SetInput(int i, ID2D1Image *b)				{ get()->SetInput(i, b); return *this; }
-	template<typename T> Effect &SetValue(uint32 i, const T &t) {
-		get()->SetValue(i, (const BYTE*)&t, sizeof(T));
-		return *this;
-	}
+	Effect &SetInput(ID2D1Effect *b)					{ return SetInput(0, b); }
+	Effect &SetInput(ID2D1Image *b)						{ return SetInput(0, b); }
+	template<typename T> Effect &SetValue(uint32 i, const T &t) { get()->SetValue(i, (const BYTE*)&t, sizeof(T)); return *this; }
 };
 #endif
 
@@ -683,7 +645,7 @@ struct Effect : com_ptr<ID2D1Effect> {
 //-----------------------------------------------------------------------------
 
 struct Write : com_ptr<IDWriteFactory> {
-	bool CreateTextLayout(IDWriteTextLayout **layout, string_param16 &&s, IDWriteTextFormat *font, float width, float height) {
+	bool CreateTextLayout(IDWriteTextLayout **layout, string_ref16 s, IDWriteTextFormat *font, float width, float height) {
 		return SUCCEEDED(get()->CreateTextLayout(s, s.size32(), font, width, height, layout));
 	}
 	bool CreateTextLayout(IDWriteTextLayout **layout, const wchar_t *s, size_t len, IDWriteTextFormat *font, float width, float height) {
@@ -711,31 +673,29 @@ struct Font : com_ptr<IDWriteTextFormat> {
 	};
 #endif
 	Font() {}
-	Font(IDWriteFactory *write, string_param16 &&name, float size, int flags = 0) {
+	Font(IDWriteFactory *write, string_ref16 name, float size, int flags = 0) {
 		write->CreateTextFormat(name, NULL,
-			flags & BOLD	? DWRITE_FONT_WEIGHT_BOLD : DWRITE_FONT_WEIGHT_MEDIUM,
-			flags & ITALIC	? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL,
+			flags & BOLD	? DWRITE_FONT_WEIGHT_BOLD	: DWRITE_FONT_WEIGHT_MEDIUM,
+			flags & ITALIC	? DWRITE_FONT_STYLE_ITALIC	: DWRITE_FONT_STYLE_NORMAL,
 			DWRITE_FONT_STRETCH_NORMAL,
 			size, L"", get_addr()
 		);
 	}
-	Font(IDWriteFactory *write, string_param16 &&name, float size, float spacing, int flags) : Font(write, move(name), size, flags) {
+	Font(IDWriteFactory *write, string_ref16 name, float size, float spacing, int flags) : Font(write, move(name), size, flags) {
 		get()->SetLineSpacing(DWRITE_LINE_SPACING_METHOD_UNIFORM, spacing, size);
-
 	}
 #ifdef PLAT_WIN32
 	Font(IDWriteFactory *write, const win::Font::Params16 &p) : Font(write, p.Name(), win::DeviceContext::ScreenCaps().PerInchY<96>(p.LogicalHeight()), win::DeviceContext::ScreenCaps().PerInchY<96>(p.Height()), p.Effects()) {}
 	Font(IDWriteFactory *write, HFONT h) : Font(write, win::Font(h).GetParams16()) {}
 #endif
-
 };
 
 struct TextLayout : com_ptr<IDWriteTextLayout> {
 	struct Range : DWRITE_TEXT_RANGE {
-		Range(uint32 _start, uint32 _length)	{ startPosition = _start; length = _length; }
-		Range(const interval<uint32> &i)		{ startPosition = i.begin(); length = i.extent(); }
+		Range(uint32 start, uint32 length)	: DWRITE_TEXT_RANGE{start, length} {}
+		Range(const interval<uint32> &i)	: DWRITE_TEXT_RANGE{i.begin(), i.extent()} {}
 #ifdef PLAT_WIN32
-		Range(const CHARRANGE &chrg)			{ startPosition = chrg.cpMin; length = chrg.cpMax - chrg.cpMin; }
+		Range(const CHARRANGE &chrg)		: DWRITE_TEXT_RANGE{chrg.cpMin, chrg.cpMax - chrg.cpMin} {}
 #endif
 		uint32		begin()			const { return startPosition; }
 		uint32		end()			const { return startPosition + length; }
@@ -744,18 +704,21 @@ struct TextLayout : com_ptr<IDWriteTextLayout> {
 	};
 	TextLayout() {}
 	TextLayout(IDWriteTextLayout *p) : com_ptr<IDWriteTextLayout>(p) {}
-	TextLayout(IDWriteFactory *write, string_param16 &&s, IDWriteTextFormat *font, float width, float height = 0) {
+	TextLayout(IDWriteFactory *write, string_ref16 s, IDWriteTextFormat *font, float width, float height = 0) {
 		write->CreateTextLayout(s, s.size32(), font, width, height, get_addr());
 	}
 	TextLayout(IDWriteFactory *write, const wchar_t *s, size_t len, IDWriteTextFormat *font, float width, float height = 0) {
 		write->CreateTextLayout(s, UINT(len), font, width, height, get_addr());
 	}
-	TextLayout(IDWriteFactory *write, string_param16 &&s, IDWriteTextFormat *font, const point &size) {
+	TextLayout(IDWriteFactory *write, string_ref16 s, IDWriteTextFormat *font, const point &size) {
 		write->CreateTextLayout(s, s.size32(), font, size.x, size.y, get_addr());
 	}
 	TextLayout(IDWriteFactory *write, const wchar_t *s, size_t len, IDWriteTextFormat *font, const point &size) {
 		write->CreateTextLayout(s, UINT(len), font, size.x, size.y, get_addr());
 	}
+
+	TextLayout(TextLayout&& b) = default;
+	TextLayout& operator=(TextLayout&& b) = default;
 
 	void	SetDrawingEffect(IUnknown* effect, const Range &range) {
 		get()->SetDrawingEffect(effect, range);
@@ -764,6 +727,82 @@ struct TextLayout : com_ptr<IDWriteTextLayout> {
 		DWRITE_TEXT_METRICS	metrics;
 		get()->GetMetrics(&metrics);
 		return rect::with_ext(metrics.left, metrics.top, metrics.width, metrics.height);
+	}
+};
+
+struct Formatting {
+	typedef TextLayout::Range char_range;
+
+	enum STATE {
+		FONT, SIZE, STRETCH, STYLE, WEIGHT, STRIKE, UNDERLINE,
+		EFFECT,
+		COUNT,
+	};
+	struct format {
+		STATE	s;
+		format() {}
+		format(STATE s) : s(s) {}
+		void	set(IDWriteTextLayout *layout, const char_range &range);
+	};
+	template<STATE S> struct format1 : format {
+		format1() : format(S) {}
+	};
+	template<STATE S, typename V> struct format2 : format1<S> {
+		V		value;
+		inline void	set(IDWriteTextLayout *layout, const char_range &range);
+		template<typename U> format2(U &&u) : value(forward<U>(u)) {}
+	};
+
+	using font		= format2<FONT, string16>;
+	using size		= format2<SIZE, float>;
+	using stretch	= format2<STRETCH, DWRITE_FONT_STRETCH>;
+	using style		= format2<STYLE, DWRITE_FONT_STYLE>;
+	using weight	= format2<WEIGHT, DWRITE_FONT_WEIGHT>;
+	using strike	= format2<STRIKE, bool>;
+	using underline	= format2<UNDERLINE, bool>;
+	struct effect;
+
+	interval_tree<uint32, format*>	tree;
+
+	void	add(const interval<uint32> &r, format *f) {
+		tree.insert(r, f);
+	}
+
+	void	adjust(const interval<uint32> &r, int adj)	{
+		format	*last[COUNT] = {0};
+
+		//if (r.a || r.b != orig_end) {
+
+		for (auto j = interval_begin(tree, r); j; ++j) {
+			auto	&k = j.key();
+			if (k.b == r.b)
+				last[(*j)->s] = *j;
+		}
+
+		for (auto j = interval_begin(tree, r); j;) {
+			auto	&k = j.key();
+
+			if (k.a > r.a)
+				k.set_begin(k.a > r.b ? k.a + adj : r.a);
+
+			if (k.b >= r.a) {
+				if (last[(*j)->s] == *j) {
+					k.set_end(k.b + adj);
+				} else {
+					k.set_end(r.a);
+					if (k.empty()) {
+						tree.remove(j);
+						continue;
+					}
+				}
+			}
+			++j;
+		}
+	}
+
+	void	set(IDWriteTextLayout *layout, const interval<uint32> &r) {
+		for (auto j = interval_begin(tree, r.a, r.b); j && j.key().begin() < r.b; ++j)
+			(*j)->set(layout, (j.key() & r) - r.a);
 	}
 };
 
@@ -791,21 +830,19 @@ struct ImageEncoder : com_ptr<IWICImageEncoder> {
 #ifdef PLAT_WIN32
 
 //notifications
-enum {
-	PAINT	= 0x1000,
-};
 
 // display info
 struct PAINT_INFO : win::Notification {
+	static const uint32 CODE = 0x1000;
 	void *target;
-	PAINT_INFO(win::Control from, void *target) : Notification(from, PAINT), target(target) {}
+	PAINT_INFO(win::Control from, void *target) : Notification(from, CODE), target(target) {}
 };
 
 
 struct WND : Target {
-	uint32	dpi = 0;
+	float	dpi = 0;
 	bool	Init(HWND hWnd, const win::Point &size) {
-		if (!device || (PixelSize() != size && !Resize(size))) {
+		if (!device || (PixelSize() != size && FAILED(device.query<ID2D1HwndRenderTarget>()->Resize((D2D1_SIZE_U*)&size)))) {
 			device.clear();
 			D2D1_RENDER_TARGET_PROPERTIES	props	= {
 				D2D1_RENDER_TARGET_TYPE_DEFAULT,
@@ -818,22 +855,20 @@ struct WND : Target {
 				(D2D1_SIZE_U&)size,
 				D2D1_PRESENT_OPTIONS_NONE
 			};
-//			factory->CreateHwndRenderTarget(props, hwnd_props, (ID2D1HwndRenderTarget**)&device);
 			com_ptr<ID2D1HwndRenderTarget>		target0;
-			if (SUCCEEDED(factory->CreateHwndRenderTarget(props, hwnd_props, &target0))) {
+			if (SUCCEEDED(factory->CreateHwndRenderTarget(&props, &hwnd_props, &target0))) {
 				target0.query(&device);
-				dpi = GetDpiForWindow(hWnd);
+				dpi = GetDpiForWindow(hWnd) / 96.f;
 			}
 		}
 		return !!device;
 	}
-	bool	Resize(const win::Point &size)	const	{ return device && FAILED(device.query<ID2D1HwndRenderTarget>()->Resize((D2D1_SIZE_U*)&size));	}
+	bool	Resize(const win::Point &size)	const	{ return !device || SUCCEEDED(device.query<ID2D1HwndRenderTarget>()->Resize((D2D1_SIZE_U*)&size));	}
 	bool	Occluded()						const	{ return !!(device.query<ID2D1HwndRenderTarget>()->CheckWindowState() & D2D1_WINDOW_STATE_OCCLUDED); }
-
-	point	ToPixels(const point &p)		const	{ return point(p.x * dpi / 96, p.y * dpi / 96); }
-	point	FromPixels(const point &p)		const	{ return point(p.x * 96 / dpi, p.y * 96 / dpi); }
-	rect	ToPixels(const rect &p)			const	{ return rect(p.left * dpi / 96, p.top * dpi / 96, p.right * dpi / 96, p.bottom * dpi / 96); }
-	rect	FromPixels(const rect &p)		const	{ return rect(p.left * 96 / dpi, p.top * 96 / dpi, p.right * 96 / dpi, p.bottom * 96 / dpi); }
+	point	ToPixels(const point &p)		const	{ return point(p.x * dpi, p.y * dpi); }
+	point	FromPixels(const point &p)		const	{ return point(p.x / dpi, p.y / dpi); }
+	rect	ToPixels(const rect &p)			const	{ return rect(p.left * dpi, p.top * dpi, p.right * dpi, p.bottom * dpi); }
+	rect	FromPixels(const rect &p)		const	{ return rect(p.left / dpi, p.top / dpi, p.right / dpi, p.bottom / dpi); }
 };
 
 class Window : public win::Window<Window>, public WND {
@@ -841,18 +876,16 @@ protected:
 	struct DeviceContextPaint : public win::DeviceContextPaint {
 		Window	&target;
 		bool	unoccluded;
-		DeviceContextPaint(Window &target) : win::DeviceContextPaint(target), target(target) {
-			unoccluded = target.BeginDraw();
-		}
+		DeviceContextPaint(Window &target) : win::DeviceContextPaint(target), target(target), unoccluded(target.BeginDraw()) {}
 		~DeviceContextPaint()	{ if (unoccluded) target.EndDraw(); }
 		operator bool()			{ return unoccluded; }
 	};
 
 public:
-	LRESULT Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+	LRESULT Proc(win::MSG_ID message, WPARAM wParam, LPARAM lParam) {
 		switch (message) {
 			case WM_SIZE:
-				if (WND::Resize(win::Point(lParam)))
+				if (!WND::Resize(win::Point(lParam)))
 					DeInit();
 				break;
 
@@ -889,8 +922,7 @@ struct DC : Target {
 			{DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_IGNORE},
 			0, 0, D2D1_RENDER_TARGET_USAGE_NONE, D2D1_FEATURE_LEVEL_DEFAULT
 		};
-//		factory->CreateDCRenderTarget(&props, (ID2D1DCRenderTarget**)&device);
-		com_ptr<ID2D1DCRenderTarget>		target0;
+		com_ptr<ID2D1DCRenderTarget>	target0;
 		factory->CreateDCRenderTarget(&props, &target0);
 		target0.query(&device);
 	}
@@ -1009,7 +1041,6 @@ struct DXI : Target {
 			0, 0, D2D1_RENDER_TARGET_USAGE_NONE, D2D1_FEATURE_LEVEL_DEFAULT
 		};
 
-//		hr = factory->CreateDxgiSurfaceRenderTarget(surface, &props, &device);
 		com_ptr<ID2D1RenderTarget>		target0;
 		return SUCCEEDED(factory->CreateDxgiSurfaceRenderTarget(surface, &props, &target0)) && SUCCEEDED(target0.query(&device));
 	}
@@ -1082,8 +1113,8 @@ protected:
 	template<int N, typename T> struct parameter {
 		constexpr_string<char,N>		name;
 		constexpr_string<wchar_t,N+1>	name16;
-		PD2D1_PROPERTY_SET_FUNCTION set;
-		PD2D1_PROPERTY_GET_FUNCTION get;
+		PD2D1_PROPERTY_SET_FUNCTION		set;
+		PD2D1_PROPERTY_GET_FUNCTION		get;
 		constexpr parameter(const constexpr_string<char,N> &name, PD2D1_PROPERTY_SET_FUNCTION set, PD2D1_PROPERTY_GET_FUNCTION get) : name(name), name16(name+"\0"), set(set), get(get) {}
 		constexpr operator D2D1_PROPERTY_BINDING() const {
 			return D2D1_PROPERTY_BINDING{name16.begin(), set, get};
@@ -1206,7 +1237,7 @@ class TextRenderer : public com<IDWriteTextRenderer> {
 		matrix		mat = (float2x3)translate(baselineOriginX, baselineOriginY);
 		t.device->SetTransform(mat);
 		if (effect) {
-			if (com_ptr<TextEffect> effect2 = querier(effect))
+			if (auto effect2 = iso::query<TextEffect>(effect))
 				return effect2->DrawGeometry(context, t.device, geometry);
 		}
 		t.device->FillGeometry(geometry, brush);
@@ -1261,7 +1292,7 @@ public:
 				return DrawGeometry(context, baselineOriginX, baselineOriginY, geometry, effect);
 			return hr;
 #else
-			if (com_ptr<TextEffect> effect2 = querier(effect))
+			if (auto effect2 = iso::query<TextEffect>(effect))
 				return effect2->DrawGlyphRun(context, t.device, point(baselineOriginX, baselineOriginY), glyphRun, glyphRunDescription, measuringMode);
 #endif
 		}

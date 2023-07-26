@@ -69,7 +69,11 @@ class DIB : public DIBHEADER {
 		return this;
 	}
 	DIB*	CopyBits(const block<ISO_rgba, 2> &texels, const block<ISO_rgba, 1> &newclut) {
-		copy_n(newclut.begin(), Clut(), newclut.size());
+		if (newclut) {
+			copy_n(newclut.begin(), Clut(), newclut.size());
+			return SetPixels<Texel<R8>>(texels);
+
+		}
 		return SetPixels(texels);
 	}
 	template<int B> DIB*	CopyBits(const _bitmap<B> &bm) {
@@ -93,7 +97,7 @@ public:
 		return ((DIB*)malloc(CalcSize(width, height, bits, planes, clut)))->Init(width, -height, bits, planes, clut);
 	}
 	static DIB*		Create(const block<ISO_rgba, 2> &texels, const block<ISO_rgba, 1> &clut) {
-		return Create(texels.size<1>(), texels.size<2>(), 32, 1, clut.size())->CopyBits(texels, clut);
+		return Create(texels.size<1>(), texels.size<2>(), clut ? 8 : 32, 1, clut.size())->CopyBits(texels, clut);
 	}
 	template<int B> static DIB*		Create(const iso::_bitmap<B> &bm) {
 		return Create(bm.All(), bm.ClutBlock());

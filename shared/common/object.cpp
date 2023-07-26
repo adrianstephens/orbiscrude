@@ -332,7 +332,6 @@ void World::Begin() {
 void World::End() {
 	while (!children.empty()) {
 		Object	*obj = children.pop_front();
-		UnLink(obj);
 		delete obj;
 	}
 

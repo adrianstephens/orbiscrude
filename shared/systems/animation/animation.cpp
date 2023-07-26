@@ -1,5 +1,5 @@
 #include "object.h"
-#include "utilities.h"
+#include "extra/random.h"
 #include "animation.h"
 #include "packed_types.h"
 #include "base/algorithm.h"
@@ -1889,7 +1889,7 @@ struct an_checkstate : an_base  {
 	}
 
 	void	Create(an_data_create &d, Object *obj) {
-		instance	*my = new(d) instance(obj->Root(), (const char*)id);
+		instance	*my = new(d) instance(obj->Root(), crc32((const char*)id));
 		anim.Create(d, obj);
 	}
 
@@ -1921,7 +1921,7 @@ template<typename T> struct fn_id_type : an_base {
 	void	Reserve(instance *my, Object *obj)	{}
 	void	Create(an_data_create &d, Object *obj)	{
 		instance	*my = new(d) instance;
-		LookupMessage	m(id);
+		LookupMessage	m = crc32(id);
 		do {
 			obj->Send(m);
 		} while (!m.result && (obj = obj->Parent()));
@@ -1956,7 +1956,7 @@ struct fn_crc : an_base {
 	void	Reserve(instance *my, Object *obj)	{}
 	void	Create(an_data_create &d, Object *obj) {
 		instance *my = new(d) instance;
-		my->value = s;
+		my->value = crc32(s);
 	}
 	void	Destroy(instance *my)				{}
 	float	GetValue(instance *my, float t)		{ return 0; }//*(float*)&my->value;	}
@@ -2065,7 +2065,7 @@ struct fn_set : an_base {
 		instance	*my = new(d) instance;
 		value.Create(d, obj);
 
-		LookupMessage m(id);
+		LookupMessage m	= crc32(id);
 		obj->Send(m);
 		ISO_VERIFY(my->lvalue = (float*)m.result);
 	}
@@ -2099,7 +2099,7 @@ struct fn_sendtrigger : an_base  {
 	}
 
 	float	Evaluate(instance *my, Joint *joints, Joint *initial, int njoints, Events &events, float t) {
-		my->obj->Send(TriggerMessage(my->obj, (const char*)id));
+		my->obj->Send(TriggerMessage(my->obj, crc32((const char*)id)));
 		return 0;
 	}
 };
@@ -2160,7 +2160,7 @@ void an_item::Reserve2(an_data_reserve &d, Object *obj)	{
 				break;
 
 			case ISO::STRING: {
-				LookupMessage msg((const char*)GetType()->ReadPtr(get()));
+				LookupMessage msg(crc32((const char*)GetType()->ReadPtr(get())));
 				if (obj->Send(msg) && msg.result) {
 					if (msg.type->Is(ISO_CRC("crc32", 0xafabd35e)))
 						Header()->type = &def_fn_id_crc;

@@ -401,7 +401,7 @@ struct mpg123_pars {
 		}
 		return true;
 	}
-	bool	dis_allow(int rate, int chans, uint16 enc) {
+	bool	disallow(int rate, int chans, uint16 enc) {
 		if ((chans & 3) == 0)
 			return false;
 		if (rate) {
@@ -443,15 +443,14 @@ struct dither_filter {
 		tpdf_noise,
 		highpass_tpdf_noise,
 	};
-	float	*buffer;
-	int		index;
+	float	*buffer = nullptr;
+	float	*p		= nullptr;
 
-	dither_filter() : buffer(0), index(0)	{}
 	~dither_filter()	{ free(buffer); }
 	void	init(type t);
-	int		need(int n)			{ if (DITHERSIZE - index < n) index = 0; return index; }
-	void	set(int n)			{ index = n; }
-	float	operator()(float v)	{ return v + buffer[index++]; }
+	float*	need(int n)			{ if (buffer + DITHERSIZE - p < n) p = buffer; return p; }
+	void	set(float *_p)		{ p = _p; }
+	float	operator()(float v)	{ return v + *p++; }
 };
 
 struct decode_tables {
@@ -512,7 +511,7 @@ struct mpg_header {
 typedef vlc_in<uint32, true, byte_reader&>	vlc_reader;
 
 struct mpg123 : mpg123_pars {
-	istream_ref			file;
+	istream_ref		file;
 	byte_reader		buffer;
 	vlc_reader		vlc;
 

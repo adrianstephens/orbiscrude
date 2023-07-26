@@ -309,7 +309,7 @@ struct DSStore : DSStoreVersion, BuddyAllocator {
 };
 
 inline DateTime MacTime(uint64 v) {
-	return DateTime::Secs(v / 65536.0) + DateTime(1904, 1, 1);
+	return DateTime(1904, 1, 1) + Duration::Secs(v / 65536.0);
 }
 
 ISO_ptr<void> DSStore::ReadData(byte_reader &br) {
@@ -423,7 +423,8 @@ class AppleDoubleFileHandler : public FileHandler {
 	const char*		GetDescription() override { return "Mac Resource Fork"; }
 	int				Check(istream_ref file) override {
 		file.seek(0);
-		return file.get<AppleDouble::header>().valid() ? CHECK_PROBABLE : CHECK_DEFINITE_NO;
+		AppleDouble::header	h;
+		return file.read(h) && h.valid() ? CHECK_PROBABLE : CHECK_DEFINITE_NO;
 	}
 
 	ISO_ptr<void>	Read(tag id, istream_ref file) override {

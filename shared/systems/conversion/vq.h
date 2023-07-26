@@ -90,7 +90,7 @@ public:
 			}
 		}
 	}
-	uint32 find_closest(T &t, const E &d, uint32 cur_size, float &rmindist) {
+	uint32	find_closest(T &t, const E &d, uint32 cur_size, float &rmindist) {
 		float		mindist		= 1e30f; // keep convention that ties go to lower index
 		float		norm		= t.norm(d);
 		uint32		closest		= indices[min_sup(0, cur_size - 1, norm, norms)];
@@ -113,7 +113,8 @@ public:
 	}
 
 #else
-	uint32 find_closest(T &t, const E &d, uint32 cur_size, float &rmindist) {
+	void	make_norms(T &t, uint32 cur_size) {}
+	uint32	find_closest(T &t, const E &d, uint32 cur_size, float &rmindist) {
 		float		mindist	= t.distsquared(d, codebook[0]);
 		uint32		closest	= 0;
 		for (uint32 cb = 1; cb < cur_size; ++cb) {
@@ -135,17 +136,17 @@ public:
 		uint32	req_size	= codebook.size();
 		uint32	data_size	= uint32(t.size());
 
-		// If data fits in codebook, just copy it to code book.
+		// If data fits in codebook, just copy it to code book
 		if (data_size <= req_size) {
 			for (uint32 i = 0; i < data_size; ++i)
 				codebook[i] = t.data(i);
 			return req_size = data_size;
 		}
 
-		W		*sums		= new W[req_size];
-		float	*diameters	= new float[req_size];
-		W		*furthests	= new W[req_size];
-		float	*variances	= new float[req_size];
+		temp_array<W>		sums(req_size);
+		temp_array<float>	diameters(req_size);
+		temp_array<W>		furthests(req_size);
+		temp_array<float>	variances(req_size);
 
 		// Initialize codebook[0] to average data value
 		W		data_sum;
@@ -155,16 +156,14 @@ public:
 			w_sum += t.weightedsum(data_sum, i);
 
 		codebook[0]		= data_sum;
-		t.scale(codebook[0], 1.f / w_sum);
+		t.scale(codebook[0], 1 / w_sum);
 
 		uint32	split_target	= 0;
-		uint32	cur_size = 1;
+		uint32	cur_size		= 1;
 		while (cur_size < req_size) {
 			// Split codebook entries
 			if (fast) {
-				uint32	codebook_add = req_size - cur_size;
-				if (codebook_add > cur_size)
-					codebook_add = cur_size;
+				uint32	codebook_add = min(req_size - cur_size, cur_size);
 				for (uint32 i = 0; i < codebook_add; ++i) {
 					codebook[i + cur_size] = codebook[i];
 					t.scale(codebook[i + cur_size], 1.0001f);
@@ -180,14 +179,12 @@ public:
 
 			float	variance = 0;
 			for (;;) {
-			#ifdef USE_NORMS
 				make_norms(t, cur_size);
-			#endif
 				for (uint32 i = 0; i < cur_size; ++i) {
 					t.reset(sums[i]);
-					counts[i]		= 0.0f;
-					variances[i]	= 0.0f;
-					diameters[i]	= 0.0f;
+					counts[i]		= 0;
+					variances[i]	= 0;
+					diameters[i]	= 0;
 				}
 
 				float sum_distsq = 0.0f;
@@ -222,10 +219,10 @@ public:
 								furthest	= cb;
 							}
 						}
-						if (maxdiam > 0.0f) {
+						if (maxdiam > 0) {
 							codebook[i] = furthests[furthest];
-							diameters[furthest] = 0.0f;
-							variances[furthest] = 0.0f;
+							diameters[furthest] = 0;
+							variances[furthest] = 0;
 						}
 					}
 				}
@@ -242,25 +239,19 @@ public:
 				}
 
 				float new_variance = sum_distsq / w_sum;
-				if (variance && (variance - new_variance) < thresh * variance)
+				if (variance && variance - new_variance < thresh * variance)
 					break;
 				variance = new_variance;
 			}
 		}
-		delete[] furthests;
-		delete[] diameters;
-		delete[] sums;
-		delete[] variances;
 
 		return cur_size;
 	}
 
 	void generate_indices(T &t, uint32 *index) {
 		uint32	data_size	= uint32(t.size());
+		make_norms(t, codebook.size());
 
-	#ifdef USE_NORMS
-		make_norms(t, req_size);
-	#endif
 		for (uint32 i = 0; i < codebook.size(); ++i)
 			counts[i]	= 0;
 
@@ -290,13 +281,13 @@ template<typename T> struct dotc_s {
 	operator T() const			{ return v; }
 };
 
-template<typename C1, typename C2> typename container_traits<C1>::element_type dotc(const C1 &c1, const C2 &c2) {
-	return for_each2(c1, c2, dotc_s<typename container_traits<C1>::element_type>());
+template<typename C1, typename C2> element_t<C1> dotc(const C1 &c1, const C2 &c2) {
+	return for_each2(c1, c2, dotc_s<element_t<C1>>());
 }
-template<typename C> typename container_traits<C>::element_type len2c(const C &c) {
-	return for_each2(c, c, dotc_s<typename container_traits<C>::element_type>());
+template<typename C> element_t<C> len2c(const C &c) {
+	return for_each2(c, c, dotc_s<element_t<C>>());
 }
-template<typename C> typename container_traits<C>::element_type lenc(const C &c) {
+template<typename C> element_t<C> lenc(const C &c) {
     return sqrt(len2c(c));
 }
 

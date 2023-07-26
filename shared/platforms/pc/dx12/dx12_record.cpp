@@ -1,9 +1,9 @@
 #include "hook_com.h"
 #include "hook_stack.h"
 #include "base/list.h"
-#include "base/sparse_array.h"
 #include "thread.h"
 #include "dx12_record.h"
+#include "dx12_helpers.h"
 #include "dxgi_record.h"
 #include "dx\dxgi_helpers.h"
 #include "windows/nt.h"
@@ -85,9 +85,6 @@ struct RecDescriptorHeapLink : e_link<RecDescriptorHeapLink> {
 Mutex					RecObjectLink::orphan_mutex;
 e_list<RecObjectLink>	RecObjectLink::orphans;
 
-#define RECORDCALLSTACK			if (recording.enable) RecordCallStack(0)
-#define DEVICE_RECORDCALLSTACK	if (device->recording.enable) device->RecordCallStack(0)
-
 //-----------------------------------------------------------------------------
 //	Capture
 //-----------------------------------------------------------------------------
@@ -102,7 +99,8 @@ void WINAPI Hooked_OutputDebugStringA(LPCSTR lpOutputString) {
 }
 #else
 void WINAPI Hooked_OutputDebugStringA(LPCSTR lpOutputString) {
-	debug_sock.writebuff(lpOutputString, string_len32(lpOutputString));
+	SocketCallRPC<void>(debug_sock, INTF_Text, with_size<string>(lpOutputString));
+	//debug_sock.writebuff(lpOutputString, string_len32(lpOutputString));
 }
 void WINAPI Hooked_OutputDebugStringW(LPCWSTR lpOutputString) {
 	Hooked_OutputDebugStringA(string(lpOutputString));
@@ -144,10 +142,13 @@ HRESULT WINAPI Hooked_D3D11On12CreateDevice(
 }
 
 struct Capture {
+	PORT		port;
 	int			frames			= 1;
 	Semaphore	sema_wait_cap	= Semaphore(0, 1);	// wait for capture
 	Semaphore	sema_update		= Semaphore(0, 1);	// blocks update
 	bool		paused			= false;
+	hash_map<const void*,malloc_block,true>					shaders;
+	interval_tree<D3D12_GPU_VIRTUAL_ADDRESS, malloc_block>	vram_tree;
 
 	Wrap<ID3D12DeviceLatest>	*device;
 
@@ -161,15 +162,56 @@ struct Capture {
 		ApplyHooks();
 		socket_init();
 
+		buffer_accum<256>	message("dx12:");
+		message.move(GetModuleFileNameExA(GetCurrentProcess(), 0, message.getp(), message.remaining()));
+
+		{
+			//broadcast on port 4568 + get unique port
+			IP4::socket_addr	addr(IP4::broadcast, 4568);
+			Socket				sock = IP4::UDP();
+			sock.options().broadcast(1);
+			addr.send(sock, message.data());
+			addr.local_addr(sock);
+			port	= addr.port;
+		}
+
+		RunThread([this, message]() {
+			//listen for broadcasts from 4567
+			char	buffer[1024];
+			for (;;) {
+				IP4::socket_addr	addr(PORT(4567));
+				Socket	sock	= IP4::UDP();
+				sock.options().reuse_addr();
+				addr.bind(sock);
+
+				int	n = addr.recv(sock, buffer, 1024);
+				ISO_TRACEF(str(buffer, n));
+
+				Socket	sock2	= IP4::UDP();
+				IP4::socket_addr	addr0(port);
+				addr0.bind(sock2);
+
+				addr.port		= 4568;
+				addr.send(sock, message.data());
+			}
+		});
+
 		RunThread([this]() {
-			Socket listener = IP4::socket_addr(PORT(4567)).listener();
+			Socket listener = IP4::socket_addr(port).listen_or_close(IP4::TCP());
 			if (listener.exists()) for (;;) {
 				IP4::socket_addr	addr;
 				SocketWait			sock = addr.accept(listener);
 
 				switch (sock.getc()) {
-					case INTF_GetMemory:		SocketRPC(sock, [this](uint64 address, uint64 size) {
-						return const_memory_block((void*)address, size);
+					case INTF_GetMemory:		SocketRPC(sock, [this](uint64 address, uint64 size) -> with_size<const_memory_block> {
+						if (shaders[(void*)address].exists())
+							return *shaders[(void*)address];
+						MEMORY_BASIC_INFORMATION	info;
+						if (VirtualQuery((void*)address, &info, sizeof(info))) {
+							if (info.State == MEM_COMMIT)
+								return const_memory_block((void*)address, size);
+						}
+						return none;
 					}); break;
 
 					case INTF_Pause:			SocketRPC(sock, [this]() {
@@ -209,6 +251,7 @@ struct Capture {
 							hook(OutputDebugStringW, "kernel32.dll");
 						}
 						debug_sock = move(sock);
+						SendStatus();
 						break;
 				}
 			}
@@ -220,14 +263,22 @@ struct Capture {
 	static malloc_block_all			ResourceData(uintptr_t _res);
 	static malloc_block_all			HeapData(uintptr_t _heap);
 
+	void	SendStatus() {
+		if (debug_sock.exists())
+			SocketCallRPC<void>(debug_sock, INTF_Status, int(paused));
+	}
 	bool	Update() {
 		if (frames && --frames == 0) {
 			auto	w = with(RecObjectLink::orphan_mutex);
 			sema_wait_cap.unlock();
 			paused = true;
+			SendStatus();
+			
 			sema_update.lock();
 			paused = false;
-			com_wrap_system->defer_deletes(0);
+			SendStatus();
+
+			com_wrap_system->defer_deletes(frames);
 		}
 		com_wrap_system->end_frame();
 		return frames > 0;
@@ -235,13 +286,37 @@ struct Capture {
 	void	Continue() {
 		sema_update.unlock();
 	}
+
+	void	SaveShader(const D3D12_SHADER_BYTECODE& shader) {
+		if (!shaders[shader.pShaderBytecode].exists())
+			shaders[shader.pShaderBytecode] = const_memory_block(shader.pShaderBytecode, shader.BytecodeLength);
+	}
+
+	void	AddVRAM(D3D12_GPU_VIRTUAL_ADDRESS gpu, malloc_block&& data) {
+		vram_tree.insert({gpu, gpu + data.size()}, move(data));
+	}
+
+	const_memory_block	FindVRAM(D3D12_GPU_VIRTUAL_ADDRESS gpu) const {
+		auto	i = lower_boundc(vram_tree, gpu);
+		return gpu >= i.key().a ? i->slice(gpu - i.key().a) : none;
+	}
 };
 
 static Capture capture;
 
+uint16 WhatPort() {
+	return capture.port;
+}
+DLL_RPC(WhatPort);
+
+
 //-----------------------------------------------------------------------------
 //	Wraps
 //-----------------------------------------------------------------------------
+
+template<class T> class Wrap2<T, IUnknown> : public com_wrap<T>, public RecObjectLink {
+public:
+};
 
 template<class T> class Wrap2<T, ID3D12Object> : public com_wrap<T>, public RecObjectLink {
 public:
@@ -261,9 +336,21 @@ public:
 	HRESULT	STDMETHODCALLTYPE QueryInterface(REFIID riid, void **pp) {
 		return check_interface<ID3D12DeviceChild>(this, riid, pp) ? S_OK : Wrap2<T, ID3D12Object>::QueryInterface(riid, pp);
 	}
-	HRESULT	STDMETHODCALLTYPE GetDevice(REFIID riid, void **pp)		{ *pp = device; device->AddRef(); return S_OK; }
+	HRESULT	STDMETHODCALLTYPE GetDevice(REFIID riid, void **pp) {
+		if (device) {
+			*pp = device;
+			device->AddRef();
+		} else {
+			orig->GetDevice(riid, pp);
+		}
+		return S_OK;
+	}
 	//ID3D12Object
-	HRESULT STDMETHODCALLTYPE SetName(LPCWSTR Name)					{ name = Name; return orig->SetName(Name); }
+	HRESULT STDMETHODCALLTYPE SetName(LPCWSTR Name) {
+		name = Name;
+		return orig->SetName(Name);
+	}
+	friend string_accum& operator<<(string_accum &a, const Wrap2 *w) { return a << w->name; }
 };
 
 template<class T> class Wrap2<T, ID3D12Pageable> : public Wrap2<T, ID3D12DeviceChild> {
@@ -272,95 +359,6 @@ public:
 		return check_interface<ID3D12Pageable>(this, riid, pp) ? S_OK : Wrap2<T, ID3D12DeviceChild>::QueryInterface(riid, pp);
 	}
 };
-
-template<class T> class Wrap2<T, ID3D12CommandList> : public Wrap2<T, ID3D12DeviceChild> {
-public:
-	chunked_recording	recording;
-
-	Wrap2() {}
-	bool	set_recording(bool enable);
-	void	init(Wrap<ID3D12DeviceLatest> *_device);
-
-	void	RecordCallStack(const context &ctx) {
-		recording.Record(0xfffe, CallStacks::Stack<32>(device->callstacks, ctx));
-	}
-	HRESULT	STDMETHODCALLTYPE QueryInterface(REFIID riid, void **pp) {
-		return check_interface<ID3D12CommandList>(this, riid, pp) ? S_OK : Wrap2<T, ID3D12DeviceChild>::QueryInterface(riid, pp);
-	}
-	D3D12_COMMAND_LIST_TYPE	STDMETHODCALLTYPE GetType()		{ return orig->GetType(); }
-};
-
-template<> class Wrap<ID3D12LifetimeOwner> : public com_wrap<ID3D12LifetimeOwner> {
-	void STDMETHODCALLTYPE LifetimeStateUpdated(D3D12_LIFETIME_STATE NewState)	{ orig->LifetimeStateUpdated(NewState); }
-};
-
-template<> class Wrap<ID3D12LifetimeTracker> : public Wrap2<ID3D12LifetimeTracker, ID3D12DeviceChild> {
-public:
-	void	init(Wrap<ID3D12DeviceLatest> *_device, ID3D12LifetimeOwner* pOwner) {
-		RecObjectLink::init(_device);
-	}
-
-	HRESULT STDMETHODCALLTYPE DestroyOwnedObject(ID3D12DeviceChild *pObject)	{ return orig->DestroyOwnedObject(pObject); }
-};
-template<> class Wrap<ID3D12MetaCommand> : public Wrap2<ID3D12MetaCommand, ID3D12Pageable> {
-public:
-	void	init(Wrap<ID3D12DeviceLatest>* _device, REFGUID CommandId, UINT NodeMask, const void* pCreationParametersData, SIZE_T CreationParametersDataSizeInBytes) {
-		RecObjectLink::init(_device);
-	}
-
-	UINT64 STDMETHODCALLTYPE GetRequiredParameterResourceSize(D3D12_META_COMMAND_PARAMETER_STAGE Stage, UINT ParameterIndex) { return orig->GetRequiredParameterResourceSize(Stage, ParameterIndex); }
-};
-template<> class Wrap<ID3D12PipelineLibraryLatest> : public Wrap2<ID3D12PipelineLibraryLatest, ID3D12DeviceChild> {
-public:
-	void	init(Wrap<ID3D12DeviceLatest>* _device, const void* pLibraryBlob, SIZE_T BlobLength) {
-		RecObjectLink::init(_device);
-	}
-
-	//ID3D12PipelineLibrary
-	HRESULT STDMETHODCALLTYPE StorePipeline(LPCWSTR pName, ID3D12PipelineState *pPipeline)																	{ return orig->StorePipeline(pName, pPipeline); }
-	HRESULT STDMETHODCALLTYPE LoadGraphicsPipeline(LPCWSTR pName, const D3D12_GRAPHICS_PIPELINE_STATE_DESC *pDesc, REFIID riid,  void **ppPipelineState)	{ return orig->LoadGraphicsPipeline(pName, pDesc, riid, ppPipelineState); }
-	HRESULT STDMETHODCALLTYPE LoadComputePipeline(LPCWSTR pName, const D3D12_COMPUTE_PIPELINE_STATE_DESC *pDesc, REFIID riid,  void **ppPipelineState)		{ return orig->LoadComputePipeline(pName, pDesc, riid, ppPipelineState); }
-	SIZE_T	STDMETHODCALLTYPE GetSerializedSize()																											{ return orig->GetSerializedSize(); }
-	HRESULT STDMETHODCALLTYPE Serialize(void *pData, SIZE_T DataSizeInBytes)																				{ return orig->Serialize(pData, DataSizeInBytes); }
-
-	//ID3D12PipelineLibrary1
-	HRESULT STDMETHODCALLTYPE LoadPipeline(LPCWSTR pName, const D3D12_PIPELINE_STATE_STREAM_DESC *pDesc, REFIID riid, void **ppPipelineState)				{ return orig->LoadPipeline(pName, pDesc, riid, ppPipelineState); }
-};
-
-template<class T> class Wrap2<T, ID3D12ProtectedSession> : public Wrap2<T, ID3D12DeviceChild> {
-public:
-	void	init(Wrap<ID3D12DeviceLatest>* _device, const D3D12_PROTECTED_RESOURCE_SESSION_DESC* desc) {
-		RecObjectLink::init(_device);
-	}
-	void	init(Wrap<ID3D12DeviceLatest>* _device, const D3D12_PROTECTED_RESOURCE_SESSION_DESC1* desc) {
-		RecObjectLink::init(_device);
-	}
-
-	HRESULT STDMETHODCALLTYPE GetStatusFence(REFIID riid,  void **ppFence)	{ return orig->GetStatusFence(riid,  ppFence); }
-	D3D12_PROTECTED_SESSION_STATUS STDMETHODCALLTYPE GetSessionStatus()		{ return orig->GetSessionStatus(); }
-};
-
-template<> class Wrap<ID3D12ProtectedResourceSession> : public Wrap2<ID3D12ProtectedResourceSession, ID3D12ProtectedSession> {
-	D3D12_PROTECTED_RESOURCE_SESSION_DESC STDMETHODCALLTYPE GetDesc()		{ return orig->GetDesc();  }
-};
-
-template<> class Wrap<ID3D12StateObject> : public Wrap2<ID3D12StateObject, ID3D12Pageable> {
-public:
-	void	init(Wrap<ID3D12DeviceLatest> *_device, const D3D12_STATE_OBJECT_DESC* pDesc) {
-		RecObjectLink::init(_device);
-	}
-	void	init(Wrap<ID3D12DeviceLatest>* _device, const D3D12_STATE_OBJECT_DESC* pAddition, ID3D12StateObject* pStateObjectToGrowFrom) {
-		RecObjectLink::init(_device);
-	}
-};
-
-template<> class Wrap<ID3D12StateObjectProperties> : public com_wrap<ID3D12StateObjectProperties> {
-	void*	STDMETHODCALLTYPE GetShaderIdentifier(LPCWSTR pExportName)				{ return orig->GetShaderIdentifier(pExportName); }
-	UINT64	STDMETHODCALLTYPE GetShaderStackSize(LPCWSTR pExportName)				{ return orig->GetShaderStackSize(pExportName); }
-	UINT64	STDMETHODCALLTYPE GetPipelineStackSize()								{ return orig->GetPipelineStackSize(); }
-	void	STDMETHODCALLTYPE SetPipelineStackSize(UINT64 PipelineStackSizeInBytes)	{ return orig->SetPipelineStackSize(PipelineStackSizeInBytes); }
-};
-	
 
 //-----------------------------------------------------------------------------
 //	Wrap<ID3D12Device>
@@ -373,14 +371,23 @@ public:
 	e_list<RecDescriptorHeapLink>		descriptor_heaps;
 	e_list<RecObjectLink>				objects;
 	hash_set_with_key<HANDLE, true>		handles;
+	com_ptr<ID3D12CommandAllocator>		cmd_alloc;
+	com_ptr<ID3D12GraphicsCommandList>	cmd_list;
 
 	Wrap() {
 		type = Device;
-		set_recording(capture.Update());
-		init(this);
 	}
 	~Wrap() {
 		set_recording(capture.Update());
+	}
+	void init(int) {
+		if (!cmd_alloc)
+			orig->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, COM_CREATE(&cmd_alloc));
+		if (!cmd_list)
+			orig->CreateCommandList(1, D3D12_COMMAND_LIST_TYPE_DIRECT, cmd_alloc, nullptr, COM_CREATE(&cmd_list));
+
+		set_recording(capture.Update());
+		RecObjectLink::init(this);
 	}
 
 	virtual	malloc_block	get_info()	{
@@ -390,17 +397,24 @@ public:
 	DESCRIPTOR*		find_descriptor(D3D12_CPU_DESCRIPTOR_HANDLE h);
 	DESCRIPTOR*		modify_descriptors(D3D12_CPU_DESCRIPTOR_HANDLE h, uint32 n = 1);
 	void			set_recording(bool enable);
-
-	void			RecordCallStack(const context &ctx) {
-		recording.Record(0xfffe, CallStacks::Stack<32>(callstacks, ctx));
-	}
 	
-	ULONG	Release()	{
-		ULONG	n = Wrap2<ID3D12DeviceLatest, ID3D12Object>::Release();
-		if (n == 0)
-			set_recording(capture.Update());
-		return n;
+	auto	RecordCallStack(const context &ctx) {
+		auto	safe = recording.Safe();
+		if (safe)
+			safe->Record(0xfffe, CallStacks::Stack<32>(callstacks, ctx));
+		return safe;
 	}
+
+	auto	WithObject(const void *p, const context &ctx, uint16 id = -1) {
+		auto	safe = recording.Safe();
+		if (safe) {
+			safe->Record(0xfffe, CallStacks::Stack<32>(callstacks, ctx));
+			safe.Add(id, p);
+		}
+		return safe;
+	}
+
+	bool	GetVRAM(D3D12_GPU_VIRTUAL_ADDRESS addr, memory_block out);
 
 	//ID3D12Device
 	UINT	STDMETHODCALLTYPE GetNodeCount() {
@@ -570,233 +584,124 @@ uint64	Wrap<ID3D12Heap>::fake_gpu = 0x8000000000000000ull;
 //	Wrap<ID3D12Resource>
 //-----------------------------------------------------------------------------
 
-struct Waiter {
-	com_ptr<ID3D12Fence>	fence;
-	HANDLE					fence_event;
-	uint32					fence_value;
+uint64	total_resource_size = 0;
+uint64	saved_resource_size = 0;
 
-	Waiter(ID3D12Device *device) {
-		fence_value	= 0;
-		device->CreateFence(fence_value, D3D12_FENCE_FLAG_NONE, __uuidof(ID3D12Fence), (void**)&fence);
-		fence_event	= CreateEvent(nullptr, false, false, nullptr);
-	}
-	~Waiter() {
-		CloseHandle(fence_event);
-	}
-	bool	Wait(ID3D12CommandQueue *q) {
-		q->Signal(fence, ++fence_value);
-		fence->SetEventOnCompletion(fence_value, fence_event);
-		return WaitForSingleObject(fence_event, INFINITE) == WAIT_OBJECT_0;
-	}
-};
-
-struct Transferer : Waiter {
-	ID3D12Device						*device;
-	com_ptr<ID3D12CommandQueue>			cmd_queue;
-	com_ptr<ID3D12CommandAllocator>		cmd_alloc;
-	com_ptr<ID3D12GraphicsCommandList>	cmd_list;
-
-	bool	Init() {
-		D3D12_COMMAND_QUEUE_DESC	qdesc = {D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_COMMAND_QUEUE_PRIORITY_NORMAL, D3D12_COMMAND_QUEUE_FLAG_NONE, 1};
-		bool	ret = SUCCEEDED(device->CreateCommandQueue(&qdesc, __uuidof(ID3D12CommandQueue), (void**)&cmd_queue))
-			&& SUCCEEDED(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, __uuidof(ID3D12CommandAllocator), (void**)&cmd_alloc))
-			&& SUCCEEDED(device->CreateCommandList(1, D3D12_COMMAND_LIST_TYPE_DIRECT, cmd_alloc, 0, __uuidof(ID3D12GraphicsCommandList), (void**)&cmd_list));
-		return ret;
-	}
-
-	Transferer(ID3D12Device *device) : Waiter(device), device(device) {}
-
-	void Transition(ID3D12Resource *res, D3D12_RESOURCE_STATES from, D3D12_RESOURCE_STATES to) {
-		if (from != to) {
-			D3D12_RESOURCE_BARRIER	b;
-			b.Type						= D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-			b.Flags						= D3D12_RESOURCE_BARRIER_FLAG_NONE;
-			b.Transition.pResource		= res;
-			b.Transition.StateBefore	= from;
-			b.Transition.StateAfter		= to;
-			b.Transition.Subresource	= D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
- 			cmd_list->ResourceBarrier(1, &b);
-		}
-	}
-
-	ID3D12Resource* Transfer(ID3D12Resource *res, D3D12_RESOURCE_STATES state, uint64 *total_size);
-	bool			Wait() { return Waiter::Wait(cmd_queue); }
-};
-
-ID3D12Resource* Transferer::Transfer(ID3D12Resource *res, D3D12_RESOURCE_STATES state, uint64 *total_size) {
-	RESOURCE_DESC	desc		= res->GetDesc();
-	uint32			nsub		= desc.MipLevels * desc.ArraySize() * desc.PlaneCount(device);
-
-	if (desc.SampleDesc.Count > 1) {
-		return nullptr;
-
-		D3D12_RESOURCE_DESC	desc1	= desc;
-		//desc1.DepthOrArraySize			= 1;
-		//desc1.MipLevels					= 1;
-		desc1.SampleDesc.Count			= 1;
-
-		D3D12_HEAP_PROPERTIES	heap_props1;
-		heap_props1.Type				= D3D12_HEAP_TYPE_DEFAULT;
-		heap_props1.CPUPageProperty		= D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-		heap_props1.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-		heap_props1.CreationNodeMask	= 1;
-		heap_props1.VisibleNodeMask		= 1;
-
-		com_ptr<ID3D12Resource>		res1;
-		device->CreateCommittedResource(&heap_props1, D3D12_HEAP_FLAG_NONE, &desc1, D3D12_RESOURCE_STATE_RESOLVE_DEST, 0, __uuidof(ID3D12Resource), (void**)&res1);
-
-		Transition(res, state, D3D12_RESOURCE_STATE_RESOLVE_SOURCE);
-
-		for (int i = 0; i < nsub; i++)
-			cmd_list->ResolveSubresource(res1, i, res, i, desc.Format);
-
-		Transition(res, D3D12_RESOURCE_STATE_RESOLVE_SOURCE, state);
-
-		cmd_list->Close();
-
-		ID3D12CommandList	*cmd_list0 = cmd_list;
-		cmd_queue->ExecuteCommandLists(1, &cmd_list0);
-
-		ISO_VERIFY(Wait());
-		return nullptr;
-		//return Transfer(res1, D3D12_RESOURCE_STATE_RESOLVE_DEST, total_size);
-
-	}
-	
-	auto	*footprints = alloc_auto(D3D12_PLACED_SUBRESOURCE_FOOTPRINT, nsub);
-	device->GetCopyableFootprints(&desc, 0, nsub, 0, footprints, 0, 0, total_size);
-
-
-	Transition(res, state, D3D12_RESOURCE_STATE_COPY_SOURCE);
-
-	D3D12_RESOURCE_DESC	desc2;
-	clear(desc2);
-	desc2.Dimension			= D3D12_RESOURCE_DIMENSION_BUFFER;
-	desc2.Layout			= D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-	desc2.Width				= *total_size;
-	desc2.Height			= 1;
-	desc2.DepthOrArraySize	= 1;
-	desc2.MipLevels			= 1;
-	desc2.SampleDesc.Count	= 1;
-
-	ID3D12Resource		*res2;
-	D3D12_HEAP_PROPERTIES	heap_props2;
-	heap_props2.Type				= D3D12_HEAP_TYPE_READBACK;
-	heap_props2.CPUPageProperty		= D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-	heap_props2.MemoryPoolPreference= D3D12_MEMORY_POOL_UNKNOWN;
-	heap_props2.CreationNodeMask	= 1;
-	heap_props2.VisibleNodeMask		= 1;
-	device->CreateCommittedResource(&heap_props2, D3D12_HEAP_FLAG_NONE, &desc2, D3D12_RESOURCE_STATE_COPY_DEST, 0, __uuidof(ID3D12Resource), (void**)&res2);
-
-
-	D3D12_TEXTURE_COPY_LOCATION	srcloc, dstloc;
-	srcloc.pResource		= res;
-	dstloc.pResource		= res2;
-
-	if (desc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER) {
-		//srcloc.Type	= D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-		//dstloc.Type	= D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-		//srcloc.SubresourceIndex	= 0;
-		//dstloc.SubresourceIndex	= 0;
-		//cmd_list->CopyTextureRegion(&dstloc, 0, 0, 0, &srcloc, 0);
-		cmd_list->CopyResource(res2, res);
-
-	} else {
-		srcloc.Type	= D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-		dstloc.Type	= D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-
-		for (int i = 0; i < nsub; i++) {
-			srcloc.SubresourceIndex	= i;
-			dstloc.PlacedFootprint	= footprints[i];
-			cmd_list->CopyTextureRegion(&dstloc, 0, 0, 0, &srcloc, 0);
-		}
-	}
-
-	Transition(res, D3D12_RESOURCE_STATE_COPY_SOURCE, state);
-
-	cmd_list->Close();
-
-	ID3D12CommandList	*cmd_list0 = cmd_list;
-	cmd_queue->ExecuteCommandLists(1, &cmd_list0);
-
-	ISO_VERIFY(Wait());
-	return res2;
-}
-
-void TransferResource(ID3D12Resource *res, const memory_block &out) {
-	void			*p;
-	D3D12_RANGE		range	= {0, out.length()};
-	if (SUCCEEDED(res->Map(0, &range, &p))) {
-		memcpy(out, p, out.length());
-		res->Unmap(0, 0);
-	}
-}
-
-malloc_block TransferResource(ID3D12Resource *res, size_t size) {
-	if (res) {
-		void			*p;
-		D3D12_RANGE		range	= {0, size};
-		if (SUCCEEDED(res->Map(0, &range, &p))) {
-			malloc_block	out(size);
-			memcpy(out, p, out.length());
-			res->Unmap(0, 0);
-			return out;
-		}
-	}
-	return none;
-}
-
-template<> class Wrap<ID3D12Resource> : public Wrap2<ID3D12Resource, ID3D12Pageable>, public RecResource {
+template<> class Wrap<ID3D12Resource> : public Wrap2<ID3D12Resource, ID3D12Pageable>, public RecResourceClear {
 public:
-    D3D12_RESOURCE_STATES state;
-	Wrap<ID3D12Heap> *heap;
+	ResourceStates			states;
+	com_ptr<ID3D12Resource>	init_resource;
+	Wrap<ID3D12Heap>		*heap;
+	int						local_refs = 1;
 
 	Wrap() { type = Resource; }
 
-	template<typename D> void	init(Wrap<ID3D12DeviceLatest> *_device, Allocation _alloc, const D *desc, D3D12_RESOURCE_STATES InitialState) {
+	template<typename D> void	init(Wrap<ID3D12DeviceLatest> *_device, Allocation _alloc, const D *desc, D3D12_RESOURCE_STATES InitialState, const D3D12_CLEAR_VALUE *clear, ID3D12ProtectedResourceSession* session) {
 		RecObjectLink::init(_device);
-		RecResource::init(_device->orig, _alloc, *desc);
-		state	= InitialState;
+		RecResourceClear::init(_device->orig, _alloc, *desc, clear);
+		states	= InitialState;
 		if (desc->Dimension == D3D12_RESOURCE_DIMENSION_BUFFER)
 			gpu		= orig->GetGPUVirtualAddress();
+
+		total_resource_size += data_size;
 	}
 
 	void	init(Wrap<ID3D12DeviceLatest> *_device, const D3D12_HEAP_PROPERTIES *pHeapProperties, D3D12_HEAP_FLAGS HeapFlags, const D3D12_RESOURCE_DESC *desc, D3D12_RESOURCE_STATES InitialState, const D3D12_CLEAR_VALUE *pOptimizedClearValue, ID3D12ProtectedResourceSession* pProtectedSession = nullptr) {
-		init(_device, Committed, desc, InitialState);
+		init(_device, RecResource::CalcAllocation(*pHeapProperties), desc, InitialState, pOptimizedClearValue, pProtectedSession);
 	}
 	void	init(Wrap<ID3D12DeviceLatest> *_device, const D3D12_HEAP_PROPERTIES *pHeapProperties, D3D12_HEAP_FLAGS HeapFlags, const D3D12_RESOURCE_DESC1 *desc, D3D12_RESOURCE_STATES InitialState, const D3D12_CLEAR_VALUE *pOptimizedClearValue, ID3D12ProtectedResourceSession* pProtectedSession = nullptr) {
-		init(_device, Committed, desc, InitialState);
+		init(_device, Committed, desc, InitialState, pOptimizedClearValue, pProtectedSession);
 	}
 	void	init(Wrap<ID3D12DeviceLatest> *_device, ID3D12Heap *pHeap, UINT64 HeapOffset, const D3D12_RESOURCE_DESC *desc, D3D12_RESOURCE_STATES InitialState, const D3D12_CLEAR_VALUE *pOptimizedClearValue) {
 		heap	= (Wrap<ID3D12Heap>*)pHeap;
-		init(_device, Placed, desc, InitialState);
+		init(_device, Placed, desc, InitialState, pOptimizedClearValue, nullptr);
 		if (desc->Dimension == D3D12_RESOURCE_DIMENSION_BUFFER)
 			heap->gpu = gpu - HeapOffset;
 		gpu = HeapOffset;
 	}
 	void	init(Wrap<ID3D12DeviceLatest> *_device, ID3D12Heap* pHeap, UINT64 HeapOffset, const D3D12_RESOURCE_DESC1* desc, D3D12_RESOURCE_STATES InitialState, const D3D12_CLEAR_VALUE* pOptimizedClearValue) {
-		init(_device, Committed, desc, InitialState);
+		init(_device, Committed, desc, InitialState, pOptimizedClearValue, nullptr);
 		//gpu		= ((Wrap<ID3D12Heap>*)pHeap)->gpu + HeapOffset;
 	}
 	void	init(Wrap<ID3D12DeviceLatest> *_device, const D3D12_RESOURCE_DESC *desc, D3D12_RESOURCE_STATES InitialState, const D3D12_CLEAR_VALUE *pOptimizedClearValue, ID3D12ProtectedResourceSession* pProtectedSession = nullptr) {
-		init(_device, Reserved, desc, InitialState);
-		//mapping = new TileMapping[div_round_up(data_size, D3D12_TILED_RESOURCE_TILE_SIZE_IN_BYTES)];
+		init(_device, Reserved, desc, InitialState, pOptimizedClearValue, pProtectedSession);
+		//mapping = new Tiler::Mapping[div_round_up(data_size, D3D12_TILED_RESOURCE_TILE_SIZE_IN_BYTES)];
 	}
 	void	init(Wrap<ID3D12DeviceLatest> *_device, HANDLE handle) {
 		RecObjectLink::init(_device);
-		RecResource::init(_device->orig, UnknownAlloc, orig->GetDesc());
-		state	= D3D12_RESOURCE_STATE_COMMON;
+		RecResourceClear::init(_device->orig, UnknownAlloc, orig->GetDesc(),  nullptr);
+		states	= D3D12_RESOURCE_STATE_COMMON;
 	}
 
-	void	set_state(D3D12_RESOURCE_STATES _state) {
-		state = _state;
-	};
-
 	virtual	malloc_block get_info() {
-		RecResource	temp = *this;
-		if (alloc == Placed)
-			temp.gpu += heap->gpu;
-		return memory_block(&temp);
+		if (clear.Format) {
+			RecResourceClear	temp = *this;
+			if (alloc == Placed)
+				temp.gpu += heap->gpu;
+			return memory_block(&temp);
+
+		} else {
+			RecResource	temp = *this;
+			if (alloc == Placed)
+				temp.gpu += heap->gpu;
+			return memory_block(&temp);
+		}
+	}
+
+	void	did_transition(ID3D12GraphicsCommandList *cmd, const ResourceStates &states2, const ResourceStates &all) {
+		states.combine(states2);
+	#if 0
+		if (cmd && !init_resource && (all.get_all() & D3D12_RESOURCE_STATE_WRITE)) {
+			com_ptr<ID3D12Device>	device2;
+			cmd->GetDevice(COM_CREATE(&device2));
+			states.transition_to(Transitioner(cmd), orig, D3D12_RESOURCE_STATE_COPY_SOURCE);
+
+			uint64	total_size = 0;
+			init_resource = DownloadToReadback(device2, cmd, orig, &total_size);
+			//ISO_ASSERT(!init_resource || total_size == data_size);
+
+			saved_resource_size	+= total_size;
+			states.transition_from(Transitioner(cmd), orig, D3D12_RESOURCE_STATE_COPY_SOURCE);
+		}
+	#endif
+	}
+
+	malloc_block	get_data() {
+		if (init_resource)
+			return DownloadResource(init_resource, data_size);
+
+		if (states.state == D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE) {
+			return capture.FindVRAM(gpu);
+			//return none;
+		}
+		if (!is_orig_dead()) {
+			uint64	total_size	= 0;
+
+			Downloader	trans(device->orig);
+			states.transition_to(Transitioner(trans), orig, D3D12_RESOURCE_STATE_COPY_SOURCE);
+
+			auto		res		= DownloadToReadback(device->orig, trans, orig, &total_size);
+			states.transition_from(Transitioner(trans), orig, D3D12_RESOURCE_STATE_COPY_SOURCE);
+
+			trans.ExecuteReset();
+			dx12::Waiter	waiter(device->orig);
+			ISO_VERIFY(waiter.Wait(trans.queue));
+
+			return DownloadResource(res, total_size);
+		}
+		return none;
+	}
+
+	ULONG STDMETHODCALLTYPE	AddRef() {
+		++local_refs;
+		return orig->AddRef();// - 1;
+	}
+
+	ULONG STDMETHODCALLTYPE	Release() {
+		ULONG n = orig->Release();
+		if (--local_refs == 0)
+			mark_dead();
+		return n;
 	}
 
 	HRESULT						STDMETHODCALLTYPE Map(UINT sub, const D3D12_RANGE *read, void **data)	{ return orig->Map(sub, read, data); }
@@ -804,6 +709,7 @@ public:
 	D3D12_RESOURCE_DESC			STDMETHODCALLTYPE GetDesc()												{ return orig->GetDesc(); }
 	D3D12_GPU_VIRTUAL_ADDRESS	STDMETHODCALLTYPE GetGPUVirtualAddress()								{ return orig->GetGPUVirtualAddress(); }
 	HRESULT	STDMETHODCALLTYPE WriteToSubresource(UINT DstSubresource, const D3D12_BOX *pDstBox, const void *pSrcData, UINT SrcRowPitch, UINT SrcDepthPitch) {
+		//need to save this(?)
 		return orig->WriteToSubresource(DstSubresource, pDstBox, pSrcData, SrcRowPitch, SrcDepthPitch);
 	}
 	HRESULT	STDMETHODCALLTYPE ReadFromSubresource(void *pDstData, UINT DstRowPitch, UINT DstDepthPitch, UINT SrcSubresource, const D3D12_BOX *pSrcBox) {
@@ -833,8 +739,7 @@ public:
 		list_type = _list_type;
 	}
 	HRESULT	STDMETHODCALLTYPE Reset() {
-		DEVICE_RECORDCALLSTACK;
-		return device->recording.WithObject(this).RunRecord2(this, &ID3D12CommandAllocator::Reset, RecDevice::tag_CommandAllocatorReset);
+		return device->WithObject(this, nullptr)->RunRecord2(this, &ID3D12CommandAllocator::Reset, RecDevice::tag_CommandAllocatorReset);
 	}
 	virtual	malloc_block	get_info()	{ return memory_block(&list_type); }
 };
@@ -860,13 +765,11 @@ public:
 	UINT64	STDMETHODCALLTYPE GetCompletedValue() { return orig->GetCompletedValue(); }
 	HRESULT	STDMETHODCALLTYPE SetEventOnCompletion(UINT64 Value, HANDLE hEvent) {
 		device->handles.insert(hEvent);
-		DEVICE_RECORDCALLSTACK;
-		return device->recording.WithObject(this).RunRecord2(this, &ID3D12Fence::SetEventOnCompletion, RecDevice::tag_FenceSetEventOnCompletion, Value, hEvent);
+		return device->WithObject(this, nullptr)->RunRecord2(this, &ID3D12Fence::SetEventOnCompletion, RecDevice::tag_FenceSetEventOnCompletion, Value, hEvent);
 	}
 	HRESULT	STDMETHODCALLTYPE Signal(UINT64 Value) {
 		current_value	= Value;
-		DEVICE_RECORDCALLSTACK;
-		return device->recording.WithObject(this).RunRecord2(this, &ID3D12Fence::Signal, RecDevice::tag_FenceSignal, Value);
+		return device->WithObject(this, nullptr)->RunRecord2(this, &ID3D12Fence::Signal, RecDevice::tag_FenceSignal, Value);
 	}
 	
 	//ID3D12Fence1
@@ -885,16 +788,40 @@ public:
 		RecObjectLink::init(_device);
 		//blob = map_struct<RTM>(*desc);
 		blob = map_struct<RTM>(make_tuple(0, *desc));
+		capture.SaveShader(desc->VS);
+		capture.SaveShader(desc->PS);
+		capture.SaveShader(desc->DS);
+		capture.SaveShader(desc->HS);
+		capture.SaveShader(desc->GS);
 	}
 	void	init(Wrap<ID3D12DeviceLatest> *_device, const D3D12_COMPUTE_PIPELINE_STATE_DESC *desc) {
 		RecObjectLink::init(_device);
 		//blob = map_struct<RTM>(*desc);
 		blob = map_struct<RTM>(make_tuple(1, *desc));
+		capture.SaveShader(desc->CS);
 	}
 	void	init(Wrap<ID3D12DeviceLatest> *_device, const D3D12_PIPELINE_STATE_STREAM_DESC *desc) {
 		RecObjectLink::init(_device);
 		//blob = map_struct<RTM>(*desc);
 		blob = map_struct<RTM>(make_tuple(2, *desc));
+
+		for (auto &sub : make_next_range<dx12::PIPELINE::SUBOBJECT>(const_memory_block(desc->pPipelineStateSubobjectStream, desc->SizeInBytes))) {
+			using iso::get;
+			switch (sub.t.u.t) {
+				case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_VS:
+				case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS:
+				case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DS:
+				case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_HS:
+				case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_GS:
+				case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CS:
+				case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_AS:
+				case D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MS:
+					capture.SaveShader(get<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_VS>(sub)); break;
+				default:
+					break;
+			}
+		}
+
 	}
 
 	virtual	malloc_block	get_info() { return blob; }
@@ -953,15 +880,155 @@ template<> class Wrap<ID3D12CommandSignature> : public Wrap2<ID3D12CommandSignat
 public:
 	Wrap() { type = CommandSignature; }
 	void	init(Wrap<ID3D12DeviceLatest> *_device, const D3D12_COMMAND_SIGNATURE_DESC *desc, ID3D12RootSignature *pRootSignature) {
-		blob = map_struct<RTM>(*desc);
+		blob = map_struct<RTM>(make_tuple(*desc, pRootSignature));
 		RecObjectLink::init(_device);
 	}
 	virtual	malloc_block	get_info() { return blob; }
 };
 
 //-----------------------------------------------------------------------------
+//	Wrap<ID3D12LifetimeOwner> & ID3D12LifetimeTracker
+//-----------------------------------------------------------------------------
+
+template<> class Wrap<ID3D12LifetimeOwner> : public Wrap2<ID3D12LifetimeOwner, IUnknown> {
+public:
+	Wrap() { type = LifetimeOwner; }
+	void STDMETHODCALLTYPE LifetimeStateUpdated(D3D12_LIFETIME_STATE NewState)	{ orig->LifetimeStateUpdated(NewState); }
+};
+
+template<> class Wrap<ID3D12LifetimeTracker> : public Wrap2<ID3D12LifetimeTracker, ID3D12DeviceChild> {
+public:
+	Wrap() { type = LifetimeTracker; }
+	void	init(Wrap<ID3D12DeviceLatest> *_device, ID3D12LifetimeOwner* pOwner) {
+		RecObjectLink::init(_device);
+	}
+
+	HRESULT STDMETHODCALLTYPE DestroyOwnedObject(ID3D12DeviceChild *pObject)	{ return orig->DestroyOwnedObject(pObject); }
+};
+
+//-----------------------------------------------------------------------------
+//	Wrap<ID3D12MetaCommand>
+//-----------------------------------------------------------------------------
+
+template<> class Wrap<ID3D12MetaCommand> : public Wrap2<ID3D12MetaCommand, ID3D12Pageable> {
+public:
+	Wrap() { type = MetaCommand; }
+	void	init(Wrap<ID3D12DeviceLatest>* _device, REFGUID CommandId, UINT NodeMask, const void* pCreationParametersData, SIZE_T CreationParametersDataSizeInBytes) {
+		RecObjectLink::init(_device);
+	}
+
+	UINT64 STDMETHODCALLTYPE GetRequiredParameterResourceSize(D3D12_META_COMMAND_PARAMETER_STAGE Stage, UINT ParameterIndex) { return orig->GetRequiredParameterResourceSize(Stage, ParameterIndex); }
+};
+
+//-----------------------------------------------------------------------------
+//	Wrap<ID3D12PipelineLibraryLatest>
+//-----------------------------------------------------------------------------
+
+template<> class Wrap<ID3D12PipelineLibraryLatest> : public Wrap2<ID3D12PipelineLibraryLatest, ID3D12DeviceChild> {
+public:
+	Wrap() { type = PipelineLibrary; }
+	void	init(Wrap<ID3D12DeviceLatest>* _device, const void* pLibraryBlob, SIZE_T BlobLength) {
+		RecObjectLink::init(_device);
+	}
+
+	//ID3D12PipelineLibrary
+	HRESULT STDMETHODCALLTYPE StorePipeline(LPCWSTR pName, ID3D12PipelineState *pPipeline)																	{ return orig->StorePipeline(pName, pPipeline); }
+	HRESULT STDMETHODCALLTYPE LoadGraphicsPipeline(LPCWSTR pName, const D3D12_GRAPHICS_PIPELINE_STATE_DESC *pDesc, REFIID riid,  void **ppPipelineState)	{ return orig->LoadGraphicsPipeline(pName, pDesc, riid, ppPipelineState); }
+	HRESULT STDMETHODCALLTYPE LoadComputePipeline(LPCWSTR pName, const D3D12_COMPUTE_PIPELINE_STATE_DESC *pDesc, REFIID riid,  void **ppPipelineState)		{ return orig->LoadComputePipeline(pName, pDesc, riid, ppPipelineState); }
+	SIZE_T	STDMETHODCALLTYPE GetSerializedSize()																											{ return orig->GetSerializedSize(); }
+	HRESULT STDMETHODCALLTYPE Serialize(void *pData, SIZE_T DataSizeInBytes)																				{ return orig->Serialize(pData, DataSizeInBytes); }
+
+	//ID3D12PipelineLibrary1
+	HRESULT STDMETHODCALLTYPE LoadPipeline(LPCWSTR pName, const D3D12_PIPELINE_STATE_STREAM_DESC *pDesc, REFIID riid, void **ppPipelineState)				{ return orig->LoadPipeline(pName, pDesc, riid, ppPipelineState); }
+};
+//-----------------------------------------------------------------------------
+//	Wrap<ID3D12ProtectedSession>
+//-----------------------------------------------------------------------------
+
+template<class T> class Wrap2<T, ID3D12ProtectedSession> : public Wrap2<T, ID3D12DeviceChild> {
+public:
+	void	init(Wrap<ID3D12DeviceLatest>* _device, const D3D12_PROTECTED_RESOURCE_SESSION_DESC* desc) {
+		RecObjectLink::init(_device);
+	}
+	void	init(Wrap<ID3D12DeviceLatest>* _device, const D3D12_PROTECTED_RESOURCE_SESSION_DESC1* desc) {
+		RecObjectLink::init(_device);
+	}
+
+	HRESULT STDMETHODCALLTYPE GetStatusFence(REFIID riid,  void **ppFence)	{ return orig->GetStatusFence(riid,  ppFence); }
+	D3D12_PROTECTED_SESSION_STATUS STDMETHODCALLTYPE GetSessionStatus()		{ return orig->GetSessionStatus(); }
+};
+
+template<> class Wrap<ID3D12ProtectedResourceSession> : public Wrap2<ID3D12ProtectedResourceSession, ID3D12ProtectedSession> {
+public:
+	Wrap() { type = ProtectedResourceSession; }
+	D3D12_PROTECTED_RESOURCE_SESSION_DESC STDMETHODCALLTYPE GetDesc()		{ return orig->GetDesc();  }
+};
+
+//-----------------------------------------------------------------------------
+//	Wrap<ID3D12StateObject>	& ID3D12StateObjectProperties
+//-----------------------------------------------------------------------------
+
+template<> class Wrap<ID3D12StateObject> : public Wrap2<ID3D12StateObject, ID3D12Pageable>, public ID3D12StateObjectProperties {
+	SHADER_IDS		ids;
+	malloc_block	desc_blob;
+
+	com_ptr<ID3D12StateObjectProperties>	props;
+
+public:
+	Wrap() { type = StateObject; }
+	void	init(Wrap<ID3D12DeviceLatest> *_device, const D3D12_STATE_OBJECT_DESC* desc) {
+		RecObjectLink::init(_device);
+		desc_blob = map_struct<RTM>(*desc);
+		for (auto &sub : make_range_n(desc->pSubobjects, desc->NumSubobjects)) {
+			if (sub.Type == D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY)
+				capture.SaveShader(((D3D12_DXIL_LIBRARY_DESC*)sub.pDesc)->DXILLibrary);
+		}
+		orig->QueryInterface(__uuidof(ID3D12StateObjectProperties), (void**)&props);
+	}
+	void	init(Wrap<ID3D12DeviceLatest>* _device, const D3D12_STATE_OBJECT_DESC* pAddition, ID3D12StateObject* pStateObjectToGrowFrom) {
+		RecObjectLink::init(_device);
+	}
+
+	ULONG	AddRef()	{ return Wrap2<ID3D12StateObject, ID3D12Pageable>::AddRef(); }
+	ULONG	Release()	{ return Wrap2<ID3D12StateObject, ID3D12Pageable>::Release(); }
+
+	HRESULT	STDMETHODCALLTYPE	QueryInterface(REFIID riid, void **ppv) {
+		return check_interface<ID3D12StateObjectProperties>(this, riid, ppv) ? S_OK : Wrap2<ID3D12StateObject, ID3D12Pageable>::QueryInterface(riid, ppv);
+	}
+	
+	//ID3D12StateObjectProperties
+	void*	STDMETHODCALLTYPE GetShaderIdentifier(LPCWSTR pExportName)				{ auto p = props->GetShaderIdentifier(pExportName); ids[pExportName] = p; return p; }
+	UINT64	STDMETHODCALLTYPE GetShaderStackSize(LPCWSTR pExportName)				{ return props->GetShaderStackSize(pExportName); }
+	UINT64	STDMETHODCALLTYPE GetPipelineStackSize()								{ return props->GetPipelineStackSize(); }
+	void	STDMETHODCALLTYPE SetPipelineStackSize(UINT64 PipelineStackSizeInBytes)	{ return props->SetPipelineStackSize(PipelineStackSizeInBytes); }
+
+	virtual	malloc_block	get_info() {
+		return map_struct<RTM>(make_tuple(*(map_t<RTM, D3D12_STATE_OBJECT_DESC>*)desc_blob, ids));
+	}
+};
+
+//-----------------------------------------------------------------------------
 //	Wrap<ID3D12CommandList>
 //-----------------------------------------------------------------------------
+template<class T> class Wrap2<T, ID3D12CommandList> : public Wrap2<T, ID3D12DeviceChild> {
+public:
+	chunked_recording	recording;
+
+	Wrap2() {}
+	bool	set_recording(bool enable);
+	void	init(Wrap<ID3D12DeviceLatest> *_device);
+
+	auto	RecordCallStack(const context &ctx) {
+		auto	safe = recording.Safe();
+		if (safe)
+			safe->Record(0xfffe, CallStacks::Stack<32>(device->callstacks, ctx));
+		return safe;
+	}
+	HRESULT	STDMETHODCALLTYPE QueryInterface(REFIID riid, void **pp) {
+		return check_interface<ID3D12CommandList>(this, riid, pp) ? S_OK : Wrap2<T, ID3D12DeviceChild>::QueryInterface(riid, pp);
+	}
+	D3D12_COMMAND_LIST_TYPE	STDMETHODCALLTYPE GetType()		{ return orig->GetType(); }
+};
 
 template<> class Wrap<ID3D12CommandList>		: public Wrap2<ID3D12CommandList, ID3D12CommandList> {};
 
@@ -981,6 +1048,16 @@ template<class T> bool Wrap2<T, ID3D12CommandList>::set_recording(bool enable) {
 //-----------------------------------------------------------------------------
 
 template<> class Wrap<ID3D12GraphicsCommandListLatest> : public Wrap2<ID3D12GraphicsCommandListLatest, ID3D12CommandList>, RecCommandList {
+	struct StateChanges {
+		ResourceStates curr;
+		ResourceStates all;
+		void	set(uint32 sub, D3D12_RESOURCE_STATES state) {
+			curr.set(sub, state);
+			all.set_or(sub, state);
+		}
+	};
+	hash_map_with_key<Wrap<ID3D12Resource>*, StateChanges>	states;
+
 public:
 	Wrap() { type = GraphicsCommandList; }
 	~Wrap() {}
@@ -998,35 +1075,42 @@ public:
 		return memory_block((RecCommandList*)this);
 	}
 
+	void	transition(Wrap<ID3D12Resource> *res, uint32 sub, D3D12_RESOURCE_STATES state) {
+		states[res]->set(sub, state);
+		ISO_ASSUMEFI(res->validate_state(sub, state), "Missing states on %0", res);
+	}
+
+	void	execute(ID3D12GraphicsCommandList *cmd) const {
+		for (auto& i : states)
+			i.a->did_transition(cmd, i.b.curr, i.b.all);
+	}
+
 	//ID3D12GraphicsCommandList
 	HRESULT	STDMETHODCALLTYPE Close() {
-		if (device->recording.enable) {
-			device->RecordCallStack(0);
-			device->recording.WithObject(this).Record(RecDevice::tag_GraphicsCommandListClose);
-		}
+		if (device->recording.enable)
+			device->WithObject(this, nullptr)->Record(RecDevice::tag_GraphicsCommandListClose);
 		return recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::Close, tag_Close);
 	}
 	HRESULT	STDMETHODCALLTYPE Reset(ID3D12CommandAllocator *pAllocator, ID3D12PipelineState *pInitialState) {
-		if (set_recording(device->recording.enable)) {
-			device->RecordCallStack(0);
-			device->recording.WithObject(this).Record(RecDevice::tag_GraphicsCommandListReset, pAllocator, pInitialState);
-		}
+		states.clear();
+		if (set_recording(device->recording.enable))
+			device->WithObject(this, nullptr)->Record(RecDevice::tag_GraphicsCommandListReset, pAllocator, pInitialState);
 		return recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::Reset, tag_Reset, pAllocator, pInitialState);
 	}
 	void	STDMETHODCALLTYPE ClearState(ID3D12PipelineState *pPipelineState) {
 		recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::ClearState, tag_ClearState, pPipelineState);
 	}
 	void	STDMETHODCALLTYPE DrawInstanced(UINT VertexCountPerInstance, UINT InstanceCount, UINT StartVertexLocation, UINT StartInstanceLocation) {
-		RECORDCALLSTACK;
-		recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::DrawInstanced, tag_DrawInstanced, VertexCountPerInstance, InstanceCount, StartVertexLocation, StartInstanceLocation);
+		//save changing resources
+		RecordCallStack(nullptr)->RunRecord2(this, &ID3D12GraphicsCommandListLatest::DrawInstanced, tag_DrawInstanced, VertexCountPerInstance, InstanceCount, StartVertexLocation, StartInstanceLocation);
 	}
 	void	STDMETHODCALLTYPE DrawIndexedInstanced(UINT IndexCountPerInstance, UINT InstanceCount, UINT StartIndexLocation, INT BaseVertexLocation, UINT StartInstanceLocation) {
-		RECORDCALLSTACK;
-		recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::DrawIndexedInstanced, tag_DrawIndexedInstanced, IndexCountPerInstance, InstanceCount, StartIndexLocation, BaseVertexLocation, StartInstanceLocation);
+		//save changing resources
+		RecordCallStack(nullptr)->RunRecord2(this, &ID3D12GraphicsCommandListLatest::DrawIndexedInstanced, tag_DrawIndexedInstanced, IndexCountPerInstance, InstanceCount, StartIndexLocation, BaseVertexLocation, StartInstanceLocation);
 	}
 	void	STDMETHODCALLTYPE Dispatch(UINT ThreadGroupCountX, UINT ThreadGroupCountY, UINT ThreadGroupCountZ) {
-		RECORDCALLSTACK;
-		recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::Dispatch, tag_Dispatch, ThreadGroupCountX, ThreadGroupCountY, ThreadGroupCountZ);
+		//save changing resources
+		RecordCallStack(nullptr)->RunRecord2(this, &ID3D12GraphicsCommandListLatest::Dispatch, tag_Dispatch, ThreadGroupCountX, ThreadGroupCountY, ThreadGroupCountZ);
 	}
 	void	STDMETHODCALLTYPE CopyBufferRegion(ID3D12Resource *pDst, UINT64 DstOffset, ID3D12Resource *pSrc, UINT64 SrcOffset, UINT64 NumBytes) {
 		recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::CopyBufferRegion, tag_CopyBufferRegion, pDst, DstOffset, pSrc, SrcOffset, NumBytes);
@@ -1077,7 +1161,7 @@ public:
 		recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::RSSetScissorRects, tag_RSSetScissorRects, NumRects, make_counted<0>(pRects));
 	}
 	void	STDMETHODCALLTYPE OMSetBlendFactor(const FLOAT BlendFactor[4]) {
-		recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::OMSetBlendFactor, tag_OMSetBlendFactor, BlendFactor);
+		recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::OMSetBlendFactor, tag_OMSetBlendFactor,  *(array<float, 4>*)BlendFactor);
 	}
 	void	STDMETHODCALLTYPE OMSetStencilRef(UINT StencilRef) {
 		recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::OMSetStencilRef, tag_OMSetStencilRef, StencilRef);
@@ -1090,7 +1174,9 @@ public:
 		for (const D3D12_RESOURCE_BARRIER *p = pBarriers, *e = p + NumBarriers; p != e; ++p) {
 			switch (p->Type) {
 				case D3D12_RESOURCE_BARRIER_TYPE_TRANSITION:
-					com_wrap_system->get_wrap(p->Transition.pResource)->set_state(p->Transition.StateAfter);
+					transition(com_wrap_system->get_wrap(p->Transition.pResource), p->Transition.Subresource, p->Transition.StateAfter);
+					states[com_wrap_system->get_wrap(p->Transition.pResource)]->set(p->Transition.Subresource, p->Transition.StateAfter);
+					//com_wrap_system->get_wrap(p->Transition.pResource)->set_state(p->Transition.StateAfter);
 					break;
 				case D3D12_RESOURCE_BARRIER_TYPE_ALIASING:
 				case D3D12_RESOURCE_BARRIER_TYPE_UAV:
@@ -1169,10 +1255,10 @@ public:
 		recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::ClearRenderTargetView, tag_ClearRenderTargetView, RenderTargetView, *(array<float, 4>*)ColorRGBA, NumRects, make_counted<2>(pRects));
 	}
 	void	STDMETHODCALLTYPE ClearUnorderedAccessViewUint(D3D12_GPU_DESCRIPTOR_HANDLE ViewGPUHandleInCurrentHeap, D3D12_CPU_DESCRIPTOR_HANDLE ViewCPUHandle, ID3D12Resource *pResource, const UINT Values[4], UINT NumRects, const D3D12_RECT *pRects) {
-		recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::ClearUnorderedAccessViewUint, tag_ClearUnorderedAccessViewUint, ViewGPUHandleInCurrentHeap, ViewCPUHandle, pResource, Values, NumRects, make_counted<4>(pRects));
+		recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::ClearUnorderedAccessViewUint, tag_ClearUnorderedAccessViewUint, ViewGPUHandleInCurrentHeap, ViewCPUHandle, pResource, *(array<UINT, 4>*)Values, NumRects, make_counted<4>(pRects));
 	}
 	void	STDMETHODCALLTYPE ClearUnorderedAccessViewFloat(D3D12_GPU_DESCRIPTOR_HANDLE ViewGPUHandleInCurrentHeap, D3D12_CPU_DESCRIPTOR_HANDLE ViewCPUHandle, ID3D12Resource *pResource, const FLOAT Values[4], UINT NumRects, const D3D12_RECT *pRects) {
-		recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::ClearUnorderedAccessViewFloat, tag_ClearUnorderedAccessViewFloat, ViewGPUHandleInCurrentHeap, ViewCPUHandle, pResource, Values, NumRects, make_counted<4>(pRects));
+		recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::ClearUnorderedAccessViewFloat, tag_ClearUnorderedAccessViewFloat, ViewGPUHandleInCurrentHeap, ViewCPUHandle, pResource, *(array<float, 4>*)Values, NumRects, make_counted<4>(pRects));
 	}
 	void	STDMETHODCALLTYPE DiscardResource(ID3D12Resource *pResource, const D3D12_DISCARD_REGION *pRegion) {
 		recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::DiscardResource, tag_DiscardResource, pResource, pRegion);
@@ -1190,83 +1276,103 @@ public:
 		recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::SetPredication, tag_SetPredication, pBuffer, AlignedBufferOffset, Operation);
 	}
 	void	STDMETHODCALLTYPE SetMarker(UINT Metadata, const void *pData, UINT Size) {
-		RECORDCALLSTACK;
-		recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::SetMarker, tag_SetMarker, Metadata, make_memory_block<2>(pData), Size);
+		RecordCallStack(nullptr)->RunRecord2(this, &ID3D12GraphicsCommandListLatest::SetMarker, tag_SetMarker, Metadata, make_memory_block<2>(pData), Size);
 	}
 	void	STDMETHODCALLTYPE BeginEvent(UINT Metadata, const void *pData, UINT Size) {
-		RECORDCALLSTACK;
-		recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::BeginEvent, tag_BeginEvent, Metadata, make_memory_block<2>(pData), Size);
+		RecordCallStack(nullptr)->RunRecord2(this, &ID3D12GraphicsCommandListLatest::BeginEvent, tag_BeginEvent, Metadata, make_memory_block<2>(pData), Size);
 	}
 	void	STDMETHODCALLTYPE EndEvent() {
 		recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::EndEvent, tag_EndEvent);
 	}
 	void	STDMETHODCALLTYPE ExecuteIndirect(ID3D12CommandSignature *pCommandSignature, UINT MaxCommandCount, ID3D12Resource *pArgumentBuffer, UINT64 ArgumentBufferOffset, ID3D12Resource *pCountBuffer, UINT64 CountBufferOffset) {
-		RECORDCALLSTACK;
-		recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::ExecuteIndirect, tag_ExecuteIndirect, pCommandSignature, MaxCommandCount, pArgumentBuffer, ArgumentBufferOffset, pCountBuffer, CountBufferOffset);
+		RecordCallStack(nullptr)->RunRecord2(this, &ID3D12GraphicsCommandListLatest::ExecuteIndirect, tag_ExecuteIndirect, pCommandSignature, MaxCommandCount, pArgumentBuffer, ArgumentBufferOffset, pCountBuffer, CountBufferOffset);
 	}
 
 	//ID3D12GraphicsCommandList1
 	void	STDMETHODCALLTYPE AtomicCopyBufferUINT(ID3D12Resource *pDstBuffer, UINT64 DstOffset, ID3D12Resource *pSrcBuffer, UINT64 SrcOffset, UINT Dependencies, ID3D12Resource *const *ppDependentResources, const D3D12_SUBRESOURCE_RANGE_UINT64 *pDependentSubresourceRanges) {
-		 return recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::AtomicCopyBufferUINT, tag_AtomicCopyBufferUINT, pDstBuffer, DstOffset, pSrcBuffer, SrcOffset, Dependencies, make_counted<4>(ppDependentResources), make_counted<4>(pDependentSubresourceRanges));
+		return recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::AtomicCopyBufferUINT, tag_AtomicCopyBufferUINT, pDstBuffer, DstOffset, pSrcBuffer, SrcOffset, Dependencies, make_counted<4>(ppDependentResources), make_counted<4>(pDependentSubresourceRanges));
 	}
 	void	STDMETHODCALLTYPE AtomicCopyBufferUINT64(ID3D12Resource *pDstBuffer, UINT64 DstOffset, ID3D12Resource *pSrcBuffer, UINT64 SrcOffset, UINT Dependencies, ID3D12Resource *const *ppDependentResources, const D3D12_SUBRESOURCE_RANGE_UINT64 *pDependentSubresourceRanges) {
-		 return recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::AtomicCopyBufferUINT64, tag_AtomicCopyBufferUINT64, pDstBuffer, DstOffset, pSrcBuffer, SrcOffset, Dependencies, make_counted<4>(ppDependentResources), make_counted<4>(pDependentSubresourceRanges));
+		return recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::AtomicCopyBufferUINT64, tag_AtomicCopyBufferUINT64, pDstBuffer, DstOffset, pSrcBuffer, SrcOffset, Dependencies, make_counted<4>(ppDependentResources), make_counted<4>(pDependentSubresourceRanges));
 	}
 	void	STDMETHODCALLTYPE OMSetDepthBounds(FLOAT Min, FLOAT Max) {
-		 return recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::OMSetDepthBounds, tag_OMSetDepthBounds, Min, Max);
+		return recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::OMSetDepthBounds, tag_OMSetDepthBounds, Min, Max);
 	}
 	void	STDMETHODCALLTYPE SetSamplePositions(UINT NumSamplesPerPixel, UINT NumPixels, D3D12_SAMPLE_POSITION *pSamplePositions) {
-		 return recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::SetSamplePositions, tag_SetSamplePositions, NumSamplesPerPixel, NumPixels, pSamplePositions);
+		return recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::SetSamplePositions, tag_SetSamplePositions, NumSamplesPerPixel, NumPixels, pSamplePositions);
 	}
 	void	STDMETHODCALLTYPE ResolveSubresourceRegion(ID3D12Resource *pDstResource, UINT DstSubresource, UINT DstX, UINT DstY, ID3D12Resource *pSrcResource, UINT SrcSubresource, D3D12_RECT *pSrcRect, DXGI_FORMAT Format, D3D12_RESOLVE_MODE ResolveMode) {
-		 return recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::ResolveSubresourceRegion, tag_ResolveSubresourceRegion, pDstResource, DstSubresource, DstX, DstY, pSrcResource, SrcSubresource, pSrcRect, Format, ResolveMode);
+		return recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::ResolveSubresourceRegion, tag_ResolveSubresourceRegion, pDstResource, DstSubresource, DstX, DstY, pSrcResource, SrcSubresource, pSrcRect, Format, ResolveMode);
 	}
 	void	STDMETHODCALLTYPE SetViewInstanceMask(UINT Mask) {
-		 return recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::SetViewInstanceMask, tag_SetViewInstanceMask, Mask);
+		return recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::SetViewInstanceMask, tag_SetViewInstanceMask, Mask);
 	}
 
 	//ID3D12GraphicsCommandList2
 	void	STDMETHODCALLTYPE WriteBufferImmediate(UINT Count, const D3D12_WRITEBUFFERIMMEDIATE_PARAMETER *pParams, const D3D12_WRITEBUFFERIMMEDIATE_MODE *pModes) {
-		 return recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::WriteBufferImmediate, tag_WriteBufferImmediate, Count, make_counted<0>(pParams), make_counted<0>(pModes));
+		return recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::WriteBufferImmediate, tag_WriteBufferImmediate, Count, make_counted<0>(pParams), make_counted<0>(pModes));
 	}
 
 	//ID3D12GraphicsCommandList3
 	void	STDMETHODCALLTYPE SetProtectedResourceSession(ID3D12ProtectedResourceSession *pProtectedResourceSession) {
-		 return recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::SetProtectedResourceSession, tag_SetProtectedResourceSession, pProtectedResourceSession);
+		return recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::SetProtectedResourceSession, tag_SetProtectedResourceSession, pProtectedResourceSession);
 	}
 
 	//ID3D12GraphicsCommandList4
 	void	STDMETHODCALLTYPE BeginRenderPass(UINT NumRenderTargets, const D3D12_RENDER_PASS_RENDER_TARGET_DESC *pRenderTargets, const D3D12_RENDER_PASS_DEPTH_STENCIL_DESC *pDepthStencil, D3D12_RENDER_PASS_FLAGS Flags) {
-		 return recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::BeginRenderPass, tag_BeginRenderPass, NumRenderTargets, make_counted<0>(pRenderTargets), pDepthStencil, Flags);
+		return recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::BeginRenderPass, tag_BeginRenderPass, NumRenderTargets, make_counted<0>(pRenderTargets), pDepthStencil, Flags);
 	}
 	void	STDMETHODCALLTYPE EndRenderPass() {
-		 return recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::EndRenderPass, tag_EndRenderPass);
+		return recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::EndRenderPass, tag_EndRenderPass);
 	}
 	void	STDMETHODCALLTYPE InitializeMetaCommand(ID3D12MetaCommand *pMetaCommand, const void *pInitializationParametersData, SIZE_T InitializationParametersDataSizeInBytes) {
-		 return recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::InitializeMetaCommand, tag_InitializeMetaCommand, pMetaCommand, make_memory_block<2>(pInitializationParametersData), InitializationParametersDataSizeInBytes);
+		return recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::InitializeMetaCommand, tag_InitializeMetaCommand, pMetaCommand, make_memory_block<2>(pInitializationParametersData), InitializationParametersDataSizeInBytes);
 	}
 	void	STDMETHODCALLTYPE ExecuteMetaCommand(ID3D12MetaCommand *pMetaCommand, const void *pExecutionParametersData, SIZE_T ExecutionParametersDataSizeInBytes) {
-		 return recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::ExecuteMetaCommand, tag_ExecuteMetaCommand, pMetaCommand, make_memory_block<2>(pExecutionParametersData), ExecutionParametersDataSizeInBytes);
+		return recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::ExecuteMetaCommand, tag_ExecuteMetaCommand, pMetaCommand, make_memory_block<2>(pExecutionParametersData), ExecutionParametersDataSizeInBytes);
 	}
 	void	STDMETHODCALLTYPE BuildRaytracingAccelerationStructure(const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC *pDesc, UINT NumPostbuildInfoDescs, const D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC *pPostbuildInfoDescs) {
-		 return recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::BuildRaytracingAccelerationStructure, tag_BuildRaytracingAccelerationStructure, pDesc, NumPostbuildInfoDescs, make_counted<1>(pPostbuildInfoDescs));
+		if (recording.enable) {
+
+			if (pDesc->Inputs.Type == D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL) {
+				auto			count	= pDesc->Inputs.NumDescs;
+				malloc_block	instances(count * sizeof(D3D12_RAYTRACING_INSTANCE_DESC));
+				
+				if (pDesc->Inputs.DescsLayout == D3D12_ELEMENTS_LAYOUT_ARRAY_OF_POINTERS) {
+					malloc_block	ptrs(count * sizeof(D3D12_GPU_VIRTUAL_ADDRESS));
+					if (device->GetVRAM(pDesc->Inputs.InstanceDescs, ptrs)) {
+						auto	p	= (D3D12_RAYTRACING_INSTANCE_DESC*)instances;
+						for (auto i : make_range<D3D12_GPU_VIRTUAL_ADDRESS>(ptrs))
+							device->GetVRAM(i, memory_block(p));
+					}
+				} else {
+					device->GetVRAM(pDesc->Inputs.InstanceDescs, instances);
+				}
+				capture.AddVRAM(pDesc->DestAccelerationStructureData, map_struct<RTM>(make_tuple(pDesc->Inputs, (const_memory_block)instances)));
+
+			} else {
+				capture.AddVRAM(pDesc->DestAccelerationStructureData, map_struct<RTM>(pDesc->Inputs));
+
+			}
+		}
+		return recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::BuildRaytracingAccelerationStructure, tag_BuildRaytracingAccelerationStructure, pDesc, NumPostbuildInfoDescs, make_counted<1>(pPostbuildInfoDescs));
 	}
 	void	STDMETHODCALLTYPE EmitRaytracingAccelerationStructurePostbuildInfo(const D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC *pDesc, UINT NumSourceAccelerationStructures, const D3D12_GPU_VIRTUAL_ADDRESS *pSourceAccelerationStructureData) {
-		 return recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::EmitRaytracingAccelerationStructurePostbuildInfo, tag_EmitRaytracingAccelerationStructurePostbuildInfo, pDesc, NumSourceAccelerationStructures, make_counted<1>(pSourceAccelerationStructureData));
+		return recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::EmitRaytracingAccelerationStructurePostbuildInfo, tag_EmitRaytracingAccelerationStructurePostbuildInfo, pDesc, NumSourceAccelerationStructures, make_counted<1>(pSourceAccelerationStructureData));
 	}
 	void	STDMETHODCALLTYPE CopyRaytracingAccelerationStructure(D3D12_GPU_VIRTUAL_ADDRESS DestAccelerationStructureData, D3D12_GPU_VIRTUAL_ADDRESS SourceAccelerationStructureData, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE Mode) {
-		 return recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::CopyRaytracingAccelerationStructure, tag_CopyRaytracingAccelerationStructure, DestAccelerationStructureData, SourceAccelerationStructureData, Mode);
+		return recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::CopyRaytracingAccelerationStructure, tag_CopyRaytracingAccelerationStructure, DestAccelerationStructureData, SourceAccelerationStructureData, Mode);
 	}
 	void	STDMETHODCALLTYPE SetPipelineState1(ID3D12StateObject *pStateObject) {
-		 return recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::SetPipelineState1, tag_SetPipelineState1, pStateObject);
+		return recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::SetPipelineState1, tag_SetPipelineState1, pStateObject);
 	}
 	void	STDMETHODCALLTYPE DispatchRays(const D3D12_DISPATCH_RAYS_DESC *pDesc) {
-		 return recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::DispatchRays, tag_DispatchRays, pDesc);
+		return recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::DispatchRays, tag_DispatchRays, pDesc);
 	}
 
 	//ID3D12GraphicsCommandList5
 	void	STDMETHODCALLTYPE RSSetShadingRate(D3D12_SHADING_RATE baseShadingRate, const D3D12_SHADING_RATE_COMBINER* combiners) {
-		return recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::RSSetShadingRate, tag_RSSetShadingRate, baseShadingRate, combiners);
+		return recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::RSSetShadingRate, tag_RSSetShadingRate, baseShadingRate, *(array<D3D12_SHADING_RATE_COMBINER,2>*)combiners);
 	}
 	void	STDMETHODCALLTYPE RSSetShadingRateImage(ID3D12Resource* shadingRateImage) {
 		return recording.RunRecord2(this, &ID3D12GraphicsCommandListLatest::RSSetShadingRateImage, tag_RSSetShadingRateImage, shadingRateImage);
@@ -1278,8 +1384,8 @@ public:
 	}
 };
 
-CommandRange::CommandRange(ID3D12CommandList *_t) : holder<const ID3D12CommandList*>(_t) {
-	auto	*w	= com_wrap_system->get_wrap(_t);
+CommandRange::CommandRange(ID3D12CommandList *t) : holder<const ID3D12CommandList*>(t) {
+	auto	*w	= com_wrap_system->get_wrap(t);
 	a			= w->recording.start;
 	b			= uint32(w->recording.total);
 }
@@ -1313,8 +1419,7 @@ public:
 		ID3D12Heap *pHeap, UINT NumRanges, const D3D12_TILE_RANGE_FLAGS *pRangeFlags, const UINT *pHeapRangeStartOffsets, const UINT *pRangeTileCounts,
 		D3D12_TILE_MAPPING_FLAGS Flags
 	) {
-		DEVICE_RECORDCALLSTACK;
-		device->recording.WithObject(this).RunRecord2(this, &ID3D12CommandQueue::UpdateTileMappings, RecDevice::tag_CommandQueueUpdateTileMappings,
+		device->WithObject(this, nullptr)->RunRecord2(this, &ID3D12CommandQueue::UpdateTileMappings, RecDevice::tag_CommandQueueUpdateTileMappings,
 			pResource, NumResourceRegions, make_counted<1>(pResourceRegionStartCoordinates), make_counted<1>(pResourceRegionSizes),
 			pHeap, NumRanges, make_counted<5>(pRangeFlags), make_counted<5>(pHeapRangeStartOffsets), make_counted<5>(pRangeTileCounts),
 			Flags
@@ -1322,17 +1427,17 @@ public:
 #if 0
 		Wrap<ID3D12Resource>	*rsrc = GetWrap(pResource);
 		Tiler					tiler(*rsrc, rsrc->mapping);
-		TileSource				src(pHeap, pRangeFlags, pHeapRangeStartOffsets, pRangeTileCounts);
+		Tiler::Source			src(pHeap, pRangeFlags, pHeapRangeStartOffsets, pRangeTileCounts);
 
 		for (UINT s = 0, d = 0; d < NumResourceRegions; d++) {
 			const D3D12_TILED_RESOURCE_COORDINATE	&dstart	= pResourceRegionStartCoordinates[d];
 			const D3D12_TILE_REGION_SIZE			&dsize	= pResourceRegionSizes[d];
-			Tiler0									tiler0	= tiler.SubResource(dstart.Subresource);
+			auto									tiler0	= tiler.SubResource(dstart.Subresource);
 
 			if (dsize.UseBox)
 				tiler0.FillBox(src, dstart.X, dstart.Y, dstart.Z, dsize.Width, dsize.Height, dsize.Depth);
 			else
-				tiler0.Fill(src, dstart.X, dstart.Y, dstart.Z, dsize.NumTiles);
+				tiler0.FillStrip(src, dstart.X, dstart.Y, dstart.Z, dsize.NumTiles);
 		}
 #endif
 	}
@@ -1341,8 +1446,7 @@ public:
 		ID3D12Resource *pSrcResource, const D3D12_TILED_RESOURCE_COORDINATE *pSrcRegionStartCoordinate,
 		const D3D12_TILE_REGION_SIZE *pRegionSize, D3D12_TILE_MAPPING_FLAGS Flags
 	) {
-		DEVICE_RECORDCALLSTACK;
-		device->recording.WithObject(this).RunRecord2(this, &ID3D12CommandQueue::CopyTileMappings, RecDevice::tag_CommandQueueCopyTileMappings,
+		device->WithObject(this, nullptr)->RunRecord2(this, &ID3D12CommandQueue::CopyTileMappings, RecDevice::tag_CommandQueueCopyTileMappings,
 			pDstResource, pDstRegionStartCoordinate,
 			pSrcResource, pSrcRegionStartCoordinate,
 			pRegionSize, Flags
@@ -1352,9 +1456,8 @@ public:
 		Wrap<ID3D12Resource>	*rdst = GetWrap(pSrcResource);
 		Tiler					stiler(*rsrc, rsrc->mapping);
 		Tiler					dtiler(*rdst, rdst->mapping);
-
-		Tiler0					dtiler0	= dtiler.SubResource(pDstRegionStartCoordinate->Subresource);
-		Tiler0					stiler0	= dtiler.SubResource(pSrcRegionStartCoordinate->Subresource);
+		auto					dtiler0	= dtiler.SubResource(pDstRegionStartCoordinate->Subresource);
+		auto					stiler0	= dtiler.SubResource(pSrcRegionStartCoordinate->Subresource);
 
 		if (pRegionSize->UseBox)
 			dtiler0.CopyBox(stiler0,
@@ -1363,7 +1466,7 @@ public:
 				pRegionSize->Width, pRegionSize->Height, pRegionSize->Depth
 			);
 		else
-			dtiler0.Copy(stiler0,
+			dtiler0.CopyStrip(stiler0,
 				pDstRegionStartCoordinate->X, pDstRegionStartCoordinate->Y, pDstRegionStartCoordinate->Z,
 				pSrcRegionStartCoordinate->X, pSrcRegionStartCoordinate->Y, pSrcRegionStartCoordinate->Z,
 				pRegionSize->NumTiles
@@ -1371,36 +1474,37 @@ public:
 #endif
 	}
 	void	STDMETHODCALLTYPE ExecuteCommandLists(UINT NumCommandLists, ID3D12CommandList *const *pp) {
-		DEVICE_RECORDCALLSTACK;
-#if 0
-		device->recording.WithObject(this).Record(RecDevice::tag_CommandQueueExecuteCommandLists, NumCommandLists, make_counted<0>(pp));
-		device->set_recording(capture.Update());
-		device->recording.Run2(this, &ID3D12CommandQueue::ExecuteCommandLists, NumCommandLists, make_counted<0>(pp));
-#else
-		with(RecObjectLink::orphan_mutex), device->recording.WithObject(this).RunRecord2(this, &ID3D12CommandQueue::ExecuteCommandLists, RecDevice::tag_CommandQueueExecuteCommandLists,
-			NumCommandLists, make_counted<0>(pp)
-		);
-#endif
+		if (device->recording.enable) {
+			for (int i = 0; i < NumCommandLists; i++) {
+				auto p = (Wrap<ID3D12GraphicsCommandListLatest>*)com_wrap_system->get_wrap(pp[i]);
+				p->execute(device->cmd_list);
+			}
+			ExecuteReset(orig, device->cmd_list, device->cmd_alloc);
+
+		} else {
+			for (int i = 0; i < NumCommandLists; i++) {
+				auto p = (Wrap<ID3D12GraphicsCommandListLatest>*)com_wrap_system->get_wrap(pp[i]);
+				p->execute(nullptr);
+			}
+		}
+
+		with(RecObjectLink::orphan_mutex),
+			device->WithObject(this, nullptr)->RunRecord2(this, &ID3D12CommandQueue::ExecuteCommandLists, RecDevice::tag_CommandQueueExecuteCommandLists, NumCommandLists, make_counted<0>(pp));
 	}
 	void	STDMETHODCALLTYPE SetMarker(UINT Metadata, const void *pData, UINT Size) {
-		DEVICE_RECORDCALLSTACK;
-		device->recording.WithObject(this).RunRecord2(this, &ID3D12CommandQueue::SetMarker, RecDevice::tag_CommandQueueSetMarker, Metadata, make_memory_block<2>(pData), Size);
+		device->WithObject(this, nullptr)->RunRecord2(this, &ID3D12CommandQueue::SetMarker, RecDevice::tag_CommandQueueSetMarker, Metadata, make_memory_block<2>(pData), Size);
 	}
 	void	STDMETHODCALLTYPE BeginEvent(UINT Metadata, const void *pData, UINT Size) {
-		DEVICE_RECORDCALLSTACK;
-		device->recording.WithObject(this).RunRecord2(this, &ID3D12CommandQueue::BeginEvent, RecDevice::tag_CommandQueueBeginEvent, Metadata, make_memory_block<2>(pData), Size);
+		device->WithObject(this, nullptr)->RunRecord2(this, &ID3D12CommandQueue::BeginEvent, RecDevice::tag_CommandQueueBeginEvent, Metadata, make_memory_block<2>(pData), Size);
 	}
 	void	STDMETHODCALLTYPE EndEvent() {
-		DEVICE_RECORDCALLSTACK;
-		device->recording.WithObject(this).RunRecord2(this, &ID3D12CommandQueue::EndEvent, RecDevice::tag_CommandQueueEndEvent);
+		device->WithObject(this, nullptr)->RunRecord2(this, &ID3D12CommandQueue::EndEvent, RecDevice::tag_CommandQueueEndEvent);
 	}
 	HRESULT	STDMETHODCALLTYPE Signal(ID3D12Fence *pFence, UINT64 Value) {
-		DEVICE_RECORDCALLSTACK;
-		return device->recording.WithObject(this).RunRecord2(this, &ID3D12CommandQueue::Signal, RecDevice::tag_CommandQueueSignal, pFence, Value);
+		return device->WithObject(this, nullptr)->RunRecord2(this, &ID3D12CommandQueue::Signal, RecDevice::tag_CommandQueueSignal, pFence, Value);
 	}
 	HRESULT	STDMETHODCALLTYPE Wait(ID3D12Fence *pFence, UINT64 Value) {
-		DEVICE_RECORDCALLSTACK;
-		return device->recording.WithObject(this).RunRecord2(this, &ID3D12CommandQueue::Wait, RecDevice::tag_CommandQueueWait, pFence, Value);
+		return device->WithObject(this, nullptr)->RunRecord2(this, &ID3D12CommandQueue::Wait, RecDevice::tag_CommandQueueWait, pFence, Value);
 	}
 	HRESULT	STDMETHODCALLTYPE GetTimestampFrequency(UINT64 *pFrequency) { return orig->GetTimestampFrequency(pFrequency); }
 	HRESULT	STDMETHODCALLTYPE GetClockCalibration(UINT64 *pGpuTimestamp, UINT64 *pCpuTimestamp) { return orig->GetClockCalibration(pGpuTimestamp, pCpuTimestamp); }
@@ -1427,7 +1531,8 @@ DESCRIPTOR *Wrap<ID3D12DeviceLatest>::modify_descriptors(D3D12_CPU_DESCRIPTOR_HA
 	for (auto &i : descriptor_heaps) {
 		if (const DESCRIPTOR* d = i->holds(h)) {
 			if (recording.enable)
-				i.modify(i->index(h), n, d);
+				with(RecObjectLink::orphan_mutex),
+					i.modify(i->index(h), n, d);
 			return unconst(d);
 		}
 	}
@@ -1435,93 +1540,111 @@ DESCRIPTOR *Wrap<ID3D12DeviceLatest>::modify_descriptors(D3D12_CPU_DESCRIPTOR_HA
 }
 
 void Wrap<ID3D12DeviceLatest>::set_recording(bool enable) {
+	if (!enable && recording.enable) {
+		// release captured resources
+		for (auto &i : RecObjectLink::orphans) {
+			if (i.type == Resource) {
+				auto	*res	= static_cast<Wrap<ID3D12Resource>*>(&i);
+				res->init_resource.clear();
+			}
+		}
+		for (auto &i : objects) {
+			if (i.type == Resource) {
+				auto	*res	= static_cast<Wrap<ID3D12Resource>*>(&i);
+				res->init_resource.clear();
+			}
+		}
+	}
 	capture.device		= enable ? this : nullptr;
 	recording.enable	= enable;
 	recording.start		= uint32(recording.total);
 }
 
+bool Wrap<ID3D12DeviceLatest>::GetVRAM(D3D12_GPU_VIRTUAL_ADDRESS addr, memory_block out) {
+	for (auto& i : objects) {
+		if (i.type == RecObject::Resource) {
+			auto	*res	= static_cast<Wrap<ID3D12Resource>*>(&i);
+			if (res->gpu <= addr && res->gpu + res->data_size > addr) {
+				void	*p;
+				if (SUCCEEDED(res->Map(0, RANGE(addr - res->gpu, out.size()), &p))) {
+					out.copy_from(p);
+					res->Unmap(0, 0);
+					return true;
+				}
+				break;
+			}
+		}
+	}
+	return false;
+}
+
 HRESULT	Wrap<ID3D12DeviceLatest>::CreateCommandQueue(const D3D12_COMMAND_QUEUE_DESC *desc, REFIID riid, void **pp) {
-	RECORDCALLSTACK;
-	return recording.RunRecord2Wrap(this, &ID3D12Device::CreateCommandQueue, tag_CreateCommandQueue, riid, (ID3D12CommandQueue**)pp, desc);
+	return RecordCallStack(nullptr)->RunRecord2Wrap(this, &ID3D12Device::CreateCommandQueue, tag_CreateCommandQueue, riid, (ID3D12CommandQueue**)pp, desc);
 }
 HRESULT	Wrap<ID3D12DeviceLatest>::CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE type, REFIID riid, void **pp) {
-	RECORDCALLSTACK;
-	return recording.RunRecord2Wrap(this, &ID3D12Device::CreateCommandAllocator, tag_CreateCommandAllocator, riid, (ID3D12CommandAllocator**)pp, type);
+	return RecordCallStack(nullptr)->RunRecord2Wrap(this, &ID3D12Device::CreateCommandAllocator, tag_CreateCommandAllocator, riid, (ID3D12CommandAllocator**)pp, type);
 }
 HRESULT	Wrap<ID3D12DeviceLatest>::CreateGraphicsPipelineState(const D3D12_GRAPHICS_PIPELINE_STATE_DESC *desc, REFIID riid, void **pp) {
-	RECORDCALLSTACK;
-	return recording.RunRecord2Wrap(this, &ID3D12Device::CreateGraphicsPipelineState, tag_CreateGraphicsPipelineState, riid, (ID3D12PipelineState**)pp, desc);
+	return RecordCallStack(nullptr)->RunRecord2Wrap(this, &ID3D12Device::CreateGraphicsPipelineState, tag_CreateGraphicsPipelineState, riid, (ID3D12PipelineState**)pp, desc);
 }
 HRESULT	Wrap<ID3D12DeviceLatest>::CreateComputePipelineState(const D3D12_COMPUTE_PIPELINE_STATE_DESC *desc, REFIID riid, void **pp) {
-	RECORDCALLSTACK;
-	return recording.RunRecord2Wrap(this, &ID3D12Device::CreateComputePipelineState, tag_CreateComputePipelineState, riid, (ID3D12PipelineState**)pp, desc);
+	return RecordCallStack(nullptr)->RunRecord2Wrap(this, &ID3D12Device::CreateComputePipelineState, tag_CreateComputePipelineState, riid, (ID3D12PipelineState**)pp, desc);
 }
 HRESULT	Wrap<ID3D12DeviceLatest>::CreateCommandList(UINT nodeMask, D3D12_COMMAND_LIST_TYPE type, ID3D12CommandAllocator *pCommandAllocator, ID3D12PipelineState *pInitialState, REFIID riid, void **pp) {
-	RECORDCALLSTACK;
-	return recording.RunRecord2Wrap(this, &ID3D12Device::CreateCommandList, tag_CreateCommandList, riid, (ID3D12GraphicsCommandList**)pp, nodeMask, type, pCommandAllocator, pInitialState);
+	return RecordCallStack(nullptr)->RunRecord2Wrap(this, &ID3D12Device::CreateCommandList, tag_CreateCommandList, riid, (ID3D12GraphicsCommandList**)pp, nodeMask, type, pCommandAllocator, pInitialState);
 }
 HRESULT	Wrap<ID3D12DeviceLatest>::CheckFeatureSupport(D3D12_FEATURE Feature, void *pFeatureSupportData, UINT FeatureSupportDataSize) {
-	RECORDCALLSTACK;
-	return recording.RunRecord2(this, &ID3D12Device::CheckFeatureSupport, tag_CheckFeatureSupport, Feature, pFeatureSupportData, FeatureSupportDataSize);
+	return RecordCallStack(nullptr)->RunRecord2(this, &ID3D12Device::CheckFeatureSupport, tag_CheckFeatureSupport, Feature, pFeatureSupportData, FeatureSupportDataSize);
 }
 HRESULT	Wrap<ID3D12DeviceLatest>::CreateDescriptorHeap(const D3D12_DESCRIPTOR_HEAP_DESC *desc, REFIID riid, void **pp) {
-	RECORDCALLSTACK;
-	return recording.RunRecord2Wrap(this, &ID3D12Device::CreateDescriptorHeap, tag_CreateDescriptorHeap, riid, (ID3D12DescriptorHeap**)pp, desc);
+	return RecordCallStack(nullptr)->RunRecord2Wrap(this, &ID3D12Device::CreateDescriptorHeap, tag_CreateDescriptorHeap, riid, (ID3D12DescriptorHeap**)pp, desc);
 }
 HRESULT	Wrap<ID3D12DeviceLatest>::CreateRootSignature(UINT nodeMask, const void *pBlobWithRootSignature, SIZE_T blobLengthInBytes, REFIID riid, void **pp) {
-	RECORDCALLSTACK;
-	return recording.RunRecord2Wrap(this, &ID3D12Device::CreateRootSignature, tag_CreateRootSignature, riid, (ID3D12RootSignature**)pp, nodeMask, make_memory_block<2>(pBlobWithRootSignature), blobLengthInBytes);
+	return RecordCallStack(nullptr)->RunRecord2Wrap(this, &ID3D12Device::CreateRootSignature, tag_CreateRootSignature, riid, (ID3D12RootSignature**)pp, nodeMask, make_memory_block<2>(pBlobWithRootSignature), blobLengthInBytes);
 }
 void	Wrap<ID3D12DeviceLatest>::CreateConstantBufferView(const D3D12_CONSTANT_BUFFER_VIEW_DESC *desc, D3D12_CPU_DESCRIPTOR_HANDLE dest) {
-	RECORDCALLSTACK;
-	recording.RunRecord2(this, &ID3D12Device::CreateConstantBufferView, tag_CreateConstantBufferView, desc, dest);
+	RecordCallStack(nullptr)->RunRecord2(this, &ID3D12Device::CreateConstantBufferView, tag_CreateConstantBufferView, desc, dest);
 	DESCRIPTOR *d = modify_descriptors(dest);
 	d->set(desc);
 }
 void	Wrap<ID3D12DeviceLatest>::CreateShaderResourceView(ID3D12Resource *pResource, const D3D12_SHADER_RESOURCE_VIEW_DESC *desc, D3D12_CPU_DESCRIPTOR_HANDLE dest) {
-	RECORDCALLSTACK;
-	recording.RunRecord2(this, &ID3D12Device::CreateShaderResourceView, tag_CreateShaderResourceView, pResource, desc, dest);
+	RecordCallStack(nullptr)->RunRecord2(this, &ID3D12Device::CreateShaderResourceView, tag_CreateShaderResourceView, pResource, desc, dest);
 	if (pResource) {
 		DESCRIPTOR *d	= modify_descriptors(dest);
-		d->set(pResource, desc);
+		d->set(desc, pResource);
 	}
 }
 
 void	Wrap<ID3D12DeviceLatest>::CreateUnorderedAccessView(ID3D12Resource *pResource, ID3D12Resource *pCounterResource, const D3D12_UNORDERED_ACCESS_VIEW_DESC *desc, D3D12_CPU_DESCRIPTOR_HANDLE dest) {
-	RECORDCALLSTACK;
-	recording.RunRecord2(this, &ID3D12Device::CreateUnorderedAccessView, tag_CreateUnorderedAccessView, pResource, pCounterResource, desc, dest);
+	RecordCallStack(nullptr)->RunRecord2(this, &ID3D12Device::CreateUnorderedAccessView, tag_CreateUnorderedAccessView, pResource, pCounterResource, desc, dest);
 	if (pResource) {
 		DESCRIPTOR *d	= modify_descriptors(dest);
-		d->set(pResource, desc);
+		d->set(desc, pResource);
 	}
 }
 
 void	Wrap<ID3D12DeviceLatest>::CreateRenderTargetView(ID3D12Resource *pResource, const D3D12_RENDER_TARGET_VIEW_DESC *desc, D3D12_CPU_DESCRIPTOR_HANDLE dest) {
-	RECORDCALLSTACK;
-	recording.RunRecord2(this, &ID3D12Device::CreateRenderTargetView, tag_CreateRenderTargetView, pResource, desc, dest);
+	RecordCallStack(nullptr)->RunRecord2(this, &ID3D12Device::CreateRenderTargetView, tag_CreateRenderTargetView, pResource, desc, dest);
 	if (pResource) {
 		DESCRIPTOR	*d	= modify_descriptors(dest);
-		d->set(pResource, desc, pResource->GetDesc());
+		d->set(desc, pResource, pResource->GetDesc());
 	}
 }
 void	Wrap<ID3D12DeviceLatest>::CreateDepthStencilView(ID3D12Resource *pResource, const D3D12_DEPTH_STENCIL_VIEW_DESC *desc, D3D12_CPU_DESCRIPTOR_HANDLE dest) {
-	RECORDCALLSTACK;
-	recording.RunRecord2(this, &ID3D12Device::CreateDepthStencilView, tag_CreateDepthStencilView, pResource, desc, dest);
+	RecordCallStack(nullptr)->RunRecord2(this, &ID3D12Device::CreateDepthStencilView, tag_CreateDepthStencilView, pResource, desc, dest);
 	if (pResource) {
 		DESCRIPTOR	*d	= modify_descriptors(dest);
-		d->set(pResource, desc, pResource->GetDesc());
+		d->set(desc, pResource, pResource->GetDesc());
 	}
 }
 void	Wrap<ID3D12DeviceLatest>::CreateSampler(const D3D12_SAMPLER_DESC *desc, D3D12_CPU_DESCRIPTOR_HANDLE dest) {
-	RECORDCALLSTACK;
-	recording.RunRecord2(this, &ID3D12Device::CreateSampler, tag_CreateSampler, desc, dest);
+	RecordCallStack(nullptr)->RunRecord2(this, &ID3D12Device::CreateSampler, tag_CreateSampler, desc, dest);
 	DESCRIPTOR *d	= modify_descriptors(dest);
 	d->type			= DESCRIPTOR::SMP;
 	d->smp			= *desc;
 }
 void	Wrap<ID3D12DeviceLatest>::CopyDescriptors(UINT dest_num, const D3D12_CPU_DESCRIPTOR_HANDLE *dest_starts, const UINT *dest_sizes, UINT srce_num, const D3D12_CPU_DESCRIPTOR_HANDLE *srce_starts, const UINT *srce_sizes, D3D12_DESCRIPTOR_HEAP_TYPE type) {
-	RECORDCALLSTACK;
-	recording.RunRecord2(this, &ID3D12Device::CopyDescriptors, tag_CopyDescriptors,
+	RecordCallStack(nullptr)->RunRecord2(this, &ID3D12Device::CopyDescriptors, tag_CopyDescriptors,
 		dest_num, make_counted<0>(dest_starts), make_counted<0>(dest_sizes),
 		srce_num, make_counted<3>(srce_starts), make_counted<3>(srce_sizes),
 		type
@@ -1548,37 +1671,32 @@ void	Wrap<ID3D12DeviceLatest>::CopyDescriptors(UINT dest_num, const D3D12_CPU_DE
 	}
 }
 void	Wrap<ID3D12DeviceLatest>::CopyDescriptorsSimple(UINT num, D3D12_CPU_DESCRIPTOR_HANDLE dest_start, D3D12_CPU_DESCRIPTOR_HANDLE srce_start, D3D12_DESCRIPTOR_HEAP_TYPE type) {
-	RECORDCALLSTACK;
-	recording.RunRecord2(this, &ID3D12Device::CopyDescriptorsSimple, tag_CopyDescriptorsSimple,
+	RecordCallStack(nullptr)->RunRecord2(this, &ID3D12Device::CopyDescriptorsSimple, tag_CopyDescriptorsSimple,
 		num, dest_start, srce_start, type
 	);
 	copy_n(find_descriptor(srce_start), modify_descriptors(dest_start, num), num);
 }
 HRESULT	Wrap<ID3D12DeviceLatest>::CreateCommittedResource(const D3D12_HEAP_PROPERTIES *pHeapProperties, D3D12_HEAP_FLAGS HeapFlags, const D3D12_RESOURCE_DESC *desc, D3D12_RESOURCE_STATES InitialResourceState, const D3D12_CLEAR_VALUE *pOptimizedClearValue, REFIID riidResource, void **pp) {
-	RECORDCALLSTACK;
-	return recording.RunRecord2Wrap(this, &ID3D12Device::CreateCommittedResource, tag_CreateCommittedResource, riidResource, (ID3D12Resource**)pp, pHeapProperties, HeapFlags, desc, InitialResourceState, pOptimizedClearValue);
+	return RecordCallStack(nullptr)->RunRecord2Wrap(this, &ID3D12Device::CreateCommittedResource, tag_CreateCommittedResource, riidResource, (ID3D12Resource**)pp, pHeapProperties, HeapFlags, desc, InitialResourceState, pOptimizedClearValue);
 }
 HRESULT	Wrap<ID3D12DeviceLatest>::CreateHeap(const D3D12_HEAP_DESC *desc, REFIID riid, void **pp) {
-	RECORDCALLSTACK;
-	return recording.RunRecord2Wrap(this, &ID3D12Device::CreateHeap, tag_CreateHeap, riid, (ID3D12Heap**)pp, desc);
+	return RecordCallStack(nullptr)->RunRecord2Wrap(this, &ID3D12Device::CreateHeap, tag_CreateHeap, riid, (ID3D12Heap**)pp, desc);
 }
 HRESULT	Wrap<ID3D12DeviceLatest>::CreatePlacedResource(ID3D12Heap *pHeap, UINT64 HeapOffset, const D3D12_RESOURCE_DESC *desc, D3D12_RESOURCE_STATES InitialState, const D3D12_CLEAR_VALUE *pOptimizedClearValue, REFIID riid, void **pp) {
-	RECORDCALLSTACK;
-	return recording.RunRecord2Wrap(this, &ID3D12Device::CreatePlacedResource, tag_CreatePlacedResource, riid, (ID3D12Resource**)pp, pHeap, HeapOffset, desc, InitialState, pOptimizedClearValue);
+	return RecordCallStack(nullptr)->RunRecord2Wrap(this, &ID3D12Device::CreatePlacedResource, tag_CreatePlacedResource, riid, (ID3D12Resource**)pp, pHeap, HeapOffset, desc, InitialState, pOptimizedClearValue);
 }
 HRESULT	Wrap<ID3D12DeviceLatest>::CreateReservedResource(const D3D12_RESOURCE_DESC *desc, D3D12_RESOURCE_STATES InitialState, const D3D12_CLEAR_VALUE *pOptimizedClearValue, REFIID riid, void **pp) {
-	RECORDCALLSTACK;
-	return recording.RunRecord2Wrap(this, &ID3D12Device::CreateReservedResource, tag_CreateReservedResource, riid, (ID3D12Resource**)pp, desc, InitialState, pOptimizedClearValue);
+	return RecordCallStack(nullptr)->RunRecord2Wrap(this, &ID3D12Device::CreateReservedResource, tag_CreateReservedResource, riid, (ID3D12Resource**)pp, desc, InitialState, pOptimizedClearValue);
 }
 HRESULT	Wrap<ID3D12DeviceLatest>::CreateSharedHandle(ID3D12DeviceChild *pObject, const SECURITY_ATTRIBUTES *pAttributes, DWORD Access, LPCWSTR Name, HANDLE *pHandle) {
-	RECORDCALLSTACK;
-	HRESULT	r = recording.RunRecord2(this, &ID3D12Device::CreateSharedHandle, tag_CreateSharedHandle, pObject, pAttributes, Access, Name, pHandle);
+	HRESULT	r = RecordCallStack(nullptr)->RunRecord2(this, &ID3D12Device::CreateSharedHandle, tag_CreateSharedHandle, pObject, pAttributes, Access, Name, pHandle);
 	if (SUCCEEDED(r))
 		device->handles.insert(*pHandle);
 	return r;
 }
 HRESULT	Wrap<ID3D12DeviceLatest>::OpenSharedHandle(HANDLE handle, REFIID riid, void **pp) {
-	RECORDCALLSTACK;
+	auto	safe = RecordCallStack(0);
+
 	device->handles.insert(handle);
 	return	riid == __uuidof(ID3D12Heap)		? recording.RunRecord2Wrap(this, &ID3D12Device::OpenSharedHandle, tag_OpenSharedHandle, riid, (ID3D12Heap**)pp, handle)
 		:	riid == __uuidof(ID3D12Resource)	? recording.RunRecord2Wrap(this, &ID3D12Device::OpenSharedHandle, tag_OpenSharedHandle, riid, (ID3D12Resource**)pp, handle)
@@ -1586,115 +1704,108 @@ HRESULT	Wrap<ID3D12DeviceLatest>::OpenSharedHandle(HANDLE handle, REFIID riid, v
 		: recording.RunRecord2(this, &ID3D12Device::OpenSharedHandle, tag_OpenSharedHandle, handle, riid, pp);
 }
 HRESULT	Wrap<ID3D12DeviceLatest>::OpenSharedHandleByName(LPCWSTR Name, DWORD Access, HANDLE *pHandle) {
-	RECORDCALLSTACK;
-	HRESULT	r = recording.RunRecord2(this, &ID3D12Device::OpenSharedHandleByName, tag_OpenSharedHandleByName, Name, Access, pHandle);
+	HRESULT	r = RecordCallStack(nullptr)->RunRecord2(this, &ID3D12Device::OpenSharedHandleByName, tag_OpenSharedHandleByName, Name, Access, pHandle);
 	if (SUCCEEDED(r))
 		device->handles.insert(*pHandle);
 	return r;
 }
 HRESULT	Wrap<ID3D12DeviceLatest>::MakeResident(UINT NumObjects, ID3D12Pageable *const *pp) {
-	RECORDCALLSTACK;
-	return recording.RunRecord2(this, &ID3D12Device::MakeResident, tag_MakeResident, NumObjects, make_counted<0>(pp));
+	return RecordCallStack(nullptr)->RunRecord2(this, &ID3D12Device::MakeResident, tag_MakeResident, NumObjects, make_counted<0>(pp));
 }
 HRESULT	Wrap<ID3D12DeviceLatest>::Evict(UINT NumObjects, ID3D12Pageable *const *pp) {
-	RECORDCALLSTACK;
-	return recording.RunRecord2(this, &ID3D12Device::Evict, tag_Evict, NumObjects, make_counted<0>(pp));
+	return RecordCallStack(nullptr)->RunRecord2(this, &ID3D12Device::Evict, tag_Evict, NumObjects, make_counted<0>(pp));
 }
 HRESULT	Wrap<ID3D12DeviceLatest>::CreateFence(UINT64 InitialValue, D3D12_FENCE_FLAGS Flags, REFIID riid, void **pp) {
-	RECORDCALLSTACK;
-	return recording.RunRecord2Wrap(this, &ID3D12Device::CreateFence, tag_CreateFence, riid, (ID3D12Fence**)pp, InitialValue, Flags);
+	return RecordCallStack(nullptr)->RunRecord2Wrap(this, &ID3D12Device::CreateFence, tag_CreateFence, riid, (ID3D12Fence**)pp, InitialValue, Flags);
 }
 HRESULT	Wrap<ID3D12DeviceLatest>::CreateQueryHeap(const D3D12_QUERY_HEAP_DESC *desc, REFIID riid, void **pp) {
-	RECORDCALLSTACK;
-	return recording.RunRecord2Wrap(this, &ID3D12Device::CreateQueryHeap, tag_CreateQueryHeap, riid, (ID3D12QueryHeap**)pp, desc);
+	return RecordCallStack(nullptr)->RunRecord2Wrap(this, &ID3D12Device::CreateQueryHeap, tag_CreateQueryHeap, riid, (ID3D12QueryHeap**)pp, desc);
 }
 HRESULT	Wrap<ID3D12DeviceLatest>::SetStablePowerState(BOOL Enable) {
-	RECORDCALLSTACK;
-	return recording.RunRecord2(this, &ID3D12Device::SetStablePowerState, tag_SetStablePowerState, Enable);
+	return RecordCallStack(nullptr)->RunRecord2(this, &ID3D12Device::SetStablePowerState, tag_SetStablePowerState, Enable);
 }
 HRESULT	Wrap<ID3D12DeviceLatest>::CreateCommandSignature(const D3D12_COMMAND_SIGNATURE_DESC *desc, ID3D12RootSignature *pRootSignature, REFIID riid, void **pp) {
-	RECORDCALLSTACK;
-	return recording.RunRecord2Wrap(this, &ID3D12Device::CreateCommandSignature, tag_CreateCommandSignature, riid, (ID3D12CommandSignature**)pp, desc, pRootSignature);
+	return RecordCallStack(nullptr)->RunRecord2Wrap(this, &ID3D12Device::CreateCommandSignature, tag_CreateCommandSignature, riid, (ID3D12CommandSignature**)pp, desc, pRootSignature);
 }
 
 //ID3D12Device1
 HRESULT Wrap<ID3D12DeviceLatest>::CreatePipelineLibrary(const void* pLibraryBlob, SIZE_T BlobLength, REFIID riid, void** ppPipelineLibrary) {
-	return recording.RunRecord2Wrap(this, &ID3D12DeviceLatest::CreatePipelineLibrary, tag_CreatePipelineLibrary, riid, (ID3D12PipelineLibrary**)ppPipelineLibrary, pLibraryBlob, BlobLength);
+	return RecordCallStack(nullptr)->RunRecord2Wrap(this, &ID3D12DeviceLatest::CreatePipelineLibrary, tag_CreatePipelineLibrary, riid, (ID3D12PipelineLibrary**)ppPipelineLibrary, pLibraryBlob, BlobLength);
 }
 HRESULT Wrap<ID3D12DeviceLatest>::SetEventOnMultipleFenceCompletion(ID3D12Fence* const* ppFences, const UINT64* pFenceValues, UINT NumFences, D3D12_MULTIPLE_FENCE_WAIT_FLAGS Flags, HANDLE hEvent) {
-	return recording.RunRecord2(this, &ID3D12DeviceLatest::SetEventOnMultipleFenceCompletion, tag_SetEventOnMultipleFenceCompletion, make_counted<2>(ppFences), make_counted<2>(pFenceValues), NumFences, Flags, hEvent);
+	return RecordCallStack(nullptr)->RunRecord2(this, &ID3D12DeviceLatest::SetEventOnMultipleFenceCompletion, tag_SetEventOnMultipleFenceCompletion, make_counted<2>(ppFences), make_counted<2>(pFenceValues), NumFences, Flags, hEvent);
 }
 HRESULT Wrap<ID3D12DeviceLatest>::SetResidencyPriority(UINT NumObjects, ID3D12Pageable* const* ppObjects, const D3D12_RESIDENCY_PRIORITY* pPriorities) {
-	return recording.RunRecord2(this, &ID3D12DeviceLatest::SetResidencyPriority, tag_SetResidencyPriority, NumObjects, make_counted<0>(ppObjects), make_counted<0>(pPriorities));
+	return RecordCallStack(nullptr)->RunRecord2(this, &ID3D12DeviceLatest::SetResidencyPriority, tag_SetResidencyPriority, NumObjects, make_counted<0>(ppObjects), make_counted<0>(pPriorities));
 }
 
 //ID3D12Device2
 
 HRESULT Wrap<ID3D12DeviceLatest>::CreatePipelineState(const D3D12_PIPELINE_STATE_STREAM_DESC* pDesc, REFIID riid, void** ppPipelineState) {
-	return recording.RunRecord2Wrap(this, &ID3D12DeviceLatest::CreatePipelineState, tag_CreatePipelineState, riid, (ID3D12PipelineState**)ppPipelineState, pDesc);
+	return RecordCallStack(nullptr)->RunRecord2Wrap(this, &ID3D12DeviceLatest::CreatePipelineState, tag_CreatePipelineState, riid, (ID3D12PipelineState**)ppPipelineState, pDesc);
 }
 
 //ID3D12Device3
 HRESULT Wrap<ID3D12DeviceLatest>::OpenExistingHeapFromAddress(const void* pAddress, REFIID riid, void** ppvHeap) {
-	return recording.RunRecord2Wrap(this, &ID3D12DeviceLatest::OpenExistingHeapFromAddress, tag_OpenExistingHeapFromAddress, riid, (ID3D12Heap**)ppvHeap, pAddress);
+	return RecordCallStack(nullptr)->RunRecord2Wrap(this, &ID3D12DeviceLatest::OpenExistingHeapFromAddress, tag_OpenExistingHeapFromAddress, riid, (ID3D12Heap**)ppvHeap, pAddress);
 }
 HRESULT Wrap<ID3D12DeviceLatest>::OpenExistingHeapFromFileMapping(HANDLE hFileMapping, REFIID riid, void** ppvHeap) {
-	return recording.RunRecord2Wrap(this, &ID3D12DeviceLatest::OpenExistingHeapFromFileMapping, tag_OpenExistingHeapFromFileMapping, riid, (ID3D12Heap**)ppvHeap, hFileMapping);
+	return RecordCallStack(nullptr)->RunRecord2Wrap(this, &ID3D12DeviceLatest::OpenExistingHeapFromFileMapping, tag_OpenExistingHeapFromFileMapping, riid, (ID3D12Heap**)ppvHeap, hFileMapping);
 }
 HRESULT Wrap<ID3D12DeviceLatest>::EnqueueMakeResident(D3D12_RESIDENCY_FLAGS Flags, UINT NumObjects, ID3D12Pageable* const* ppObjects, ID3D12Fence* pFenceToSignal, UINT64 FenceValueToSignal) {
-	return recording.RunRecord2(this, &ID3D12DeviceLatest::EnqueueMakeResident, tag_EnqueueMakeResident, Flags, NumObjects, make_counted<1>(ppObjects), pFenceToSignal, FenceValueToSignal);
+	return RecordCallStack(nullptr)->RunRecord2(this, &ID3D12DeviceLatest::EnqueueMakeResident, tag_EnqueueMakeResident, Flags, NumObjects, make_counted<1>(ppObjects), pFenceToSignal, FenceValueToSignal);
 }
 
 //ID3D12Device4
 HRESULT Wrap<ID3D12DeviceLatest>::CreateCommandList1(UINT nodeMask, D3D12_COMMAND_LIST_TYPE type, D3D12_COMMAND_LIST_FLAGS flags, REFIID riid, void** ppCommandList) {
-	return recording.RunRecord2Wrap(this, &ID3D12DeviceLatest::CreateCommandList1, tag_CreateCommandList1, riid, (ID3D12GraphicsCommandListLatest**)ppCommandList, nodeMask, type, flags);
+	return RecordCallStack(nullptr)->RunRecord2Wrap(this, &ID3D12DeviceLatest::CreateCommandList1, tag_CreateCommandList1, riid, (ID3D12GraphicsCommandListLatest**)ppCommandList, nodeMask, type, flags);
 }
 HRESULT Wrap<ID3D12DeviceLatest>::CreateProtectedResourceSession(const D3D12_PROTECTED_RESOURCE_SESSION_DESC* pDesc, REFIID riid, void** ppSession) {
-	return recording.RunRecord2Wrap(this, &ID3D12DeviceLatest::CreateProtectedResourceSession, tag_CreateProtectedResourceSession, riid, (ID3D12ProtectedResourceSession**)ppSession, pDesc);
+	return RecordCallStack(nullptr)->RunRecord2Wrap(this, &ID3D12DeviceLatest::CreateProtectedResourceSession, tag_CreateProtectedResourceSession, riid, (ID3D12ProtectedResourceSession**)ppSession, pDesc);
 }
 HRESULT Wrap<ID3D12DeviceLatest>::CreateCommittedResource1(const D3D12_HEAP_PROPERTIES* pHeapProperties, D3D12_HEAP_FLAGS HeapFlags, const D3D12_RESOURCE_DESC* pDesc, D3D12_RESOURCE_STATES InitialResourceState, const D3D12_CLEAR_VALUE* pOptimizedClearValue, ID3D12ProtectedResourceSession* pProtectedSession, REFIID riidResource, void** ppvResource) {
-	return recording.RunRecord2Wrap(this, &ID3D12DeviceLatest::CreateCommittedResource1, tag_CreateCommittedResource1, riidResource, (ID3D12Resource**)ppvResource, pHeapProperties, HeapFlags, pDesc, InitialResourceState, pOptimizedClearValue, pProtectedSession);
+	return RecordCallStack(nullptr)->RunRecord2Wrap(this, &ID3D12DeviceLatest::CreateCommittedResource1, tag_CreateCommittedResource1, riidResource, (ID3D12Resource**)ppvResource, pHeapProperties, HeapFlags, pDesc, InitialResourceState, pOptimizedClearValue, pProtectedSession);
 }
 HRESULT Wrap<ID3D12DeviceLatest>::CreateHeap1(const D3D12_HEAP_DESC* pDesc, ID3D12ProtectedResourceSession* pProtectedSession, REFIID riid, void** ppvHeap) {
-	return recording.RunRecord2Wrap(this, &ID3D12DeviceLatest::CreateHeap1, tag_CreateHeap1, riid, (ID3D12Heap**)ppvHeap, pDesc, pProtectedSession);
+	return RecordCallStack(nullptr)->RunRecord2Wrap(this, &ID3D12DeviceLatest::CreateHeap1, tag_CreateHeap1, riid, (ID3D12Heap**)ppvHeap, pDesc, pProtectedSession);
 }
 HRESULT Wrap<ID3D12DeviceLatest>::CreateReservedResource1(const D3D12_RESOURCE_DESC* pDesc, D3D12_RESOURCE_STATES InitialState, const D3D12_CLEAR_VALUE* pOptimizedClearValue, ID3D12ProtectedResourceSession* pProtectedSession, REFIID riid, void** ppvResource) {
-	return recording.RunRecord2Wrap(this, &ID3D12DeviceLatest::CreateReservedResource1, tag_CreateReservedResource1, riid, (ID3D12Resource**)ppvResource, pDesc, InitialState, pOptimizedClearValue, pProtectedSession);
+	return RecordCallStack(nullptr)->RunRecord2Wrap(this, &ID3D12DeviceLatest::CreateReservedResource1, tag_CreateReservedResource1, riid, (ID3D12Resource**)ppvResource, pDesc, InitialState, pOptimizedClearValue, pProtectedSession);
 }
 
 //ID3D12Device5
 HRESULT Wrap<ID3D12DeviceLatest>::CreateLifetimeTracker(ID3D12LifetimeOwner* pOwner, REFIID riid, void** ppvTracker) {
-	return recording.RunRecord2Wrap(this, &ID3D12DeviceLatest::CreateLifetimeTracker, tag_CreateLifetimeTracker, riid, (ID3D12LifetimeTracker**)ppvTracker, pOwner);
+	return RecordCallStack(nullptr)->RunRecord2Wrap(this, &ID3D12DeviceLatest::CreateLifetimeTracker, tag_CreateLifetimeTracker, riid, (ID3D12LifetimeTracker**)ppvTracker, pOwner);
 }
 HRESULT Wrap<ID3D12DeviceLatest>::CreateMetaCommand(REFGUID CommandId, UINT NodeMask, const void* pCreationParametersData, SIZE_T CreationParametersDataSizeInBytes, REFIID riid, void** ppMetaCommand) {
-	return recording.RunRecord2Wrap(this, &ID3D12DeviceLatest::CreateMetaCommand, tag_CreateMetaCommand, riid, (ID3D12MetaCommand**)ppMetaCommand, CommandId, NodeMask, pCreationParametersData, CreationParametersDataSizeInBytes);
+	return RecordCallStack(nullptr)->RunRecord2Wrap(this, &ID3D12DeviceLatest::CreateMetaCommand, tag_CreateMetaCommand, riid, (ID3D12MetaCommand**)ppMetaCommand, CommandId, NodeMask, pCreationParametersData, CreationParametersDataSizeInBytes);
 }
 HRESULT Wrap<ID3D12DeviceLatest>::CreateStateObject(const D3D12_STATE_OBJECT_DESC* pDesc, REFIID riid, void** ppStateObject) {
-	return recording.RunRecord2Wrap(this, &ID3D12DeviceLatest::CreateStateObject, tag_CreateStateObject, riid, (ID3D12StateObject**)ppStateObject, pDesc);
+	return RecordCallStack(nullptr)->RunRecord2Wrap(this, &ID3D12DeviceLatest::CreateStateObject, tag_CreateStateObject, riid, (ID3D12StateObject**)ppStateObject, pDesc);
 }
 
 //ID3D12Device6
 HRESULT Wrap<ID3D12DeviceLatest>::SetBackgroundProcessingMode(D3D12_BACKGROUND_PROCESSING_MODE Mode, D3D12_MEASUREMENTS_ACTION MeasurementsAction, HANDLE hEventToSignalUponCompletion, BOOL* pbFurtherMeasurementsDesired) {
-	return recording.RunRecord2(this, &ID3D12DeviceLatest::SetBackgroundProcessingMode, tag_SetBackgroundProcessingMode, Mode, MeasurementsAction, hEventToSignalUponCompletion, pbFurtherMeasurementsDesired);
+	return RecordCallStack(nullptr)->RunRecord2(this, &ID3D12DeviceLatest::SetBackgroundProcessingMode, tag_SetBackgroundProcessingMode, Mode, MeasurementsAction, hEventToSignalUponCompletion, pbFurtherMeasurementsDesired);
 }
 
 //ID3D12Device7
 HRESULT Wrap<ID3D12DeviceLatest>::AddToStateObject(const D3D12_STATE_OBJECT_DESC* pAddition, ID3D12StateObject* pStateObjectToGrowFrom, REFIID riid, void** ppNewStateObject) {
-	return recording.RunRecord2Wrap(this, &ID3D12DeviceLatest::AddToStateObject, tag_AddToStateObject, riid, (ID3D12StateObject**)ppNewStateObject, pAddition, pStateObjectToGrowFrom);
+	return RecordCallStack(nullptr)->RunRecord2Wrap(this, &ID3D12DeviceLatest::AddToStateObject, tag_AddToStateObject, riid, (ID3D12StateObject**)ppNewStateObject, pAddition, pStateObjectToGrowFrom);
 }
 HRESULT Wrap<ID3D12DeviceLatest>::CreateProtectedResourceSession1(const D3D12_PROTECTED_RESOURCE_SESSION_DESC1* pDesc, REFIID riid, void** ppSession) {
-	return recording.RunRecord2Wrap(this, &ID3D12DeviceLatest::CreateProtectedResourceSession1, tag_CreateProtectedResourceSession1, riid, (ID3D12ProtectedResourceSession**)ppSession, pDesc);
+	return RecordCallStack(nullptr)->RunRecord2Wrap(this, &ID3D12DeviceLatest::CreateProtectedResourceSession1, tag_CreateProtectedResourceSession1, riid, (ID3D12ProtectedResourceSession**)ppSession, pDesc);
 }
 
 //ID3D12Device8
 HRESULT Wrap<ID3D12DeviceLatest>::CreateCommittedResource2(const D3D12_HEAP_PROPERTIES* pHeapProperties, D3D12_HEAP_FLAGS HeapFlags, const D3D12_RESOURCE_DESC1* pDesc, D3D12_RESOURCE_STATES InitialResourceState, const D3D12_CLEAR_VALUE* pOptimizedClearValue, ID3D12ProtectedResourceSession* pProtectedSession, REFIID riidResource, void** ppvResource) {
-	return recording.RunRecord2Wrap(this, &ID3D12DeviceLatest::CreateCommittedResource2, tag_CreateCommittedResource2, riidResource, (ID3D12Resource**)ppvResource, pHeapProperties, HeapFlags, pDesc, InitialResourceState, pOptimizedClearValue, pProtectedSession);
+	return RecordCallStack(nullptr)->RunRecord2Wrap(this, &ID3D12DeviceLatest::CreateCommittedResource2, tag_CreateCommittedResource2, riidResource, (ID3D12Resource**)ppvResource, pHeapProperties, HeapFlags, pDesc, InitialResourceState, pOptimizedClearValue, pProtectedSession);
 }
 HRESULT Wrap<ID3D12DeviceLatest>::CreatePlacedResource1(ID3D12Heap* pHeap, UINT64 HeapOffset, const D3D12_RESOURCE_DESC1* pDesc, D3D12_RESOURCE_STATES InitialState, const D3D12_CLEAR_VALUE* pOptimizedClearValue, REFIID riid, void** ppvResource) {
-	return recording.RunRecord2Wrap(this, &ID3D12DeviceLatest::CreatePlacedResource1, tag_CreatePlacedResource1, riid, (ID3D12Resource**)ppvResource, pHeap, HeapOffset, pDesc, InitialState, pOptimizedClearValue);
+	return RecordCallStack(nullptr)->RunRecord2Wrap(this, &ID3D12DeviceLatest::CreatePlacedResource1, tag_CreatePlacedResource1, riid, (ID3D12Resource**)ppvResource, pHeap, HeapOffset, pDesc, InitialState, pOptimizedClearValue);
 }
 void Wrap<ID3D12DeviceLatest>::CreateSamplerFeedbackUnorderedAccessView(ID3D12Resource* pTargetedResource, ID3D12Resource* pFeedbackResource, D3D12_CPU_DESCRIPTOR_HANDLE DestDescriptor) {
-	return recording.RunRecord2(this, &ID3D12DeviceLatest::CreateSamplerFeedbackUnorderedAccessView, tag_CreateSamplerFeedbackUnorderedAccessView, pTargetedResource, pFeedbackResource, DestDescriptor);
+	return RecordCallStack(nullptr)->RunRecord2(this, &ID3D12DeviceLatest::CreateSamplerFeedbackUnorderedAccessView, tag_CreateSamplerFeedbackUnorderedAccessView, pTargetedResource, pFeedbackResource, DestDescriptor);
 }
 
 //-----------------------------------------------------------------------------
@@ -1717,7 +1828,7 @@ struct OBJECT_NAME_INFORMATION : NT::UNICODE_STRING {
 
 typedef LONG T_NtQueryObject(
 	HANDLE						Handle,
-	OBJECT_INFORMATION_CLASS	bjectInformationClass,
+	OBJECT_INFORMATION_CLASS	ObjectInformationClass,
 	PVOID						ObjectInformation,
 	ULONG						ObjectInformationLength,
 	PULONG						ReturnLength
@@ -1733,18 +1844,18 @@ string16 GetHandleName(HANDLE h) {
 }
 
 HRESULT WINAPI Hooked_D3D12CreateDevice(IUnknown* pAdapter, D3D_FEATURE_LEVEL MinimumFeatureLevel, REFIID riid, void** pp) {
-	return com_wrap_system->make_wrap(get_orig(D3D12CreateDevice)(pAdapter, MinimumFeatureLevel, riid, pp), (ID3D12Device**)pp);
+	return com_wrap_system->make_wrap_check(get_orig(D3D12CreateDevice)(pAdapter, MinimumFeatureLevel, riid, pp), (ID3D12Device**)pp, 0);
 }
 
 DWORD WINAPI Hooked_WaitForSingleObjectEx(HANDLE hHandle, DWORD dwMilliseconds, BOOL bAlertable) {
 	if (capture.device && capture.device->recording.enable && capture.device->handles.count(hHandle))
-		capture.device->recording.WithObject(hHandle).Record(RecDevice::tag_WaitForSingleObjectEx, dwMilliseconds, bAlertable);
+		capture.device->WithObject(hHandle, nullptr)->Record(RecDevice::tag_WaitForSingleObjectEx, dwMilliseconds, bAlertable);
 	return get_orig(WaitForSingleObjectEx)(hHandle, dwMilliseconds, bAlertable);
 }
 
 DWORD WINAPI Hooked_WaitForSingleObject(HANDLE hHandle, DWORD dwMilliseconds) {
 	if (capture.device && capture.device->recording.enable && capture.device->handles.count(hHandle))
-		capture.device->recording.WithObject(hHandle).Record(RecDevice::tag_WaitForSingleObjectEx, dwMilliseconds, FALSE);
+		capture.device->WithObject(hHandle, nullptr)->Record(RecDevice::tag_WaitForSingleObjectEx, dwMilliseconds, FALSE);
 	return get_orig(WaitForSingleObjectEx)(hHandle, dwMilliseconds, FALSE);
 }
 
@@ -1796,22 +1907,16 @@ malloc_block_all Capture::ResourceData(uintptr_t _res) {
 	auto	res	= (Wrap<ID3D12Resource>*)_res;
 
 	if (res->orig && res->device) {
-		bool			done	= false;
-		if (res->alloc != RecResource::Reserved) {
+		if (res->alloc != RecResource::Reserved && !res->is_orig_dead()) {
 			D3D12_HEAP_PROPERTIES	heap_props;
 			D3D12_HEAP_FLAGS		heap_flags;
 			res->GetHeapProperties(&heap_props, &heap_flags);
 
 			if (heap_props.Type == D3D12_HEAP_TYPE_UPLOAD || heap_props.Type == D3D12_HEAP_TYPE_READBACK)
-				return TransferResource(res, res->data_size);
+				return DownloadResource(res, res->data_size);
 		}
-		Transferer	trans(res->device->orig);
-		uint64		total_size = 0;
-		if (trans.Init()) {
-			com_ptr<ID3D12Resource>	res2 = trans.Transfer(res->orig, res->state, &total_size);
-			ISO_ASSERT(!res2 || total_size == res->data_size);
-			return TransferResource(res2, total_size);
-		}
+
+		return res->get_data();
 	}
 	return none;
 }
@@ -1838,8 +1943,8 @@ malloc_block_all Capture::HeapData(uintptr_t _heap) {
 			rdesc.Flags				= desc.Flags & D3D12_HEAP_FLAG_SHARED_CROSS_ADAPTER ? D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER : D3D12_RESOURCE_FLAG_NONE;
 
 			com_ptr<ID3D12Resource>	buffer;
-			if (SUCCEEDED(heap->device->orig->CreatePlacedResource(heap->orig, 0, &rdesc, D3D12_RESOURCE_STATE_COPY_SOURCE, 0, __uuidof(ID3D12Resource), (void**)&buffer)))
-				return TransferResource(buffer, size);
+			if (SUCCEEDED(heap->device->orig->CreatePlacedResource(heap->orig, 0, &rdesc, D3D12_RESOURCE_STATE_COPY_SOURCE, 0, COM_CREATE(&buffer))))
+				return DownloadResource(buffer, size);
 
 		} else if (!(desc.Flags & D3D12_HEAP_FLAG_DENY_BUFFERS)) {
 			D3D12_RESOURCE_DESC	rdesc;
@@ -1855,29 +1960,34 @@ malloc_block_all Capture::HeapData(uintptr_t _heap) {
 			rdesc.Flags				= desc.Flags & D3D12_HEAP_FLAG_SHARED_CROSS_ADAPTER ? D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER : D3D12_RESOURCE_FLAG_NONE;
 
 			com_ptr<ID3D12Resource>	buffer;
-			if (SUCCEEDED(heap->device->orig->CreatePlacedResource(heap->orig, 0, &rdesc, D3D12_RESOURCE_STATE_COPY_SOURCE, 0, __uuidof(ID3D12Resource), (void**)&buffer))) {
+			if (SUCCEEDED(heap->device->orig->CreatePlacedResource(heap->orig, 0, &rdesc, D3D12_RESOURCE_STATE_COPY_SOURCE, 0, COM_CREATE(&buffer)))) {
 				uint64	total_size		= 0;
-				Transferer	trans(heap->device->orig);
-				if (trans.Init()) {
-					com_ptr<ID3D12Resource>	res2 = trans.Transfer(buffer, D3D12_RESOURCE_STATE_COPY_SOURCE, &total_size);
+				Downloader	trans(heap->device->orig);
+				if (trans) {
+					com_ptr<ID3D12Resource>	res2 = trans.Download(buffer, &total_size);
 					ISO_ASSERT(total_size == size);
-					return TransferResource(res2, size);
+
+					trans.ExecuteReset();
+					dx12::Waiter	waiter(heap->device->orig);
+					ISO_VERIFY(waiter.Wait(trans.queue));
+
+					return DownloadResource(res2, size);
 				}
 			}
 
 		} else {
-			Transferer		trans(heap->device->orig);
-			if (trans.Init()) {
+			Downloader		trans(heap->device->orig);
+			if (trans) {
 				malloc_block	out(size);
 
 				uint64	offset = 0;
 				while (size) {
-					uint64				pixels	= size / 16;
-					//uint64			width	= min(isqrt(pixels), D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION);
-					uint64				width	= min(pixels, D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION);
-					uint32				array	= 1;//min(pixels / width, D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION);
-					//uint64	rsize			= min(size, 1 << 27);
-					uint64		rsize			= width * array * 16;
+					uint64		pixels	= size / 16;
+					//uint64	width	= min(isqrt(pixels), D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION);
+					uint64		width	= min(pixels, D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION);
+					uint32		array	= 1;//min(pixels / width, D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION);
+					//uint64	rsize	= min(size, 1 << 27);
+					uint64		rsize	= width * array * 16;
 
 					D3D12_RESOURCE_DESC	rdesc;
 					clear(rdesc);
@@ -1892,19 +2002,25 @@ malloc_block_all Capture::HeapData(uintptr_t _heap) {
 					//rdesc.Flags				= desc.Flags & D3D12_HEAP_FLAG_SHARED_CROSS_ADAPTER ? D3D12_RESOURCE_FLAG_ALLOW_CROSS_ADAPTER : D3D12_RESOURCE_FLAG_NONE;
 
 					com_ptr<ID3D12Resource>	buffer;
-					if (FAILED(heap->device->orig->CreatePlacedResource(heap->orig, offset, &rdesc, D3D12_RESOURCE_STATE_COPY_SOURCE, 0, __uuidof(ID3D12Resource), (void**)&buffer)))
-						break;
+					if (FAILED(heap->device->orig->CreatePlacedResource(heap->orig, offset, &rdesc, D3D12_RESOURCE_STATE_COPY_SOURCE, 0, COM_CREATE(&buffer))))
+						return none;
 
 					uint64	total_size		= 0;
-					com_ptr<ID3D12Resource>	res2 = trans.Transfer(buffer, D3D12_RESOURCE_STATE_COPY_SOURCE, &total_size);
+					com_ptr<ID3D12Resource>	res2 = trans.Download(buffer, &total_size);
 					ISO_ASSERT(total_size == rsize);
-					TransferResource(res2, out.slice(offset, rsize));
+
+					trans.ExecuteReset();
+					dx12::Waiter	waiter(heap->device->orig);
+					ISO_VERIFY(waiter.Wait(trans.queue));
+
+					DownloadResource(res2, out.slice(offset, rsize));
 
 					offset	+= rsize;
 					size	-= rsize;
 				}
+				return out;
 			}
 		}
-		return none;
 	}
+	return none;
 }

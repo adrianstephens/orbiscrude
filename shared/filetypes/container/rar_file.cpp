@@ -124,7 +124,7 @@ struct BlockHeader15 {
 	uint64	data_size;
 	bool read(istream_ref file) {
 		data_size = 0;
-		return iso::read(file, crc, type, flags, header_size) && header_size >= 7;
+		return file.read(crc, type, flags, header_size) && header_size >= 7;
 	}
 	malloc_block	header_data(istream_ref file) const {
 		return malloc_block(file, header_size);
@@ -201,7 +201,7 @@ struct FileHeader15 : BlockHeader15 {
 		unp_size		= file.get<uint32>();
 		host_os			= file.getc();
 
-		iso::read(file, crc32, mtime, unp_ver, method, name_size, file_attr);
+		file.read(crc32, mtime, unp_ver, method, name_size, file_attr);
 
 		if (flags & LARGE) {
 			data_size	+= uint64(file.get<uint32>()) << 32;
@@ -243,7 +243,7 @@ struct ProtectHeader15 : BlockHeader15 {
 
 	ProtectHeader15(const BlockHeader15& h, istream_ref file) : BlockHeader15(h) {
 		data_size = file.get<uint32>();
-		iso::read(file, ver, rec_sectors, total_blocks, mark);
+		file.read(ver, rec_sectors, total_blocks, mark);
 	}
 };
 // RAR 2.9 and earlier
@@ -302,7 +302,7 @@ struct BlockHeader50 {
 	leb128<uint64>		data_size	= 0;
 
 	bool read(istream_ref file) {
-		if (!iso::read(file, crc, header_size, type, header_flags))
+		if (!file.read(crc, header_size, type, header_flags))
 			return false;
 
 //		uint32 HeaderCRC = Raw.GetCRC50();
@@ -361,7 +361,7 @@ struct CryptHeader50 : BlockHeader50 {
 	uint8			salt[SIZE_SALT50];
 
 	CryptHeader50(const BlockHeader50 &h, istream_ref file) : BlockHeader50(h) {
-		iso::read(file, ver, flags, lg2_count, salt);
+		file.read(ver, flags, lg2_count, salt);
 	}
 };
 

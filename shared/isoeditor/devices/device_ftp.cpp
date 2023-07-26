@@ -2,7 +2,7 @@
 #include "comms/http.h"
 #include "comms/ftp.h"
 #include "filename.h"
-#include "utilities.h"
+#include "events.h"
 #include "windows/registry.h"
 
 #ifdef PLAT_PC
@@ -94,7 +94,7 @@ FTP::CODE FTPsite::GetDirectory(const char *dir, dynamic_array<ISO_ptr<void> > &
 				b.merge(buffer, len);
 			code = ClosePassiveSocket(sock, sock_in);
 
-			string_scan	ss(b);
+			string_scan	ss(b.term());
 			while (ss.skip_whitespace().remaining()) {
 				count_string	tok;
 				int				type	= 0;
@@ -161,7 +161,6 @@ struct FTPDevice : app::DeviceT<FTPDevice>, MenuCallbackT<FTPDevice> {
 	}
 
 	void			operator()(const DeviceAdd &add) {
-		this->id	= id;
 		add("FTP sites", this);
 	}
 	void			operator()(Control c, Menu m) {
@@ -228,7 +227,7 @@ void GetFTP(const char *host, const char *user, const char *password, const char
 		ftp.Command(sock, FTP::MLST, infile);
 		string_builder	reply;
 		if (ftp.ReceiveReply(sock, reply) == FTP::ActionCompleted) {
-			string_scan	ss(reply);
+			string_scan	ss(reply.term());
 			if (ss.scan_skip("size="))
 				filelength = ss.get<uint64>();
 		}

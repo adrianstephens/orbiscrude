@@ -100,9 +100,11 @@ public:
 
 struct JSONval {
 	enum TYPE {NONE, NIL, BOOL, INT, FLOAT, STRING, ARRAY, OBJECT, BINARY, NUM_TYPES} type;
-	typedef compact_array<JSONval>				array;
-	typedef	compact_array<pair<string,JSONval>>	object;
-	typedef compact_array<char>					binary;
+	typedef	pair<string,JSONval,0>	element;
+
+	typedef compact_array<JSONval>	array;
+	typedef	compact_array<element>	object;
+	typedef compact_array<char>		binary;
 
 	union {
 		bool	b;
@@ -120,14 +122,14 @@ struct JSONval {
 
 	JSONval&	GetNode(const char *s) const;
 
-	constexpr JSONval() : type(NONE), i(0) {}
-	constexpr JSONval(_none&) : type(NONE), i(0)	{}
-	explicit constexpr JSONval(TYPE _type) : type(_type),	i(0)	{}
-	explicit constexpr JSONval(bool		b) : type(BOOL),	b(b)	{}
-	explicit constexpr JSONval(int64	i) : type(INT),		i(i)	{}
-	explicit constexpr JSONval(double	f) : type(FLOAT),	f(f)	{}
-	constexpr JSONval(JSONval&&	j) : type(j.type),	i(j.i)		{ j.type = NIL; }
-	constexpr JSONval(string&&	s) : type(STRING),	s(move(s))	{}
+	constexpr JSONval()						: type(NONE),	i(0)	{}
+	constexpr JSONval(const _none&)			: type(NONE),	i(0)	{}
+	explicit constexpr JSONval(TYPE type)	: type(type),	i(0)	{}
+	explicit constexpr JSONval(bool		b)	: type(BOOL),	b(b)	{}
+	explicit constexpr JSONval(int64	i)	: type(INT),	i(i)	{}
+	explicit constexpr JSONval(double	f)	: type(FLOAT),	f(f)	{}
+	constexpr JSONval(JSONval&&	j)			: type(j.type),	i(j.i)	{ j.type = NIL; }
+	constexpr JSONval(string&&	s)			: type(STRING),	s(move(s))	{}
 	JSONval(array&&		a)	: type(ARRAY),	a(move(a))	{}
 	JSONval(object&&	o)	: type(OBJECT),	o(move(o))	{}
 	
@@ -167,12 +169,12 @@ struct JSONval {
 
 	JSONval&	operator[](int i)			const	{ return type == ARRAY && i < a.size() ? a[i] : type == OBJECT && i < o.size() ? o[i].b : none; }
 	JSONval&	operator[](const JSONval &i)	const	{
-		return	i.type == JSONval::INT		? operator[](i.i)
-			:	i.type == JSONval::STRING	? operator/(i.s)
+		return	i.type == INT		? operator[](i.i)
+			:	i.type == STRING	? operator/(i.s)
 			:	none;
 	}
 	JSONval&	operator/(const char *s)	const	{
-		if (type == JSONval::OBJECT) {
+		if (type == OBJECT) {
 			for (auto &i : o) {
 				if (i.a == s)
 					return i.b;
@@ -190,9 +192,14 @@ struct JSONval {
 	size_t		size()						const	{ return type == ARRAY ? a.size() : type == OBJECT ? o.size() : 0; }
 	auto		begin()						const	{ return make_indexed_iterator(*this, make_int_iterator(0)); }
 	auto		end()						const	{ return make_indexed_iterator(*this, make_int_iterator((int)size())); }
-	
-	range<pair<string,JSONval>*>	items()	const	{ if (type == JSONval::OBJECT) return {o.begin(), o.end()}; return {}; }
-	
+	range<element*>	items()					const	{ if (type == OBJECT) return {o.begin(), o.end()}; return {}; }
+
+	template<typename...T> int	get_enum(T... t) const {
+		return which(0, str(get("")), t...);
+		//return _get_enum(get(""), t...);
+	}
+
+
 	bool		push_back(JSONval &&v) {
 		if (type = NONE)
 			*this = JSONval(JSONval::array());
@@ -205,7 +212,7 @@ struct JSONval {
 	bool 		write(JSONwriter &w, const char *id);
 	bool		read(JSONreader &r);
 	bool 		write(ostream_ref w)	{ return write(lvalue(JSONwriter(w)), 0); }
-	bool		read(istream_ref r)	{ return read(lvalue(JSONreader(r))); }
+	bool		read(istream_ref r)		{ return read(lvalue(JSONreader(r))); }
 
 	friend bool operator==(const JSONval &a, const JSONval &b) {
 		if (a.type == b.type) {

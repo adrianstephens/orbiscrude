@@ -42,6 +42,9 @@ Standard keywords for text chunks:
 	Comment          Miscellaneous comment; conversion from GIF comment
 */
 
+
+namespace PNG {
+
 uint8	signature[] = {0x89, 'P', 'N', 'G', 13, 10, 26, 10};
 
 struct Chunk {
@@ -57,11 +60,12 @@ struct Chunk {
 
 	Chunk()	{}
 	Chunk(uint32 type, malloc_block&& data) : type(type), data(data) {}
+	template<typename T> Chunk(uint32 type, T&& data) : type(type), data(const_memory_block(&data)) {}
 
-	bool	read(istream_ref file) {
+	bool	read(istream_ref file, bool cgbi = false) {
 		uint32be	length;
 		uint32be	crc;
-		return file.read(length, type) && data.read(file, length) && file.read(crc) && calc_crc() == crc;
+		return file.read(length, type) && data.read(file, length) && ((cgbi && type == "IDAT"_u32) || (file.read(crc) && calc_crc() == crc));
 	}
 
 	bool	write(ostream_ref file) const {
@@ -74,6 +78,9 @@ struct ia8 {
 };
 struct rgba8 {
 	uint8		r, g, b, a;
+	rgba8()	{}
+	rgba8(uint8 r, uint8 g, uint8 b, uint8 a) : r(r), g(g), b(b), a(a)	{}
+	rgba8(ISO_rgba c) : rgba8(c.r, c.g, c.b, c.a)	{}
 	operator ISO_rgba() const { return {r,g,b,a}; }
 };
 struct rgb8 {
@@ -149,8 +156,7 @@ struct IHDR {
 		, CompressionMethod(zlib), FilterMethod(None), InterlaceMethod(interlaced ? Adam7 : NoInterlace) {}
 } __attribute__((packed));
 
-//Transparency
-//If present specifies that the image uses simple transparency: either alpha values associated with palette entries (for indexed-color images) or a single transparent color (for grayscale and truecolor images)
+//Transparency specifies that the image uses simple transparency: either alpha values associated with palette entries (for indexed-color images) or a single transparent color (for grayscale and truecolor images)
 union tRNS {
 	uint8	alpha[];//palette entry alphas
 	col16	trans;	//Pixels of this colour are to be treated as transparent (equivalent to alpha value 0)
@@ -159,6 +165,7 @@ union tRNS {
 //Image gamma
 struct gAMA {
 	uint32be	Gamma;
+	gAMA(uint32 gamma) : Gamma(gamma) {}
 };
 
 //Primary chromaticities
@@ -205,7 +212,6 @@ union bKGD {
 };
 
 //Physical pixel dimensions
-// When the unit specifier is 0, the pHYs chunk defines pixel aspect ratio only; the actual size of the pixels remains unspecified.
 struct pHYs {
 	enum {
 		unknown	= 0,
@@ -217,12 +223,12 @@ struct pHYs {
 };
 
 //Significant bits
-// Each depth specified in sBIT must be greater than zero and less than or equal to the sample depth (which is 8 for indexed-color images, and the bit depth given in IHDR for other color types).
+// Each depth specified in sBIT must be greater than zero and less than or equal to the sample depth
 union sBIT {
-	uint8	gray_bits;		//0
-	rgb8	col_bits;		//2,3
-	ia8		gray_alpha_bits;//4
-	rgba8	col_alpha_bits;	//6
+	uint8	gray_bits;			//0
+	rgb8	col_bits;			//2,3
+	ia8		gray_alpha_bits;	//4
+	rgba8	col_alpha_bits;		//6
 };
 
 //Suggested palette
@@ -231,8 +237,8 @@ union sBIT {
 struct sPLT {
 	embedded_string	PaletteName;
 	uint8			SampleDepth;
-	struct Entry8 { rgb8	col8; uint16 freq; };
-	struct Entry16 { rgb16	col16; uint16 freq; };
+	struct Entry8	{ rgb8	col8;	uint16 freq; };
+	struct Entry16	{ rgb16	col16;	uint16 freq; };
 	union {
 		Entry8	entries8[];
 		Entry16	entries16[];
@@ -243,7 +249,7 @@ struct sPLT {
 struct hIST {
 };
 
-//Image last-modification time
+//last-modification time
 struct  tIME {
 	uint16be	Year;	// (complete; for example, 1995, not 95)
 	uint8		Month;	// (1-12)
@@ -259,10 +265,13 @@ struct  tIME {
 //	zlib header, footer, and CRC removed from the IDAT chunk
 //	premultiplied alpha (color' = color * alpha / 255)
 struct  CgBI {
+	enum {
+		val1	= 0x06200050,
+		val2	= 0x02200050,
+	};
 	//CGBitmapInfo bitmask.
 	uint32be	cgbi;	// 0x50 0x00 0x20 0x06 or 0x50 0x00 0x20 0x02 
 };
-
 
 // a = left, b = above, c = upper left
 inline int PaethPredictor(int a, int b, int c) {
@@ -316,7 +325,7 @@ bool readline(istream_ref file, uint8 *prev, uint8 *next, uint32 len, uint32 bpp
 	return true;
 }
 
-template<int B, typename T> const uint8 *readbits(const block<T, 1> &blk, const uint8 *src) {
+template<int B, typename T> const uint8 *readbits(const iblock<T, 1> &blk, const uint8 *src) {
 	uint32	b = 1 << 16;
 	for (auto& x : blk) {
 		if (b >= (1 << 16))
@@ -565,9 +574,9 @@ static bool writeline(ostream_ref file, uint8 *prev, uint8 *next, uint8 *dest, u
 	return file.writebuff(dest, len) == len;
 }
 
-template<int B, typename T> uint8 *writebits(const block<T, 1> &blk, uint8 *dst) {
+template<int B, typename T> uint8 *writebits(const iblock<T, 1> &blk, uint8 *dst) {
 	uint32	b = 1;
-	for (auto& x : blk) {
+	for (auto&& x : blk) {
 		b = (b << B) | (x.r & bits(B));
 		if (b >= (1 << 8)) {
 			*dst++ = b;
@@ -577,7 +586,7 @@ template<int B, typename T> uint8 *writebits(const block<T, 1> &blk, uint8 *dst)
 	return dst;
 }
 
-template<typename T> bool writeblock(const block<T, 2> &blk, ostream_ref file, Type type, uint8 bitdepth) {
+template<typename T> bool writeblock(const iblock<T, 2> &blk, ostream_ref file, Type type, uint8 bitdepth) {
 	uint32	bpp	= bytes_per_texel(type, bitdepth);
 	uint32	bpl	= bpp * blk.template size<1>();
 
@@ -600,13 +609,13 @@ template<typename T> bool writeblock(const block<T, 2> &blk, ostream_ref file, T
 						break;
 					case 8: {
 						auto	dst	= next;
-						for (auto& x : y)
+						for (auto&& x : y)
 							*dst++ = x.r;
 						break;
 					}
 					case 16: {
 						auto	dst = (uint16be*)next;
-						for (auto& x : y)
+						for (auto&& x : y)
 							*dst++ = x.r;
 						break;
 					}
@@ -617,7 +626,7 @@ template<typename T> bool writeblock(const block<T, 2> &blk, ostream_ref file, T
 				switch (bitdepth) {
 					case 8: {
 						auto	dst	= next;
-						for (auto& x : y) {
+						for (auto&& x : y) {
 							*dst++ = x.r;
 							*dst++ = x.g;
 							*dst++ = x.b;
@@ -626,7 +635,7 @@ template<typename T> bool writeblock(const block<T, 2> &blk, ostream_ref file, T
 					}
 					case 16: {
 						auto	dst = (uint16be*)next;
-						for (auto& x : y) {
+						for (auto&& x : y) {
 							*dst++ = x.r;
 							*dst++ = x.g;
 							*dst++ = x.b;
@@ -649,7 +658,7 @@ template<typename T> bool writeblock(const block<T, 2> &blk, ostream_ref file, T
 						break;
 					case 8: {
 						auto	dst = next;
-						for (auto& x : y)
+						for (auto&& x : y)
 							*dst++ = x.r;
 						break;
 					}
@@ -660,7 +669,7 @@ template<typename T> bool writeblock(const block<T, 2> &blk, ostream_ref file, T
 				switch (bitdepth) {
 					case 8: {
 						auto	dst	= next;
-						for (auto& x : y) {
+						for (auto&& x : y) {
 							*dst++ = x.r;
 							*dst++ = x.a;
 						}
@@ -668,7 +677,7 @@ template<typename T> bool writeblock(const block<T, 2> &blk, ostream_ref file, T
 					}
 					case 16: {
 						auto	dst = (uint16be*)next;
-						for (auto& x : y) {
+						for (auto&& x : y) {
 							*dst++ = x.r;
 							*dst++ = x.a;
 						}
@@ -681,7 +690,7 @@ template<typename T> bool writeblock(const block<T, 2> &blk, ostream_ref file, T
 				switch (bitdepth) {
 					case 8: {
 						auto	dst	= next;
-						for (auto& x : y) {
+						for (auto&& x : y) {
 							*dst++ = x.r;
 							*dst++ = x.g;
 							*dst++ = x.b;
@@ -691,7 +700,7 @@ template<typename T> bool writeblock(const block<T, 2> &blk, ostream_ref file, T
 					}
 					case 16: {
 						auto	dst = (uint16be*)next;
-						for (auto& x : y) {
+						for (auto&& x : y) {
 							*dst++ = x.r;
 							*dst++ = x.g;
 							*dst++ = x.b;
@@ -712,16 +721,15 @@ template<typename T> bool writeblock(const block<T, 2> &blk, ostream_ref file, T
 
 struct PNG {
 	IHDR	ihdr;
-	sBIT	sbit;
-	bKGD	bkgd;
-	pHYs	phys;
-	cHRM	chrm;
-	tIME	time;
+	optional<sBIT>	sbit;
+	optional<bKGD>	bkgd;
+	optional<pHYs>	phys;
+	optional<cHRM>	chrm;
+	optional<tIME>	time;
+	optional<col16>	trans;
 
-	col16	trans;
 	uint32	gamma	= 0;
 	Intent	intent	= Perceptual;
-	bool	end		= false;
 	uint32	cgbi	= 0;	//apple extension
 
 	map<string, malloc_block>	texts;
@@ -732,84 +740,158 @@ struct PNG {
 	malloc_block	image_data;
 
 	PNG()	{}
+	PNG(uint32 Width, uint32 Height, uint8 BitDepth, Type ColorType, bool interlaced = false)	{
+		ihdr = IHDR(Width, Height, BitDepth, ColorType, interlaced);
+	}
 
-	bool process(const Chunk &chunk);
+	bool	ReadChunks(istream_ref file);
+	bool	WriteChunks(ostream_ref file);
 
-	template<typename T> bool read(const block<T, 2> &blk, istream_ref file);
-	template<typename T> bool write(const block<T, 2> &blk, ostream_ref file);
+	template<typename T> bool read(const iblock<T, 2> &blk, istream_ref file) const;
+	template<typename T> bool write(const iblock<T, 2> &blk, ostream_ref file) const;
 };
 
-bool PNG::process(const Chunk &chunk) {
-	switch (chunk.type) {
-		case "IHDR"_u32: ihdr = *chunk.data; break;
-		case "PLTE"_u32:
-			palette	= make_range<rgb8>(chunk.data);
-			break;
-		case "IDAT"_u32:
-			image_data	+= chunk.data;
-			break;
-		case "IEND"_u32:
-			end = true;
-			break;
+bool PNG::ReadChunks(istream_ref file) {
+	Chunk	chunk;
+	while (chunk.read(file, cgbi != 0)) {
+		switch (chunk.type) {
+			case "IHDR"_u32:
+				ihdr = *chunk.data;
+				break;
+			case "PLTE"_u32:
+				palette	= make_range<rgb8>(chunk.data);
+				break;
+			case "IDAT"_u32:
+				image_data	+= chunk.data;
+				break;
+			case "IEND"_u32:
+				return true;
 
-		case "cHRM"_u32: chrm = *chunk.data; break;
-		case "gAMA"_u32: gamma = ((gAMA*)chunk.data)->Gamma; break;
-		case "iCCP"_u32: {
-			const char	*p = chunk.data;
-			icc_profile_name	= p;
-			icc_profile = transcode(zlib_decoder(), chunk.data.slice(string_end(p) + 1));
-			break;
-		}
-		case "sBIT"_u32: sbit = *chunk.data; break;
-		case "sRGB"_u32: intent = ((sRGB*)chunk.data)->RenderingIntent; break;
-		case "bKGD"_u32: bkgd = *chunk.data; break;
-//		case "hIST"_u32: set((hIST*)chunk.data); break;
-		case "tRNS"_u32: {
-			if (ihdr.ColorType == indexed) {
-				auto	p = palette.begin();
-				for (auto i : make_range<uint8>(chunk.data))
-					(p++)->a = i;
-			} else {
-				trans = ((tRNS*)chunk.data)->trans;
+			case "cHRM"_u32:
+				chrm	= *chunk.data;
+				break;
+			case "gAMA"_u32:
+				gamma	= ((gAMA*)chunk.data)->Gamma;
+				break;
+			case "iCCP"_u32: {
+				const char	*p = chunk.data;
+				icc_profile_name	= p;
+				icc_profile = transcode(zlib_decoder(), chunk.data.slice(string_end(p) + 1));
+				break;
 			}
-		}
-		case "pHYs"_u32: phys = *chunk.data; break;
-//		case "sPLT"_u32: set((sPLT*)chunk.data); break;
-		case "tIME"_u32: time = *chunk.data; break;
-		case "tEXt"_u32: {
-			const char *p = chunk.data;
-			texts.put(p, chunk.data.slice(string_end(p) + 1));
-			break;
-		}
-		case "zTXt"_u32: {
-			const char *p = chunk.data;
-			texts.put(p, transcode(zlib_decoder(), chunk.data.slice(string_end(p) + 1)));
-			break;
-		}
-		case "iTXt"_u32: {
-			const char *p			= chunk.data;
-			auto		p2			= string_end(p);
-			uint8		flag		= p2[1];
-			uint8		comp		= p2[2];
-			auto		language	= p2 + 3;
-			auto		keyword		= string_end(language) + 1;
-			auto		text		= string_end(keyword) + 1;
-			if (flag)
-				texts.put(p, transcode(zlib_decoder(), chunk.data.slice(text + 1)));
-			else
-				texts.put(p, chunk.data.slice(text + 1));
-			break;
-		}
+			case "sBIT"_u32:
+				sbit	= *chunk.data;
+				break;
+			case "sRGB"_u32:
+				intent	= ((sRGB*)chunk.data)->RenderingIntent;
+				break;
+			case "bKGD"_u32:
+				bkgd	= *chunk.data; 
+				break;
+	//		case "hIST"_u32: set((hIST*)chunk.data); break;
+			case "tRNS"_u32: {
+				if (ihdr.ColorType == indexed) {
+					auto	p = palette.begin();
+					for (auto i : make_range<uint8>(chunk.data))
+						(p++)->a = i;
+				} else {
+					trans = ((tRNS*)chunk.data)->trans;
+				}
+			}
+			case "pHYs"_u32:
+				phys = *chunk.data;
+				break;
+	//		case "sPLT"_u32: set((sPLT*)chunk.data); break;
+			case "tIME"_u32:
+				time = *chunk.data;
+				break;
+			case "tEXt"_u32: {
+				const char *p = chunk.data;
+				texts.put(p, chunk.data.slice(string_end(p) + 1));
+				break;
+			}
+			case "zTXt"_u32: {
+				const char *p = chunk.data;
+				texts.put(p, transcode(zlib_decoder(), chunk.data.slice(string_end(p) + 1)));
+				break;
+			}
+			case "iTXt"_u32: {
+				const char *p			= chunk.data;
+				auto		p2			= string_end(p);
+				uint8		flag		= p2[1];
+				uint8		comp		= p2[2];
+				auto		language	= p2 + 3;
+				auto		keyword		= string_end(language) + 1;
+				auto		text		= string_end(keyword) + 1;
+				if (flag)
+					texts.put(p, transcode(zlib_decoder(), chunk.data.slice(text + 1)));
+				else
+					texts.put(p, chunk.data.slice(text + 1));
+				break;
+			}
 
-		case "CgBI"_u32:	//apple extension
-			cgbi	= ((CgBI*)chunk.data)->cgbi;
-			break;
-
+			case "CgBI"_u32:	//apple extension
+				cgbi	= ((CgBI*)chunk.data)->cgbi;
+				break;
+		}
 	}
+	return false;
+}
+
+bool PNG::WriteChunks(ostream_ref file) {
+	file.write(signature);
+	file.write(Chunk("IHDR"_u32, ihdr));
+
+	if (cgbi)
+		file.write(Chunk("CgBI"_u32, cgbi));
+
+	if (time.exists())
+		file.write(Chunk("tIME"_u32, get(time)));
+
+	for (auto &i : texts.with_keys())
+		file.write(Chunk("tEXt"_u32, malloc_block(i.key().data()) += i.b));
+	
+	if (chrm.exists())
+		file.write(Chunk("cHRM"_u32, get(chrm)));
+
+	if (gamma)
+		file.write(Chunk("gAMA"_u32, gAMA(gamma)));
+
+	if (icc_profile_name)
+		file.write(Chunk("iCCP"_u32, malloc_block(icc_profile_name.data()) += transcode(zlib_encoder(), icc_profile)));
+
+	if (sbit.exists())
+		file.write(Chunk("sBIT"_u32, get(sbit)));
+
+	if (intent)
+		file.write(Chunk("sRGB"_u32, intent));
+
+	if (palette)
+		file.write(Chunk("PLTE"_u32, palette.raw_data()));
+
+	if (bkgd.exists())
+		file.write(Chunk("bKGD"_u32, get(bkgd)));
+
+	if (trans.exists()) {
+		if (ihdr.ColorType == indexed) {
+			//TBD
+			//auto	p = palette.begin();
+			//file.write(Chunk("tRNS"_u32, trans));
+		} else {
+			file.write(Chunk("tRNS"_u32, get(trans)));
+		}
+	}
+
+	if (phys.exists())
+		file.write(Chunk("pHYs"_u32, get(phys)));
+
+	file.write(Chunk("IDAT"_u32, transcode(zlib_encoder(), image_data)));
+	file.write(Chunk("IEND"_u32, none));
 	return true;
 }
 
-template<typename T> bool PNG::read(const block<T, 2> &blk, istream_ref file) {
+
+template<typename T> bool PNG::read(const iblock<T, 2> &blk, istream_ref file) const {
 	if (!ihdr.InterlaceMethod)
 		return readblock(blk, file, ihdr.ColorType, ihdr.BitDepth);
 
@@ -823,7 +905,7 @@ template<typename T> bool PNG::read(const block<T, 2> &blk, istream_ref file) {
 	return ret;
 }
 
-template<typename T> bool PNG::write(const block<T, 2> &blk, ostream_ref file) {
+template<typename T> bool PNG::write(const iblock<T, 2> &blk, ostream_ref file) const {
 	if (!ihdr.InterlaceMethod)
 		return writeblock(blk, file, ihdr.ColorType, ihdr.BitDepth);
 
@@ -836,46 +918,53 @@ template<typename T> bool PNG::write(const block<T, 2> &blk, ostream_ref file) {
 	ret		&= writeblock(skip<2>(blk.template slice<2>(1), 2), file, ihdr.ColorType, ihdr.BitDepth);				//7
 	return ret;
 }
+} // namespace PNG
 
 class PNGFileHandler : public BitmapFileHandler {
 	const char*		GetExt()	override { return "png";	}
 	const char*		GetMIME()	override { return "image/png"; }
 	int				Check(istream_ref file) override {
 		file.seek(0);
-		return file.get<array<uint8, 8>>() == signature ? CHECK_PROBABLE : CHECK_DEFINITE_NO;
+		return file.get<array<uint8, 8>>() == PNG::signature ? CHECK_PROBABLE : CHECK_DEFINITE_NO;
 	}
 
 	ISO_ptr<void>	Read(tag id, istream_ref file) override {
-		if (compare_array(file.get<array<uint8, 8>>(), signature))
+		if (compare_array(file.get<array<uint8, 8>>(), PNG::signature))
 			return ISO_NULL;
 
-		PNG		png;
-		Chunk	ch;
-		while (!png.end && file.read(ch))
-			png.process(ch);
+		PNG::PNG		png;
+		if (png.ReadChunks(file)) {
+			if (png.cgbi) {
+				ISO_ptr<bitmap>	bm(id, png.ihdr.Width, png.ihdr.Height);
 
-		if (png.end) {
-			auto	all		= transcode(zlib_decoder(), png.image_data);
-			auto	file2	= memory_reader(all);
-			//auto	file2 = make_codec_reader<0>(zlib_decoder(), memory_reader(image_data));
+				if (png.ihdr.ColorType == PNG::indexed)
+					copy(png.palette, ((bitmap*)bm)->CreateClut(png.palette.size()));// = png.palette;
+
+				png.read(bm->All(), make_codec_reader<0>(deflate_decoder(), memory_reader(png.image_data)));
+				
+				for_each(bm->All(), [](ISO_rgba &c) {
+					swap(c.r, c.b);
+				});
+				return bm;
+			}
+
+			auto	file2 = make_codec_reader<0>(zlib_decoder(), memory_reader(png.image_data));
 
 			if (png.ihdr.BitDepth > 8) {
 				ISO_ptr<HDRbitmap>	bm(id, png.ihdr.Width, png.ihdr.Height);
-
 				png.read(bm->All(), file2);
 				return bm;
 
 			} else {
-				 ISO_ptr<bitmap>	bm(id, png.ihdr.Width, png.ihdr.Height);
+				ISO_ptr<bitmap>	bm(id, png.ihdr.Width, png.ihdr.Height);
 
-				 if (png.ihdr.ColorType == indexed)
-					 ((bitmap*)bm)->CreateClut(png.palette.size()) = png.palette;
-			
-				 png.read(bm->All(), file2);
-				 return bm;
+				if (png.ihdr.ColorType == PNG::indexed)
+					copy(png.palette, ((bitmap*)bm)->CreateClut(png.palette.size()));
+
+				png.read(bm->All(), file2);
+				return bm;
 			}
 		}
-
 		return ISO_NULL;
 	}
 
@@ -884,25 +973,21 @@ class PNGFileHandler : public BitmapFileHandler {
 		if (!bm)
 			return false;
 
-		PNG		png;
+		auto		flags	= bm->Scan();
+		PNG::Type	type	= bm->IsPaletted() ? PNG::indexed : PNG::Type((flags & BMF_GREY ? PNG::gray : PNG::rgb) | (flags & BMF_ALPHA ? PNG::alpha : PNG::noalpha));
+		PNG::PNG	png(bm->Width(), bm->Height(), 8, type);
 
-		auto	flags	= bm->Scan();
-		Type	type	= bm->IsPaletted() ? indexed : Type((flags & BMF_GREY ? gray : rgb) | (flags & BMF_ALPHA ? alpha : noalpha));
-		png.ihdr = IHDR(bm->Width(), bm->Height(), 8, type, false);
-
-		file.write(signature);
-		file.write(Chunk("IHDR"_u32, memory_block(&png.ihdr)));
+		if (bm->IsPaletted())
+			png.palette = bm->ClutBlock();
 
 		dynamic_memory_writer	mem;
-		{
-			//auto	file2 = make_codec_writer<0>(zlib_encoder(), mem);
+		if (png.cgbi)
+			png.write(transform(bm->All(), [](const ISO_rgba &c) { return ISO_rgba(c.b, c.g, c.r, c.a); }), mem);
+		else
 			png.write(bm->All(), mem);
-		}
-		file.write(Chunk("IDAT"_u32, transcode(zlib_encoder(), mem.data())));
-		file.write(Chunk("IEND"_u32, none));
 
-		return true;
+		png.image_data = move(mem);
+
+		return png.WriteChunks(file);
 	}
-} png;
-
-
+} _png;

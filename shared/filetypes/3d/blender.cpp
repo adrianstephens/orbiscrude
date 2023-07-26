@@ -267,7 +267,7 @@ ISO::Browser2	DNA_struc::Index(int i)	{
 		if (ftname == cstr("int64_t"))	return MakeBrowser((int64	*)fdata, array);
 		if (ftname == cstr("uint64_t"))	return MakeBrowser((uint64	*)fdata, array);
 
-		return ISO::MakePtr(0, const_memory_block(fdata, flen));
+		return ISO::MakePtr(none, const_memory_block(fdata, flen));
 
 	}
 }
@@ -361,7 +361,7 @@ ISO_ptr<Model3> GetModel(ISO::Browser2 b) {
 	for (auto &i : mpoly)
 		di = convex_to_tris(di, ix.slice(i.loopstart, i.totalloop));
 
-	sm->UpdateExtents();
+	sm->UpdateExtent();
 	model->UpdateExtents();
 	return model;
 }

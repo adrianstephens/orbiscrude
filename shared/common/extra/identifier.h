@@ -2,46 +2,67 @@
 #define IDENTIFIER_H
 
 #include "base/defs.h"
-
-namespace iso {
-template<typename T> inline enable_if_t<is_enum<T>, size_t>			from_string(const char *s, T &t);
-template<typename T> inline enable_if_t<is_enum<T>, const char*>	to_string(const T &t);
-}
-
 #include "base/strings.h"
 #include "base/pointer.h"
 #include "base/bits.h"
 #include "base/functions.h"
 
-#define	_MAKE_FIELD(S,X)				field::make<S>(#X, &S::X),
-#define	_MAKE_FIELDS(S, ...)			VA_APPLYP(_MAKE_FIELD, S, __VA_ARGS__)
-#define	MAKE_FIELDS(S, ...)				template<> field fields<S>::f[] = { _MAKE_FIELDS(S, __VA_ARGS__) field::terminator<S>() }
+#define	_MAKE_FIELD(S,X)				field::make<S>(#X, container_cast<S>(&S::X)),
+#define	_MAKE_FIELDT(S,X,T)				field::make<S,T>(#X, &S::X)
+#define	MAKE_FIELDS(S, ...)				template<> field fields<S>::f[] = { VA_APPLYP(_MAKE_FIELD, S, __VA_ARGS__) field::terminator<S>() }
+#define	MAKE_FIELDS_USING(S0,S1,...)	template<> field fields<S0>::f[] = { VA_APPLYP(_MAKE_FIELD, S1, __VA_ARGS__) field::terminator<S0>() }
+
+#define	_MAKE_FIELD_NAME(X)				#X
+#define	_MAKE_FIELD_OFFSET(X)			X
+#define	_MAKE_FIELD_TYPE(X)
+
+#define	_MAKE_FIELD_NAMET(T,X)			#X
+#define	_MAKE_FIELD_OFFSETT(T,X)		X
+#define	_MAKE_FIELD_TYPET(T,X)			element_cast<T>
+
+#define	_MAKE_FIELD_NAMEC(I,X)			#X
+#define	_MAKE_FIELD_OFFSETC(I,X)		X
+#define	_MAKE_FIELD_TYPEC(I,X)			make_counted<I>
+
+#define	_MAKE_FIELD_NAMEU(I, ...)		0
+#define	_MAKE_FIELD_OFFSETU(I, X, ...)	X
+#define	_MAKE_FIELD_TYPEU(I, X, ...)	make_selection<I, __VA_ARGS__>
+
+#define	_MAKE_FIELD2(I,S,X)				make_field_idx<I>(_MAKE_FIELD_NAME##X, _MAKE_FIELD_TYPE##X (&S::_MAKE_FIELD_OFFSET##X)),
+#define	MAKE_FIELDS2(S, ...)			template<> field fields<S>::f[] = {VA_APPLYPI(_MAKE_FIELD2, S, __VA_ARGS__) field::terminator<S>() }
 
 #define	DECLARE_VALUE_FIELD(S)			template<> struct fields<S> : value_field<S>	{};
 
 #define	_MAKE_ENUM(S,X)					#X,
-#define	_MAKE_ENUMS(S, ...)				VA_APPLYP(_MAKE_ENUM, S, __VA_ARGS__)
 #define	_MAKE_VALUE(S,X)				{#X, X},
-#define	_MAKE_VALUES(S, ...)			VA_APPLYP(_MAKE_VALUE, S, __VA_ARGS__)
+#define	_MAKE_VALUE2(S,X)				{#X, S::X},
 #define	_MAKE_PREFIXED_VALUE(P,X)		{#X, P##X},
-#define	_MAKE_PREFIXED_VALUES(P, ...)	VA_APPLYP(_MAKE_PREFIXED_VALUE, P, __VA_ARGS__)
 
-#define	MAKE_ENUMS(S, ...)				template<> const char *field_names<S>::s[]	= { _MAKE_ENUMS(S, __VA_ARGS__) }
+#define	START_ENUMS(S)					template<> const char *field_names<S>::s[]	= {
+#define	MAKE_ENUMS(S, ...)				START_ENUMS(S)			VA_APPLYP(_MAKE_ENUM, S, __VA_ARGS__)	}
 
 #define	DECLARE_VALUE_ENUMS(S)			template<> struct field_names<S> { static field_value s[]; };
-#define	MAKE_VALUE_ENUMS(S, ...)		field_value field_names<S>::s[] = { _MAKE_VALUES(S, __VA_ARGS__) 0 }
+#define	START_VALUE_ENUMS(S)			field_value field_names<S>::s[] = {
+#define	MAKE_VALUE_ENUMS(S, ...)		START_VALUE_ENUMS(S)	VA_APPLYP(_MAKE_VALUE, S, __VA_ARGS__)	0}
 
 #define	DECLARE_BIT_ENUMS(S)			template<> struct field_names<S> { static field_bit s[]; };
-#define	MAKE_BIT_ENUMS(S, ...)			field_bit field_names<S>::s[] =	{ _MAKE_VALUES(S, __VA_ARGS__) 0 }
+#define	START_BIT_ENUMS(S)				field_bit field_names<S>::s[] =	{
+#define	MAKE_BIT_ENUMS(S, ...)			START_BIT_ENUMS(S)		VA_APPLYP(_MAKE_VALUE, S, __VA_ARGS__)	0}
+#define	MAKE_BIT_ENUMS2(S, ...)			START_BIT_ENUMS(S)		VA_APPLYP(_MAKE_VALUE2, S, __VA_ARGS__)	0}
 
-#define	DECLARE_PREFIXED_ENUMS(S)		template<> struct field_names<S> { static field_prefix<const char*> s; };
-#define	MAKE_PREFIXED_ENUMS(S, P, ...)	field_prefix<const char*>	field_names<S>::s	= { #P, (const char*[]) {_MAKE_ENUMS(S, __VA_ARGS__) }}
+#define	DECLARE_PREFIXED_ENUMS(S)				template<> struct field_names<S> { static field_prefix<const char*> s; };
+#define	START_PREFIXED_ENUMS(S, P)				field_prefix<const char*>	field_names<S>::s	= { #P, (const char*[]) {
+#define	MAKE_PREFIXED_ENUMS(S, P, ...)			START_PREFIXED_ENUMS(S, P)	VA_APPLYP(_MAKE_ENUM, S, __VA_ARGS__) }}
 
-#define	DECLARE_PREFIXED_VALUE_ENUMS(S)		template<> struct field_names<S> { static field_prefix<field_value> s; };
-#define	MAKE_PREFIXED_VALUE_ENUMS(S, P, ...) field_prefix<field_value>	field_names<S>::s	= { #P, (field_value[]) {_MAKE_PREFIXED_VALUES(P, __VA_ARGS__) 0}}
+#define	DECLARE_PREFIXED_VALUE_ENUMS(S)			template<> struct field_names<S> { static field_prefix<field_value> s; };
+#define	START_PREFIXED_VALUE_ENUMS(S, P)		field_prefix<field_value>	field_names<S>::s	= { #P, (field_value[]) {
+#define	MAKE_PREFIXED_VALUE_ENUMS(S, P, ...)	START_PREFIXED_VALUE_ENUMS(S, P)	VA_APPLYP(_MAKE_PREFIXED_VALUE, P, __VA_ARGS__)	0}}
+#define	MAKE_PREFIXED_VALUE_ENUMS2(S, P, ...)	START_PREFIXED_VALUE_ENUMS(S, P)	VA_APPLYP(_MAKE_VALUE2, S, __VA_ARGS__)			0}}
 
-#define	DECLARE_PREFIXED_BIT_ENUMS(S)		template<> struct field_names<S> { static field_prefix<field_bit> s; };
-#define	MAKE_PREFIXED_BIT_ENUMS(S, P, ...)	field_prefix<field_bit>	field_names<S>::s	= { #P, (field_bit[]) {_MAKE_PREFIXED_VALUES(P, __VA_ARGS__) 0}}
+#define	DECLARE_PREFIXED_BIT_ENUMS(S)			template<> struct field_names<S> { static field_prefix<field_bit> s; };
+#define	START_PREFIXED_BIT_ENUMS(S, P)			field_prefix<field_bit>	field_names<S>::s	= { #P, (field_bit[]) {
+#define	MAKE_PREFIXED_BIT_ENUMS(S, P, ...)		START_PREFIXED_BIT_ENUMS(S, P)		VA_APPLYP(_MAKE_PREFIXED_VALUE, P, __VA_ARGS__)	0}}
+#define	MAKE_PREFIXED_BIT_ENUMS2(S, P, ...)		START_PREFIXED_BIT_ENUMS(S, P)		VA_APPLYP(_MAKE_VALUE2, S, __VA_ARGS__)			0}}
 
 namespace iso {
 
@@ -114,7 +135,7 @@ enum IDTYPE {
 };
 
 string_accum&	FormatIdentifier(string_accum &sa, const char *p, IDFMT format, IDTYPE type = IDTYPE_MEMBER);
-//string			FormatIdentifier(const char *p, IDFMT format, IDTYPE type = IDTYPE_MEMBER);
+
 inline auto FormatIdentifier(const char *p, IDFMT format, IDTYPE type) {
 	return [=](string_accum &sa) {
 		return FormatIdentifier(sa, p, format, type);
@@ -135,47 +156,9 @@ public:
 template<typename T> IdentifierT<T>	Identifier(T &&str, IDFMT format, IDTYPE type = IDTYPE_MEMBER) {
 	return IdentifierT<T>(forward<T>(str), format, type);
 }
-IdentifierT<string>	Identifier(const char *prefix, const char *name, IDFMT format, IDTYPE type = IDTYPE_MEMBER);
-
-//-----------------------------------------------------------------------------
-//	Option
-//-----------------------------------------------------------------------------
-
-struct array_entry;
-template<typename T> inline size_t from_string(const char *s, _read_as<array_entry, T> &x) {
-	return from_string(s, x.t.push_back());
+inline IdentifierT<string>	Identifier(const char *prefix, const char *name, IDFMT format, IDTYPE type = IDTYPE_MEMBER) {
+	return IdentifierT<string>(str(prefix) + name, format, type);
 }
-
-template<uint32 F> struct _flag_option;
-template<uint32 F, typename I> inline size_t from_string(const char *s, _read_as<_flag_option<F>, I> &x) {
-	x.t |= F;
-	return 1;
-}
-template<uint32 F, typename B, typename T> _read_as<_flag_option<F>,T B::*> flag_option(T B::* p) {
-	return p;
-}
-
-struct structure_field {
-	typedef	size_t read_type(const char *v, void *p);
-	read_type	*_read;
-	uint32		offset;
-	template<typename T, typename B>				constexpr structure_field(T B::* p)				: _read((read_type*)(size_t(*)(const char*,T&))&iso::from_string), offset(uint32(T_get_member_offset(p))) {}
-	template<typename R, typename B, typename T>	constexpr structure_field(_read_as<R,T B::*> p)	: _read((read_type*)(size_t(*)(const char*,_read_as<R,T>&))&iso::from_string), offset(uint32(T_get_member_offset(p.t)))	{}
-};
-
-typedef meta::constant<bool, true>	yes;
-typedef meta::constant<bool, false>	no;
-
-template<typename T> inline size_t from_string(const char *s, _not<T> &x) {
-	return from_string(s, x.t);
-}
-
-struct Option {
-	const char		*name;
-	structure_field	off;
-	bool			operator==(const char *n) const		{ return str(n).begins(name) && !is_alpha(n[strlen(name)]); }
-	size_t			set(void *p, const char *v)	const	{ return off._read(v, (char*)p + off.offset); }
-};
 
 //-----------------------------------------------------------------------------
 //	field values
@@ -194,9 +177,14 @@ struct field_bit {
 	uint32		value;
 };
 
+template<char C> struct field_bit_sep {
+	const char *name;
+	uint32		value;
+};
+
 struct field_custom {};
 
-typedef string_accum&	(*field_callback_func)(string_accum&, const field*, const uint32le*, uint32, uint32);
+typedef string_accum&	field_callback_func(string_accum&, const field*, const uint32le*, uint32, uint32);
 
 struct field_thing {
 	uint32		*p;
@@ -222,6 +210,7 @@ template<typename T> struct field_customs	{ static field_custom s[]; };
 template<typename T> field_custom field_customs<T>::s[1];
 template<typename T> struct field_names<const T>			: field_names<T>	{};
 template<typename T> struct field_names<constructable<T>>	: field_names<T>	{};
+template<typename T, int N>	struct field_names<compact<T,N>>: field_names<T>	{};
 template<typename T> struct field_values<const T>			: field_values<T>	{};
 
 struct field_names_none						{ static const char **s; };
@@ -248,8 +237,9 @@ template<> struct field_names<long>			: field_names_signed	{};
 #ifdef PLAT_PC
 template<> struct field_names<wchar_t>		: field_names_none		{};
 #endif
+template<int N> struct field_names<uintn<N, false>>	: field_names_none	{};
 
-extern const char	*sString[], *sRelString[], *sDec[], *sEnable[], *sOn[], *sPowersOfTwo[], *sCustom[];
+extern const char	*sString[], *sString16[], *sRelString[], *sDec[], *sEnable[], *sOn[], *sPowersOfTwo[], *sCustom[];
 #define sFloat	field_names<float>::s
 #define sBool	field_names<bool>::s
 #define sSigned	field_names_signed::s
@@ -288,11 +278,15 @@ template<> struct array_names<0> {
 
 template<typename T>			static constexpr bool field_is_struct = is_class<T>;
 template<typename T>			static constexpr bool field_is_struct<constructable<T>> = field_is_struct<T>;
-template<int B, typename T>		static constexpr bool field_is_struct<baseint<B,T>> = false;
-template<typename T, size_t N>	static constexpr bool field_is_struct<T[N]> = true;
-template<>						static constexpr bool field_is_struct<string> = false;
+template<int B, typename T>		static constexpr bool field_is_struct<baseint<B,T>>		= false;
+template<typename T, int N>		static constexpr bool field_is_struct<compact<T,N>>		= field_is_struct<T>;
+template<typename T, size_t N>	static constexpr bool field_is_struct<T[N]>				= true;
+template<>						static constexpr bool field_is_struct<string>			= false;
+template<int N>					static constexpr bool field_is_struct<uintn<N, false>>	= false;
 
 template<typename T, bool S = field_is_struct<T>> struct field_maker;
+//template<typename T, bool S = field_is_struct<T>> struct indexed_field_maker;
+//template<int N, typename B, typename T> constexpr field make_field_idx(const char *name, T B::*p);
 
 template<typename T>    struct fields;
 template<typename...TT> struct union_fields		{ static const field *p[]; };
@@ -324,35 +318,41 @@ struct field {
 	static constexpr MODE get_mode(field_value*)							{ return MODE_VALUES; }
 	static constexpr MODE get_mode(field_bit*)								{ return MODE_BITS; }
 	static constexpr MODE get_mode(field_custom*)							{ return MODE_CUSTOM; }
-	static constexpr MODE get_mode(field_callback_func)						{ return MODE_CALLBACK; }
+	static constexpr MODE get_mode(field_callback_func*)						{ return MODE_CALLBACK; }
 	template<typename T> static constexpr MODE get_mode(const field_prefix<T>&)	{ return MODE(get_mode((T*)0) | MODE_PREFIX); }
 //	template<typename T> static constexpr MODE get_mode(field_prefix<T>*)	{ return get_mode((T*)0) | MODE_PREFIX; }
 	template<typename T> static constexpr MODE get_mode(field_dot<T>*)		{ return get_mode((T*)0) | MODE_DOT; }
 
 	static constexpr field dummy(uint32 num) {
-		return field {0, 0, num, 0, 0, sHex};
+		return {0, 0, num, 0, 0, sHex};
 	}
 	static constexpr field make(const char *name, uint32 start, uint32 num, uint32 offset = 0, int shift = 0, const char *const *values = 0) {
-		return field {name, start, num, offset, uint32(shift), (const char**)values};
+		return {name, start, num, offset, uint32(shift), (const char**)values};
 	}
-	static constexpr field call(const field *fields, uint32 start, const char *prefix = 0) {
-		return field {prefix, start, 0, MODE_CALL, 0, (const char**)fields};
+	//static constexpr field call(const field *fields, uint32 start, const char *prefix = 0) {
+	//	return {prefix, start, 0, MODE_CALL, 0, (const char**)fields};
+	//}
+	template<MODE M = MODE_CALL> static constexpr field call(const char *name, uint32 start, const field *fields, int rel_field = 0) {
+		return field {name, start, 0, M, uint32(rel_field), (const char**)fields};
 	}
+	template<typename...TT> static constexpr field call_union(const char *name, uint32 start, int select_rel_field) {
+		return call<MODE_CALL>(name, start, (const field*)union_fields<TT...>::p, select_rel_field);
+	}
+
+	//templated make
 	template<typename V> static constexpr field make(const char *name, uint32 start, uint32 num, V *values) {
 		return {name, start, num, uint32(get_mode(values) & 15), uint32(get_mode(values) >> 4), (const char**)values};
 	}
 	template<typename V> static constexpr field make(const char *name, uint32 start, uint32 num, const V &values) {
 		return {name, start, num, uint32(get_mode(values) & 15), uint32(get_mode(values) >> 4), (const char**)&values};
 	}
-	template<typename B, typename T, typename V> static constexpr field make(const char *name, T B::*p, V *values) {
-		return make(name, uint32(BIT_OFFSET(p)), uint32(sizeof(T)), values);
-	}
 	template<typename B, typename T> static constexpr field make(const char *name, T B::*p, field *values) {
 		return make(name, uint32(BIT_OFFSET(p)), 0, values);
 	}
-	template<typename T> static constexpr field make(const char *name, uint32 start, uint32 num) {
-		return make(name, start, num, field_names<T>::s);
-	}
+	//template<typename T> static constexpr field make(const char *name, uint32 start, uint32 num) {
+	//	return make(name, start, num, field_names<T>::s);
+	//}
+
 	template<typename T> static constexpr field make(const char *name, uint32 start) {
 		return field_maker<T>::f(name, start);
 	}
@@ -365,15 +365,8 @@ struct field {
 	template<typename T, T t> static constexpr field make(meta::field<T, t> &&f) {
 		return field_maker<T>::f(f.name, BIT_OFFSET(t));
 	}
-	template<typename T, MODE M = MODE_CALL> static constexpr field call(const char *name, uint32 start, int rel_field = 0) {
-		return field {name, start, 0, M, uint32(rel_field), (const char**)(const field*)fields<T>::f};
-	}
-	template<typename B, typename T> static constexpr field call(const char *name, T B::*p) {
-		return call<T>(name, BIT_OFFSET(p));
-	}
-	template<typename...TT> static constexpr field call_union(const char *name, uint32 start, int select_rel_field) {
-		return field {name, start, 0, MODE_CALL, uint32(select_rel_field), (const char**)union_fields<TT...>::p};
-	}
+
+	//terminator
 	template<typename T> static constexpr field terminator() {
 		return field {0, BIT_COUNT<T>};
 	}
@@ -435,7 +428,7 @@ struct field {
 			: (const field*)values;
 	}
 	const uint32 *get_ptr(const uint32 *p, uint32 off) const {
-		return offset == MODE_POINTER ? (const uint32*)get_raw_value(p, off) : p;
+		return offset == MODE_POINTER ? *(const uint32**)get_raw_ptr(p, off) : p;
 	}
 	constexpr uint32 get_offset(uint32 off) const {
 		return offset == MODE_POINTER ? 0 : off + start;
@@ -459,11 +452,13 @@ template<typename T, typename U> inline constexpr int get_field_size(const U&) {
 	return BIT_COUNT<T>;
 }
 template<typename T, int N> inline constexpr int get_field_size(const char *const (&)[N]) {
-	return LOG2_CEIL(N);
+	return klog2_ceil<N>;
 }
 template<typename T> constexpr int get_field_size() {
 	return get_field_size<T>(field_names<T>::s);
 }
+
+template<typename T>		using rel_ptr		= soft_pointer<T, base_relative<int32> >; 
 
 // field
 template<typename T> struct field_maker<T, false> {
@@ -471,8 +466,18 @@ template<typename T> struct field_maker<T, false> {
 };
 // struct
 template<typename T> struct field_maker<T, true> {
-	static constexpr field f(const char *name, uint32 start) { return field::call<T>(name, start); }
+	static constexpr field f(const char *name, uint32 start) { return field::call(name, start, fields<T>::f); }
 };
+
+// pointers
+template<typename T> struct field_maker<rel_ptr<T>, true> {
+	static constexpr field f(const char *name, uint32 start) { return field::call<field::MODE_RELPTR>(name, start, fields<T>::f); }
+};
+template<typename T> struct field_maker<soft_pointer<T, base_relative<uint32> >, true> : field_maker<rel_ptr<T>, true> {};
+
+//template<> struct field_maker<rel_ptr<void*>, false> {
+//	static /*constexpr*/ field f(const char *name, uint32 start) { return field::make(name, start, 0, field::MODE_RELPTR, 0, (const char**)custom_ptr_field); }
+//};
 
 // strings
 template<> struct field_maker<const char*, false> {
@@ -484,6 +489,25 @@ template<> struct field_maker<char*, false> {
 template<> struct field_maker<string, false> {
 	static constexpr field f(const char *name, uint32 start) { return field::make(name, start, BIT_COUNT<void*>, 0, 0, sString); }
 };
+template<> struct field_maker<const char16*, false> {
+	static constexpr field f(const char *name, uint32 start) { return field::make(name, start, BIT_COUNT<void*>, 0, 0, sString16); }
+};
+template<> struct field_maker<char16*, false> {
+	static constexpr field f(const char *name, uint32 start) { return field::make(name, start, BIT_COUNT<void*>, 0, 0, sString16); }
+};
+template<> struct field_maker<string16, false> {
+	static constexpr field f(const char *name, uint32 start) { return field::make(name, start, BIT_COUNT<void*>, 0, 0, sString16); }
+};
+
+template<> struct field_maker<rel_ptr<const char>, true> {
+	static constexpr field f(const char *name, uint32 start) { return field::make(name, start, 32, 0, 0, sRelString); }
+};
+template<> struct field_maker<rel_ptr<char>, true> {
+	static constexpr field f(const char *name, uint32 start) { return field::make(name, start, 32, 0, 0, sRelString); }
+};
+template<> struct field_maker<rel_ptr<const char16>, true> {
+	static constexpr field f(const char *name, uint32 start) { return field::make(name, start, 32, 1, 0, sRelString); }
+};
 
 // fields - array of field
 template<typename T>	struct fields			{ static field f[]; };
@@ -491,12 +515,18 @@ template<typename T>	struct fields<const T>	: fields<T> {};
 template<>				struct fields<_none>	{ static typed_nullptr<field> f; };
 template<>				struct fields<void>		: fields<_none> {};
 
-template<typename T, typename B>	struct fields<soft_pointer<T, B> > { static field f[]; };
-template<typename T, typename B>	field fields<soft_pointer<T, B> >::f[] = { field::call<T, field::MODE_RELPTR>(0, 0), field::terminator<T>() };
-
 // fields with indices
 template<int N, typename B, typename T> constexpr field make_field_idx(const char *name, T B::*p) {
-	return field::make<B>(name, p);
+	return field_maker<T>::f(name, BIT_OFFSET(p));
+}
+template<int N, typename B, typename T, int I, typename P> constexpr field make_field_idx(const char *name, counted<T,I,P> B::*p) {
+	return field::call<field::MODE_RELPTR>(name, T_get_member_offset(p) * 8, fields<T>::f, N - I);
+}
+template<int N, typename B, typename T, int I> constexpr field make_field_idx(const char *name, counted<T,I> B::*p) {
+	return field::call<field::MODE_POINTER>(name, T_get_member_offset(p) * 8, fields<T>::f, N - I);
+}
+template<int N, typename B, int I, typename...TT> constexpr field make_field_idx(const char *name, selection<I,TT...> B::*p) {
+	return field::call_union<TT...>(name, T_get_member_offset(p) * 8, N - I);
 }
 
 // fields of tuple
@@ -509,13 +539,10 @@ template<typename TL, int... II> field fieldsI<TL, index_list<II...> >::f[]	= {
 template<typename TL> struct fields<TL_tuple<TL> > : fieldsI<TL, meta::make_index_list<TL::count>> {};
 
 // fields of as_tuple
-template<int N, typename B, typename T> constexpr field make_field_idx_test(const char *name, T B::*p) {
-	return field::make<B>(name, p);
-}
 template<typename T, typename TL, typename IL> struct fieldsIN;
 template<typename T, typename TL, int... II> struct fieldsIN<T, TL, index_list<II...> >  { static field f[]; };
 template<typename T, typename TL, int... II> field fieldsIN<T, TL, index_list<II...> >::f[]	= {
-	make_field_idx_test<II>(fields<T>::f[II].name, TL_tuple<TL>::template field<II>())...,
+	make_field_idx<II>(fields<T>::f[II].name, TL_tuple<TL>::template field<II>())...,
 	field::terminator<TL_tuple<TL> >(),
 };
 template<typename T, typename TL> struct fields<as_tuple<T,TL> > : fieldsIN<T, TL, meta::make_index_list<TL::count>> {};
@@ -525,10 +552,8 @@ template<typename...TT> const field *union_fields<TT...>::p[] = { fields<TT>::f.
 
 //value_field - single entry fields
 template<typename T> struct value_field				{ static field f[];	};
-template<typename T> field value_field<T>::f[]	=	{ field::make(0, 0, BIT_COUNT<T>, field_names<T>::s), field::terminator<T>() };
-
-template<typename T> struct value_field<T*>			{ static field f[];	};
-template<typename T> field value_field<T*>::f[] =	{ field::call<T,field::MODE_POINTER>(0, 0), 0 };
+//template<typename T> field value_field<T>::f[]	=	{ field::make(0, 0, BIT_COUNT<T>, field_names<T>::s), field::terminator<T>() };
+template<typename T> field value_field<T>::f[]	=	{ field_maker<T>::f(0, 0), field::terminator<T>() };
 
 template<> struct fields<uint8>		: value_field<uint8>	{};
 template<> struct fields<uint16>	: value_field<uint16>	{};
@@ -544,7 +569,8 @@ template<> struct fields<double>	: value_field<double>	{};
 template<> struct fields<ulong>		: value_field<ulong>	{};
 template<> struct fields<long>		: value_field<long>		{};
 #endif
-template<typename T> struct fields<T*> : value_field<T*>	{};
+template<typename T>				struct fields<T*>					: value_field<T*>					{};
+template<typename T, typename B>	struct fields<soft_pointer<T, B>>	: value_field<soft_pointer<T, B>>	{};
 
 // arrays
 template<typename T, int N> struct fields_array {
@@ -571,6 +597,14 @@ inline constexpr const char *get_field_name(const char *const *p, int i) {
 	return p[i];
 }
 inline constexpr const char *get_field_name(const field_value *p, int i) {
+	while (p->name) {
+		if (i == p->value)
+			return p->name;
+		++p;
+	}
+	return 0;
+}
+inline constexpr const char *get_field_name(const field_bit *p, int i) {
 	while (p->name) {
 		if (i == p->value)
 			return p->name;
@@ -621,10 +655,17 @@ template<typename T> size_t	get_field_value(const char *s, T &t) {
 	return get_field_value(s, t, field_names<T>::s);
 }
 
-template<typename T> inline enable_if_t<is_enum<T>, size_t> from_string(const char *s, T &t) {
+template<typename T> inline enable_if_t<is_enum<T>, decltype(get_field_value(declval<const char*>(), declval<T&>(), field_names<T>::s))> from_string(const char *s, T &t) {
 	return get_field_value(s, t);
 }
 
+string_accum&	PutConst(string_accum &a, IDFMT fmt, const char *const *p, int val, const char *prefix);
+string_accum&	PutConst(string_accum &a, IDFMT fmt, const field_value *p, int val, const char *prefix);
+string_accum&	PutConst(string_accum &a, IDFMT fmt, const field_bit *p, int val, const char *prefix, char sep = '|');
+template<char C>	 string_accum&	PutConst(string_accum &a, IDFMT fmt, const field_bit_sep<C> *p, int val, const char *prefix) { return PutConst(a, fmt, (const field_bit*)p, val, prefix, C); }
+template<typename T> string_accum&	PutConst(string_accum &a, IDFMT fmt, const field_prefix<T> &p, int i, const char *prefix)	{ return PutConst(a, fmt, p.names, i, fmt & IDFMT_NOPREFIX ? prefix : p.prefix); }
+template<typename T> enable_if_t<is_enum<T>, string_accum&> PutConst(string_accum &a, IDFMT fmt, const T &t)					{ return PutConst(a, fmt, field_names<T>::s, (int)t, ""); }
+template<typename T> enable_if_t<is_enum<T>, string_accum&> operator<<(string_accum &a, const T& t)								{ return PutConst(a, IDFMT_LEAVE, field_names<T>::s, (int)t, ""); }
 
 string_accum&	PutConst(string_accum &a, IDFMT fmt, const char *const *names, uint32 val, uint8 mode = 0);
 string_accum&	PutConst(string_accum &a, IDFMT fmt, const field *pf, uint64 val);
@@ -679,14 +720,15 @@ class FieldPutter {
 	void	(*vLine)(void *me, const char *name, const char *value, uint32 addr);
 	void	(*vCallback)(void *me, const field *pf, const uint32le *p, uint32 offset, uint32 addr);
 
-	void	Open(string_param name, uint32 addr)					{ vOpen(me, name, addr); }
-	void	Close()													{ vClose(me); }
-	void	Line(string_param name, const char *value, uint32 addr)	{ vLine(me, name, value, addr); }
+	void	Open(const string_param &name, uint32 addr)								{ vOpen(me, name, addr); }
+	void	Close()																	{ vClose(me); }
+	void	Line(const string_param &name, const string_param &value, uint32 addr)	{ vLine(me, name, value, addr); }
 	void	Callback(const field *pf, const uint32le *p, uint32 offset, uint32 addr) { vCallback(me, pf, p, offset, addr); }
 
 	auto	FieldName(const field* pf) {
 		return FormatIdentifier(pf->name, format, IDTYPE_MEMBER);
 	}
+
 public:
 	template<typename T> FieldPutter(T *t, IDFMT format) : format(format), me(t),
 		vOpen(make_staticfunc2(&T::Open,T)),
@@ -698,6 +740,7 @@ public:
 
 	void	AddHex(const uint32 *vals, uint32 n, uint32 addr);
 	void	AddArray(const field *pf, const uint32le *p, uint32 stride, uint32 n, uint32 addr = 0);
+	void	AddPointer(const field *pf, const uint32 *p, uint32 addr, uint32 offset, const field *pf2, const uint32 *p2);
 	void	AddField(const field *pf, const uint32 *p, uint32 addr = 0, uint32 offset = 0);
 	void	AddFields(const field* pf, const uint32* p, uint32 addr = 0, uint32 offset = 0);
 
@@ -712,6 +755,47 @@ public:
 			Close();
 		}
 	}
+};
+
+
+//-----------------------------------------------------------------------------
+//	Option
+//-----------------------------------------------------------------------------
+
+struct array_entry;
+template<typename T> inline size_t from_string(const char *s, _read_as<array_entry, T> &x) {
+	return from_string(s, x.t.push_back());
+}
+
+template<uint32 F> struct _flag_option;
+template<uint32 F, typename I> inline size_t from_string(const char *s, _read_as<_flag_option<F>, I> &x) {
+	x.t |= F;
+	return 1;
+}
+template<uint32 F, typename B, typename T> _read_as<_flag_option<F>,T B::*> flag_option(T B::* p) {
+	return p;
+}
+
+struct structure_field {
+	typedef	size_t read_type(const char *v, void *p);
+	read_type	*_read;
+	uint32		offset;
+	template<typename T, typename B>				constexpr structure_field(T B::* p)				: _read((read_type*)(size_t(*)(const char*,T&))&iso::from_string), offset(uint32(T_get_member_offset(p))) {}
+	template<typename R, typename B, typename T>	constexpr structure_field(_read_as<R,T B::*> p)	: _read((read_type*)(size_t(*)(const char*,_read_as<R,T>&))&iso::from_string), offset(uint32(T_get_member_offset(p.t)))	{}
+};
+
+typedef meta::constant<bool, true>	yes;
+typedef meta::constant<bool, false>	no;
+
+template<typename T> inline size_t from_string(const char *s, _not<T> &x) {
+	return from_string(s, x.t);
+}
+
+struct Option {
+	const char		*name;
+	structure_field	off;
+	bool			operator==(const char *n) const		{ return str(n).begins(name) && !is_alpha(n[strlen(name)]); }
+	size_t			set(void *p, const char *v)	const	{ return off._read(v, (char*)p + off.offset); }
 };
 
 } // namespace iso

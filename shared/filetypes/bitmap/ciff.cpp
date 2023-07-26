@@ -145,8 +145,6 @@ enum CIFF_TAGS {						//EXIF	SubDir	Size		Description
 	ExifInformation			= 0x300b,	//-		0x300a	varies		The subdirectory containing most of the JPEG/TIFF EXIF information
 };
 
-/* Global Variables */
-
 struct CIFFDecoder {
 	istream_ref	file;
 

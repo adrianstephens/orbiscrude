@@ -51,9 +51,9 @@ class deflate_decoder : deflate_base, public codec_defaults {
 protected:
 public:
 	struct code {
-		uint8		op;		// operation, extra bits, table bits
-		uint8		bits;	// bits in thisc part of the code
-		uint16		val;	// offset in table or code value
+		uint8	op;		// operation, extra bits, table bits
+		uint8	bits;	// bits in thisc part of the code
+		uint16	val;	// offset in table or code value
 	};
 
 	enum MODE {

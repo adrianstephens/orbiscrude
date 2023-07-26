@@ -1221,8 +1221,10 @@ map<string, obj_factory_func> ObjectRegistry::object_map;
  * Run Time Type Information Class
  */
 class Type {
+	string name;
+	static int num_types;
 public:
-	Type(const char *_name, const Type *_base_type) : name(_name), base_type(_base_type), internal_type_number(num_types++) {}
+	Type(const char *name, const Type *base_type) : name(name), base_type(base_type), internal_type_number(num_types++) {}
 
 	string GetTypeName() const { return name; }
 
@@ -1238,9 +1240,6 @@ public:
 	NiObject *Create() const { return ObjectRegistry::CreateObject(name); }
 	const Type *base_type;
 	const int internal_type_number;
-private:
-	string name;
-	static int num_types;
 };
 
 int Type::num_types;
@@ -1280,8 +1279,8 @@ const Type RefObject::TYPE("RefObject", 0);
 
 class NiObject : public RefObject {
 public:
-	static NiObject			*Create()								{ return new NiObject; }
-	virtual string			asString(bool verbose = false)	const	{ return ""; }
+	static NiObject*	Create()										{ return new NiObject; }
+	string				asString(bool verbose = false)	const override	{ return ""; }
 	Ref<NiObject> Clone(uint32 version = 0xFFFFFFFF, uint32 user_version = 0) {
 		dynamic_memory_writer		mout;
 		NiObjectRef			clone = ObjectRegistry::CreateObject(GetType().GetTypeName());
@@ -1300,10 +1299,10 @@ public:
 	int internal_block_number;
 public:
 	void Read(istream_ref in, list<uint32> & link_stack, const NifInfo & info) override {}
-	virtual void Write(ostream_ref out, const map<NiObjectRef, uint32> & link_map, list<NiObject*> & missing_link_stack, const NifInfo & info) const {}
+	void Write(ostream_ref out, const map<NiObjectRef, uint32> & link_map, list<NiObject*> & missing_link_stack, const NifInfo & info) const override {}
 	void FixLinks(const map<uint32, NiObjectRef> & objects, list<uint32> & link_stack, list<NiObjectRef> & missing_link_stack, const NifInfo & info) override {}
-	virtual list<NiObjectRef> GetRefs() const { return list<Ref<NiObject> >(); }
-	virtual list<NiObject*> GetPtrs() const { return list<NiObject*>(); }
+	list<NiObjectRef>		GetRefs() const override	{ return list<Ref<NiObject> >(); }
+	virtual list<NiObject*> GetPtrs() const				{ return list<NiObject*>(); }
 };
 
 

@@ -239,7 +239,7 @@ void JPG::GetRestart(istream_ref file) {
 
 void JPG::ConvertBlock(const block<ISO_rgba, 2> &block, DCTBLOCK *blocks) {
 	for (int j = 0; j < MCUheight; j++) {
-		ISO_rgba	*dest	= block[j];
+		ISO_rgba	*dest	= block[j].begin();
 		switch (nBlocksInMCUF) {
 			case 7: {
 				DCTELEM	*ys		= blocks[0] + (j + (j & DCTSIZE)) * DCTSIZE;
@@ -1071,6 +1071,8 @@ bool JPG::WriteBitmap(ostream_ref file, bitmap &bm) {
 	} else if (bm.HasAlpha()) {
 //		nComponents = 4;
 	}
+
+	bm.Unpalette();
 
 	PutMarker(file, M_SOI);
 

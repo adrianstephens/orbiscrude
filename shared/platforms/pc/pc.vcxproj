@@ -736,6 +736,7 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DebugDX12|ARM64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DebugDX12-clang|ARM64'">true</ExcludedFromBuild>
     </ClCompile>
+    <ClCompile Include="dx12\dx12_helpers.cpp" />
     <ClCompile Include="dx12\_graphics.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='DebugDX9|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='ReleaseDX11|Win32'">true</ExcludedFromBuild>
@@ -861,15 +862,6 @@
     <MASM Include="x64\fcontext.asm">
       <ExcludedFromBuild Condition="'$(Platform)'!='x64'">true</ExcludedFromBuild>
     </MASM>
-  </ItemGroup>
-  <ItemGroup>
-    <IsoCmd Include="winrt\generate.ix">
-      <OutDir Condition="'$(Configuration)|$(Platform)'=='DebugDX11-clang|x64'">$(SolutionDir)platforms\pc\winrt\</OutDir>
-      <Variables Condition="'$(Configuration)|$(Platform)'=='DebugDX11-clang|x64'">
-      </Variables>
-      <OutExt Condition="'$(Configuration)|$(Platform)'=='DebugDX11-clang|x64'">h</OutExt>
-      <UseOutname Condition="'$(Configuration)|$(Platform)'=='DebugDX11-clang|x64'">false</UseOutname>
-    </IsoCmd>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

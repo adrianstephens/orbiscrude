@@ -28,7 +28,7 @@ template<typename T> struct leb128<T, false> {
 	T	t;
 
 	leb128() {}
-	leb128(const T &_t) : t(_t) {}
+	leb128(const T &t) : t(t) {}
 	operator T() const { return T(t); }
 
 	template<class W> bool write(W &w) const {
@@ -94,7 +94,7 @@ template<typename T> struct leb128<T,true> {
 	operator T() const { return T(t); }
 
 	template<class W> bool write(W &w) const {
-		S	t2 = t;
+		T	t2 = t;
 		while (t2 > 127 || t2 < -127) {
 			w.putc((t2 & 0x7f) | 0x80);
 			t2 /= 128;
@@ -103,14 +103,14 @@ template<typename T> struct leb128<T,true> {
 		return true;
 	}
 	template<class R> bool read(R &r) {
-		t = 0;
+		S	x = 0;
 		for (int s = 0;; s += 7) {
 			int	b = r.getc();
 			if (b == -1)
 				return false;
-			t |= S(b & 0x7f) << s;
+			x |= S(b & 0x7f) << s;
 			if (!(b & 0x80)) {
-				t -= (t & (S(64) << s)) << 1;
+				t = x - ((x & (S(64) << s)) << 1);
 				return true;
 			}
 		}

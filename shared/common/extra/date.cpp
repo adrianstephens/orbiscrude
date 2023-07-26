@@ -3,7 +3,7 @@
 using namespace iso;
 
 const uint8		month_lengths[]	= {31,28,31,30,31,30,31,31,30,31,30,31};
-const uint16	month_starts[]	= {0,31,59,90,120,151,181,212,243,273,304,334};
+//const uint16	month_starts[]	= {0,31,59,90,120,151,181,212,243,273,304,334};
 
 uint32 DateTime::Read_ISO_8601(string_scan &s) {
 	uint32	flags		= 0;
@@ -51,7 +51,7 @@ uint32 DateTime::Read_ISO_8601(string_scan &s) {
 		switch (n.length()) {
 			case 2: {
 				uint32	month = from_string<uint32>(n);
-				day	= month_starts[month - 1];
+				day	= Date::FromMonthDay(month, 1);
 				if (month > 2 && Date::IsLeap(year))
 					day++;
 
@@ -110,7 +110,7 @@ uint32 DateTime::Read_ISO_8601(string_scan &s) {
 		}
 	}
 
-	*this = DateTime(year, day) + Secs(secs) + micro;
+	*this = DateTime(year, day) + Duration::Secs(secs) + micro;
 	return flags;
 };
 
@@ -122,9 +122,9 @@ void Date::ToMonthDay(int d) {
 	day		= d + 1;
 }
 
-int Date::FromMonthDay(int month, int day) {
-	return day - 1 + month_starts[month - 1];
-}
+//int Date::FromMonthDay(int month, int day) {
+//	return day - 1 + month_starts[month - 1];
+//}
 
 int Date::DaysInMonth(int month, int year) {
 	return month_lengths[month - 1] + int(month == 2 && IsLeap(year));
@@ -211,3 +211,28 @@ template<> const char *DateFormat<ShortDate>::days[7]		= {"Sun", "Mon", "Tue", "
 
 template<> const char *DateFormat<LongDate>::months[12]		= {"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
 template<> const char *DateFormat<LongDate>::days[7]		= {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+
+string_accum& iso::operator<<(string_accum &a, Duration t) {
+	if (auto d = t.Days()) {
+		a << d << " day" << onlyif(d != 1, 's');;
+		if (auto h = t.Hours() % 24)
+			a << ", " << h << " hour" << onlyif(h != 1, 's');
+		return a;
+	}
+
+	if (auto h = t.Hours()) {
+		a << h << " hour" << onlyif(h != 1, 's');
+		if (auto m = t.Mins() % 60)
+			a << ", " << m << " minute" << onlyif(m != 1, 's');
+		return a;
+	}
+
+	if (auto m = t.Mins()) {
+		a << m << " minute" << onlyif(m != 1, 's');
+		if (auto s = t.Secs() % 60)
+			a << ", " << s << " second" << onlyif(s != 1, 's');;
+		return a;
+	}
+	float	s = t.fSecs();
+	return a << "seconds";
+}

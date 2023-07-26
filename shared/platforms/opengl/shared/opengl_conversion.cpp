@@ -312,7 +312,7 @@ ISO_ptr<bitmap2> OGLTexture2Bitmap(OGLTexture &tex) {
 					uint32	size = PVRTCDecompress(0, 0, block.size<1>(), block.size<2>(), block.pitch<2>(), fmt == TEXF_PVRTC2);
 					offset += PVRTCDecompress(
 						(PVRTCrec*)PlatformMemory(offset, size),
-						(pixel8*)(ISO_rgba*)block[0],
+						(pixel8*)(ISO_rgba*)block[0].begin(),
 						block.size<1>(), block.size<2>(), block.pitch<2>(),
 						fmt == TEXF_PVRTC2
 					);
@@ -514,7 +514,7 @@ OGLSubMesh::OGLSubMesh(SubMesh *p) {
 	int				num_comp2	= 0;
 
 	for (auto e : p->VertComponents()) {
-		USAGE2	usage(e.id);
+		USAGE2	usage(e.id.get_crc32());
 		if (!usage)
 			continue;
 

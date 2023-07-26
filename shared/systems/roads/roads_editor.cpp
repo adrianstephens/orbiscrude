@@ -447,10 +447,10 @@ void Optimise(const dynamic_array<ent::Junction*> &junctions) {
 				Junction2	*j0		= rs0->jtn[end0],			*j1		= rs1->jtn[end1];
 				float3		h0		= rs0->handle[end0] / t,	h1		= rs1->handle[end1] / (1 - t);
 
-				float3		p0		= j0->pos;
-				float3		p1		= j1->pos;
+				position3	p0		= position3(j0->pos);
+				position3	p1		= position3(j1->pos);
 
-				err += (float)abs(len(bezier_spline(p0, p0 + h0, p1 + h1, p1)) - (len0 + len1)) / (len0 + len1);
+				err += (float)abs(len(bezier_spline{p0, p0 + h0, p1 + h1, p1}) - (len0 + len1)) / (len0 + len1);
 
 				if (err < .005f) {
 					ISO_ptr<RoadSeg> prsnew(0, *rs0);
@@ -520,7 +520,7 @@ ISO_ptr<void> MakeRoads(ISO_ptr<void> roads) {
 				ISO_ptr<RoadSeg>	rs(0);
 				rs->id		= crc32(i["NAME"].Get<string>());
 				string	type = GetRoadType(i);
-				rs->type	= road_profiles[type];
+				rs->type	= road_profiles[crc32(type)];
 				rs->jtn[0]	= prev;
 				rs->jtn[1]	= next;
 
@@ -575,7 +575,7 @@ ISO_ptr<void> MakeRoads(ISO_ptr<void> roads) {
 			scene->root->children.Append(j);
 	}
 #endif
-	CheckHasExternals(scene, ISO::DUPF_DEEP);
+	CheckHasExternals(scene, ISO::TRAV_DEEP);
 	return scene;
 }
 

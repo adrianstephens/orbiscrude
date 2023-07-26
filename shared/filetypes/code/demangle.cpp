@@ -1636,7 +1636,7 @@ string enmangle(const char *m) {
 		trace_accum("demangled:\t") << d << '\n';
 		string_builder	sb;
 		if (CWEnmangle2(sb, dc))
-			trace_accum("remangled:\t%s\n", (const char*)sb);
+			trace_accum("remangled:\t") << sb << '\n';
 		return sb;
 	}
 	return 0;

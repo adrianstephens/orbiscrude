@@ -44,9 +44,9 @@ class PS4SBFileHandler : public FileHandler {
 
 int PS4SBFileHandler::Check(istream_ref file) {
 	file.seek(0);
-	ps4::shaders::Container		cont	= file.get();
-	ps4::shaders::FileHeader	sfh		= file.get();
-	return sfh.fileHeader == ps4::shaders::FileHeader::HeaderId ? CHECK_PROBABLE : CHECK_DEFINITE_NO;
+	ps4::shaders::Container		cont;//	= file.get();
+	ps4::shaders::FileHeader	sfh;//		= file.get();
+	return file.read(cont) && file.read(sfh) && sfh.fileHeader == ps4::shaders::FileHeader::HeaderId ? CHECK_PROBABLE : CHECK_DEFINITE_NO;
 }
 
 ISO_ptr<void> PS4SBFileHandler::Read(tag id, istream_ref file) {

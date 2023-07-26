@@ -166,7 +166,7 @@ namespace std {
 #define probably(a, b)		(b)
 #define unreachable()		__assume(0)
 #define	restrict			__restrict
-#define fallthrough
+//#define fallthrough
 #define DECL_ALLOCATOR		__declspec(allocator)
 
 namespace iso {
@@ -189,7 +189,8 @@ public:
 	~Win32Handle()							{ CloseHandle(h); }
 	Win32Handle	&operator=(Win32Handle &&b)	{ auto t = h; h = b.h; b.h = t; return *this; }
 	HANDLE	detach()			{ auto t = h; h = INVALID_HANDLE_VALUE; return t; }
-	HANDLE*	operator&()			{ return &h; }
+	operator HANDLE*()			{ return &h; }
+	//	HANDLE*	operator&()			{ return &h; }
 	operator HANDLE()	const	{ return h; }
 	bool	Valid()		const	{ return h != INVALID_HANDLE_VALUE; }
 	bool	operator!()	const	{ return h == INVALID_HANDLE_VALUE; }

@@ -121,6 +121,7 @@ using namespace iso;
 	void*	alloc(heap *tlsf, size_t size);
 	void*	alloc(heap *tlsf, size_t size, size_t align);
 	void*	realloc(heap *tlsf, void *p, size_t size);
+	void*	realloc_retry(heap *tlsf, void *p, size_t size);
 	void	free(heap *tlsf, void *p);
 
 	void	walk_heap(heap *tlsf, walker *w, void* user);

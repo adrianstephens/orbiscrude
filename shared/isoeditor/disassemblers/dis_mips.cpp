@@ -243,7 +243,7 @@ Disassembler::State *DisassemblerMIPS::Disassemble(const iso::memory_block &bloc
 			}
 		}
 
-		state->lines.push_back((const char*)ba);
+		state->lines.push_back(ba);
 	}
 	return state;
 }

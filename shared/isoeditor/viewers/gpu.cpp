@@ -40,7 +40,7 @@ int		EditorGPU::num_frames	= 1;
 bool	EditorGPU::until_halt	= false;
 bool	EditorGPU::resume_after	= false;
 
-bool EditorGPU::Command(MainWindow &main, ID id, MODE mode) {
+bool EditorGPU::Command(MainWindow &main, ID id) {
 	switch (id) {
 		case 0: {
 			Menu	menu	= main.GetDropDown(ID_ORBISCRUDE_GRAB);
@@ -86,6 +86,16 @@ bool EditorGPU::Command(MainWindow &main, ID id, MODE mode) {
 	return false;
 }
 #endif
+
+
+int app::MakeHeaders(win::ListViewControl lv, int nc, const SoftType &type, string_accum &prefix) {
+	for (int i = 0, n = type.Count(); i < n; i++) {
+		char	*startp = prefix.getp();
+		win::ListViewControl::Column(type.Name(prefix, i)).Width(75).Insert(lv, nc++);
+		prefix.move(startp - prefix.getp());
+	}
+	return nc;
+}
 
 //-----------------------------------------------------------------------------
 //	BatchList
@@ -170,7 +180,7 @@ int app::SelectBatch(HWND hWnd, const Point &mouse, BatchList &b, bool always_li
 //	MeshVertexWindow
 //-----------------------------------------------------------------------------
 
-LRESULT MeshVertexWindow::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+LRESULT MeshVertexWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 		case WM_LBUTTONDOWN:
 		case WM_RBUTTONDOWN:
@@ -186,8 +196,10 @@ LRESULT MeshVertexWindow::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 			switch (nmh->code) {
 				case LVN_ITEMCHANGED: {
 					NMLISTVIEW	*nmlv = (NMLISTVIEW*)nmh;
-					if (nmlv->uNewState & LVIS_SELECTED)
-						MeshWindow::Cast(GetPane(1))->SetSelection(nmlv->iItem, false);
+					if (nmlv->uNewState & LVIS_SELECTED) {
+						if (auto mw = MeshWindow::Cast(GetPane(1)))
+							mw->SetSelection(nmlv->iItem, false);
+					}
 					return 0;
 				}
 				case NM_CUSTOMDRAW: {
@@ -198,11 +210,13 @@ LRESULT MeshVertexWindow::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 
 						case CDDS_ITEMPREPAINT: {
 							static const COLORREF cols[] = { RGB(255,255,255), RGB(224,224,224) };
-							NMLVCUSTOMDRAW 	*nmlvcd = (NMLVCUSTOMDRAW*)nmh;
-							MeshWindow		*mw		= MeshWindow::Cast(GetPane(1));
-							int				i		= nmcd->dwItemSpec;
-							nmlvcd->clrTextBk		= cols[mw->PrimFromVertex(i, false) & 1];
-							return mw->IsChunkStart(i + 1) ? CDRF_NEWFONT | CDRF_NOTIFYPOSTPAINT : CDRF_NEWFONT;
+							if (auto mw = MeshWindow::Cast(GetPane(1))) {
+								NMLVCUSTOMDRAW 	*nmlvcd = (NMLVCUSTOMDRAW*)nmh;
+								int				i		= nmcd->dwItemSpec;
+								nmlvcd->clrTextBk		= cols[mw->PrimFromVertex(i) & 1];
+								return mw->ChunkOffset(i + 1) == 0 ? CDRF_NEWFONT | CDRF_NOTIFYPOSTPAINT : CDRF_NEWFONT;
+							}
+							return CDRF_DODEFAULT;
 						}
 
 						case CDDS_ITEMPOSTPAINT: {
@@ -225,7 +239,7 @@ LRESULT MeshVertexWindow::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 	return SplitterWindow::Proc(message, wParam, lParam);
 }
 
-MeshVertexWindow::MeshVertexWindow(const WindowPos &wpos, const char *title, ID id) : SplitterWindow(SWF_VERT | SWF_PROP) {
+MeshVertexWindow::MeshVertexWindow(const WindowPos &wpos, text title, ID id) : SplitterWindow(SWF_VERT | SWF_PROP) {
 	Create(wpos, title, CHILD | CLIPSIBLINGS | VISIBLE, NOEX, id);
 	Rebind(this);
 }
@@ -252,7 +266,7 @@ struct BufferWindow : public Window<BufferWindow> {
 		SetColumnWidths(vw.GetHeader());
 	}
 
-	LRESULT Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+	LRESULT Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 		switch (message) {
 			case WM_CREATE: {
 				vw.Create(GetChildWindowPos(), "verts", CHILD | CLIPSIBLINGS | VISIBLE | vw.OWNERDATA);
@@ -378,14 +392,17 @@ struct BufferWindow : public Window<BufferWindow> {
 		edit_format.MoveBefore(vw);
 
 		fixed_stride	= buffer.stride != 0;
-		if (!buffer.format)
-			buffer.format = builtin_ctypes().get_type<float[4]>();
 
 		if (!fixed_stride)
-			buffer.stride = (uint32)buffer.format.Size();//->size32();
+			buffer.stride	= !buffer.format ? (uint32)min(lowest_set(buffer.raw_size()), 16) : buffer.format.Size();
+
+		if (!buffer.format)
+			buffer.format	= buffer.stride & 3 ? builtin_ctypes().get_array_type<uint8>(buffer.stride)
+							: buffer.stride == 4 ? builtin_ctypes().get_static_type<float>()
+							: builtin_ctypes().get_array_type<float>(buffer.stride / 4);
 
 		//edit_format.SetText(DumpType(buffer_accum<256>(), buffer.format, 0, 0));
-		edit_format.SetText(buffer.format.Type(lvalue(buffer_accum<256>()), 0, 0));
+		edit_format.SetText(buffer.format.Type(lvalue(buffer_accum<256>()), -1, 0));
 		Fill();
 	}
 
@@ -399,11 +416,11 @@ struct BufferWindow : public Window<BufferWindow> {
 	}
 };
 
-Control app::MakeBufferWindow(const WindowPos &wpos, const char *title, ID id, const TypedBuffer &buffer) {
+Control app::MakeBufferWindow(const WindowPos &wpos, text title, ID id, const TypedBuffer &buffer) {
 	return *new BufferWindow(wpos, title, id, buffer);
 }
 
-Control app::MakeBufferWindow(const WindowPos &wpos, const char *title, ID id, TypedBuffer &&buffer) {
+Control app::MakeBufferWindow(const WindowPos &wpos, text title, ID id, TypedBuffer &&buffer) {
 	return *new BufferWindow(wpos, title, id, move(buffer));
 }
 
@@ -411,21 +428,7 @@ Control app::MakeBufferWindow(const WindowPos &wpos, const char *title, ID id, T
 //	VertexWindow
 //-----------------------------------------------------------------------------
 
-template<typename C, typename F> auto max_over(const C &c, F f) {
-	decltype(f(*c.begin())) t = 0;
-	for (auto &i : c)
-		t = max(t, f(i));
-	return t;
-}
-
-template<typename C> auto max_over(const C &c) {
-	typename container_traits<C>::element t = 0;
-	for (auto &i : c)
-		t = max(t, i);
-	return t;
-}
-
-LRESULT VertexWindow::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+LRESULT VertexWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 		case WM_CREATE:
 			vw.Create(GetChildWindowPos(), "verts", CHILD | CLIPSIBLINGS | vw.OWNERDATA);
@@ -467,10 +470,9 @@ LRESULT VertexWindow::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 						} else {
 
 							for (auto &b : buffers) {
-								int				nc		= b.format.Count();
+								int	nc	= b.format.Count();
 								if (col < nc) {
-									uint32	div = b.divider;
-									if (div) {
+									if (uint32 div = b.divider) {
 										row /= div;
 									} else {
 										row %= num_verts;
@@ -512,46 +514,72 @@ LRESULT VertexWindow::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 	return Super(message, wParam, lParam);
 }
 
-VertexWindow::VertexWindow(const WindowPos &wpos, const char *title, ID id, dynamic_array<uint16> &&indexing) : num_instances(1), indexing(move(indexing)) {
+VertexWindow::VertexWindow(const WindowPos &wpos, const char *title, ID id, dynamic_array<uint32> &&_indexing) : num_instances(1), indexing(move(_indexing)) {
 	Create(wpos, title, CHILD | CLIPCHILDREN | CLIPSIBLINGS, NOEX, id);
 	AddColumn(0, "#", 50, RGB(255,255,255));
 	if (indexing)
 		AddColumn(1, "index", 50, RGB(224,224,224));
 }
 
-VertexWindow::VertexWindow(const WindowPos &wpos, const char *title, ID id, named<TypedBuffer> *buffers, uint32 nb, dynamic_array<uint16> &&indexing, uint32 num_instances)
-	: num_instances(num_instances ? num_instances : 1), buffers(make_range_n(make_move_iterator(buffers), nb)), indexing(move(indexing))
-{
-	Create(wpos, title, CHILD | CLIPCHILDREN | CLIPSIBLINGS, NOEX, id);
-	AddColumn(0, "#", 50, RGB(255,255,255));
-	if (indexing)
-		AddColumn(1, "index", 50, RGB(224,224,224));
+uint32 VertexWindow::NumUnique() const {
+	uint32	n = 0;
+	for (auto& i : buffers)
+		n = max(n, i.size32());
+	return n;
 }
-void	VertexWindow::Show() {
+
+void VertexWindow::Show() {
+	Control::Show();
 	SetColumnWidths(vw.GetHeader());
-	//	num_verts = !indexing.empty() ? indexing.size32() : max_over(buffers, [](const TypedBuffer& b) { return b.size32(); });
-	num_verts = !indexing.empty() ? indexing.size32() : buffers[0].size32();
+
+	num_verts = indexing.empty() ? NumUnique() : indexing.size32();
 	vw.SetCount(num_verts * num_instances);
 	vw.Show();
 }
 
-VertexWindow *app::MakeVertexWindow(const WindowPos &wpos, const char *title, ID id, named<TypedBuffer> *buffers, uint32 nb, const indices &ix, uint32 num_instances) {
-	auto	*c	= ix
-		? new VertexWindow(wpos, title, id, buffers, nb, ix, num_instances)
-		: new VertexWindow(wpos, title, id, buffers, nb, {}, num_instances);
-	int		nc	= c->vw.NumColumns();
-	for (int i = 0; i < nb; i++) {
-		if (!buffers[i].format)
-			continue;
-		buffer_accum<512>		ba;
-		if (buffers[i].name())
-			ba << buffers[i].name();
-		else
-			ba << 'b' << i;
+void VertexWindow::AddVertices(range<TypedBuffer*> _buffers, const dynamic_array<uint32> &_indexing, uint32 _num_instances) {
+	bool	had_index = !indexing.empty();
+	indexing.append(_indexing);
 
-		nc		= MakeHeaders(c->vw, nc, buffers[i].format, ba);
-		c->AddColour(nc, MakeColour(i + 1));
+	if (indexing && !had_index)
+		AddColumn(1, "index", 50, RGB(224,224,224));
+
+	num_instances += _num_instances;
+
+	for (auto&& i : make_pair(buffers, _buffers))
+		i.a += i.b;
+
+	num_verts = indexing.empty() ? NumUnique() : indexing.size32();
+	vw.SetCount(num_verts * num_instances);
+}
+
+
+void VertexWindow::AddBuffer(const TypedBuffer& buffer, const char *name) {
+	buffers.push_back(buffer);
+
+	if (!!buffer.format) {
+		int		nc	= vw.NumColumns();
+		auto	x	= buffers.size() - 1;
+		buffer_accum<512>		ba;
+		if (name)
+			ba << name;
+		else
+			ba << 'b' << x;
+
+		nc		= MakeHeaders(vw, nc, buffer.format, ba);
+		AddColour(nc, MakeColour(x + 1));
 	}
+}
+
+VertexWindow *app::MakeVertexWindow(const WindowPos &wpos, text title, ID id, range<named<TypedBuffer>*> buffers, const indices &ix, uint32 num_instances) {
+	auto	*c	= ix
+		? new VertexWindow(wpos, title, id, ix)
+		: new VertexWindow(wpos, title, id, {});
+	c->num_instances	= num_instances;
+
+	for (auto &i : buffers)
+		c->AddBuffer(i, i.name());
+
 	c->Show();
 	return c;
 }
@@ -560,7 +588,7 @@ VertexWindow *app::MakeVertexWindow(const WindowPos &wpos, const char *title, ID
 //	VertexOutputWindow
 //-----------------------------------------------------------------------------
 
-LRESULT VertexOutputWindow::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+LRESULT VertexOutputWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 		case WM_CREATE:
 			vw.Create(GetChildWindowPos(), "vb", CHILD | CLIPSIBLINGS);
@@ -1213,7 +1241,6 @@ Tesselation::Tesselation(param(float2) edges, Spacing spacing) {
 
 int FindVertex(param(float4x4) mat, const kd_tree<dynamic_array<float3p>> &partition) {
 	typedef kd_tree<dynamic_array<float3p>>::kd_node	kd_node;
-	typedef kd_tree<dynamic_array<float3p>>::kd_leaf	kd_leaf;
 
 	struct stack_element {
 		const kd_node	*node;
@@ -1369,6 +1396,7 @@ void Axes::draw(GraphicsContext &ctx, param(float3x3) rot, const ISO::Browser &p
 	ctx.SetDepthTest(DT_USUAL);
 	DrawAxes(ctx, .05f, .2f, .2f, 0.25f, tech, (float3x4)rot, params);
 }
+
 int Axes::click(const Rect &client, const point &mouse, param(float3x3) rot) const {
 	return GetAxesClick(proj() * rot, (to<float>(mouse) - float2{size / 2, client.Height() - size / 2}) / float2{size / 2, size / 2});
 }
@@ -1376,6 +1404,9 @@ int Axes::click(const Rect &client, const point &mouse, param(float3x3) rot) con
 //-----------------------------------------------------------------------------
 //	MeshWindow
 //-----------------------------------------------------------------------------
+
+struct vertex_idx;
+struct vertex_norm;
 
 struct float3_in4 {
 	float4p	v;
@@ -1428,7 +1459,7 @@ void MeshWindow::SetDepthBounds(float zmin, float zmax) {
 	scissor.b.v.z = zmax;
 }
 
-void MeshWindow::SetScreenSize(const Point &s) {
+void MeshWindow::SetScreenSize(const point &s) {
 	screen_size = s;
 	flags.set(SCREEN_RECT);
 }
@@ -1487,7 +1518,7 @@ void MeshWindow::GetMatrices(float4x4 *world, float4x4 *proj) const {
 				float4{0,0,1 + viewport.y.z / viewport.x.z,1}
 			);
 
-			*proj	= perspective_projection(zoom2, 1.f);
+			*proj	= perspective_projection(zoom2 * float2{0.5f, -0.5f}, 1.f);
 			*world	= vpmat * unpersp;
 			break;
 		}
@@ -1513,29 +1544,6 @@ float4x4 MeshWindow::GetMatrix() const {
 	float4x4	world, proj;
 	GetMatrices(&world, &proj);
 	return proj * (float3x4)view_loc * world;
-}
-
-void MeshWindow::SelectVertex(const Point &mouse) {
-	point		size		= Size();
-	float		sx			= float(size.x) / 2, sy = float(size.y) / 2, sz = max(sx, sy);
-	float4x4	mat			= translate(sx - mouse.x, sy - mouse.y, 0) * scale(sx, sy, one) * GetMatrix();
-	int			hw_prims	= num_prims * topology.hw_mul;
-	int			face		= -1;
-	int			vert		= ib
-		? FindVertPrim(oct, mat, make_prim_iterator(topology.hw.p2v, make_indexed_iterator(vb.Data().begin(), ib.Data().begin())), hw_prims, face)
-		: FindVertPrim(oct, mat, make_prim_iterator(topology.hw.p2v, vb.Data().begin()), hw_prims, face);
-
-	if (vert >= 0) {
-		vert += topology.hw.p2v.first_vert(face % topology.hw_mul);
-		face /= topology.hw_mul;
-		vert = topology.p2v.first_vert(face) + topology.FromHWOffset(vert);
-
-		//deindex?
-		//if (ib)
-		//	vert = ib.Data()[vert];
-
-		MeshNotification::Set(*this, vert).Send(Parent());
-	}
 }
 
 LRESULT MeshWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
@@ -1570,9 +1578,7 @@ LRESULT MeshWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 				Timer::Start(0.01f);
 				break;
 			}
-			if (vb) {
-				SelectVertex(mouse);
-			}
+			Select(mouse);
 		}
 		// fall through
 		case WM_RBUTTONDOWN:
@@ -1727,95 +1733,59 @@ void MeshWindow::ResetView() {
 	Timer::Start(0.01f);
 }
 
-void MeshWindow::SetSelection(int i, bool zoom) {
-	select = i;
-	if (zoom) {
-		position3	pos[64];
-		if (ib) {
-			copy(make_prim_iterator(topology.hw.p2v, make_indexed_iterator(vb.Data().begin(), ib.Data().begin()))[i], pos);
-		} else {
-			copy(make_prim_iterator(topology.hw.p2v, vb.Data().begin())[i], pos);
-		}
-
-		float3		normal	= GetNormal(pos);
-		position3	centre	= centroid(pos);
-		float4x4	world, proj;
-		GetMatrices(&world, &proj);
-
-		if (reverse(cull, proj.det() < 0) == BFC_FRONT)
-			normal = -normal;
-
-		centre	= world * centre;
-		float	dist		= sqrt(len(normal));
-
-		float4	min_pos		= float4{0,0,-1,1} / proj;
-		float	min_dist	= len(project(min_pos));
-
-		dist	= max(dist, min_dist);
-
-		target_loc.rot		= quaternion::between(normalise(normal), float3{0,0,-1});
-//		target_loc.trans	= position3(0, 0, len(centre) + sqrt(len(normal) * half)) - target_loc.rot * float3(centre);
-		target_loc.trans4	= position3(0, 0, dist) - target_loc.rot * float3(centre);
-
-		Timer::Start(0.01f);
-
-	}
-	Invalidate();
-}
-
-bool MeshWindow::IsChunkStart(int i) const {
+int MeshWindow::ChunkOffset(int i) const {
+#if 0
 	if (topology.chunks)
-		return i % topology.chunks == 0;
+		return i % topology.chunks;
+#endif
 	if (patch_starts.size()) {
 		auto j = lower_boundc(patch_starts, i);
-		return j != patch_starts.end() && *j == i;
+		if (j != patch_starts.end())
+			return i - *j;
 	}
-	return false;
+	return i;
 }
 
-void MeshWindow::DrawMesh(GraphicsContext &ctx, int v, int n) {
-	if (topology && v < num_verts) {
-		PrimType	prim = GetHWType(topology, n);
+int	MeshWindow::PrimFromVertex(int i)	const {
+	if (items.empty())
+		return 0;
+	return ((MeshInstance*)items.front().get())->PrimFromVertex(i, false);
+}
 
-		/*if (int cs = topology.chunks) {
-			v	= topology.VertexFromPrim(v, false);
-			n	= topology.p2v.prims_to_verts(n);
-			while (n) {
-				int	n1 = min(n, cs - v % cs);
-				if (ib)
-					ctx.DrawIndexedVertices(prim, 0, num_verts, v, n1);
-				else
-					ctx.DrawVertices(prim, v, n1);
-				n -= n1;
-				v += n1;
-			}
+void MeshWindow::Select(const Point &mouse) {
+	point		size		= Size();
+	float		sx			= float(size.x) / 2, sy = float(size.y) / 2, sz = max(sx, sy);
+	float4x4	mat			= translate(sx - mouse.x, sy - mouse.y, 0) * scale(sx, sy, one) * GetMatrix();
 
-		} else*/ {
-			if (ib)
-				ctx.DrawIndexedPrimitive(prim, 0, num_verts, v, n);
-			else
-				ctx.DrawPrimitive(prim, v, n);
+	for (auto& i : items) {
+		int v = i->Select(this, mat);
+		if (v >= 0) {
+			MeshNotification::Set(*this, v).Send(Parent());
+			break;
 		}
 	}
 }
 
-void SetThickPoint(GraphicsContext &ctx, float size) {
-#ifdef USE_DX11
-	static pass *thickpoint	= *ISO::root("data")["default"]["thickpoint4"][0];
-	float2		point_size	= float2(size / float2(ctx.GetWindow().extent()));
-	AddShaderParameter("point_size",		point_size);
-	Set(ctx, thickpoint);
-#else
-	ctx.Device()->SetRenderState(D3DRS_POINTSIZE, iorf(8.f).i);
-#endif
+void MeshWindow::SetSelection(int i, bool zoom) {
+	select = i;
+	for (auto& x : items) {
+		x->Select(this, i);
+	}
+}
+
+void MeshWindow::AddDrawable(Item *p) {
+	items.push_back(p);
+	extent |= p->extent;
+	if (mode == PERSPECTIVE) {
+		float size	= len(extent.extent());
+		move_scale	= size;
+		view_loc.trans4 = position3(zero, zero, size);
+	}
 }
 
 void MeshWindow::Paint() {
-	static pass	*blend_idx		= *ISO::root("data")["default"]["blend_idx"][0];
 	static pass *blend4			= *ISO::root("data")["default"]["blend4"][0];
-	static pass *tex_blend		= *ISO::root("data")["default"]["tex"][0];
 	static pass *specular		= *ISO::root("data")["default"]["specular"][0];
-	static pass *specular4		= *ISO::root("data")["default"]["specular4"][0];
 	static pass *thickline		= *ISO::root("data")["default"]["thicklineR"][0];
 
 	axes.tech = specular;
@@ -1843,69 +1813,27 @@ void MeshWindow::Paint() {
 	float4x4	worldviewproj	= viewProj * world;
 
 	float3x4	iview			= inverse(view);
-	bool		flip			= proj.det() < 0;
-	BackFaceCull cull2			= cull == BFC_NONE ? BFC_NONE : reverse(cull, flip);
-	float		flip_normals	= cull2 == BFC_FRONT ? -1 : 1;
 	float3		shadowlight_dir	= light_rot * float3{0, 0, -1};
 	colour		shadowlight_col(0.75f);
 	colour		ambient(float3(0.25f));
 	colour		tint(one);
-	colour		col(one);
 	float2		point_size		= float2{8.f / width, 8.f / height};
 
-#if 0
-	AddShaderParameter("projection",		proj);
-	AddShaderParameter("worldViewProj",		worldviewproj);
-	AddShaderParameter("matrices",			matrices);
-	AddShaderParameter("diffuse_colour",	col);
-
-	AddShaderParameter("iview",				iview);
-	AddShaderParameter("world",				world);
-	AddShaderParameter("view",				view);
-	AddShaderParameter("viewProj",			viewProj);
-	AddShaderParameter("flip_normals",		flip_normals);
-	AddShaderParameter("tint",				tint);
-	AddShaderParameter("shadowlight_dir",	shadowlight_dir);
-	AddShaderParameter("shadowlight_col",	shadowlight_col);
-	AddShaderParameter("light_ambient",		ambient);
-#else
 	ShaderVal	vals[] = {
 		{"projection",			&proj},
 		{"worldViewProj",		&worldviewproj},
-		{"matrices",			&matrices},
-		{"diffuse_colour",		&col},
 		{"iview",				&iview},
 		{"world",				&world},
 		{"view",				&view},
 		{"viewProj",			&viewProj},
-		{"flip_normals",		&flip_normals},
 		{"tint",				&tint},
 		{"shadowlight_dir",		&shadowlight_dir},
 		{"shadowlight_col",		&shadowlight_col},
 		{"light_ambient",		&ambient},
 		{"point_size",			&point_size},
-		{"flags",				&flags},
 	};
 	ShaderVals	shader_params(vals);
 	auto		shader_browser = ISO::MakeBrowser(shader_params);
-#endif
-
-	worldviewproj	= viewProj * world;
-
-	plane		near_plane(z_axis,-1);
-	plane		far_plane(z_axis, 1);
-	plane		near_plane2		= worldviewproj * near_plane;
-
-	float4	pos{0, 0, 0, 1};
-
-	float4x4	wvp			= transpose(worldviewproj);
-	wvp[2]					= as_vec(near_plane);
-	float4		near_pt		= cofactors(wvp) * pos;
-	wvp[2]					= as_vec(far_plane);
-	float4		far_pt		= cofactors(wvp) * pos;
-
-	bool		test		= near_plane2.test(near_pt);
-	bool		test2		= near_plane2.clip(near_pt, far_pt);
 
 #if 0
 	if (dt) {
@@ -1955,162 +1883,8 @@ void MeshWindow::Paint() {
 		p[3] = float3{+1, +1, 1};
 	}
 
-	if (num_prims) {
-		worldviewproj	= viewProj * world;
-		tint	= colour(1,0.95f,0.8f);
-
-		ctx.SetVertices(0, vb);
-
-		if (topology.type == Topology::POINTLIST || topology.type == Topology::PATCH) {
-			ctx.SetBlendEnable(true);
-			SetThickPoint(ctx, 4);
-			ctx.SetVertexType<float4p>();
-
-		} else if (vb_matrix) {
-			Set(ctx, blend_idx, shader_browser);
-			ctx.SetVertices(1, vb_matrix);
-			ctx.SetVertexType<vertex_idx>();
-
-		} else if (vb_norm) {
-			Set(ctx, specular4, shader_browser);
-			ctx.SetVertices(1, vb_norm);
-			ctx.SetVertexType<vertex_norm>();
-
-		} else {
-			Set(ctx, blend4, shader_browser);
-			ctx.SetVertexType<float4p>();
-		}
-
-		if (ib)
-			ctx.SetIndices(ib);
-
-		if (flags.test(FILL)) {
-			ctx.SetBackFaceCull(cull2);
-			ctx.SetFillMode(FILL_SOLID);
-			ctx.SetZBuffer(Surface(TEXF_D24S8, Size(), MEM_DEPTH));
-//			ctx.SetZBuffer(Surface(TEXF_D32F, Size()));
-
-			ctx.SetDepthTest(DT_USUAL);
-			ctx.SetDepthTestEnable(true);
-			ctx.ClearZ();
-
-			DrawMesh(ctx);
-			if (cull != BFC_NONE) {
-				ctx.SetBackFaceCull(reverse(cull, !flip));
-				ctx.SetFillMode(FILL_WIREFRAME);
-				DrawMesh(ctx);
-			}
-
-		} else {
-			//ctx.SetBackFaceCull(BFC_NONE);
-			//Set(ctx, specular4, shader_browser);
-			ctx.SetBackFaceCull(cull2);
-			ctx.SetFillMode(FILL_WIREFRAME);
-			DrawMesh(ctx);
-		}
-
-		if (select >= 0) {
-
-			if (patch_starts.size()) {
-				col = colour(0, 1, 0);
-				/*
-				static pass *thickline	= *ISO::root("data"]["default"]["thickline4"][0);
-				float2		point_size	= float2(4 / ctx.GetWindow().Size());
-				AddShaderParameter("point_size",		point_size);
-				Set(ctx, thickline, shader_browser);
-				*/
-				Set(ctx, vb_matrix ? blend_idx : blend4, shader_browser);
-				ctx.SetBackFaceCull(BFC_NONE);
-				ctx.SetDepthTestEnable(false);
-				ctx.SetFillMode(FILL_WIREFRAME);
-
-				auto		j		= lower_boundc(patch_starts, select);
-				int			end		= j[0];
-				int			start	= j == patch_starts.begin() ? 0 : j[-1];
-				int			n		= 1;
-				PrimType	prim	= GetHWType(topology, n);
-				if (ib)
-					ctx.DrawIndexedVertices(prim, 0, num_verts, start, end - start);
-				else
-					ctx.DrawVertices(prim, start, end - start);
-			}
-
-			int	prim	= PrimFromVertex(select, false);
-			int	off		= topology.ToHWOffset(max(select - VertexFromPrim(prim, false), 0));
-			int	vert	= VertexFromPrim(prim * topology.hw_mul, true);
-
-			col = colour(1,0.5f,0.5f);
-
-			switch (topology.type) {
-				case Topology::POINTLIST:
-					break;
-
-				case Topology::PATCH: {
-				#if 0
-					int			cp		= topology.hw_mul;
-					PrimType	prim	= PatchPrim(cp);
-					static technique *convex_hull	= ISO::root("data"]["default"]["convex_hull");
-					Set(ctx, (*convex_hull)[cp - 3], shader_browser);
-					try {
-					if (flags.test(FILL)) {
-						ctx.SetFillMode(FILL_SOLID);
-						ctx.SetBackFaceCull(cull2);
-						if (ib)
-							ctx.DrawIndexedVertices(prim, 0, num_verts, vert, cp);
-						else
-							ctx.DrawVertices(prim, vert, cp);
-					}
-					} catch (...) {}
-
-					try {
-					ctx.SetBackFaceCull(BFC_NONE);
-					ctx.SetDepthTestEnable(false);
-					ctx.SetFillMode(FILL_WIREFRAME);
-					if (ib)
-						ctx.DrawIndexedVertices(prim, 0, num_verts, vert, cp);
-					else
-						ctx.DrawVertices(prim, vert, cp);
-					} catch (...) {}
-
-					col = colour(1,0.5f,0.5f);
-				#endif
-				}
-				// fall through
-				default: {
-					if (topology.type == Topology::POINTLIST || topology.type == Topology::PATCH)
-						SetThickPoint(ctx, 8);
-					else
-						Set(ctx, vb_matrix ? blend_idx : blend4, shader_browser);
-
-					if (flags.test(FILL)) {
-						ctx.SetFillMode(FILL_SOLID);
-						ctx.SetBackFaceCull(cull2);
-						DrawMesh(ctx, vert, 1);
-					}
-
-					ctx.SetBackFaceCull(BFC_NONE);
-					ctx.SetDepthTestEnable(false);
-					ctx.SetFillMode(FILL_WIREFRAME);
-					DrawMesh(ctx, vert, 1);
-					break;
-				}
-			}
-
-			if (vert < num_verts) {
-				col = colour(1,0,0);
-				if (topology.type == Topology::POINTLIST || topology.type == Topology::PATCH)
-					SetThickPoint(ctx, 8);
-				else
-					Set(ctx, vb_matrix ? blend_idx : blend4, shader_browser);
-
-				SetThickPoint(ctx, 8);
-				ctx.SetBlendEnable(true);
-				ctx.SetFillMode(FILL_SOLID);
-				ctx.DrawPrimitive(PRIM_POINTLIST, ib ? ib.Data()[vert + off] : vert + off, 1);
-			}
-		}
-
-	}
+	for (auto &i : items)
+		i->Draw(this, ctx);
 
 	ctx.SetBlendEnable(false);
 	ctx.SetBackFaceCull(BFC_NONE);
@@ -2119,23 +1893,23 @@ void MeshWindow::Paint() {
 
 	if (flags.test(FRUSTUM_EDGES)) {
 		worldviewproj = viewProj * world * (translate(zero, zero, (one + viewport.y.z) * half) * scale(one, one, viewport.x.z * half));
-		col = colour(0.5f, 0.5f, 0.5f);
+		tint = colour(0.5f, 0.5f, 0.5f);
 		Set(ctx, blend4, shader_browser);
 		DrawWireFrameBox(ctx);
 	}
 
 	if (flags.test(SCISSOR)) {
 		worldviewproj	= viewProj * world * cuboid((scissor - viewport.y) / scale(viewport.x)).matrix();
-		col = colour(1,1,0);
+		tint = colour(1,1,0);
 		Set(ctx, blend4, shader_browser);
 		DrawWireFrameBox(ctx);
 	}
 
 	if (flags.test(SCREEN_RECT)) {
-		rectangle	r = rectangle::with_length(position2(zero), float2{screen_size.x, screen_size.y});
+		rectangle	r = rectangle::with_length(position2(zero), to<float>(screen_size));
 		r = (r - viewport.y.xy) / scale(viewport.x.xy);
 		worldviewproj	= viewProj * world * translate(0,0,1) * float3x4(r.matrix());
-		col = colour(1,1,1);
+		tint = colour(1,1,1);
 		Set(ctx, blend4, shader_browser);
 		DrawWireFrameRect(ctx);
 	}
@@ -2146,7 +1920,7 @@ void MeshWindow::Paint() {
 		ctx.SetBlendEnable(true);
 
 		worldviewproj	= viewProj * world * extent.matrix();
-		col			= colour(0,1,0);
+		tint			= colour(0,1,0);
 		Set(ctx, thickline, shader_browser);
 		//Set(ctx, blend4, shader_browser);
 		DrawWireFrameBox(ctx);
@@ -2156,7 +1930,6 @@ void MeshWindow::Paint() {
 	proj			= hardware_fix(axes.proj());
 	viewProj		= proj * view_loc.rot;
 	iview			= (float3x4)float3x3((quaternion)inverse(view_loc.rot));
-	flip_normals	= 1;
 	shadowlight_dir	= inverse(view_loc.rot) * float3{0,0,-1};
 
 	axes.draw(ctx, mode == PERSPECTIVE ? float3x3(world) : identity, shader_browser);
@@ -2165,60 +1938,313 @@ void MeshWindow::Paint() {
 	Present();
 }
 
-void MeshWindow::Init(const Topology2 _topology, int _num_verts, param(cuboid) &_extent, MODE _mode) {
-	mode		= _mode;
-	topology	= _topology;
-	num_verts	= _num_verts;
-	num_prims	= topology.p2v.verts_to_prims(num_verts);
-	extent		= _extent;
+//-----------------------------------------------------------------------------
+// MeshInstance
+//-----------------------------------------------------------------------------
 
-	if (mode == PERSPECTIVE) {
-		float size	= len(extent.extent());
-		move_scale	= size;
-		view_loc.trans4 = position3(zero, zero, size);
+void MeshInstance::DrawMesh(GraphicsContext &ctx, int v, int n) {
+	if (topology && v < num_verts) {
+		PrimType	prim = GetHWType(topology, n);
+
+		if (ib)
+			ctx.DrawIndexedPrimitive(prim, 0, num_verts, v, n);
+		else
+			ctx.DrawPrimitive(prim, v, n);
+	}
+}
+
+void SetThickPoint(GraphicsContext &ctx, float size, const ISO::Browser &params) {
+#ifdef USE_DX11
+	static pass *thickpoint	= *ISO::root("data")["default"]["thickpoint4"][0];
+	params["point_size"].UnsafeSet(addr(size / to<float>(ctx.GetWindow().extent())));
+	Set(ctx, thickpoint, params);
+#else
+	ctx.Device()->SetRenderState(D3DRS_POINTSIZE, iorf(8.f).i);
+#endif
+}
+/*
+mw->GetMatrices(&world, &proj0);
+mw->view_loc
+mw->cull
+mw->light_rot
+mw->Size()
+mw->flags
+mw->mode
+mw->select
+*/
+
+void MeshInstance::Draw(MeshWindow *mw, GraphicsContext &ctx) {
+	static pass	*blend_idx		= *ISO::root("data")["default"]["blend_idx"][0];
+	static pass *blend4			= *ISO::root("data")["default"]["blend4"][0];
+	static pass *specular4		= *ISO::root("data")["default"]["specular4"][0];
+
+	float4x4	world, proj0;
+	mw->GetMatrices(&world, &proj0);
+
+	world	= world * transform;
+
+	float4x4	proj			= hardware_fix(proj0);
+	float3x4	view			= mw->view_loc;
+	float4x4	viewProj		= proj * view;
+	float4x4	worldviewproj	= viewProj * world;
+
+	float3x4	iview			= inverse(view);
+	bool		flip			= proj.det() < 0;
+	BackFaceCull cull2			= mw->cull == BFC_NONE ? BFC_NONE : reverse(mw->cull, flip);
+	float		flip_normals	= cull2 == BFC_FRONT ? -1 : 1;
+	float3		shadowlight_dir	= mw->light_rot * float3{0, 0, -1};
+	colour		shadowlight_col(0.75f);
+	colour		ambient(float3(0.25f));
+	colour		tint(one);
+	colour		clip_tint(one);
+	colour		col(one);
+	float2		point_size		= 8.f / to<float>(mw->Size());
+
+	ShaderVal	vals[] = {
+		{"projection",			&proj},
+		{"worldViewProj",		&worldviewproj},
+		{"matrices",			&matrices},
+		{"diffuse_colour",		&col},
+		{"iview",				&iview},
+		{"world",				&world},
+		{"view",				&view},
+		{"viewProj",			&viewProj},
+		{"flip_normals",		&flip_normals},
+		{"tint",				&tint},
+		{"clip_tint",			&clip_tint},
+		{"shadowlight_dir",		&shadowlight_dir},
+		{"shadowlight_col",		&shadowlight_col},
+		{"light_ambient",		&ambient},
+		{"point_size",			&point_size},
+		{"flags",				&mw->flags},
+	};
+	ShaderVals	shader_params(vals);
+	auto		shader_browser = ISO::MakeBrowser(shader_params);
+
+	tint		= colour(1,0.95f,0.8f);
+	clip_tint	= mw->mode == mw->PERSPECTIVE ? tint : colour(1, 0, 0, 1);
+
+	ctx.SetVertices(0, vb);
+
+	if (topology.type == Topology::POINTLIST || topology.type == Topology::PATCH) {
+		ctx.SetBlendEnable(true);
+		SetThickPoint(ctx, 4, shader_browser);
+		ctx.SetVertexType<float4p>();
+
+	} else if (vb_matrix) {
+		Set(ctx, blend_idx, shader_browser);
+		ctx.SetVertices(1, vb_matrix);
+		ctx.SetVertexType<vertex_idx>();
+	
+	} else if (vb_norm) {
+		Set(ctx, specular4, shader_browser);
+		ctx.SetVertices(1, vb_norm);
+		ctx.SetVertexType<vertex_norm>();
+
 	} else {
-		move_scale	= len(viewport.x);
+		Set(ctx, blend4, shader_browser);
+		ctx.SetVertexType<float4p>();
 	}
-	if (toolbar) {
-		toolbar.CheckButton(ID_MESH_BACKFACE, cull == BFC_FRONT);
-		toolbar.CheckButton(ID_MESH_BOUNDS, flags.test(BOUNDING_EDGES));
-		toolbar.CheckButton(ID_MESH_FILL, flags.test(FILL));
+
+	if (ib)
+		ctx.SetIndices(ib);
+
+	if (mw->flags.test(mw->FILL)) {
+		ctx.SetBackFaceCull(cull2);
+		ctx.SetFillMode(FILL_SOLID);
+		ctx.SetZBuffer(Surface(TEXF_D24S8, mw->Size(), MEM_DEPTH));
+		//			ctx.SetZBuffer(Surface(TEXF_D32F, Size()));
+
+		ctx.SetDepthTest(DT_USUAL);
+		ctx.SetDepthTestEnable(true);
+		ctx.ClearZ();
+
+		DrawMesh(ctx);
+		if (mw->cull != BFC_NONE) {
+			ctx.SetBackFaceCull(reverse(mw->cull, !flip));
+			ctx.SetFillMode(FILL_WIREFRAME);
+			DrawMesh(ctx);
+		}
+
+	} else {
+		//ctx.SetBackFaceCull(BFC_NONE);
+		//Set(ctx, specular4, shader_browser);
+		ctx.SetBackFaceCull(cull2);
+		ctx.SetFillMode(FILL_WIREFRAME);
+		DrawMesh(ctx);
+	}
+
+	if (mw->select >= 0) {
+		if (mw->patch_starts.size()) {
+			tint = colour(0, 1, 0);
+
+			Set(ctx, vb_matrix ? blend_idx : blend4, shader_browser);
+			ctx.SetBackFaceCull(BFC_NONE);
+			ctx.SetDepthTestEnable(false);
+			ctx.SetFillMode(FILL_WIREFRAME);
+
+			//auto		j		= mw->ChunkOffset(mw->select);
+			//int			end		= j;
+			//int			start	= mw->select - j;
+
+			auto		j		= lower_boundc(mw->patch_starts, mw->select);
+			int			end		= j[0];
+			int			start	= j == mw->patch_starts.begin() ? 0 : j[-1];
+			int			n		= 1;
+			PrimType	prim	= GetHWType(topology, n);
+			if (ib)
+				ctx.DrawIndexedVertices(prim, 0, num_verts, start, end - start);
+			else
+				ctx.DrawVertices(prim, start, end - start);
+		}
+
+		int	prim	= PrimFromVertex(mw->select, false);
+		int	off		= topology.ToHWOffset(max(mw->select - VertexFromPrim(prim, false), 0));
+		int	vert	= VertexFromPrim(prim * topology.hw_mul, true);
+
+		tint = colour(1,0.5f,0.5f);
+
+		switch (topology.type) {
+			case Topology::POINTLIST:
+				break;
+
+			case Topology::PATCH: {
+			#if 0
+				int			cp		= topology.hw_mul;
+				PrimType	prim	= PatchPrim(cp);
+				static technique *convex_hull	= ISO::root("data")["default"]["convex_hull"];
+				Set(ctx, (*convex_hull)[cp - 3], shader_browser);
+				try {
+					if (flags.test(FILL)) {
+						ctx.SetFillMode(FILL_SOLID);
+						ctx.SetBackFaceCull(cull2);
+						if (ib)
+							ctx.DrawIndexedVertices(prim, 0, num_verts, vert, cp);
+						else
+							ctx.DrawVertices(prim, vert, cp);
+					}
+				} catch (...) {}
+
+				try {
+					ctx.SetBackFaceCull(BFC_NONE);
+					ctx.SetDepthTestEnable(false);
+					ctx.SetFillMode(FILL_WIREFRAME);
+					if (ib)
+						ctx.DrawIndexedVertices(prim, 0, num_verts, vert, cp);
+					else
+						ctx.DrawVertices(prim, vert, cp);
+				} catch (...) {}
+
+				tint = colour(1,0.5f,0.5f);
+			#endif
+			}
+			// fall through
+			default: {
+				if (topology.type == Topology::POINTLIST || topology.type == Topology::PATCH)
+					SetThickPoint(ctx, 8, shader_browser);
+				else
+					Set(ctx, vb_matrix ? blend_idx : blend4, shader_browser);
+
+				if (mw->flags.test(mw->FILL)) {
+					ctx.SetFillMode(FILL_SOLID);
+					ctx.SetBackFaceCull(cull2);
+					DrawMesh(ctx, vert, 1);
+				}
+
+				ctx.SetBackFaceCull(BFC_NONE);
+				ctx.SetDepthTestEnable(false);
+				ctx.SetFillMode(FILL_WIREFRAME);
+				DrawMesh(ctx, vert, 1);
+				break;
+			}
+		}
+
+		if (vert < num_verts) {
+			tint = colour(1,0,0);
+			if (topology.type == Topology::POINTLIST || topology.type == Topology::PATCH)
+				SetThickPoint(ctx, 8, shader_browser);
+			else
+				Set(ctx, vb_matrix ? blend_idx : blend4, shader_browser);
+
+			SetThickPoint(ctx, 8, shader_browser);
+			ctx.SetBlendEnable(true);
+			ctx.SetFillMode(FILL_SOLID);
+			ctx.DrawPrimitive(PRIM_POINTLIST, ib ? ib.Data()[vert + off] : vert + off, 1);
+		}
 	}
 }
 
-MeshWindow::MeshWindow(const WindowPos &wpos, ID id) {
-	Create(wpos, "Mesh", CHILD | CLIPCHILDREN | CLIPSIBLINGS, NOEX, id);
+int MeshInstance::Select(MeshWindow *mw, const float4x4 &mat) {
+	int			hw_prims	= num_prims * topology.hw_mul;
+	int			face		= -1;
+	int			vert		= ib
+		? FindVertPrim(oct, mat, make_prim_iterator(topology.hw, make_indexed_iterator(vb.Data().begin(), ib.Data().begin())), hw_prims, face)
+		: FindVertPrim(oct, mat, make_prim_iterator(topology.hw, vb.Data().begin()), hw_prims, face);
+
+	if (vert >= 0) {
+		vert += topology.hw.first_vert(face % topology.hw_mul);
+		face /= topology.hw_mul;
+		vert = topology.first_vert(face) + topology.FromHWOffset(vert);
+
+		//deindex?
+		//if (ib)
+		//	vert = ib.Data()[vert];
+
+		MeshNotification::Set(*mw, vert).Send(mw->Parent());
+	}
+	return vert;
 }
 
-MeshWindow *app::MakeMeshView(const WindowPos &wpos, Topology2 topology, const TypedBuffer &vb, const indices &ix, param(float3x2) viewport, BackFaceCull cull, MeshWindow::MODE mode) {
-	graphics.Init();
+void MeshInstance::Select(MeshWindow *mw, int i) {
+	position3	pos[64];
+	if (ib) {
+		copy(make_prim_iterator(topology.hw, make_indexed_iterator(vb.Data().begin(), ib.Data().begin()))[i], pos);
+	} else {
+		copy(make_prim_iterator(topology.hw, vb.Data().begin())[i], pos);
+	}
 
-	MeshWindow	*c			= new MeshWindow;
-	cuboid		ext			= empty;
-	bool		use_w		= mode != MeshWindow::PERSPECTIVE;
-	uint32		num_ix		= ix.num;
-	uint32		num_prims	= topology.p2v.verts_to_prims(num_ix);
-	int			num_hw		= topology.NumHWVertices(num_ix);
+	float3		normal	= GetNormal(pos);
+	position3	centre	= centroid(pos);
+	float4x4	world, proj;
+	mw->GetMatrices(&world, &proj);
+
+	if (reverse(mw->cull, proj.det() < 0) == BFC_FRONT)
+		normal = -normal;
+
+	centre	= world * centre;
+	float	dist		= sqrt(len(normal));
+
+	float4	min_pos		= float4{0,0,-1,1} / proj;
+	float	min_dist	= len(project(min_pos));
+
+	dist	= max(dist, min_dist);
+
+	auto	rot	= quaternion::between(normalise(normal), float3{0,0,-1});
+	mw->SetTarget({rot, position3(0, 0, dist) - rot * float3(centre)});
+}
+
+MeshInstance::MeshInstance(const Topology2 topology, const TypedBuffer &verts, const indices &ix, bool use_w) : topology(topology), num_verts(ix.num), num_prims(topology.verts_to_prims(num_verts)) {
+	int			num_hw		= topology.NumHWVertices(num_verts);
 	uint32		num_recs	= ix.max_index() + 1;
 
-	if (num_hw && num_recs <= vb.size()) {
+	if (num_hw && num_recs <= verts.size()) {
 		dynamic_array<float3>	prim_norms(num_prims);
 
 		if (ix) {
-			float4p	*vec	= c->vb.Begin(num_recs);
+			float4p	*vec	= vb.Begin(num_recs);
 			float4p	*v0		= vec;
 
-			for (auto &&i : make_range_n(vb.begin(), num_recs)) {
+			for (auto &&i : make_range_n(verts.begin(), num_recs)) {
 				assign(*vec, i);
 				if (!use_w)
 					vec->w	= 1;
 				vec++;
 			}
 
-			uint32	*i0			= c->ib.Begin(num_hw);
+			uint32	*i0			= ib.Begin(num_hw);
 			uint32	*idx		= i0;
 			dynamic_bitarray<uint32>	used(num_recs);
-			for (int i = 0; i < num_ix; i++) {
+			for (int i = 0; i < num_verts; i++) {
 				uint32	j	= min(ix[i], num_recs - 1);
 				used[j]		= true;
 				*idx		= j;
@@ -2227,67 +2253,111 @@ MeshWindow *app::MakeMeshView(const WindowPos &wpos, Topology2 topology, const T
 
 			for (int x = 0; (x = used.next(x, true)) < used.size(); x++) {
 				if (v0[x].w)
-					ext |= project(float4(v0[x]));
+					extent |= project(float4(v0[x]));
 			}
 
 			if (topology.type >= Topology::TRILIST) {
 				auto	v		= make_indexed_iterator(v0, make_const(i0));
 				GetFaceNormals(prim_norms,
-					make_prim_iterator(topology.hw.p2v, v),
-					num_prims
+					make_range_n(make_prim_iterator(topology.hw, v), num_prims)
 				);
 
 				int		ix0		= used.lowest(true);
 				int		ix1		= used.highest(true);
 				dynamic_array<NormalRecord>	vert_norms(ix1 - ix0 + 1);
 				AddNormals(vert_norms - ix0, prim_norms,
-					make_prim_iterator(topology.hw.p2v, i0),
-					num_prims
+					make_range_n(make_prim_iterator(topology.hw, i0), num_prims)
 				);
 
-				float3p	*norm	= c->vb_norm.Begin(num_recs);
+				float3p	*norm	= vb_norm.Begin(num_recs);
 				for (int i = 0; i < ix1 - ix0 + 1; i++) {
 					vert_norms[i].Normalise();
 					norm[i + ix0] = vert_norms[i].Get(1);
 				}
-				c->vb_norm.End();
+				//c->vb_norm.End();
 			}
 
-			c->ib.End();
-			c->vb.End();
+			//c->ib.End();
+			//c->vb.End();
 
 		} else {
-			float4p	*vec	= c->vb.Begin(num_hw);
+			float4p	*vec	= vb.Begin(num_hw);
 			float4p	*v0		= vec;
 			int		x		= 0;
-			for (auto &&i : make_range_n(vb.begin(), num_recs)) {
+			for (auto &&i : make_range_n(verts.begin(), num_recs)) {
 				assign(*vec, i);
 				if (!use_w)
 					vec->w	= 1;
-				ext |= project(float4(*vec));
+				extent |= project(float4(*vec));
 				vec = topology.Adjust(vec, x++);
 			}
 
 			if (topology.type >= Topology::TRILIST) {
 				GetFaceNormals(prim_norms,
-					make_prim_iterator(topology.hw.p2v, v0),
-					num_prims
+					make_range_n(make_prim_iterator(topology.hw, v0), num_prims)
 				);
-				float3p	*norm	= c->vb_norm.Begin(num_hw);
+				float3p	*norm	= vb_norm.Begin(num_hw);
 				for (int i = 0; i < num_hw; i++)
 					norm[i] = prim_norms[topology.FirstPrimFromVertex(i, false) / topology.hw_mul];
-				c->vb_norm.End();
+				//c->vb_norm.End();
 			}
-			c->vb.End();
+			//c->vb.End();
 		}
 	}
+}
 
-	c->viewport	= viewport;
-	c->cull		= cull;
-	c->flags.set(MeshWindow::FILL);
-	c->Init(topology, num_ix, ext, mode);
-	c->Create(wpos, "Mesh", Control::CHILD | Control::CLIPCHILDREN | Control::CLIPSIBLINGS, Control::NOEX);
-	return c;
+
+MeshWindow *app::MakeMeshView(const WindowPos &wpos, Topology2 topology, const TypedBuffer &vb, const indices &ix, param(float3x2) viewport, BackFaceCull cull, MeshWindow::MODE mode) {
+	graphics.Init();
+
+	auto	mesh	= new MeshInstance(topology, vb, ix, mode != MeshWindow::PERSPECTIVE);
+	auto	mw		= new MeshWindow(viewport, cull, mode);
+
+	mw->AddDrawable(mesh);
+	mw->Create(wpos, "Mesh", Control::CHILD | Control::CLIPCHILDREN | Control::CLIPSIBLINGS, Control::NOEX);
+	return mw;
+}
+
+
+
+void	MeshAABBInstance::Draw(MeshWindow *mw, GraphicsContext &ctx) {
+	static pass *blend4			= *ISO::root("data")["default"]["blend4"][0];
+
+	float4x4	world, proj0;
+	mw->GetMatrices(&world, &proj0);
+
+	float4x4	proj			= hardware_fix(proj0);
+	float3x4	view			= mw->view_loc;
+	float4x4	viewProj		= proj * view;
+	float4x4	worldviewproj	= viewProj * world;
+	colour		tint			= colour(0.5f, 0.5f, 0.5f);
+
+	ShaderVal	vals[] = {
+		{"worldViewProj",		&worldviewproj},
+		{"tint",				&tint},
+	};
+	ShaderVals	shader_params(vals);
+	auto		shader_browser = ISO::MakeBrowser(shader_params);
+
+	for (auto& i : boxes) {
+		worldviewproj	= viewProj * world * i.matrix();
+		Set(ctx, blend4, shader_browser);
+		DrawWireFrameBox(ctx);
+	}
+}
+
+int		MeshAABBInstance::Select(MeshWindow *mw, const float4x4 &mat) {
+	return -1;
+}
+void	MeshAABBInstance::Select(MeshWindow *mw, int i) {
+}
+
+MeshAABBInstance::MeshAABBInstance(const TypedBuffer &b) {
+	for (auto i : b) {
+		auto&	box = *(cuboid*)&i.t;
+		boxes.push_back(box);
+		extent	|= box;
+	}
 }
 
 //-----------------------------------------------------------------------------
@@ -2299,13 +2369,14 @@ const GUID GUID_GridPixelShader	= {0xB7B36C92, 0x3498, 0x4A94, {0x9E, 0x95, 0x9F
 
 struct GridEffectConstants {
 	float2x3		itransform;
+	uint32			dummy[2];
 	d2d::vector4	sizes;
 	d2d::vector4	colour1;
 	d2d::vector4	colour2;
 	int				mode;
 };
 
-class GridEffect : public com_inherit<type_list<ID2D1Transform>, com2<ID2D1DrawTransform, d2d::CustomEffect> >, public GridEffectConstants {
+class GridEffect : public com_inherit<type_list<ID2D1Transform>, com<ID2D1DrawTransform, d2d::CustomEffect>>, public GridEffectConstants {
 	com_ptr2<ID2D1DrawInfo> draw_info;
 	d2d::matrix		transform;
 
@@ -2407,112 +2478,128 @@ d2d::Bitmap MakeChecker(d2d::Target &target, int w, int h) {
 	return d2d::Bitmap(target, g);
 }
 
-class ComputeGrid : public d2d::Window {
-	d2d::Write	write;
-	d2d::Font	font;
+string_accum& ComputeGrid::GetSelectedText(string_accum &&a, uint32x3 group, uint32x3 dim) const {
+	return a << "thread: " << group << ", group: " << ifelse(dim_swap, dim.yxz, dim);
+}
 
-	float		zoom;
-	d2d::point	pos;
-	d2d::point	prevmouse;
+LRESULT ComputeGrid::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
+	switch (message) {
+		case WM_CREATE:
+			tooltip.Create(*this, NULL, POPUP);// | TTS_NOPREFIX | TTS_ALWAYSTIP);
+			tooltip.Add(*this);
+			tip_on	= false;
+			break;
 
-	uint3p		dim, group;
-	uint32		selected;
+		case WM_MOUSEWHEEL: {
+			d2d::point	pt	= ToClient(Point(lParam));
+			float	mult	= iso::pow(1.05f, (short)HIWORD(wParam) / 64.f);
+			zoom	*= mult;
+			pos		= pt + (pos - pt) * mult;
+			Invalidate();
+			return 0;
+		}
 
-public:
-	d2d::point	ClientToWorld(const d2d::point &pt) const {
-		return (pt - pos) * (1.0f / zoom);
-	}
-	float2x3	GetTransform() const {
-		return translate(pos) * scale(zoom);
-	}
-	uint32		Flatten(const uint3p &dim_loc, const uint3p &group_loc) const {
-		uint32	group_size	= group.x * group.y * group.z;
-		return flat_index(uint32x3(group_loc), uint32x3(group).xy) + flat_index(uint32x3(dim_loc), uint32x3(dim).xy) * group_size;
-	}
-	bool		GetLoc(position2 mouse, uint3p &dim_loc, uint3p &group_loc) const;
-	uint32		GetLoc(position2 mouse) const {
-		uint3p	dim_loc, group_loc;
-		return GetLoc(mouse, dim_loc, group_loc) ? Flatten(dim_loc, group_loc) : ~0u;
-	}
+		case WM_RBUTTONDOWN:
+			if (~selected) {
+				NMITEMACTIVATE	nm;
+				nm.iItem	= selected;
+				if (dim_swap) {
+					auto	group_loc	= split_index(selected, group.xy);
+					auto	selected2	= flat_index(group_loc.yxz, group.yx);
+					nm.iItem = selected2;
+				}
+				return SendNotification(nm.hdr, *this, NM_RCLICK);
+			}
+			return 0;
 
-	void		Paint() const;
+		case WM_MOUSEMOVE: {
+			Point	mouse	= Point(lParam);
 
-	LRESULT Proc(UINT message, WPARAM wParam, LPARAM lParam) {
-		switch (message) {
-			case WM_MOUSEWHEEL: {
-				d2d::point	pt	= ToClient(Point(lParam));
-				float	mult	= iso::pow(1.05f, (short)HIWORD(wParam) / 64.f);
-				zoom	*= mult;
-				pos		= pt + (pos - pt) * mult;
+			bool	is_sel = ~selected;
+			if (is_sel != tip_on) {
+				tooltip.Activate(*this, tip_on = is_sel);
+				if (is_sel)
+					TrackMouse(TME_LEAVE);
+			}
+
+			if (is_sel)
+				tooltip.Track();
+
+			if (wParam & MK_LBUTTON) {
+				pos	+= mouse - prevmouse;
 				Invalidate();
-				return 0;
-			}
-
-			case WM_RBUTTONDOWN:
-				if (~selected) {
-					NMITEMACTIVATE	nm;
-					nm.iItem	= selected;
-					return SendNotification(nm.hdr, *this, NM_RCLICK);
-				}
-				return 0;
-
-			case WM_MOUSEMOVE: {
-				Point	mouse	= Point(lParam);
-				if (wParam & MK_LBUTTON) {
-					pos	+= mouse - prevmouse;
+			} else {
+				auto	prev = exchange(selected, ~0u);
+				uint3p	dim_loc, group_loc;
+				if (GetLoc(ClientToWorld(mouse), dim_loc, group_loc))
+					selected = flat_index(group_loc, group.xy) + flat_index(dim_loc, dim.xy) * reduce_mul(group);
+				//selected = flat_index(uint32x3(group_loc), uint32x3(group).xy) + flat_index(uint32x3(dim_loc), uint32x3(dim).xy) * (group.x * group.y * group.z);
+				
+				if (prev != selected)
 					Invalidate();
-				} else {
-					auto	prev = selected;
-					selected = GetLoc(ClientToWorld(mouse));
-					if (prev != selected)
-						Invalidate();
-				}
-				prevmouse	= mouse;
-				return 0;
 			}
-
-			case WM_PAINT:
-				if (DeviceContextPaint	dc = DeviceContextPaint(*this))
-					Paint();
-				return 0;
-
-			case WM_NCDESTROY:
-				delete this;
-				return 0;
-
-		}
-		return d2d::Window::Proc(message, wParam, lParam);
-	}
-
-	ComputeGrid(const WindowPos &wpos, const char *title, ID id, const uint3p &dim, const uint3p &group) : pos(0, 0), dim(dim), group(group), font(write, L"Arial", 0.75f) {
-
-		GridEffect::Register(factory);
-
-		//font->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
-
-		int		slack		= 1;
-		int		width1		= dim.x * (group.x + slack) + slack;
-		int		height1		= dim.y * (group.y + slack);
-		int		width		= dim.z * (width1 + slack * 2) - slack;
-
-		auto	size		= wpos.rect.Size();
-		if (size.x * height1 < size.y * width) {
-			zoom	= float(size.x) / width;
-			pos.y	= (size.y - zoom * height1) / 2;
-		} else {
-			zoom	= float(size.y) / height1;
-			pos.x	= (size.x - zoom * width) / 2;
+			prevmouse	= mouse;
+			return 0;
 		}
 
-//		zoom = 0.475628167f;
-//		zoom = 0.508630991f;
-//		zoom = 0.501700401f;
+		case WM_MOUSELEAVE:
+			tooltip.Activate(*this, tip_on = false);
+			break;
 
-		Create(wpos, title, CHILD | CLIPSIBLINGS | VISIBLE, NOEX, id);
-		Rebind(this);
+		case WM_PAINT:
+			if (DeviceContextPaint	dc = DeviceContextPaint(*this))
+				Paint();
+			return 0;
+
+		case WM_NOTIFY: {
+			NMHDR	*nmh = (NMHDR*)lParam;
+			switch (nmh->code) {
+				case TTN_GETDISPINFOA: {
+					NMTTDISPINFOA	*nmtdi	= (NMTTDISPINFOA*)nmh;
+					uint32		group_size		= group.x * group.y * group.z;
+					GetSelectedText(fixed_accum(nmtdi->szText), split_index(selected, uint32x3(group)).xyz, split_index(selected / group_size, uint32x3(dim)).xyz);
+					return 0;
+				}
+			}
+			break;
+		}
+		case WM_NCDESTROY:
+			delete this;
+			return 0;
 
 	}
-};
+	return d2d::Window::Proc(message, wParam, lParam);
+}
+
+ComputeGrid::ComputeGrid(const WindowPos &wpos, const char *title, ID id, const uint3p &_dim, const uint3p &group) : font(write, L"Arial", 0.75f), dim(_dim), group(group) {
+	ISO_ASSERT(reduce_min(dim) > 0 && reduce_min(group) > 0);
+	GridEffect::Register(factory);
+
+	//font->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+
+	dim_swap = group.y < group.x && dim.x > dim.y;
+	if (dim_swap)
+		dim = dim.yxz;
+
+	int		slack		= 1;
+	int		width1		= dim.x * (group.x + slack) + slack;
+	int		height1		= dim.y * (group.y + slack);
+	int		width		= dim.z * (width1 + slack * 2) - slack;
+
+	auto	size		= wpos.rect.Size();
+	if (size.x * height1 < size.y * width) {
+		zoom	= float(size.x) / width;
+		pos.y	= (size.y - zoom * height1) / 2;
+	} else {
+		zoom	= float(size.y) / height1;
+		pos.x	= (size.x - zoom * width) / 2;
+	}
+
+	Create(wpos, title, CHILD | CLIPSIBLINGS | VISIBLE, NOEX, id);
+	Rebind(this);
+	Invalidate();
+
+}
 
 void ComputeGrid::Paint() const {
 //	UsePixels();
@@ -2668,7 +2755,11 @@ void ComputeGrid::Paint() const {
 					Fill(rect, d2d::SolidBrush(*this, colour(0, 1, 0, zf)));
 
 					buffer_accum16<256>	ba;
-					ba << "thread:\n" << selected_group << "\ngroup:\n" << selected_dim;
+					ba << "thread:\n" << selected_group << "\ngroup:\n";
+					if (dim_swap)
+						ba << selected_dim.yxz;
+					else
+						ba << selected_dim;
 
 					d2d::rect	ext	= d2d::TextLayout(write, ba, font, 1000).GetExtent();
 					float		s	= max(ext.Width(), ext.Height()) * 1.01f;
@@ -2688,64 +2779,48 @@ bool ComputeGrid::GetLoc(position2 mouse, uint3p &dim_loc, uint3p &group_loc) co
 	int		width1		= dim.x * (group.x + slack) + slack;
 	int		height1		= dim.y * (group.y + slack) + slack;
 
-	float	x	= mouse.v.x, y = mouse.v.y;
+	float	x		= mouse.v.x, y = mouse.v.y;
 
-	dim_loc.z = floor(x / (width1 + slack * 2));
-	if (dim_loc.z < 0 || dim_loc.z >= dim.z)
+	int		dimz	= floor(x / (width1 + slack * 2));
+	if (dimz < 0 || dimz >= dim.z)
 		return false;
 
-	x -= dim_loc.z * (width1 + slack * 2) + slack * 2;
+	x -= dimz * (width1 + slack * 2) + slack * 2;
 	y -= slack * 2;
 
-	dim_loc.x	= floor(x / (group.x + slack));
-	if (dim_loc.x < 0 || dim_loc.x >= dim.x)
+	int		dimx	= floor(x / (group.x + slack));
+	if (dimx < 0 || dimx >= dim.x)
 		return false;
 
-	dim_loc.y	= floor(y / (group.y + slack));
-	if (dim_loc.y < 0 || dim_loc.y >= dim.y)
+	int		dimy	= floor(y / (group.y + slack));
+	if (dimy < 0 || dimy >= dim.y)
 		return false;
 
-	x -= dim_loc.x * (group.x + slack);
-	y -= dim_loc.y * (group.y + slack);
+	dim_loc = {dimx, dimy, dimz};
+
+	x -= dimx * (group.x + slack);
+	y -= dimy * (group.y + slack);
 
 	if (x < group.x && y < group.y) {
 		group_loc.x = int(x);
 		group_loc.y = int(y);
 		group_loc.z = group.z - 1 - int(min(frac(x), frac(y)) * group.z);
-	} else if (x < group.x) {
-		x -= frac(y);
-		if (x < 0)
-			return false;
-		group_loc.x = int(x);
-		group_loc.y = group.y - 1;
-		group_loc.z = group.z - 2 - int(frac(y) * group.z);
-	} else if (y < group.y) {
-		y -= frac(x);
-		if (y < 0)
-			return false;
-		group_loc.x = group.x - 1;
-		group_loc.y = int(y);
-		group_loc.z = group.z - 2 - int(frac(x) * group.z);
-	} else {
-		group_loc.x = group.x - 1;
-		group_loc.y = group.y - 1;
-		group_loc.z = group.z - 2 - int(max(frac(x), frac(y)) * group.z);
+		return true;
+
+	} else if (group.z > 1) {
+		float	f = max(x - group.x, y - group.y);
+		x	-= f;
+		y	-= f;
+		if (x >= 0 && y > 0) {
+			group_loc.x = int(x);
+			group_loc.y = int(y);
+			group_loc.z = group.z - 2 - int(f * group.z);
+			return true;
+		}
 	}
-	return true;
+	return false;
 
 }
-
-Control app::MakeComputeGrid(const WindowPos &wpos, const char *title, ID id, const uint3p &dim, const uint3p &group) {
-	return *new ComputeGrid(wpos, title, id, dim, group);//constructable<uint3p>(2,3,4), constructable<uint3p>(4,3,8));//dim, group);
-}
-/*
-uint32 app::GetComputeIndex(Control c, const Point &pt) {
-	ComputeGrid	*cg = (ComputeGrid*)ComputeGrid::Cast(c);
-	if (!cg)
-		return ~0;
-	return cg->GetLoc(cg->ClientToWorld(pt));
-}
-*/
 
 //-----------------------------------------------------------------------------
 //	TimingWindow
@@ -2753,7 +2828,7 @@ uint32 app::GetComputeIndex(Control c, const Point &pt) {
 
 //TimingWindow	*TimingWindow::me;
 
-TimingWindow::TimingWindow(const WindowPos &wpos, Control _owner) : time(0), tscale(1), last_batch(0), yscale(1) {
+TimingWindow::TimingWindow(const WindowPos &wpos, Control _owner) {
 	Create(wpos, "Timing", CHILD | CLIPSIBLINGS | VISIBLE, CLIENTEDGE, ID);
 	owner	= _owner;
 //	me		= this;
@@ -2768,7 +2843,7 @@ LRESULT TimingWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 			break;
 
 		case WM_SIZE:
-			if (d2d.Resize(Point(lParam)))
+			if (!d2d.Resize(Point(lParam)))
 				d2d.DeInit();
 			Invalidate();
 			break;
@@ -2779,7 +2854,7 @@ LRESULT TimingWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 				TrackMouse(TME_LEAVE);
 				tooltip.Activate(*this, tip_on = true);
 			}
-			tooltip.Track(ToScreen(mouse) + Point(15, 15));
+			tooltip.Track();
 			if (DragStrip().Contains(mouse))
 				CURSOR_LINKBATCH.Set();
 			else

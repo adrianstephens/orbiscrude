@@ -339,7 +339,7 @@ class SQLiteFileHandler : public FileHandler {
 
 	const char*		GetExt() override { return "db";	}
 	const char*		GetDescription() override { return "SQLite database";	}
-	int				Check(istream_ref file) override { file.seek(0); return file.get<fixed_string<16> >() == "SQLite format 3" ? CHECK_PROBABLE : CHECK_DEFINITE_NO; }
+	int				Check(istream_ref file) override { file.seek(0); return file.length() > 16 && file.get<fixed_string<16> >() == "SQLite format 3" ? CHECK_PROBABLE : CHECK_DEFINITE_NO; }
 	ISO_ptr<void>	Read(tag id, istream_ref file) override;
 //	bool			Write(ISO_ptr<void> p, ostream_ref file) override;
 } sqlite;

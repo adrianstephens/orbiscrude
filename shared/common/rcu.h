@@ -137,12 +137,11 @@ public:
 template<typename L> class rcu<slist_iterator_base<L>> : public slist_iterator_base<L> {
 	typedef slist_iterator_base<L> B;
 	using B::p;
-	using typename B::element;
 public:
 	rcu(L *p) : B(p)	{}
 	rcu(const slink_base<noconst_t<L>> &p) : B(p)	{}
-	operator element*()			const	{ return B::get(); }
-	element*	operator->()	const	{ return B::get(); }
+	operator	auto()			const	{ return B::get(); }
+	auto		operator->()	const	{ return B::get(); }
 	L*			link()			const	{ return p; }
 	rcu&		operator++()			{ p = rcu_dereference(p->next); return *this; }
 	rcu			operator++(int)			{ auto i = *this; p = rcu_dereference(p->next); return i; }
@@ -152,7 +151,7 @@ template<typename T> class rcu<e_slist<T>> : public e_slist<T> {
 	typedef e_slist<T>	B;
 	using B::head;
 public:
-	typedef rcu<slist_iterator_base<T>>		iterator;
+	typedef rcu<slist_iterator_base<T>>			iterator;
 	typedef rcu<slist_iterator_base<const T>>	const_iterator;
 
 	rcu()				{}

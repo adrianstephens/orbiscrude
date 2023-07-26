@@ -43,6 +43,15 @@
     <ClInclude Include="..\..\..\filetypes\code\pdb.h">
       <Filter>shared</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\platforms\pc\dx\dx_sim.h">
+      <Filter>shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\platforms\pc\dx\dx_opcodes.h">
+      <Filter>shared</Filter>
+    </ClInclude>
+    <ClInclude Include="view_dxbc.h">
+      <Filter>view</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dx_fields.cpp">
@@ -68,6 +77,12 @@
     </ClCompile>
     <ClCompile Include="..\..\..\filetypes\code\msf.cpp">
       <Filter>shared</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\platforms\pc\dx\dx_sim.cpp">
+      <Filter>shared</Filter>
+    </ClCompile>
+    <ClCompile Include="view_dxbc.cpp">
+      <Filter>view</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

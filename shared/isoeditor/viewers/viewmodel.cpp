@@ -111,17 +111,6 @@ ISO_ptr<SubMesh> GenerateHull(ISO_ptr<SubMesh> submesh) {
 }
 #endif
 
-position3 GetVertex(SubMesh *sm, int i) {
-	auto	v	= sm->VertComponentData<float3p>(0);
-	return position3(v[i]);
-}
-
-triangle3 GetTriangle(SubMesh *sm, int i) {
-	auto	&f	= sm->indices[i];
-	auto	v	= sm->VertComponentData<float3p>(0);
-	return triangle3(position3(v[f[0]]), position3(v[f[1]]), position3(v[f[2]]));
-}
-
 bool FindIndex(const ISO::Browser &bi, const ISO::Browser &b, int &index) {
 	const ISO::Type	*type = b.GetTypeDef();
 	if (bi[0].Is(type) && (char*)b >= bi[0] && (char*)b <= bi[bi.Count() - 1]) {
@@ -189,6 +178,11 @@ bool FindVertex(PatchModel3 *patch, void *v, int &sub, int &pat, int &index) {
 	}
 	return false;
 }
+
+bool HasIntVerts(SubMesh *sm) {
+	return sm->VertComponent(0)->type->SubType()->GetType() == ISO::INT;
+}
+
 /*
 rot_trans lerp(rot_trans &a, const rot_trans &b, float rate) {
 	quaternion	dq	= b.rot / a.rot;
@@ -223,7 +217,7 @@ rot_trans as_rot_trans(const triangle3 &t) {
 	return rot_trans(quaternion::between(z_axis, -t.normal()), concat(t.centre(), t.area()));
 }
 
-class ViewModel : public Window<ViewModel>, public WindowTimer<ViewModel>, public World, Graphics::Display {
+class ViewModel : public Window<ViewModel>, public refs<ViewModel>, public WindowTimer<ViewModel>, public World, Graphics::Display {
 
 	enum FLAGS	{
 		MODE			= 3 << 0,
@@ -242,11 +236,24 @@ class ViewModel : public Window<ViewModel>, public WindowTimer<ViewModel>, publi
 		CUSTOM2			= 1 << 17,
 	};
 
+	struct Selection {
+		enum MODE {
+			NONE, VERTEX, FACE, PATCH, SUBMESH, BONE
+		};
+		MODE	mode;
+		int		index;
+		Selection(MODE mode = NONE, int index = -1) : mode(mode), index(index) {}
+		explicit constexpr operator bool()		const { return mode != NONE; }
+		bool	operator==(const Selection &b)	const { return mode == b.mode && index == b.index; }
+		bool	operator!=(const Selection &b)	const { return mode != b.mode || index != b.index; }
+	};
+
 	MainWindow				&main;
 	Accelerator				accel;
 	BackFaceCull			cull;
 	iso::flags<FLAGS>		flags;
 	ToolBarControl			toolbar;
+	ToolTipControl			tooltip;
 	timer					time;
 	ISO_ptr_machine<void>	original;
 	ISO_ptr<Node>			node;
@@ -258,13 +265,13 @@ class ViewModel : public Window<ViewModel>, public WindowTimer<ViewModel>, publi
 	TesselationInfo			tess_info;
 	Tesselation				tess;
 	octree					oct;
+	dynamic_array<float3p>	verts;
 
-	enum {
-		NONE, VERTEX, FACE, PATCH, SUBMESH//, MATRIX, BONE
-	} sel_mode;
-	int						sel_submesh, sel_patch, sel_index, sel_bone;
+	Selection				sel;
+	Selection				hover;
+	int						sel_patch;
 	rot_trans				sel_loc;
-	float3x4p*				sel_mat;
+	float3x4p*				sel_mat	= nullptr;
 
 	TextureT<float4>		bone_texture;
 
@@ -281,13 +288,21 @@ class ViewModel : public Window<ViewModel>, public WindowTimer<ViewModel>, publi
 	JointRotFilter::entry	filter_entries[IK_MAX_BONES];
 	JointRotFilter			filter;
 
+	ISO_ptr<SubMeshBase>	GetSelectedSubMesh(const Selection &sel, int &sub_sel)	const;
+	position3				GetVertex(int i)		const;
+	triangle3				GetTriangle(int i)		const;
+	
+	Selection		TestMouse(const point &mouse);
+	Selection		ToSelection(ISO::Browser b);
+	bool			SetSelection(const Selection &sel0);
+	bool			SetAnimation(ISO_ptr<Animation> t);
+	void			GetSelectionText(string_accum &sa, const Selection &sel);
+
+	void			DrawSelection(GraphicsContext &ctx, const Selection &sel, const ISO::Browser &parameters);
 	void			DrawScene(GraphicsContext &ctx);
-//	void			DrawMatrix(GraphicsContext &ctx, param(float3x4) mat);
 	void			DrawMatrix(GraphicsContext &ctx, param(float3x4) mat, pass *p, ISO::Browser params);
 	void			ResetView();
-
 	bool			ClickAxes(const point &mouse);
-	bool			ClickModel(const point &mouse);
 
 	float4x4		Projection() const {
 		return perspective_projection(1.f, float(width) / height, near_z);
@@ -317,315 +332,376 @@ public:
 		void		set(param(float3) p, param(colour) c) { pos = p; col = c.rgba; }
 	};
 
-	LRESULT Proc(UINT message, WPARAM wParam, LPARAM lParam) {
-		switch (message) {
-			case WM_CREATE: {
-				toolbar.Create(*this, NULL, CHILD | CLIPSIBLINGS | VISIBLE | toolbar.NORESIZE | toolbar.FLAT | toolbar.TOOLTIPS);
-				toolbar.Init("IDR_TOOLBAR_MESH");
-//				toolbar.Add(Menu("IDR_MENU_VIEWMODEL"));
-				toolbar.CheckButton(ID_MESH_BACKFACE, cull == BFC_FRONT);
-				toolbar.CheckButton(ID_MESH_FILL, flags.test(FILL));
-
-				Accelerator::Builder	ab;
-				ab.Append(42, ' ');
-				accel	= Accelerator(ab);
-
-				return 0;
-			}
-
-			case WM_SIZE:
-				SetSize((RenderWindow*)hWnd, Point(lParam));
-				toolbar.Resize(toolbar.GetItemRect(toolbar.Count() - 1).BottomRight() + Point(3, 3));
-				break;
-
-			case WM_PAINT: {
-				DeviceContextPaint	dc(*this);
-				try {
-					GraphicsContext ctx;
-					graphics.BeginScene(ctx);
-#if 1
-					Surface	screen = GetDispSurface();// .As(TEXF_R8G8B8A8_SRGB);
-#else
-					Texture	screen(TEXF_R8G8B8A8,	Size().x, Size().y, 1, 1, MEM_TARGET);
-#endif
-					ctx.SetRenderTarget(screen);
-					ctx.SetZBuffer(Surface(TEXF_D24S8, Size(), MEM_DEPTH));
-					ctx.Clear(colour(0.5f,0.5f,0.5f));
-					ctx.SetBackFaceCull(BFC_BACK);
-					ctx.SetDepthTestEnable(true);
-					ctx.SetDepthTest(DT_USUAL);
-#ifndef USE_DX11
-					ctx.SetTexture(bone_texture, D3DVERTEXTEXTURESAMPLER0);
-#endif
-					Use();
-					DrawScene(ctx);
-
-//					ctx.SetDepthTestEnable(false);
-//					ctx.SetRenderTarget(Surface(), RT_DEPTH);
-//					ctx.SetRenderTarget(GetDispSurface());
-//					PostEffects(ctx).FullScreenQuad((*PostEffects::shaders->copy)[0]);
-
-					graphics.EndScene(ctx);
-					Present();
-				} catch (char *s) {
-					MessageBoxA(*this, s, "Graphics Error", MB_ICONERROR | MB_OK);
-				}
-				break;
-			}
-
-			case WM_MOUSEACTIVATE:
-				SetFocus();
-				return MA_ACTIVATE;
-			
-			case WM_SETFOCUS:
-				SetAccelerator(*this, accel);
-				break;
-
-			case WM_RBUTTONDOWN:
-			case WM_MBUTTONDOWN:
-				prevmouse	= Point(lParam);
-				((IsoEditor&)main).SetEditWindow(*this);
-				break;
-
-			case WM_LBUTTONDOWN:
-				prevmouse	= Point(lParam);
-				((IsoEditor&)main).SetEditWindow(*this);
-				if (!(wParam & (MK_SHIFT | MK_CONTROL)) && !(GetKeyState(VK_MENU) & 0x8000)) {
-					if (ClickAxes(prevmouse) || ClickModel(prevmouse))
-						Invalidate();
-				}
-				break;
-
-			case WM_LBUTTONDBLCLK:
-				//ChangeView(translate(zero, zero, sqrt(sel_loc.trans4.w) * two) / sel_loc);
-				ChangeView(rot_trans(rotate_in_x(pi * half), position3(zero, zero, move_scale / 2)));
-				break;
-
-			case WM_MOUSEMOVE: {
-				Point		mouse(lParam);
-				if (wParam & MK_MBUTTON) {
-					if (sel_bone >= 0) {
-						Pose		*pose	= Root()->Property<Pose>();
-						float3x4	wmat	= pose->GetObjectMatrix(sel_bone);
-						float3		axis	= wmat * float3{float(prevmouse.y - mouse.y), 0, float(prevmouse.x - mouse.x)};
-						quaternion	q(normalise(concat(axis, 512)));
-						pose->joints[sel_bone].rot *= q;
-						pose->mats[sel_bone] = pose->joints[sel_bone];
-						pose->Update();
-						Invalidate();
-					}
-				} else if (wParam & MK_RBUTTON) {
-					StopMoving();
-					view_loc *= translate(float3{float(mouse.x - prevmouse.x), float(mouse.y - prevmouse.y), 0} * (move_scale / 256));
-					Invalidate();
-
-				} else if (wParam & MK_LBUTTON) {
-					if (sel_bone >= 0) {
-						Pose *pose = Root()->Property<Pose>();
-						pose->mats[sel_bone] = pose->mats[sel_bone] * rotate_in_y((mouse.x - prevmouse.x) / 100.f) * rotate_in_x((mouse.y - prevmouse.y) / 100.f);
-
-					} else {
-						quaternion	q(normalise(float4{float(prevmouse.y - mouse.y), float(mouse.x - prevmouse.x), 0, 512}));
-						if (wParam & MK_CONTROL) {
-							light	= normalise(q * light);
-						} else {
-							StopMoving();
-							view_loc = rotate_around(view_loc, GetKeyState(VK_MENU) & 0x8000 ? position3(sel_loc.trans4.xyz) : focus_pos, q);
-						}
-					}
-					Invalidate();
-				}
-				prevmouse	= mouse;
-				break;
-			}
-
-			case WM_MOUSEWHEEL: {
-				StopMoving();
-				float		dist	= (short)HIWORD(wParam) / 2048.f;
-				position3	pos		= GetAsyncKeyState(VK_MENU) & 0x8000 ? position3(sel_loc.trans4.xyz) : focus_pos;
-				position3	pos2	= view_loc * pos;
-				if (pos2.v.z > zero) {
-					view_loc *= translate(pos2 * dist);
-					near_z = min(move_scale / 100, pos2.v.z / 2.f);
-				} else {
-					view_loc *= translate(float3{0, 0, move_scale * dist});
-				}
-				Invalidate();
-				break;
-			}
-
-			case WM_ISO_TIMER: {
-				bool	stop = true;
-				if (anim) {
-					float	t = time;
-					if (flags.test(SLOW))
-						t /= 10;
-					stop = !anim->Evaluate(Root()->Property<Pose>(), t);
-				}
-				if (flags.test(MOVING)) {
-					float		rate	= 0.1f;
-					view_loc = lerp(view_loc, target_loc, rate);
-					if (approx_equal(view_loc, target_loc, 1e-4f)) {
-						view_loc = target_loc;
-					} else {
-						stop = false;
-					}
-					if (sel_mode == FACE) {
-						position3	pos	= view_loc * position3(sel_loc.trans4.xyz);
-						if (pos.v.z > zero)
-							near_z = min(move_scale / 100, pos.v.z / 2.f);
-					}
-
-				}
-				Invalidate();
-				if (stop)
-					StopMoving();
-				break;
-			}
-
-			case WM_COMMAND:
-				switch (uint16 id = LOWORD(wParam)) {
-					case ID_EDIT_SELECT: {
-						flags.clear(BONES);
-						ISO::Browser b	= *(ISO::Browser*)lParam;
-						const ISO::Type	*type = b.GetTypeDef();
-						if (type->SkipUser()->GetType() == ISO::REFERENCE) {
-							b		= *b;
-							type	= b.GetTypeDef();
-							if (type->Is("Animation")) {
-								if (anim)
-									delete anim;
-								anim = new AnimationHolder(Root(), b);
-								Timer::Start(1/60.f);
-								time.reset();
-								return TRUE;
-
-							} else if (type->Is("AnimationHierarchy")) {
-								Root()->AddEntities(b);
-
-							} else if (type->SameAs<Bone>()) {
-								if (BasePose *bp = basepose) {
-									Bone	*bone = b;
-									for (int i = 0, n = bp->Count(); i < n; i++) {
-										if (bone == (*bp)[i]) {
-											sel_mat		= 0;
-											flags.set(BONES);
-											sel_bone	= i;
-											Invalidate();
-											return true;
-										}
-									}
-								}
-
-							} else if (type->SameAs<SubMesh>()) {
-								if (model && (FindSubMesh(model, b, sel_submesh) || (original.IsType<Model3>() && FindSubMesh((Model3*)original, b, sel_submesh)))) {
-									sel_mode	= SUBMESH;
-									Invalidate();
-									return true;
-								}
-							}
-
-						} else if (model && type->GetType() == ISO::ARRAY && type->SubType()->SameAs<uint16>()) {
-							if (FindIndex(model, b, sel_submesh, sel_index)
-							|| (original.IsType<Model3>() && FindIndex((Model3*)original, b, sel_submesh, sel_index))
-							) {
-								sel_mode	= FACE;
-								sel_loc		= as_rot_trans(GetTriangle(model->submeshes[sel_submesh], sel_index));
-								Invalidate();
-								return true;
-							}
-							if (ISO::Browser bi	= ISO::Browser(original)["indices"]) {
-								if (FindIndex(bi, b, sel_index)) {
-									sel_mode	= FACE;
-									sel_loc		= as_rot_trans(GetTriangle(model->submeshes[sel_submesh], sel_index));
-								}
-								Invalidate();
-								return true;
-							}
-
-						} else if (type->SameAs<float3x4p>()) {
-							sel_mat		= (float3x4p*)b;
-							sel_bone	= -1;
-							Invalidate();
-							return true;
-
-						} else if (model) {
-							if (FindVertex(model, b, sel_submesh, sel_index) || (original.IsType<Model3>() && FindVertex((Model3*)original, b, sel_submesh, sel_index))) {
-								sel_mode	= VERTEX;
-								sel_loc		= rot_trans(identity, GetVertex(model->submeshes[sel_submesh], sel_index));
-								Invalidate();
-								return true;
-							}
-
-						} else if (patch) {
-							if (FindVertex(patch, b, sel_submesh, sel_patch, sel_index) || (original.IsType<PatchModel3>() && FindVertex((PatchModel3*)original, b, sel_submesh, sel_patch, sel_index))) {
-								sel_mode	= sel_index < 16 ? VERTEX : PATCH;
-								Invalidate();
-								return true;
-							}
-						}
-						return false;
-					}
-
-					case ID_MESH_BACKFACE:
-						cull = ~cull;
-						toolbar.CheckButton(id, cull == BFC_FRONT);
-						Invalidate();
-						break;
-
-					case ID_MESH_RESET:
-						ResetView();
-						break;
-
-					case ID_MESH_BOUNDS:
-						toolbar.CheckButton(id, flags.flip_test(BOUNDING_EDGES));
-						Invalidate();
-						break;
-
-					case ID_MESH_FILL:
-						flags.inc_field(MODE);
-						//toolbar.CheckButton(id, flags.flip_test(FILL));
-						Invalidate();
-						break;
-
-					case ID_VIEWMODEL_SLOW:
-						flags.flip(SLOW);
-						break;
-
-					case 42:
-						flags.flip(CUSTOM1);
-						Invalidate();
-						break;
-				}
-				break;
-
-			case WM_NOTIFY: {
-				NMHDR	*nmh = (NMHDR*)lParam;
-				switch (nmh->code) {
-					case TBN_DROPDOWN: {
-						NMTOOLBAR	*nmtb	= (NMTOOLBAR*)nmh;
-						Menu		menu	= ToolBarControl(nmh->hwndFrom).GetItem(nmtb->iItem).Param();
-						menu.CheckByID(ID_VIEWMODEL_SLOW, flags.test(SLOW));
-						menu.Track(*this, ToScreen(Rect(nmtb->rcButton).BottomLeft()));
-						break;
-					}
-				}
-				break;
-			}
-			case WM_NCDESTROY:
-				delete this;
-				break;
-			default:
-				return Super(message, wParam, lParam);
-		}
-		return 0;
-	}
+	LRESULT Proc(MSG_ID message, WPARAM wParam, LPARAM lParam);
 
 	ViewModel(MainWindow &_main, const WindowPos &wpos, const ISO_ptr_machine<void> p);
 };
 
+LRESULT ViewModel::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
+	switch (message) {
+		case WM_CREATE: {
+			toolbar.Create(*this, NULL, CHILD | CLIPSIBLINGS | VISIBLE | toolbar.NORESIZE | toolbar.FLAT | toolbar.TOOLTIPS);
+			toolbar.Init("IDR_TOOLBAR_MESH");
+			//toolbar.Add(Menu("IDR_MENU_VIEWMODEL"));
+			toolbar.CheckButton(ID_MESH_BACKFACE, cull == BFC_FRONT);
+			toolbar.CheckButton(ID_MESH_FILL, flags.test(FILL));
+
+			tooltip.Create(*this, NULL, POPUP);// | TTS_NOPREFIX | TTS_ALWAYSTIP);
+			tooltip.Add(*this);
+
+			Accelerator::Builder	ab;
+			ab.Append(42, ' ');
+			accel	= Accelerator(ab);
+
+			return 0;
+		}
+
+		case WM_SIZE:
+			SetSize((RenderWindow*)hWnd, Point(lParam));
+			toolbar.Resize(toolbar.GetItemRect(toolbar.Count() - 1).BottomRight() + Point(3, 3));
+			break;
+
+		case WM_PAINT: {
+			DeviceContextPaint	dc(*this);
+			try {
+				GraphicsContext ctx;
+				graphics.BeginScene(ctx);
+			#if 1
+				Surface	screen = GetDispSurface();// .As(TEXF_R8G8B8A8_SRGB);
+			#else
+				Texture	screen(TEXF_R8G8B8A8,	Size().x, Size().y, 1, 1, MEM_TARGET);
+			#endif
+				ctx.SetRenderTarget(screen);
+				ctx.SetZBuffer(Surface(TEXF_D24S8, Size(), MEM_DEPTH));
+				ctx.Clear(colour(0.5f,0.5f,0.5f));
+				ctx.SetBackFaceCull(BFC_BACK);
+				ctx.SetDepthTestEnable(true);
+				ctx.SetDepthTest(DT_USUAL);
+			#ifndef USE_DX11
+				ctx.SetTexture(bone_texture, D3DVERTEXTEXTURESAMPLER0);
+			#endif
+				Use();
+				DrawScene(ctx);
+
+				//ctx.SetDepthTestEnable(false);
+				//ctx.SetRenderTarget(Surface(), RT_DEPTH);
+				//ctx.SetRenderTarget(GetDispSurface());
+				//PostEffects(ctx).FullScreenQuad((*PostEffects::shaders->copy)[0]);
+
+				graphics.EndScene(ctx);
+				Present();
+			} catch (char *s) {
+				MessageBoxA(*this, s, "Graphics Error", MB_ICONERROR | MB_OK);
+			}
+			break;
+		}
+
+		case WM_MOUSEACTIVATE:
+			SetFocus();
+			return MA_ACTIVATE;
+
+		case WM_SETFOCUS:
+			SetAccelerator(*this, accel);
+			break;
+
+		case WM_RBUTTONDOWN:
+		case WM_MBUTTONDOWN:
+			prevmouse	= Point(lParam);
+			((IsoEditor&)main).SetEditWindow(*this);
+			break;
+
+		case WM_LBUTTONDOWN:
+			prevmouse	= Point(lParam);
+			((IsoEditor&)main).SetEditWindow(*this);
+			if (!(wParam & (MK_SHIFT | MK_CONTROL)) && !(GetKeyState(VK_MENU) & 0x8000)) {
+				if (ClickAxes(prevmouse) || SetSelection(TestMouse((prevmouse))))
+					Invalidate();
+			}
+			break;
+
+		case WM_LBUTTONDBLCLK:
+			ResetView();
+			break;
+
+		case WM_MOUSEMOVE: {
+			Point		mouse(lParam);
+			if (wParam & MK_MBUTTON) {
+				if (sel.mode == Selection::BONE) {
+					Pose		*pose	= Root()->Property<Pose>();
+					float3x4	wmat	= pose->GetObjectMatrix(sel.index);
+					float3		axis	= wmat * float3{float(prevmouse.y - mouse.y), 0, float(prevmouse.x - mouse.x)};
+					quaternion	q(normalise(concat(axis, 512)));
+					pose->joints[sel.index].rot *= q;
+					pose->mats[sel.index] = pose->joints[sel.index];
+					pose->Update();
+					Invalidate();
+				}
+			} else if (wParam & MK_RBUTTON) {
+				StopMoving();
+				view_loc *= translate(float3{float(mouse.x - prevmouse.x), float(mouse.y - prevmouse.y), 0} * (move_scale / 256));
+				Invalidate();
+				Update();
+
+			} else if (wParam & MK_LBUTTON) {
+				if (sel.mode == Selection::BONE) {
+					Pose *pose = Root()->Property<Pose>();
+					pose->mats[sel.index] = pose->mats[sel.index] * rotate_in_y((mouse.x - prevmouse.x) / 100.f) * rotate_in_x((mouse.y - prevmouse.y) / 100.f);
+
+				} else {
+					quaternion	q(normalise(float4{float(prevmouse.y - mouse.y), float(mouse.x - prevmouse.x), 0, 512}));
+					if (wParam & MK_CONTROL) {
+						light	= normalise(q * light);
+					} else {
+						StopMoving();
+						view_loc = rotate_around(view_loc, GetKeyState(VK_MENU) & 0x8000 ? position3(sel_loc.trans4.xyz) : focus_pos, q);
+					}
+				}
+				Invalidate();
+				Update();
+			} else {
+				auto	hover0 = TestMouse(mouse);
+				if (hover != hover0) {
+					hover = hover0;
+					tooltip.Activate(*this, hover.mode != Selection::NONE);
+					Invalidate();
+					Update();
+				}
+			}
+			prevmouse	= mouse;
+			tooltip.Track();
+			break;
+		}
+
+		case WM_MOUSELEAVE:
+			tooltip.Activate(*this, *this, false);
+			return 0;
+
+		case WM_MOUSEWHEEL: {
+			StopMoving();
+			float		dist	= (short)HIWORD(wParam) / 2048.f;
+			position3	pos		= GetAsyncKeyState(VK_MENU) & 0x8000 ? position3(sel_loc.trans4.xyz) : focus_pos;
+			position3	pos2	= view_loc * pos;
+			if (pos2.v.z > zero) {
+				view_loc *= translate(pos2 * dist);
+				near_z = min(move_scale / 100, pos2.v.z / 2.f);
+			} else {
+				view_loc *= translate(float3{0, 0, move_scale * dist});
+			}
+			Invalidate();
+			Update();
+			break;
+		}
+
+		case WM_ISO_TIMER: {
+			bool	stop = true;
+			if (anim) {
+				float	t = time;
+				if (flags.test(SLOW))
+					t /= 10;
+				stop = !anim->Evaluate(Root()->Property<Pose>(), t);
+			}
+			if (flags.test(MOVING)) {
+				float		rate	= 0.1f;
+				view_loc = lerp(view_loc, target_loc, rate);
+				if (approx_equal(view_loc, target_loc, 1e-4f)) {
+					view_loc = target_loc;
+				} else {
+					stop = false;
+				}
+				if (sel.mode == Selection::FACE) {
+					position3	pos	= view_loc * position3(sel_loc.trans4.xyz);
+					if (pos.v.z > zero)
+						near_z = min(move_scale / 100, pos.v.z / 2.f);
+				}
+
+			}
+			Invalidate();
+			if (stop)
+				StopMoving();
+			break;
+		}
+
+		case WM_COMMAND:
+			switch (uint16 id = LOWORD(wParam)) {
+				case ID_EDIT_SELECT: {
+					flags.clear(BONES);
+					auto	b = *(ISO::Browser*)lParam;
+					const ISO::Type	*type = b.GetTypeDef();
+					if (SkipUserType(type) == ISO::REFERENCE) {
+						b		= *b;
+						type	= b.GetTypeDef();
+						if (type->Is("Animation")) {
+							return SetAnimation(b);
+
+						} else if (type->Is("AnimationHierarchy")) {
+							Root()->AddEntities(b);
+							return true;
+						}
+					} else if (type->SameAs<float3x4p>()) {
+						sel_mat		= (float3x4p*)b;
+						Invalidate();
+						return true;
+					}
+
+					if (SetSelection(ToSelection(b))) {
+						Invalidate();
+						return true;
+					}
+					return false;
+				}
+
+				case ID_MESH_BACKFACE:
+					cull = ~cull;
+					toolbar.CheckButton(id, cull == BFC_FRONT);
+					Invalidate();
+					break;
+
+				case ID_MESH_RESET:
+					ResetView();
+					break;
+
+				case ID_MESH_BOUNDS:
+					toolbar.CheckButton(id, flags.flip_test(BOUNDING_EDGES));
+					Invalidate();
+					break;
+
+				case ID_MESH_FILL:
+					flags.inc_field(MODE);
+					//toolbar.CheckButton(id, flags.flip_test(FILL));
+					Invalidate();
+					break;
+
+				case ID_VIEWMODEL_SLOW:
+					flags.flip(SLOW);
+					break;
+
+				case 42:
+					flags.flip(CUSTOM1);
+					Invalidate();
+					break;
+			}
+			break;
+
+		case WM_NOTIFY: {
+			NMHDR	*nmh = (NMHDR*)lParam;
+			switch (nmh->code) {
+				case TBN_DROPDOWN: {
+					NMTOOLBAR	*nmtb	= (NMTOOLBAR*)nmh;
+					Menu		menu	= ToolBarControl(nmh->hwndFrom).GetItem(nmtb->iItem).Param();
+					menu.CheckByID(ID_VIEWMODEL_SLOW, flags.test(SLOW));
+					menu.Track(*this, ToScreen(Rect(nmtb->rcButton).BottomLeft()));
+					break;
+				}
+				case TTN_GETDISPINFOA:
+					if (nmh->hwndFrom == tooltip) {
+						NMTTDISPINFOA	*nmtdi	= (NMTTDISPINFOA*)nmh;
+						GetSelectionText(lvalue(fixed_accum(nmtdi->szText)), hover);
+					}
+					break;
+			}
+			break;
+		}
+		case WM_NCDESTROY:
+			tooltip.Destroy();
+			release();
+			break;
+		default:
+			return Super(message, wParam, lParam);
+	}
+	return 0;
+}
+ViewModel::Selection ViewModel::ToSelection(ISO::Browser b) {
+	if (const ISO::Type	*type = b.GetTypeDef()) {
+		if (SkipUserType(type) == ISO::REFERENCE) {
+			b		= *b;
+			type	= b.GetTypeDef();
+		}
+		if (type->SameAs<SubMeshBase>()) {
+			int	submesh;
+			if (model && (FindSubMesh(model, b, submesh) || (original.IsType<Model3>() && FindSubMesh((Model3*)original, b, submesh))))
+				return {Selection::SUBMESH, submesh};
+
+		} else if (type->SameAs<Bone>()) {
+			if (BasePose *bp = basepose) {
+				Bone	*bone = b;
+				for (int i = 0, n = bp->Count(); i < n; i++) {
+					if (bone == (*bp)[i])
+						return {Selection::BONE, i};
+				}
+			}
+
+		} else if (model && type->GetType() == ISO::ARRAY && type->SubType()->SameAs<uint16>()) {
+			int	submesh, index;
+			if (FindIndex(model, b, submesh, index) || (original.IsType<Model3>() && FindIndex((Model3*)original, b, submesh, index)))
+				return {Selection::FACE, index};
+
+			if (ISO::Browser bi	= ISO::Browser(original)["indices"]) {
+				if (FindIndex(bi, b, index))
+					return {Selection::FACE, index};
+			}
+
+		} else if (model) {
+			int	submesh, index;
+			if (FindVertex(model, b, submesh, index) || (original.IsType<Model3>() && FindVertex((Model3*)original, b, submesh, index)))
+				return  {Selection::VERTEX, index};
+
+		} else if (patch) {
+			int	submesh, index;
+			if (FindVertex(patch, b, submesh, sel_patch, index) || (original.IsType<PatchModel3>() && FindVertex((PatchModel3*)original, b, submesh, sel_patch, index)))
+				return {index < 16 ? Selection::VERTEX : Selection::PATCH, index};
+		}
+	}
+	return {};
+}
+
+ISO_ptr<SubMeshBase> ViewModel::GetSelectedSubMesh(const Selection &sel, int &sub_sel) const {
+	int		i = sel.index;
+	if (sel.mode == Selection::SUBMESH)
+		return model->submeshes[i];
+
+	for (auto &sm : model->submeshes) {
+		auto	n = sel.mode == Selection::VERTEX ? ((SubMesh*)sm)->NumVerts() : ((SubMesh*)sm)->NumFaces();
+		if (i < n) {
+			sub_sel = i;
+			return sm;
+		}
+		i -= n;
+	}
+	return ISO_NULL;
+}
+
+position3 ViewModel::GetVertex(int i) const {
+	if (verts)
+		return position3(verts[i]);
+
+	int		sub_sel;
+	SubMesh *sm = GetSelectedSubMesh({Selection::VERTEX, i}, sub_sel);
+	return position3(sm->VertComponentData<float3p>(0)[sub_sel]);
+}
+
+triangle3 ViewModel::GetTriangle(int i) const {
+	auto	_GetTriangle = [](auto v, uint32 f[3]) { return triangle3(position3(v[f[0]]), position3(v[f[1]]), position3(v[f[2]])); };
+
+	const float3p	*v = verts.begin();
+	for (SubMesh *sm : model->submeshes) {
+		auto	n = sm->NumFaces();
+		if (i < n) {
+			if (v)
+				return _GetTriangle(v, sm->indices[i]);
+			else
+				return _GetTriangle(sm->VertComponentData<float3p>(0), sm->indices[i]);
+		}
+		if (v)
+			v += sm->NumVerts();
+		i -= n;
+	}
+	unreachable();
+}
+
+
 void ViewModel::ResetView() {
-	//InitTimer(0.01f);
+	ChangeView(translate(zero, zero, sqrt(sel_loc.trans4.w) * two) / sel_loc);
+	//ChangeView(rot_trans(rotate_in_x(pi * half), position3(zero, zero, move_scale / 2)));
 }
 
 bool ViewModel::ClickAxes(const point &mouse) {
@@ -642,124 +718,172 @@ bool ViewModel::ClickAxes(const point &mouse) {
 	return false;
 }
 
-
-bool ViewModel::ClickModel(const point &mouse) {
-	if (model) {
-		if (!oct.nodes) {
-			dynamic_array<cuboid>	exts;
-			for (SubMesh *sm : model->submeshes) {
-				auto	v = sm->VertComponentData<float3p>(0);
-				for (auto &f : sm->indices)
-					exts.push_back(get_extent(make_indexed_container(v, f)));
-			}
-			oct.init(exts, exts.size32());
-		}
-
+ViewModel::Selection ViewModel::TestMouse(const point &mouse) {
+	if (oct.root) {
 		int			total	= 0;
-		dynamic_array<int>	sm_sizes(transformc(model->submeshes, [&total](SubMesh *sm) { return exchange(total, total + sm->indices.size32()); }));
-
 		float4x4	mat		= translate(-mouse.x, -mouse.y, 0) * ScreenMat();
 
-		int			face	= oct.shoot_ray(mat, 0.25f, [&](int i, param(ray3) r, float &t) {
-			auto		smi	= upper_boundc(sm_sizes, i) - 1;
-			triangle3	tri	= GetTriangle(model->submeshes[sm_sizes.index_of(smi)], i - *smi);
+		int			face	= oct.shoot_ray(mat, 0.25f, [this](int i, param(ray3) r, float &t) {
+			triangle3	tri	= GetTriangle(i);
 			float3		normal;
 			return tri.ray_check(r, t, &normal) && dot(normal, r.d) < zero;
 		});
 
 		if (face >= 0) {
-			auto	smi		= upper_boundc(sm_sizes, face) - 1;
-			sel_submesh		= sm_sizes.index_of(smi);
-			face -= *smi;
-
-			float	mind	= 10;
-#if 0
-			SubMesh		*sm		= model->submeshes[sel_submesh];
-			triangle3	tri		= GetTriangle(sm, face);
-			auto		index	= sm->indices[face].begin();
-			for (auto &p : tri.corners()) {
-				float		d	= len2(project(mat * float4(p)).xy);
-				if (d < mind) {
-					mind		= d;
-					sel_index	= *index;
-					sel_mode	= VERTEX;
-					sel_loc		= p;
+			int		face_offset = face;
+			int		vert_offset	= 0;
+			SubMesh::face	indices;
+			for (SubMesh *sm : model->submeshes) {
+				auto	n = sm->NumFaces();
+				if (face_offset < n) {
+					indices = sm->indices[face_offset];
+					break;
 				}
-				++index;
+				vert_offset += sm->NumVerts();
+				face_offset -= n;
 			}
-			if (mind == 10) {
-				sel_loc		= tri.centre();
-				sel_index	= face;
-				sel_mode	= FACE;
-			}
-#else
-			float3		centre(zero);
-			SubMesh		*sm	= model->submeshes[sel_submesh];
-			auto		&f	= sm->indices[face];
-			auto		v	= sm->VertComponentData<float3p>(0);
+
+			auto	tri		= GetTriangle(face);
+			float	mind	= 10;
+			int		index;
 
 			for (int i = 0; i < 3; i++) {
-				position3	p	= position3(v[f[i]]);
+				position3	p	= tri.corner(i);
 				float		d	= len2(project(mat * float4(p)).v.xy);
 				if (d < mind) {
-					mind		= d;
-					sel_index	= f[i];
-					sel_mode	= VERTEX;
-					sel_loc		= rot_trans(identity, p);
+					mind	= d;
+					index	= i;
 				}
-				centre += p.v;
 			}
-			if (mind == 10) {
-				sel_loc		= as_rot_trans(GetTriangle(sm, face));	//	centre / 3;
-				sel_index	= face;
-				sel_mode	= FACE;
-			}
-#endif
-			if (original.IsType<Model3>()) {
-				string_builder	route;
-				if (((IsoEditor&)main).LocateRoute(route, ((Model3*)original)->submeshes[sel_submesh]))
-					((IsoEditor&)main).SelectRoute(route << "[" << (sel_mode == FACE ? 2 : 1) << "][" << sel_index << ']');
-			}
-
-			return true;
+			if (mind == 10)
+				return {Selection::FACE, face};
+			else
+				return {Selection::VERTEX, indices[index] + vert_offset};
 		}
 	}
-	return false;
+	return {Selection::NONE};
 }
 
+bool ViewModel::SetSelection(const Selection &sel0) {
+	if (sel == sel0)
+		return false;
+
+	if (!sel0.mode)
+		return false;
+
+	sel		= sel0;
+	switch (sel0.mode) {
+		case Selection::VERTEX: {
+			int			sub_sel;
+			SubMesh		*sm = GetSelectedSubMesh(sel, sub_sel);
+			sel_loc		= rot_trans(identity, position3(sm->VertComponentData<float3p>(0)[sub_sel]));
+			return true;
+		}
+		case Selection::FACE:
+			sel_loc	= as_rot_trans(GetTriangle(sel0.index));	//	centre / 3;
+			return true;
+
+		case Selection::BONE:
+			sel_mat		= nullptr;
+			sel_loc		= rot_trans(identity, focus_pos);
+			flags.set(BONES);
+			return true;
+
+		default:
+			sel_loc		= rot_trans(identity, focus_pos);
+			return true;
+	}
+}
+
+void ViewModel::GetSelectionText(string_accum& sa, const Selection& sel) {
+	switch (sel.mode) {
+		case Selection::VERTEX: {
+			int			sub_sel;
+			SubMesh		*sm		= GetSelectedSubMesh(sel, sub_sel);
+			auto		&vert	= sm->VertComponentData<float3p>(0)[sub_sel];
+			sa << "vertex " << sub_sel << '/' << sm->NumVerts() << ":(" << vert.x << ',' << vert.y << ',' << vert.z << ')';
+			break;
+		}
+		case Selection::FACE: {
+			int			sub_sel;
+			SubMesh		*sm		= GetSelectedSubMesh(sel, sub_sel);
+			auto		&face	= sm->indices[sub_sel];
+			sa << "face " << sub_sel << '/' << sm->NumFaces() << ":(" << face[0] << ',' <<face[1] << ',' << face[2] << ')';;
+			break;
+		}
+
+		case Selection::SUBMESH:
+			sa << "submesh";
+			break;
+
+		case Selection::BONE:
+			sa << "bone";
+			break;
+
+		default:
+			break;
+	}
+}
+
+
+bool ViewModel::SetAnimation(ISO_ptr<Animation> t) {
+	if (anim)
+		delete anim;
+	anim = new AnimationHolder(Root(), t);
+	Timer::Start(1/60.f);
+	time.reset();
+	return true;
+}
+
+void ViewModel::DrawSelection(GraphicsContext &ctx, const Selection &sel, const ISO::Browser &parameters) {
+	int						sub_sel;
+	ISO_ptr<SubMeshBase>	smb		= GetSelectedSubMesh(sel, sub_sel);
+
+	if (((pass*)(*smb->technique)[0])->Has(SS_VERTEX)) {
+		SubMeshPlat::renderdata	*rd		= (SubMeshPlat::renderdata*)((SubMesh*)smb)->verts.User().get();
+		bool					pass	= HasIntVerts(smb);
+		ctx.SetVertexType(rd->vd);
+		ctx.SetVertices(0, rd->vb, rd->vert_size);
+		ctx.SetIndices(rd->ib);
+
+		switch (sel.mode) {
+			case Selection::VERTEX: {
+			#ifndef USE_DX11
+				ctx.Device()->SetRenderState(D3DRS_POINTSIZE, iorf(8.f).i);
+			#else
+				Set(ctx, *ISO::root("data")["default"]["thickpoint"][pass], parameters);
+			#endif
+				ctx.DrawPrimitive(PRIM_POINTLIST, sub_sel, 1);
+				break;
+			}
+			case Selection::FACE: {
+				uint8	vpp		= smb->GetVertsPerPrim();
+				Set(ctx, *ISO::root("data")["default"]["coloured"][pass], parameters);
+				ctx.DrawIndexedVertices(PrimType(rd->prim), 0, rd->nverts, sub_sel * vpp, vpp);
+				break;
+			}
+			case Selection::SUBMESH: {
+				Set(ctx, *ISO::root("data")["default"]["coloured"][pass], parameters);
+				ctx.DrawIndexedVertices(PrimType(rd->prim), 0, rd->nverts, 0, rd->nindices);
+				break;
+			}
+		}
+	}
+}
 
 void ViewModel::DrawScene(GraphicsContext &ctx) {
 	static pass *specular		= *ISO::root("data")["default"]["specular"][0];
 
-#if 0
-	float4x4	in(
-		position3(0,0,0),
-		position3(-.48f - 1,-.30f,1),
-		position3(+.48f - 1,-.30f,1),
-		position3(-.48f - 1,+.30f,1)
-	);
-	float4x4	out(
-		float4(0,0,-1,0),
-		float4(-1,-1,0,1),
-		float4(+1,-1,0,1),
-		float4(-1,+1,0,1)
-	);
-	float4x4	proj0			= out * inverse(in);
-//	float4x4	proj0			= find_projection(in, out);
-#else
 	float4x4	proj0			= Projection();
-#endif
 
 	float3x4	view			= view_loc;
 	float3x4	iview			= inverse(view);
 	float4x4	proj			= hardware_fix(proj0);
 	float4x4	viewProj		= proj * view;
 
-
 	float3x4	world			= Root()->GetWorldMat();
 	float3x4	worldView		= view * world;
 	float4x4	worldViewProj	= viewProj * world;
-
 
 	float3		shadowlight_dir	= -float3x3(light).z;
 	colour		shadowlight_col(one, one ,one);
@@ -776,30 +900,67 @@ void ViewModel::DrawScene(GraphicsContext &ctx) {
 	diffuse_irradiance.AddAmbient(light_ambient);
 
 #if 0
-	hash_map<crc32, arbitrary_ptr> shader_params;
+	static DataBufferT<int,false>			visible_meshlets(0x100000, MEM_WRITABLE);//|MEM_CPU_READ);
+	static DataBufferT<array<int,3>, false>	meshlet_indices;
 
-	shader_params["diffuse_irradiance"]	= &diffuse_irradiance;
-	shader_params["num_lights"]			= &num_lights;
-	shader_params["fog_dir1"]			= &fog_dir;
-	shader_params["fog_col1"]			= &fog_col;
+	if (!meshlet_indices) {
+		SubMesh	*sm = model->submeshes[0];
+		pass	*p = (*sm->technique)[0];
 
-	shader_params["view"]				= &view;
-	shader_params["projection"]			= &proj;
-	shader_params["viewProj"]			= &viewProj;
-	shader_params["iview"]				= &iview;
+		if (!p->Has(SS_VERTEX)) {
+			auto	prims = ISO::Browser(sm->parameters)["prims"];
+			uint32*	prims_start		= prims[0];
+			uint32	prims_num		= prims.Count();
+			dynamic_array<array<int,3>>	tri_indices;
+			uint32	*indices		= sm->indices.begin()->begin();
 
-	shader_params["world"]				= &world;
-	shader_params["worldView"]			= &worldView;
-	shader_params["worldViewProj"]		= &worldViewProj;
+			struct Meshlet {
+				uint32	PrimCount, PrimOffset;
+				float4p	sphere;
+				xint32	cone;
+				float	apex;
+			};
 
-	shader_params["tint"]				= &tint;
-	shader_params["shadowlight_dir"]	= &shadowlight_dir;
-	shader_params["shadowlight_col"]	= &shadowlight_col;
-	shader_params["light_ambient"]		= &light_ambient;
+			for (Meshlet *m : ISO::Browser(sm->parameters)["meshlets"]) {
+				auto	*prims = prims_start + m->PrimOffset;
+				for (int i = 0; i < m->PrimCount; i++) {
+					uint32	prim = *prims++;
+					auto&	dest	= tri_indices.push_back();
+					dest[0] = indices[(prim & 0xff)];
+					dest[1] = indices[((prim >>  8) & 0xff)];
+					dest[2] = indices[((prim >> 16) & 0xff)];
+				}
+				indices += 64;
+			}
 
-	shader_params["tint"]		= &tint;
-	shader_params["point_size"]			= &point_size;
+			meshlet_indices.Init(tri_indices.begin(), tri_indices.size32(), MEM_WRITABLE);//|MEM_CPU_READ);
+		} else {
+			meshlet_indices.Init(0x100000, MEM_WRITABLE);//|MEM_CPU_READ);
+		}
+	}
+#elif 0
+	static DataBufferT<int,false>			visible_meshlets;
+	static DataBufferT<array<int,3>, false>	meshlet_indices(0x100000, MEM_WRITABLE);//|MEM_CPU_READ);
+	DataBufferT<DrawVerticesArgs>		indirect2({{0, -1, 0, 1}}, MEM_WRITABLE|MEM_INDIRECTARG);
+
+	if (!visible_meshlets) {
+		SubMesh	*sm = model->submeshes[0];
+		pass	*p = (*sm->technique)[0];
+
+		if (!p->Has(SS_VERTEX)) {
+			dynamic_array<int>	meshlets = int_range(sm->NumFaces());
+			visible_meshlets.Init(meshlets.begin(), meshlets.size(), MEM_WRITABLE);//|MEM_CPU_READ);
+		}
+	}
+
 #else
+	DataBufferT<int,false>		visible_meshlets(0x100000, MEM_WRITABLE|MEM_CPU_READ);
+	DataBufferT<int[4], false>	meshlet_indices(0x1000000, MEM_WRITABLE);//|MEM_CPU_READ);
+	static DataBufferT<int>					indirect({1,1,1}, MEM_WRITABLE|MEM_INDIRECTARG);
+	static DataBufferT<DrawVerticesArgs>	indirect2({{0, -1, 0, 1}}, MEM_WRITABLE|MEM_INDIRECTARG);
+
+#endif
+
 	ShaderVal	vals[] = {
 		{"diffuse_irradiance",	&diffuse_irradiance},
 		{"num_lights",			&num_lights},
@@ -824,9 +985,10 @@ void ViewModel::DrawScene(GraphicsContext &ctx) {
 		{"point_size",			&point_size},
 		{"glossiness",			&glossiness},
 		{"flags",				&flags},
+		{"visible_meshlets",	&visible_meshlets},
+		{"meshlet_indices",		&meshlet_indices},
 	};
 	ShaderVals	shader_params(vals);
-#endif
 
 	int			nmats	= 0;
 	float3x4	*mats	= 0;
@@ -856,117 +1018,139 @@ void ViewModel::DrawScene(GraphicsContext &ctx) {
 
 	ctx.SetBackFaceCull(cull);
 	switch (flags.get_field(MODE)) {
-		case POINTS:
-			Set(ctx, *ISO::root("data")["default"]["thickpoint"][0], ISO::MakeBrowser(shader_params));
-			for (int i = 0, n = model->submeshes.Count(); i < n; i++) {
-				SubMeshBase	*sm = model->submeshes[i];
-				auto		*rd = ((SubMeshPlat*)sm)->GetRenderData();
-				ctx.SetVertexType(rd->vd);
-				ctx.SetVertices(0, rd->vb, rd->vert_size);
-				ctx.DrawPrimitive(PRIM_POINTLIST, 0, rd->nverts);
+		case POINTS: {
+			Set(ctx, *ISO::root("data")["default"]["thickpoint"][HasIntVerts(model->submeshes[0])], ISO::MakeBrowser(shader_params));
+			ctx.SetBlendEnable(true);
+			for (SubMeshBase *sm : model->submeshes) {
+				pass	*p = (*sm->technique)[0];
+				if (p->Has(SS_VERTEX)) {
+					auto		*rd = ((SubMeshPlat*)sm)->GetRenderData();
+					ctx.SetVertexType(rd->vd);
+					ctx.SetVertices(0, rd->vb, rd->vert_size);
+					ctx.DrawPrimitive(PRIM_POINTLIST, 0, rd->nverts);
+				}
 			}
 			break;
+		}
 
 		case WIREFRAME:
 			ctx.SetFillMode(FILL_WIREFRAME);
 
 		case FILL:
 			if (model) {
-				for (int i = 0, n = model->submeshes.Count(); i < n; i++) {
-					SubMeshBase	*sm = model->submeshes[i];
-					Set(ctx, (*sm->technique)[0], ISO::MakeBrowser(ISO::combine(ISO::Browser(sm->parameters), ISO::MakeBrowser(shader_params))));
+				for (SubMeshBase *sm : model->submeshes) {
+					pass	*p = (*sm->technique)[0];
+				#if 0
+					Set(ctx, p, ISO::MakeBrowser(ISO::combine(ISO::Browser(sm->parameters), ISO::MakeBrowser(shader_params))));
 					((SubMeshPlat*)sm)->Render(ctx);
+					if (!p->Has(SS_VERTEX)) {
+						Set(ctx, (*sm->technique)[2], ISO::MakeBrowser(ISO::combine(ISO::Browser(sm->parameters), ISO::MakeBrowser(shader_params))));
+						auto	verts	= ((SubMesh*)sm)->verts;
+						auto	*rd		= (SubMeshPlat::renderdata*)verts.User().get();
+						ctx.SetBuffer(SS_VERTEX, rd->vb, 0);
+						ctx.SetBuffer(SS_VERTEX, meshlet_indices, 1);
+						ctx.DrawVertices(PRIM_TRILIST, 0, meshlet_indices.Size() * 3);
+
+					}
+				#elif 0
+					Set(ctx, p, ISO::MakeBrowser(ISO::combine(ISO::Browser(sm->parameters), ISO::MakeBrowser(shader_params))));
+					((SubMeshPlat*)sm)->Render(ctx);
+					if (!p->Has(SS_VERTEX)) {
+						Set(ctx, (*sm->technique)[1], ISO::MakeBrowser(ISO::combine(ISO::Browser(sm->parameters), ISO::MakeBrowser(shader_params))));
+						ctx.Dispatch(visible_meshlets.Size());
+
+						ctx.PutCount(meshlet_indices, indirect2, 0);
+						Set(ctx, (*sm->technique)[2], ISO::MakeBrowser(ISO::combine(ISO::Browser(sm->parameters), ISO::MakeBrowser(shader_params))));
+						auto	verts	= ((SubMesh*)sm)->verts;
+						auto	*rd		= (SubMeshPlat::renderdata*)verts.User().get();
+						ctx.SetBuffer(SS_GEOMETRY, rd->vb, 0);
+						ctx.SetBuffer(SS_GEOMETRY, meshlet_indices, 1);
+						ctx.DrawVertices(PRIM_POINTLIST, indirect2, 0);
+
+					}
+				#else
+					Set(ctx, p, ISO::MakeBrowser(ISO::combine(ISO::Browser(sm->parameters), ISO::MakeBrowser(shader_params))));
+					((SubMeshPlat*)sm)->Render(ctx);
+
+					if (!p->Has(SS_VERTEX)) {
+						ctx.PutCount(visible_meshlets, indirect, 0);
+					#if 0
+						ctx.PutFence().Wait();
+						auto	data = visible_meshlets.Data();
+						dynamic_bitarray<>	b(((SubMesh*)sm)->indices.size(), false);
+						for (auto i : data)
+							ISO_ASSERT(!b[i].test_set() || i == 0);
+					#endif
+
+						Set(ctx, (*sm->technique)[1], ISO::MakeBrowser(ISO::combine(ISO::Browser(sm->parameters), ISO::MakeBrowser(shader_params))));
+						ctx.Dispatch(indirect, 0);
+
+						ctx.PutCount(meshlet_indices, indirect2, 0);
+					#if 0
+						ctx.PutFence().Wait();
+						auto	data = meshlet_indices.Data();
+						dynamic_bitarray<>	b(((SubMesh*)sm)->NumVerts(), false);
+						for (auto &i : data) {
+							b[i[0]] = true;
+							b[i[1]] = true;
+							b[i[2]] = true;
+						}
+					#endif
+
+						Set(ctx, (*sm->technique)[2], ISO::MakeBrowser(ISO::combine(ISO::Browser(sm->parameters), ISO::MakeBrowser(shader_params))));
+						auto	verts	= ((SubMesh*)sm)->verts;
+						auto	*rd		= (SubMeshPlat::renderdata*)verts.User().get();
+						ctx.SetBuffer(SS_GEOMETRY, rd->vb, 0);
+						ctx.SetBuffer(SS_GEOMETRY, meshlet_indices, 1);
+						ctx.DrawVertices(PRIM_POINTLIST, indirect2, 0);
+					}
+				#endif
 				}
+
 			} else if (patch) {
 				tess_info.Calculate(worldViewProj, 16, tess);
 				Draw(ctx, patch, tess.begin());
 
 			} else if (nurbs) {
-		#if 1
 				for (int i = 0, n = nurbs->subpatches.Count(); i < n; i++) {
 					SubPatch		&subpatch	= nurbs->subpatches[i];
 					Set(ctx, (*subpatch.technique)[0], ISO::MakeBrowser(ISO::combine(ISO::Browser(subpatch.parameters), ISO::MakeBrowser(shader_params))));
 					Draw(ctx, subpatch);
 				}
-		#else
-				AddShaderParameter<crc32_const("view")				>(view);
-				AddShaderParameter<crc32_const("projection")		>(proj);
-				AddShaderParameter<crc32_const("viewProj")			>(viewProj);
-				AddShaderParameter<crc32_const("iview")				>(iview);
-				AddShaderParameter<crc32_const("world")				>(world);
-				AddShaderParameter<crc32_const("worldView")			>(worldView);
-				AddShaderParameter<crc32_const("worldViewProj")		>(worldViewProj);
-				AddShaderParameter<crc32_const("tint")				>(tint);
-				AddShaderParameter<crc32_const("shadowlight_dir")	>(shadowlight_dir);
-				AddShaderParameter<crc32_const("shadowlight_col")	>(shadowlight_col);
-				AddShaderParameter<crc32_const("light_ambient")		>(light_ambient);
-
-				Draw(ctx, nurbs);
-		#endif
 			}
 
 			ctx.SetFillMode(FILL_SOLID);
 
 	}
 
-	if (sel_mode != NONE) {
+	if (sel.mode) {
 		ctx.SetBackFaceCull(BFC_NONE);
 		ctx.SetDepthTestEnable(false);
-		ctx.SetBlendEnable(false);
+		ctx.SetBlendEnable(true);
 #ifndef USE_DX11
 		ctx.SetAlphaTestEnable(false);
 #endif
 
 		if (model) {
-			ISO_ptr<SubMeshBase>	smb = model->submeshes[sel_submesh];
-			SubMeshPlat::renderdata	*rd = (SubMeshPlat::renderdata*)((SubMeshPlat&)*smb).verts.User().get();
-			ctx.SetVertexType(rd->vd);
-			ctx.SetVertices(0, rd->vb, rd->vert_size);
-			ctx.SetIndices(rd->ib);
-
-			switch (sel_mode) {
-				case VERTEX: {
-#ifndef USE_DX11
-					ctx.Device()->SetRenderState(D3DRS_POINTSIZE, iorf(8.f).i);
-#else
-					Set(ctx, *ISO::root("data")["default"]["thickpoint"][0], ISO::MakeBrowser(shader_params));
-#endif
-					ctx.DrawPrimitive(PRIM_POINTLIST, sel_index, 1);
-					break;
-				}
-				case FACE: {
-					uint8	vpp		= smb->GetVertsPerPrim();
-					//int		t		= 0;//smb->technique->Count() > 1 ? 1 : 0;
-					//Bind(model)[sel_submesh * 4 + t].Set(ctx, (*smb->technique)[t]);
-					Set(ctx, *ISO::root("data")["default"]["coloured"][0], ISO::MakeBrowser(shader_params));
-					ctx.DrawIndexedVertices(PrimType(rd->prim), 0, rd->nverts, sel_index * vpp, vpp);
-					break;
-				}
-				case SUBMESH: {
-					//int		t		= 0;//smb->technique->Count() > 1 ? 1 : 0;
-					//Bind(model)[sel_submesh * 4 + t].Set(ctx, (*smb->technique)[t]);
-					Set(ctx, *ISO::root("data")["default"]["coloured"][0], ISO::MakeBrowser(shader_params));
-					ctx.DrawIndexedVertices(PrimType(rd->prim), 0, rd->nverts, 0, rd->nindices);
-					break;
-				}
-			}
+			tint = {1,1,1};
+			DrawSelection(ctx, sel, ISO::MakeBrowser(shader_params));
 
 		} else if (patch) {
 #if 0
-		if (sel_submesh >= 0 && sel_index < 0) {
-			ISO_ptr<SubPatch>	smp = patch->subpatches[sel_submesh];
-			ShaderConstants		*sc = (ShaderConstants*)smp.User();
-			sc[1].Set((*smp->technique)[1]);
-			ctx.SetFillMode(FILL_SOLID);
-			ctx.SetBackFaceCull(BFC_NONE);
-			ctx.SetDepthTestEnable(false);
-			ctx.SetBlend(BLENDOP_ADD, BLEND_ONE, BLEND_ONE);
-			ctx.SetBlendEnable(true);
-			ctx.SetAlphaTestEnable(false);
+			if (sel_submesh >= 0 && sel_index < 0) {
+				ISO_ptr<SubPatch>	smp = patch->subpatches[sel_submesh];
+				ShaderConstants		*sc = (ShaderConstants*)smp.User();
+				sc[1].Set((*smp->technique)[1]);
+				ctx.SetFillMode(FILL_SOLID);
+				ctx.SetBackFaceCull(BFC_NONE);
+				ctx.SetDepthTestEnable(false);
+				ctx.SetBlend(BLENDOP_ADD, BLEND_ONE, BLEND_ONE);
+				ctx.SetBlendEnable(true);
+				ctx.SetAlphaTestEnable(false);
 
-			ctx.Device()->SetRenderState(D3DRS_POINTSIZE, iorf(8.f).i);
-			ctx.DrawPrimitive(PRIM_POINTLIST, ~sel_index, 1);
-		}
+				ctx.Device()->SetRenderState(D3DRS_POINTSIZE, iorf(8.f).i);
+				ctx.DrawPrimitive(PRIM_POINTLIST, ~sel_index, 1);
+			}
 #endif
 		}
 
@@ -1003,11 +1187,10 @@ void ViewModel::DrawScene(GraphicsContext &ctx) {
 			}
 		}
 
-		if (sel_bone >= 0) {
-
-			float3x4	mat		= pose->skinmats[sel_bone] * inverse(pose->invbpmats[sel_bone]);
+		if (sel.mode == Selection::BONE) {
+			float3x4	mat		= pose->skinmats[sel.index] * inverse(pose->invbpmats[sel.index]);
 			position3	pos		= get_trans(mat);
-			int			parent	= pose->parents[sel_bone];
+			int			parent	= pose->parents[sel.index];
 			if (parent != Pose::INVALID) {
 #ifndef USE_DX11
 				ctx.Device()->SetRenderState(D3DRS_ANTIALIASEDLINEENABLE, TRUE);
@@ -1040,6 +1223,17 @@ void ViewModel::DrawScene(GraphicsContext &ctx) {
 		Set(ctx, *ISO::root("data")["default"]["blend_vc"][0], ISO::MakeBrowser(shader_params));
 
 		DrawMatrix(ctx, *sel_mat, specular, ISO::MakeBrowser(shader_params));
+	}
+
+	if (hover.mode) {
+		ctx.SetBackFaceCull(BFC_NONE);
+		ctx.SetDepthTestEnable(false);
+		ctx.SetBlendEnable(true);
+	#ifndef USE_DX11
+		ctx.SetAlphaTestEnable(false);
+	#endif
+		tint = {1,0.5f,0};
+		DrawSelection(ctx, hover, ISO::MakeBrowser(shader_params));
 	}
 
 	float3x4	orig_world		= world;
@@ -1113,19 +1307,13 @@ void ViewModel::DrawMatrix(GraphicsContext &ctx, param(float3x4) mat, pass *p, I
 #endif
 }
 
-namespace iso {
-template<> VertexElements GetVE<ViewModel::vertex>() {
-	static VertexElement ve[] = {
-		VertexElement(&ViewModel::vertex::pos, "position"_usage),
-		VertexElement(&ViewModel::vertex::col, "colour"_usage)
-	};
-	return ve;
+template<> static const VertexElements ve<ViewModel::vertex> = (const VertexElement[]) {
+	{&ViewModel::vertex::pos, "position"_usage},
+	{&ViewModel::vertex::col, "colour"_usage}
 };
-}
 
 ViewModel::ViewModel(MainWindow &_main, const WindowPos &wpos, ISO_ptr_machine<void> p)
 	: main(_main), cull(BFC_BACK), flags(FILL), original(p)
-	, sel_mode(NONE), sel_bone(-1), sel_mat(0)
 	, view_loc(identity), target_loc(identity), focus_pos(zero)
 	, light(identity), light_ambient(0.25f, 0.25f, 0.25f), anim(0)
 {
@@ -1136,107 +1324,150 @@ ViewModel::ViewModel(MainWindow &_main, const WindowPos &wpos, ISO_ptr_machine<v
 
 	Use();
 
-//	try {
-		if (p.GetType() == ISO::getdef<Model3>()) {
-			ISO::Type	*type = ISO::getdef<Model3>();
-			save(type->flags, type->flags & ~ISO::TypeUser::CHANGE),
-				model = ISO_conversion::convert<Model3>(p, ISO_conversion::RECURSE | ISO_conversion::EXPAND_EXTERNALS | ISO_conversion::CHECK_INSIDE | ISO_conversion::FULL_CHECK);//p;
+	if (p.GetType() == ISO::getdef<Model>()) {
+		model = ISO_ptr<Model3>(ISO::FileHandler::ExpandExternals(p));
 
-			for (auto &sm : model->submeshes) {
-				if (!sm->technique) {
+	} else if (p.GetType() == ISO::getdef<Model3>()) {
+		ISO::Type	*type = ISO::getdef<Model3>();
+		save(type->flags, type->flags & ~ISO::TypeUser::CHANGE),
+			model = ISO_conversion::convert<Model3>(p, ISO_conversion::RECURSE | ISO_conversion::EXPAND_EXTERNALS | ISO_conversion::CHECK_INSIDE | ISO_conversion::FULL_CHECK);//p;
+
+		for (SubMesh *sm : model->submeshes) {
+			if (!sm->technique) {
+				if (sm->VertComponent(USAGE_NORMAL))
 					sm->technique = ISO::root("data")["default"]["specular"];
-				}
-			}
-
-		} else if (p.GetType() == ISO::getdef<SubMesh>()) {
-			ISO_ptr<SubMesh>	sm = FileHandler::ExpandExternals(p);
-			model.Create(0);
-			model->submeshes.Append(sm);
-			model->minext = sm->minext;
-			model->maxext = sm->maxext;
-
-		} else if (p.GetType() == ISO::getdef<PatchModel3>()) {
-			patch = p;
-
-		} else if (p.GetType() == ISO::getdef<NurbsModel>()) {
-			nurbs = p;
-
-		} else if (p.GetType()->SameAs<BasePose>()) {
-			Pose	*pose = Pose::Create(basepose = p);
-			Root()->SetProperty(pose);
-			flags.set(BONES);
-
-		} else if (p.GetType()->Is("MergeModels")) {
-			ISO_ptr<anything> a = ISO_conversion::convert(p, NULL, ISO_conversion::RECURSE | ISO_conversion::EXPAND_EXTERNALS | ISO_conversion::CHECK_INSIDE | ISO_conversion::FULL_CHECK);
-			for (int i = 0, n = a->Count(); i < n; i++) {
-				if ((*a)[i].GetType()->SameAs<Model3>()) {
-					model = (*a)[i];
-					break;
-				}
-			}
-
-		} else {
-			ISO::Type	*type = ISO::getdef<Model3>();
-			save(type->flags, type->flags & ~ISO::TypeUser::CHANGE),
-				node = ISO_conversion::convert<Node>(p, ISO_conversion::RECURSE | ISO_conversion::EXPAND_EXTERNALS | ISO_conversion::CHECK_INSIDE | ISO_conversion::FULL_CHECK);
-
-			for (int i = 0, n = node->children.Count(); i < n; i++) {
-				ISO_ptr<void>	&child = node->children[i];
-				const ISO::Type *type = child.GetType();
-
-				if (type->SameAs<BasePose>()) {
-					Pose	*pose = Pose::Create(basepose = child);
-					Root()->SetProperty(pose);
-
-				} else if (type == ISO::getdef<Model3>()) {
-					model = child;
-
-				} else if (type == ISO::getdef<PatchModel3>()) {
-					patch = child;
-
-				} else if (type == ISO::getdef<NurbsModel>()) {
-					nurbs = child;
-				}
 			}
 		}
 
-		bone_texture.Init(1024 * 4, 1, 1, 1, MEM_CPU_WRITE);
-		{
-			aligned<float4x4,16>	*mats	= new aligned<float4x4,16>[1024];
-			for (int i = 0; i < 1024; i++)
-				mats[i] = identity;
-			memcpy(bone_texture.WriteData(), mats, 1024 * sizeof(float4x4));
-			delete[] mats;
-		}
+	} else if (p.GetType() == ISO::getdef<SubMesh>()) {
+		ISO_ptr<SubMesh>	sm = FileHandler::ExpandExternals(p);
+		model.Create(0);
+		model->submeshes.Append(sm);
+		model->minext = sm->minext;
+		model->maxext = sm->maxext;
 
-		if (model || patch || nurbs) {
-			cuboid	ext = model	? cuboid(position3(model->maxext), position3(model->minext))
-						: patch ? cuboid(position3(patch->maxext), position3(patch->minext))
-						: cuboid(position3(nurbs->maxext), position3(nurbs->minext));
-			focus_pos	= ext.centre();
-			sel_loc		= rot_trans(identity, focus_pos);
-			move_scale	= len(ext.extent());
+	} else if (p.GetType() == ISO::getdef<PatchModel3>()) {
+		patch = p;
 
-			if (patch) {
-				tess_info.Init(patch);
-				tess.Create(tess_info.Total());
+	} else if (p.GetType() == ISO::getdef<NurbsModel>()) {
+		nurbs = p;
+
+	} else if (p.GetType()->SameAs<BasePose>()) {
+		Pose	*pose = Pose::Create(basepose = p);
+		Root()->SetProperty(pose);
+		flags.set(BONES);
+
+	} else if (p.GetType()->Is("MergeModels")) {
+		ISO_ptr<anything> a = ISO_conversion::convert(p, NULL, ISO_conversion::RECURSE | ISO_conversion::EXPAND_EXTERNALS | ISO_conversion::CHECK_INSIDE | ISO_conversion::FULL_CHECK);
+		for (int i = 0, n = a->Count(); i < n; i++) {
+			if ((*a)[i].GetType()->SameAs<Model3>()) {
+				model = (*a)[i];
+				break;
 			}
 		}
 
-		near_z			= move_scale / 100;
-		view_loc		= rot_trans(rotate_in_x(pi * half), position3(0, 0, move_scale / 2) - view_loc.rot * float3(focus_pos));
-		target_loc		= view_loc;
-//	} catch (char *s) {
-//		MessageBoxA(*this, s, "Error", MB_ICONERROR | MB_OK);
-//	}
+	} else {
+		ISO::Type	*type = ISO::getdef<Model3>();
+		save(type->flags, type->flags & ~ISO::TypeUser::CHANGE),
+			node = ISO_conversion::convert<Node>(p, ISO_conversion::RECURSE | ISO_conversion::EXPAND_EXTERNALS | ISO_conversion::CHECK_INSIDE | ISO_conversion::FULL_CHECK);
+
+		for (int i = 0, n = node->children.Count(); i < n; i++) {
+			ISO_ptr<void>	&child = node->children[i];
+			const ISO::Type *type = child.GetType();
+
+			if (type->SameAs<BasePose>()) {
+				Pose	*pose = Pose::Create(basepose = child);
+				Root()->SetProperty(pose);
+
+			} else if (type == ISO::getdef<Model3>()) {
+				model = child;
+
+			} else if (type == ISO::getdef<PatchModel3>()) {
+				patch = child;
+
+			} else if (type == ISO::getdef<NurbsModel>()) {
+				nurbs = child;
+			}
+		}
+	}
+
+	bone_texture.Init(1024 * 4, 1, 1, 1, MEM_CPU_WRITE);
+	{
+		aligned<float4x4,16>	*mats	= new aligned<float4x4,16>[1024];
+		for (int i = 0; i < 1024; i++)
+			mats[i] = identity;
+		memcpy(bone_texture.WriteData()[0].begin(), mats, 1024 * sizeof(float4x4));
+		delete[] mats;
+	}
+
+	if (model || patch || nurbs) {
+		cuboid	ext = model	? cuboid(position3(model->maxext), position3(model->minext))
+					: patch ? cuboid(position3(patch->maxext), position3(patch->minext))
+					: cuboid(position3(nurbs->maxext), position3(nurbs->minext));
+		focus_pos	= ext.centre();
+		sel_loc		= rot_trans(identity, focus_pos);
+		move_scale	= len(ext.extent());
+
+		if (patch) {
+			tess_info.Init(patch);
+			tess.Create(tess_info.Total());
+		}
+	}
+
+	addref();
+	if (model) {
+		addref();
+		RunThread([this]() {
+			bool	convert_verts	= false;
+			size_t	total_verts		= 0;
+			for (SubMesh *sm : model->submeshes) {
+				convert_verts = convert_verts || !sm->VertComponent(0)->type->SameAs<float3p>();
+				total_verts += sm->NumVerts();
+			}
+
+			dynamic_array<cuboid>	exts;
+
+			if (convert_verts) {
+				verts.resize(total_verts);
+				total_verts		= 0;
+
+				for (SubMesh *sm : model->submeshes) {
+					auto	comp	= sm->VertComponent(0);
+					auto	v		= verts + total_verts;
+					ISO::Conversion::batch_convert(sm->_VertComponentData(comp->offset), comp->type, v, sm->NumVerts());
+					total_verts += sm->NumVerts();
+
+					for (auto &f : sm->indices)
+						exts.push_back(get_extent(make_indexed_container(v, f)));
+				}
+			} else {
+				for (auto &smp : model->submeshes) {
+					auto	isize	= smp.GetType()->SkipUser()->as<ISO::COMPOSITE>()->Find("indices")->type->as<ISO::OPENARRAY>()->subsize / 4;
+					if (isize == 3) {
+						SubMesh	*sm		= smp;
+						auto	v		= sm->VertComponentData<float3p>(0);
+						for (auto &f : sm->indices)
+							exts.push_back(get_extent(make_indexed_container(v, f)));
+					}
+				}
+			}
+			oct.init(exts, exts.size32());
+			release();
+		});
+	}
+
+	near_z			= move_scale / 100;
+	view_loc		= rot_trans(rotate_in_x(pi * half), position3(0, 0, move_scale / 2) - view_loc.rot * float3(focus_pos));
+	target_loc		= view_loc;
 
 	Create(wpos, get_id(p), CHILD | VISIBLE | CLIPCHILDREN | CLIPSIBLINGS, CLIENTEDGE);
 }
 
 
 class EditorModel : public Editor {
-	virtual bool Matches(const ISO::Type *type) {
+	bool	Matches(const ISO::Type *type) override {
 		return type == ISO::getdef<Model3>()
+			|| type == ISO::getdef<Model>()
 			|| type == ISO::getdef<SubMesh>()
 			|| type == ISO::getdef<PatchModel3>()
 			|| type == ISO::getdef<NurbsModel>()
@@ -1244,9 +1475,13 @@ class EditorModel : public Editor {
 			|| type->SameAs<BasePose>()
 			|| type->Is("MergeModels");
 	}
-	virtual Control Create(MainWindow &main, const WindowPos &wpos, const ISO_ptr_machine<void> &p) {
+	Control	Create(MainWindow &main, const WindowPos &wpos, const ISO_ptr_machine<void> &p) override {
 		return *new ViewModel(main, wpos, p);
 	}
+	ID		GetIcon(const ISO_ptr<void> &p)	override {
+		return "IDB_DEVICE_LANDSCAPE";
+	}
+
 } editormodel;
 
 static initialise init(

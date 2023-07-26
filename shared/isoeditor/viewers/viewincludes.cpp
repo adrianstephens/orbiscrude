@@ -92,7 +92,7 @@ class ViewIncludes : public aligned<Window<ViewIncludes>,16>, public WindowTimer
 	void	Paint(const Rect &r);
 	void	Physics(float dt);
 public:
-	LRESULT Proc(UINT message, WPARAM wParam, LPARAM lParam);
+	LRESULT Proc(MSG_ID message, WPARAM wParam, LPARAM lParam);
 	ViewIncludes(const WindowPos &wpos, ISO_ptr<void> p);
 };
 
@@ -339,14 +339,14 @@ void ViewIncludes::Physics(float dt) {
 	tree.Init((TreeNode**)files.begin(), files.size32());
 }
 
-LRESULT ViewIncludes::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+LRESULT ViewIncludes::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 		case WM_CREATE:
 			d2d.Init(hWnd, GetClientRect().Size());
 			break;
 
 		case WM_SIZE: {
-			if (d2d.Resize(Point(lParam)))
+			if (!d2d.Resize(Point(lParam)))
 				d2d.DeInit();
 			Invalidate();
 			break;

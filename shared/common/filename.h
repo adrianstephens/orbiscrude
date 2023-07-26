@@ -147,15 +147,14 @@ class filename : public fixed_string<512> {
 public:
 	typedef fixed_string<_MAX_VOLUME>	drive_t;
 	typedef fixed_string<_MAX_EXT>		ext_t;
+	using B::B;
 
 	iso_export static filename	temp(const char *prefix = 0);
-	iso_export static filename	cleaned(const char *fn);
+	iso_export static filename	cleaned(const string_param &s);
 
 	filename() {}
-	iso_export filename(const char *s);
-	filename(const char16 *s)								: B(s)	{}
-	template<typename T> filename(const string_base<T> &s)	: B(s)	{}
-	template<typename T> filename(const string_getter<T> &s): B(s)	{}
+	filename(const char16 *s)		: B(s)	{}
+	iso_export filename(const string_param &s);
 
 	iso_export bool			is_url()					const;
 	iso_export bool			is_wild()					const;
@@ -167,20 +166,22 @@ public:
 	iso_export filename		name_ext()					const;
 	iso_export filename		dir_name_ext()				const;
 
-	const char*				ext_ptr()					const	{ const char *d = rfind('.'); return d && !string_find(d, DIRECTORY_SEP) ? d : 0; }
-	const char*				name_ext_ptr()				const	{ const char *d = rfind(DIRECTORY_SEP); return d ? d + 1 : p; }
+	cstring					ext_ptr()					const	{ const char *d = rfind('.'); return d && !string_find(d, DIRECTORY_SEP) ? d : 0; }
+	cstring					name_ext_ptr()				const	{ const char *d = rfind(DIRECTORY_SEP); return d ? d + 1 : p; }
+	bool					has_dir()					const	{ return find(DIRECTORY_SEP); }
+	constexpr explicit operator bool()					const	{ return !!p[0]; }
 
 	iso_export filename&	cleanup();
 	iso_export filename&	rem_dir();
 	iso_export filename&	rem_first();
-	iso_export filename&	add_dir(const count_string &s);
-	iso_export filename&	set_dir(const count_string &s);
-	iso_export filename&	add_ext(const char *e);
+	iso_export filename&	add_dir(const string_param &s);
+	iso_export filename&	set_dir(const string_param &s);
+	iso_export filename&	add_ext(const string_param &e);
 	iso_export filename&	set_ext(const char *e);
-	filename&				add_dir(const char *d)				{ if (d) add_dir(count_string(d, strlen(d))); return *this; }
-	filename&				set_dir(const char *d)				{ return set_dir(count_string(d, strlen(d))); }
+//	filename&				add_dir(const char *d)				{ if (d) add_dir(count_string(d, strlen(d))); return *this; }
+//	filename&				set_dir(const char *d)				{ return set_dir(count_string(d, strlen(d))); }
 
-	iso_export filename		relative(const char *f)		const;
+	iso_export filename		relative(const string_param &f)		const;
 	iso_export bool			matches(const char *s)		const;
 	iso_export bool			matched(filename &out, const char *spec0, const char *spec1) const;
 	iso_export filename		matched(const char *spec0, const char *spec1) const;
@@ -189,8 +190,8 @@ public:
 	filename				convert_to_backslash()		const	{ filename r; replace(r.begin(), begin(), "/", "\\"); return r; }
 	filename				convert_to_fwdslash()		const	{ filename r; replace(r.begin(), begin(), "\\", "/"); return r; }
 	bool					exists()					const	{ return iso::exists(*this); }
-	static filename			fix(const char *p);
-	filename				fix()						const	{ return fix(p); }
+//	static filename			fix(const char *p);
+//	filename				fix()						const	{ return fix(p); }
 
 	filename				operator/(const char* d)	const	{ return filename(*this).add_dir(d); }
 };
@@ -204,12 +205,12 @@ iso_export filename 	get_temp_dir();
 class push_cwd {
 	filename prev;
 public:
-	push_cwd(const char *dir)	{ prev = get_cwd(); set_cwd(dir); }
+	push_cwd(const string_param &dir)	{ prev = get_cwd(); set_cwd(dir); }
 	~push_cwd()					{ set_cwd(prev); }
 };
 
 struct _cwd {
-	bool	operator=(const char *dir)	{ return set_cwd(dir); }
+	bool	operator=(const string_param &dir)	{ return set_cwd(dir); }
 	operator filename() const			{ return get_cwd(); }
 };
 extern _cwd cwd;

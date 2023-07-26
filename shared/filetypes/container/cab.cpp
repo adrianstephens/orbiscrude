@@ -581,7 +581,7 @@ class CHMFileHandler : public FileHandler {
 
 				if (i == 0) {
 					file.seek(content);
-					sections.emplace_back(name, istream_offset(file));
+					sections.emplace_back(name, make_reader_offset(file));
 
 				} else if (ISO::Browser b = storage[name]) {
 					if (name == "MSCompressed") {

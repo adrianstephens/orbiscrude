@@ -308,7 +308,7 @@ void DrawPlane(GraphicsContext &ctx, const plane &p, const float4x4 &wvp) {
 	uint32		nv	= clip_plane(p2, verts) - verts;
 
 	if (nv > 2) {
-		float3	n	= p.normal() * sign(p2.v.w);
+		float3	n	= p.normal() * sign(as_vec(p2).w);
 		ImmediateStream<VertexIndexBuffer::vertex>	imm(ctx, PRIM_TRISTRIP, nv);
 		convex_to_tristrip(imm.begin(), transformc(make_range_n(verts, nv), [&n](param(position3) i)->VertexIndexBuffer::vertex { return {i.v, n}; }));
 	}

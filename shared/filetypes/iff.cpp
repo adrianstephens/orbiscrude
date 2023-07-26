@@ -12,7 +12,7 @@ class IFFFileHandler : public FileHandler {
 		return "Generic IFF container";
 	}
 
-	int	Check(istream_ref file) {
+	int	Check(istream_ref file) override {
 		file.seek(0);
 		return (file.get<uint32be>() >> 8) == 'FOR' ? CHECK_POSSIBLE : CHECK_DEFINITE_NO;
 	}

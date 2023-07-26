@@ -92,8 +92,8 @@ class AcornDFS : public FileHandler {
 
 			if (check(side1, len >> 1)) {
 				ISO_ptr<anything>	disk(id, 2);
-				(*disk)[0] = read(0, side0, file, 10, 0);
-				(*disk)[1] = read(0, side1, file, 10, 10 * SECTOR_SIZE);
+				(*disk)[0] = read(none, side0, file, 10, 0);
+				(*disk)[1] = read(none, side1, file, 10, 10 * SECTOR_SIZE);
 				return disk;
 			}
 		}
@@ -134,7 +134,7 @@ ISO_ptr<void> AcornDFS::read(tag id, const Sector01 &s, istream_ref file, uint32
 			nlen--;
 		ba << str(name.name, nlen);
 
-		ISO_ptr<ISO_openarray<uint8> >	e((const char*)ba);
+		ISO_ptr<ISO_openarray<uint8> >	e(ba);
 		uint32	start	= info.start();
 		uint32	length	= info.length();
 		uint8	*dest	= e->Create(length, false);
@@ -270,7 +270,7 @@ uint8 *PrintBBCBASIC(string_accum &&ac, uint8 *data, uint32 len, int basic_versi
 				p += 3;
 
 				if (use_pretty_print)
-					ac.putc(' ', indent_level + 1);
+					ac << repeat(' ', indent_level + 1);
 
 				assembler_comment	= false;
 				basic_comment		= false;

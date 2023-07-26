@@ -3,7 +3,6 @@
 #include "polynomial.h"
 #include "base/algorithm.h"
 #include "extra/indexer.h"
-#include "dynamic_vector.h"
 #include "utilities.h"
 
 #if 0
@@ -43,7 +42,6 @@ float closest_point(const convex_polygon<range<position2*>> &a, const convex_pol
 	vb	= (int)cb.prev_i;
 	return dist;
 }
-
 
 //-----------------------------------------------------------------------------
 // minimum obb2
@@ -308,77 +306,8 @@ triangle triangle::minimum(position2 *p, uint32 n) {
 #endif
 
 //-----------------------------------------------------------------------------
-// minimum circle
-//-----------------------------------------------------------------------------
-
-circle minimum_circle(stride_iterator<position2> p, uint32 n, uint32 b) {
-	circle m;
-	switch (b) {
-		case 0:	m = circle(zero);						break;
-		case 1:	m = circle::with_r2(p[-1], zero);		break;
-		case 2:	m = circle::through(p[-1], p[-2]);		break;
-		case 3:	return circle::through(p[-1], p[-2], p[-3]);
-	}
-
-	for (uint32 i = 0; i < n; i++) {
-		position2 t = p[i];
-		if (!m.contains(t)) {
-			for (int j = i; j > 0; j--)
-				p[j] = p[j - 1];
-			p[0] = t;
-			m	= minimum_circle(p + 1, i, b + 1);
-			((float3&)m).z *= 0.9999f;	// robustness fudge
-		}
-	}
-	return m;
-}
-
-template<> circle _minimum_sphere(stride_iterator<position2> p, uint32 n) {
-	uint32	b = n < 3 ? n : 0;
-	return minimum_circle(p + b, n - b, b);
-}
-
-//-----------------------------------------------------------------------------
 // minimum ellipse
 //-----------------------------------------------------------------------------
-
-// Khachiyan Algorithm
-conic khachiyan(stride_iterator<position2> p, uint32 n, float eps) {
-	static const int	d	= 2;				// Dimension of the points
-	auto	u	= dynamic_vector<double>(n);	// u is an nx1 vector where each element is 1/n
-	auto	Q	= dynamic_matrix<double3>(n);
-
-	for (int i = 0; i < n; i++) {
-		u[i]	= 1.f / n;
-		Q[i]	= to<double>(float3(p[i]));
-	}
-
-	eps		= max(eps, 1e-6f);
-
-	double err2;
-	do {
-		auto	X	= Q * scale(u) * transpose(Q);
-		auto	M	= (transpose(Q) * inverse(X) * Q).diagonal();
-
-		// Find the value and location of the maximum element in the vector M
-		int		j	= max_component_index(M);
-		auto	max	= M[j];
-
-		// Calculate the step size for the ascent
-		auto	step = (max - d - 1) / ((d + 1) * (max - 1));
-
-		// Calculate the new_u
-		u		*= 1 - step;		// multiply all elements in u by (1 - step_size)
-		u[j]	+= step;			// Increment the jth element of u by step_size
-
-		err2	= (len2(u) + 1 - u[j] * 2) * square(step);
-	} while (err2 > eps);
-
-	auto	A	= to<float>(get(inverse(Q * scale(u) * transpose(Q))));
-	conic	c	= make_sym(float3x3(A[0], A[1], A[2]));
-	auto	centre	= c.centre();
-	return (translate(centre) * scale(sqrt(float(d))) * translate(-centre)) * c;
-}
 
 struct ellipse_min {
 	conic		c1, c2;
@@ -457,7 +386,7 @@ bool ellipse_min::check_inside(param(position2) p, float eps) const {
 	}
 }
 
-ellipse_min minimum_ellipse(stride_iterator<position2> p, uint32 n, uint32 b, float eps) {
+ellipse_min minimum_ellipse(position2 *p, uint32 n, uint32 b, float eps) {
 	ellipse_min	m(p - b, b);
 	for (uint32 i = 0; i < n; i++) {
 		position2	t = p[i];
@@ -471,7 +400,7 @@ ellipse_min minimum_ellipse(stride_iterator<position2> p, uint32 n, uint32 b, fl
 	return m;
 }
 
-template<> ellipse minimum_ellipsoid(stride_iterator<position2> p, uint32 n, float eps) {
+template<> ellipse minimum_ellipsoid(position2 *p, uint32 n, float eps) {
 	switch (n) {
 		case 0: return ellipse(position2(zero), float2(zero), zero);
 		case 1: return ellipse(p[0], float2(zero), zero);
@@ -679,8 +608,8 @@ int optimise_hull_2d(stride_iterator<position2> p, int n, int m) {
 	}
 #else
 	auto	d	= make_double_index_container(rev_indices, indices);
-	auto	ix	= make_index_container(links.links, d);
-	auto	q	= make_priority_queue_ref(ix);
+	auto	ix	= make_indexed_container(links.links, d);
+	auto	q	= make_priority_queue<less>(ix);
 
 	for (int m1 = m; n > m1;) {
 		int		i	= indices[0];
@@ -901,41 +830,9 @@ template<> obb<float,3> minimum_obb(stride_iterator<position3> p, uint32 n) {
 }
 
 //-----------------------------------------------------------------------------
-// minimum sphere
-//-----------------------------------------------------------------------------
-
-sphere minimum_sphere(stride_iterator<position3> p, uint32 n, uint32 b) {
-	sphere m;
-	switch (b) {
-		case 0:	m = sphere(zero);							break;
-		case 1:	m = sphere(p[-1], zero);					break;
-		case 2:	m = sphere::through(p[-1], p[-2]);			break;
-		case 3:	m = sphere::through(p[-1], p[-2], p[-3]);	break;
-		case 4:	return sphere::through(p[-1], p[-2], p[-3], p[-4]);
-	}
-
-	for (uint32 i = 0; i < n; i++) {
-		position3 t = p[i];
-		if (!m.contains(t)) {
-			for (int j = i; j > 0; j--)
-				p[j] = p[j - 1];
-			p[0] = t;
-			m = minimum_sphere(p + 1, i, b + 1);
-			m *= 1.0001f;
-		}
-	}
-	return m;
-}
-
-template<> sphere _minimum_sphere(stride_iterator<position3> p, uint32 n) {
-	uint32	b = n < 4 ? n : 0;
-	return minimum_sphere(p + b, n - b, b);
-}
-
-//-----------------------------------------------------------------------------
 // minimum ellipsoid
 //-----------------------------------------------------------------------------
-
+#if 0
 // Khachiyan Algorithm
 quadric khachiyan(stride_iterator<position3> p, uint32 n, float eps) {
 	static const int	d	= 3;				// Dimension of the points
@@ -973,10 +870,16 @@ quadric khachiyan(stride_iterator<position3> p, uint32 n, float eps) {
 	auto	centre	= c.centre();
 	return (translate(centre) * scale(sqrt(float(d))) * translate(-centre)) * c;
 }
+#endif
 
 #if 1
-template<> ellipsoid minimum_ellipsoid(stride_iterator<position3> p, uint32 n, float eps) {
-	return khachiyan(p, n, eps);
+template<> ellipsoid minimum_ellipsoid(position3 *p, uint32 n, float eps) {
+	auto	A = khachiyan(p, n, eps);
+	quadric	c	= make_sym(float4x4(A[0], A[1], A[2], A[3]));
+	auto	centre	= c.centre();
+	return (translate(centre) * scale(sqrt3) * translate(-centre)) * c;
+	
+	//	return khachiyan(p, n, eps);
 }
 
 #else

@@ -59,7 +59,7 @@ struct StreamHdr {
 	uint32		Offset;		// Memory offset to start of this stream from start of the metadata root (§II.24.2.1)
 	uint32		Size;		// Size of this stream in bytes, shall be a multiple of 4.
 	embedded_string	Name;	// Name of the stream as null-terminated variable length array of ASCII characters, padded to the next 4-byte boundary with \0 characters. The name is limited to 32 characters.
-	StreamHdr	*next()	const { return (StreamHdr*)(Name + align(Name.length() + 1, 4)); }
+	StreamHdr	*next()	const { return (StreamHdr*)(Name.begin() + align(Name.length() + 1, 4)); }
 };
 
 struct METADATA_ROOT : littleendian_types {

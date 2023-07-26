@@ -171,6 +171,7 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>onecore.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -250,6 +251,7 @@
   <ItemGroup>
     <ClCompile Include="..\..\..\common\base\defs.cpp" />
     <ClCompile Include="..\..\..\common\filename.cpp" />
+    <ClCompile Include="..\..\..\platforms\pc\dx12\dx12_helpers.cpp" />
     <ClCompile Include="..\..\..\platforms\pc\dx12\dx12_record.cpp" />
     <ClCompile Include="..\..\..\platforms\pc\dxgi_record.cpp" />
     <ClCompile Include="..\..\..\platforms\pc\hook.cpp" />
@@ -279,6 +281,7 @@
     <ClInclude Include="..\..\..\common\base\strings.h" />
     <ClInclude Include="..\..\..\common\base\tree.h" />
     <ClInclude Include="..\..\..\common\filename.h" />
+    <ClInclude Include="..\..\..\platforms\pc\dx12\dx12_helpers.h" />
     <ClInclude Include="..\..\..\platforms\pc\dx12\dx12_record.h" />
     <ClInclude Include="..\..\..\platforms\pc\dxgi_record.h" />
     <ClInclude Include="..\..\..\platforms\pc\hook.h" />

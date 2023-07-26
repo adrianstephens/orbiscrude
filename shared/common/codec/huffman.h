@@ -227,7 +227,7 @@ template<int CB, typename T, typename C> int HUFF_make_tree(T nc, uint16 *freq, 
 // IB: prefix bits in table
 
 template<int NC, int IB, int CB> struct THUFF_base {
-	enum { TB = LOG2_CEIL(NC) };
+	enum { TB = klog2_ceil<NC> };
 
 	typedef	uint_bits_t<TB>	T;
 	typedef	uint_bits_t<CB>	C;

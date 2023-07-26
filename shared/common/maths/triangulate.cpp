@@ -328,7 +328,7 @@ float iso::closest_point(const point_cloud<range<position2*>> &a, const point_cl
 	t.AddVerts(b.points());
 	t.Triangulate();
 
-	int		na	= a.size32();
+	int		na	= a.points().size32();
 	int		i0	= 0, i1 = na;
 	float	best_dist2	= maximum;
 

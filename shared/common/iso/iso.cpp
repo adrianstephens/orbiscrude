@@ -173,7 +173,7 @@ struct tlsfvm_iso_allocator {
 		void	*p2	= tlsf::realloc(pp, p, size);
 		if (!p2) {
 			more(size);
-			p2 = tlsf::realloc(pp, p, size);
+			p2 = tlsf::realloc_retry(pp, p, size);
 		}
 		return p2;
 	}
@@ -258,44 +258,45 @@ const char* to_string(const tag2 &t) {
 //	Type
 //-----------------------------------------------------------------------------
 
-string_accum& operator<<(string_accum &a, const Type *const type) {
-	if (type) switch (type->GetType()) {
-		case INT:
-			a << "int";
-			if (type != getdef<int>()) {
-				TypeInt	*i = (TypeInt*)type;
-				a << '{' << onlyif((i->flags & TypeInt::HEX) || !(i->flags & TypeInt::SIGN), i->flags & TypeInt::HEX ? 'x' : 'u') << i->num_bits();
-				if (i->frac_bits())
-					a << '.' << i->frac_bits();
-				a << '}';
-			}
-			break;
-		case FLOAT:
-			a << "float";
-			if (type != getdef<float>())
-				a << '{' << onlyif(!(type->flags & TypeFloat::SIGN), 'u') << type->param1 << '.' << type->param2 << '}';
-			break;
-		case STRING:
-			a << "string";
-			if (int	c = ((TypeString*)type)->log2_char_size())
-				a << (8 << c);
-			return a;
+string_accum& operator<<(string_accum &a, const TypeInt &t) {
+	if (&t == getdef<int>())
+		return a << "int";
+	return a << "int{" << onlyif((t.flags & TypeInt::HEX) || !(t.flags & TypeInt::SIGN), t.flags & TypeInt::HEX ? 'x' : 'u') << t.num_bits() << onlyif(t.frac_bits(), '.', t.frac_bits()) << '}';
+}
+string_accum& operator<<(string_accum &a, const TypeFloat &t) {
+	if (&t == getdef<float>())
+		return a << "float";
+	return a << "float{" << onlyif(!(t.flags & TypeFloat::SIGN), 'u') << t.param1 << '.' << t.param2 << '}';
+}
+string_accum& operator<<(string_accum &a, const TypeString &t) {
+	return a << "string" << onlyif(t.log2_char_size(), 8 << t.log2_char_size());
+}
+string_accum& operator<<(string_accum &a, const TypeComposite &t) {
+	a << '{';
+	for (auto &i : t)
+		a << ' ' << get(i.type) << '.' << ifelse(i.id.blank(), '.', t.GetID(&i));
+	return a << " }";
+}
+string_accum& operator<<(string_accum &a, const TypeArray &t)		{ return a << get(t.subtype) << '[' << t.count << ']'; }
+string_accum& operator<<(string_accum &a, const TypeOpenArray &t)	{ return a << get(t.subtype) << "[]"; }
+string_accum& operator<<(string_accum &a, const TypeReference &t)	{ return a << get(t.subtype) << '*'; }
+string_accum& operator<<(string_accum &a, const TypeUser &t)		{ return a << get(t.ID()); }
 
+string_accum& operator<<(string_accum &a, const Type *const type) {
+	if (!type)
+		return a;
+	switch (type->GetType()) {
+		case INT:		return a << *(TypeInt*)type;
+		case FLOAT:		return a << *(TypeFloat*)type;
+		case STRING:	return a << *(TypeString*)type;
+		case COMPOSITE:	return a << *(TypeComposite*)type;
+		case ARRAY:		return a << *(TypeArray*)type;
+		case OPENARRAY:	return a << *(TypeOpenArray*)type;
+		case REFERENCE:	return a << *(TypeReference*)type;
+		case USER:		return a << *(TypeUser*)type;
 		case VIRTUAL:	return a << "virtual";
-		case COMPOSITE:	{
-			TypeComposite	&comp	= *(TypeComposite*)type;
-			a << '{';
-			for (auto &i : comp)
-				a << ' ' << get(i.type) << '.' << ifelse(i.id.blank(), '.', comp.GetID(&i));
-			return a << " }";
-		}
-		case ARRAY:		return a << get(((TypeArray*)type)->subtype) << '[' << ((TypeArray*)type)->count << ']';
-		case OPENARRAY:	return a << get(((TypeOpenArray*)type)->subtype) << "[]";
-		case REFERENCE:	return a << get(((TypeReference*)type)->subtype) << "*";
-		case USER:		return a << get(((TypeUser*)type)->ID());
-		default:		break;
+		default:		return a << "<bad type>";
 	}
-	return a;
 }
 
 const Type *Type::_SubType(const Type *type) {
@@ -307,7 +308,7 @@ const Type *Type::_SubType(const Type *type) {
 		case USER:		return ((TypeUser*)type)->subtype;
 		default:		break;
 	}
-	return 0;
+	return nullptr;
 }
 
 const Type *Type::_SkipUser(const Type *type) {
@@ -316,7 +317,7 @@ const Type *Type::_SkipUser(const Type *type) {
 	return type;
 }
 
-uint32 Type::_GetSize(const Type *type) {
+uint32 Type::_Size(const Type *type) {
 	if (type) switch (type->GetType()) {
 		case INT:		return ((TypeInt*)type)->GetSize();
 		case FLOAT:		return ((TypeFloat*)type)->GetSize();
@@ -324,7 +325,7 @@ uint32 Type::_GetSize(const Type *type) {
 		case COMPOSITE:	return ((TypeComposite*)type)->GetSize();
 		case ARRAY:		return ((TypeArray*)type)->GetSize();
 		case VIRTUAL:	return ((Virtual*)type)->GetSize();
-		case USER:		return _GetSize(((TypeUser*)type)->subtype);
+		case USER:		return _Size(((TypeUser*)type)->subtype);
 		case OPENARRAY:
 		case REFERENCE:	return type->Is64Bit() ? 8 : 4;
 		default:		break;
@@ -332,7 +333,7 @@ uint32 Type::_GetSize(const Type *type) {
 	return 0;
 }
 
-uint32 Type::_GetAlignment(const Type *type) {
+uint32 Type::_Alignment(const Type *type) {
 	if (!type || type->IsPacked())
 		return 1;
 	switch (type->GetType()) {
@@ -340,10 +341,10 @@ uint32 Type::_GetAlignment(const Type *type) {
 		case FLOAT:		return ((TypeFloat*)type)->GetSize();
 		case STRING:	return ((TypeString*)type)->GetAlignment();
 		case COMPOSITE:	return ((TypeComposite*)type)->GetAlignment();
-		case ARRAY:		return _GetAlignment(((TypeArray*)type)->subtype);
+		case ARRAY:		return _Alignment(((TypeArray*)type)->subtype);
 		case OPENARRAY:
 		case REFERENCE:	return type->Is64Bit() ? 8 : 4;
-		case USER:		return _GetAlignment(((TypeUser*)type)->subtype);
+		case USER:		return _Alignment(((TypeUser*)type)->subtype);
 		default:		return 1;
 	}
 }
@@ -371,9 +372,12 @@ bool Type::_ContainsReferences(const Type *type) {
 }
 
 bool Type::_IsPlainData(const Type *type, bool flip_endian) {
-	if (type) switch (type->GetType()) {
-		case INT:		return !flip_endian || _GetSize(type) == 1 || (type->flags & TypeInt::NOSWAP);
-		case FLOAT:		return !flip_endian || _GetSize(type) == 1;
+	if (!type)
+		return true;
+	
+	switch (type->GetType()) {
+		case INT:		return !flip_endian || _Size(type) == 1 || (type->flags & TypeInt::NOSWAP);
+		case FLOAT:		return !flip_endian || _Size(type) == 1;
 		case COMPOSITE:
 			for (auto &i : *(const TypeComposite*)type) {
 				if (!_IsPlainData(i.type, flip_endian))
@@ -387,20 +391,12 @@ bool Type::_IsPlainData(const Type *type, bool flip_endian) {
 	return false;
 }
 
-bool IsSubclass(const Type *type1, const Type *type2, int criteria) {
-	if (TypeType(type1) != COMPOSITE)
-		return false;
-	const TypeComposite *comp = (const TypeComposite*)type1;
-	return comp->Count() > 0 && (*comp)[0].id == 0 && Same((*comp)[0].type, type2, criteria);
-}
-
-bool Type::_Same(const Type *type1, const Type *type2, int criteria) {
+bool Type::_Same(const Type *type1, const Type *type2, MATCH criteria) {
 	if (type1 == type2)
 		return true;
-	if (!type1 || !type2) {
-		return (criteria & MATCH_MATCHNULLS)
-			|| ((criteria & MATCH_MATCHNULL_RHS) && !type2);
-	}
+
+	if (!type1 || !type2)
+		return (criteria & MATCH_MATCHNULLS) || ((criteria & MATCH_MATCHNULL_RHS) && !type2);
 
 	if ((type1->flags ^ type2->flags) & (criteria & MATCH_IGNORE_SIZE ? TYPE_MASK : TYPE_MASKEX)) {
 /*		if (type2->TypeType() == COMPOSITE) {
@@ -408,11 +404,35 @@ bool Type::_Same(const Type *type1, const Type *type2, int criteria) {
 			if (comp2->Count() && !(*comp2)[0].id && (*comp2)[0].offset == 0 && Same(type1, (*comp2)[0].type, criteria))
 				return true;
 		}*/
-		return	!(criteria & MATCH_NOUSERRECURSE) && (
-				type1->GetType()	== USER	? Same(((TypeUser*)type1)->subtype, type2, criteria)
-			:	type2->GetType()	== USER	&& !(criteria & MATCH_NOUSERRECURSE_RHS) ? Same(type1, ((TypeUser*)type2)->subtype, criteria)
-			:	false
-		);
+
+		if (!(criteria & MATCH_NOUSERRECURSE)) {
+			if (type1->GetType() == USER)
+				return Same(((TypeUser*)type1)->subtype, type2, criteria);
+			if (type2->GetType()	== USER && !(criteria & MATCH_NOUSERRECURSE_RHS))
+				return Same(type1, ((TypeUser*)type2)->subtype, criteria);
+		}
+		if (criteria & MATCH_COMPOSITE_EXTRA) {
+			if (type1->GetType() == COMPOSITE) {
+				auto	comp = (const TypeComposite*)type1;
+				if (auto wrapper = comp->IsWrapper())
+					return _Same(wrapper, type2, criteria);
+				if (type2->GetType() == ARRAY && comp->Count() == ((TypeArray*)type2)->Count())
+					return _Same(comp->IsArrayLike(), ((TypeArray*)type2)->subtype, criteria);
+			}
+			if (type2->GetType() == COMPOSITE) {
+				auto	comp = (const TypeComposite*)type2;
+				if (auto wrapper = comp->IsWrapper())
+					return _Same(type1, wrapper, criteria);
+				if (type1->GetType() == ARRAY && comp->Count() == ((TypeArray*)type1)->Count())
+					return _Same(((TypeArray*)type1)->subtype, comp->IsArrayLike(), criteria);
+			}
+			if (type1->GetType() == ARRAY && ((TypeArray*)type1)->Count() == 1)
+				return _Same(((TypeArray*)type1)->subtype, type2, criteria);
+
+			if (type2->GetType() == ARRAY && ((TypeArray*)type2)->Count() == 1)
+				return _Same(type1, ((TypeArray*)type2)->subtype, criteria);
+		}
+		return false;
 	}
 	switch (type1->GetType()) {
 		case INT:
@@ -450,8 +470,10 @@ bool Type::_Same(const Type *type1, const Type *type2, int criteria) {
 			return Same(((TypeReference*)type1)->subtype, ((TypeReference*)type2)->subtype, criteria);
 
 		case USER: {
-			if (IsSubclass(type1->SkipUser(), type2, criteria & ~MATCH_MATCHNULLS))
-				return true;
+			if (auto comp = type1->SkipUser()) {
+				if (comp->GetType() == COMPOSITE && ((const TypeComposite*)comp)->IsSubclass(type2, criteria - MATCH_MATCHNULLS))
+					return true;
+			}
 			return !(criteria & (MATCH_NOUSERRECURSE | MATCH_NOUSERRECURSE_BOTH | MATCH_NOUSERRECURSE_RHS))
 				&& Same(type1, ((TypeUser*)type2)->subtype, criteria);
 		}
@@ -465,16 +487,17 @@ bool Type::_Same(const Type *type1, const Type *type2, int criteria) {
 }
 
 const Type *Canonical(const TypeInt *type) {
-	if (type->frac_bits() || (type->flags & (TypeInt::NOSWAP | TypeInt::FRAC_ADJUST)))
-		return 0;
-	bool	sign = type->is_signed();
-	switch (type->num_bits()) {
-		case 8:		return sign ? getdef<int8>()	: getdef<uint8>();
-		case 16:	return sign ? getdef<int16>()	: getdef<uint16>();
-		case 32:	return sign ? getdef<int32>()	: getdef<uint32>();
-		case 64:	return sign ? getdef<int64>()	: getdef<uint64>();
-		default:	return 0;
+	if (type->frac_bits() == 0 && !(type->flags & (TypeInt::NOSWAP | TypeInt::FRAC_ADJUST))) {
+		bool	sign = type->is_signed();
+		switch (type->num_bits()) {
+			case 8:		return sign ? getdef<int8>()	: getdef<uint8>();
+			case 16:	return sign ? getdef<int16>()	: getdef<uint16>();
+			case 32:	return sign ? getdef<int32>()	: getdef<uint32>();
+			case 64:	return sign ? getdef<int64>()	: getdef<uint64>();
+			default:	break;
+		}
 	}
+	return nullptr;
 }
 
 const Type *Canonical(const TypeFloat *type) {
@@ -487,7 +510,7 @@ const Type *Canonical(const TypeFloat *type) {
 				return getdef<double>();
 		}
 	}
-	return 0;
+	return nullptr;
 }
 
 const Type *Canonical(const Type *type) {
@@ -496,7 +519,7 @@ const Type *Canonical(const Type *type) {
 		case FLOAT: return Canonical((const TypeFloat*)type);
 		default:	break;
 	}
-	return 0;
+	return nullptr;
 }
 
 const Type *Duplicate(const Type *type) {
@@ -537,7 +560,7 @@ const Type *Duplicate(const Type *type) {
 		case USER:
 			if (type->flags & TypeUser::CRCID)
 				return Duplicate(((TypeUser*)type)->subtype);
-			fallthrough
+			//fallthrough
 		default:
 			break;
 	}
@@ -545,73 +568,7 @@ const Type *Duplicate(const Type *type) {
 }
 
 //-----------------------------------------------------------------------------
-//	class TypeComposite
-//-----------------------------------------------------------------------------
-
-uint32 TypeComposite::CalcAlignment() const {
-	uint32	a = 1;
-	for (auto &i : *this)
-		a = align(a, i.type->GetAlignment());
-	return a;
-}
-
-int TypeComposite::GetIndex(const tag2 &id, int from) const {
-	if (flags & CRCIDS) {
-		crc32	c = id;
-		for (uint32 i = from; i < count; i++)
-			if (c == (crc32&)(*this)[i].id)
-				return i;
-	} else if (tag s = id) {
-		for (uint32 i = from; i < count; i++)
-			if (s == (*this)[i].id.get_tag())
-				return i;
-	} else {
-		crc32	c = id;
-		for (uint32 i = from; i < count; i++)
-			if (c == (*this)[i].id.get_crc(false))
-				return i;
-	}
-	return -1;
-}
-
-uint32 TypeComposite::Add(const Type* type, tag1 id, bool packed) {
-	if (!type || type->Dodgy())
-		this->flags |= TYPE_DODGY;
-
-	Element	*e			= end();
-	size_t	offset		= 0;
-	auto	alignment	= type->GetAlignment();
-
-	if (alignment > (1 << param1))
-		param1 = log2(alignment);
-
-	if (count) {
-		offset = e[-1].end();
-		if (!packed)
-			offset = align(offset, alignment);
-	}
-
-	e->set(id, type, offset);
-	count++;
-	return uint32(offset);
-}
-
-TypeComposite *TypeComposite::Duplicate(void *defaults) const {
-	int		n		= Count();
-	uint32	size	= defaults ? GetSize() : 0;
-	TypeComposite	*c = new(n, size) TypeComposite(n);
-	c->param1		= param1;
-	memcpy(c->begin(), begin(), n * sizeof(Element));
-
-	if (defaults) {
-		c->flags |= DEFAULT;
-		memcpy(c->end(), defaults, size);
-	}
-	return c;
-}
-
-//-----------------------------------------------------------------------------
-//	class TypeEnumT<T>
+//	TypeEnumT<T>
 //-----------------------------------------------------------------------------
 
 template<typename T> uint32 TypeEnumT<T>::size() const {
@@ -691,18 +648,18 @@ template uint32 TypeEnumT<uint8>::size() const;
 template uint32 TypeEnumT<uint16>::size() const;
 
 //-----------------------------------------------------------------------------
-//	class TypeFloat
+//	TypeFloat
 //-----------------------------------------------------------------------------
 
 float TypeFloat::get(void *data) const {
-	return	this == getdef<float>()		?	*(float*)data
-		:	this == getdef<double>()	?	*(double*)data
+	return	this == getdef<float>()		? *(float*)data
+		:	this == getdef<double>()	? *(double*)data
 		:	read_float<float>(data, param1, param2, is_signed());
 }
 
 double TypeFloat::get64(void *data) const {
-	return	this == getdef<float>()		?	*(float*)data
-		:	this == getdef<double>()	?	*(double*)data
+	return	this == getdef<float>()		? *(float*)data
+		:	this == getdef<double>()	? *(double*)data
 		:	read_float<double>(data, param1, param2, is_signed());
 }
 
@@ -726,7 +683,7 @@ void TypeFloat::set(void *data, float f) const {
 	else if (this == getdef<double>())
 		*(double*)data = f;
 	else {
-		float_components<float> c;
+		float_components<float> c(f);
 		set(data, c.m, c.e, !!c.s);
 	}
 }
@@ -737,14 +694,52 @@ void TypeFloat::set(void *data, double f) const {
 	else if (this == getdef<double>())
 		*(double*)data = f;
 	else {
-		float_components<double> c;
+		float_components<double> c(f);
 		set(data, c.m, c.e, !!c.s);
 	}
 }
 
+void TypeFloat::set(void* data, number n) const {
+	n	= n.to_binary();
+	uint64	m	= abs(n.m);
+	int		i	= leading_zeros(m);
+	set(data, m << i, n.e - i + 62, n.m < 0);
+}
+
+
 //-----------------------------------------------------------------------------
 //	TypeString
 //-----------------------------------------------------------------------------
+
+struct TypeString::getter {
+	const TypeString	*t;
+	void				*p;
+	size_t	string_len() const	{
+		return t->len(p);
+	}
+	template<typename C> size_t	string_get(C *s, size_t len)	const	{
+		switch (t->log2_char_size()) {
+			default:	return string_copy(s, (const char*  )p, len);
+			case 1:		return string_copy(s, (const char16*)p, len);
+			case 2:		return string_copy(s, (const char32*)p, len);
+			case 3:		return string_copy(s, (const uint64*)p, len);
+		}
+	}
+};
+
+string_getter<TypeString::getter> TypeString::get(void *data) const {
+	return getter{this, data};
+}
+
+void TypeString::set(void* data, const void *s) const {
+	if (s && (flags & ALLOC)) {
+		uint32	size = (len(s) + 1) << log2_char_size();
+		void	*t	= Is64Bit() ? (flags & MALLOC ? iso::malloc(size) : allocate<64>::alloc(size)) : allocate<32>::alloc(size);
+		memcpy(t, s, size);
+		s	= t;
+	}
+	WritePtr(data, (void*)s);
+}
 
 memory_block TypeString::get_memory(const void* data) const {
 	void	*s = ReadPtr(data);
@@ -765,25 +760,102 @@ uint32 TypeString::len(const void *s) const {
 	}
 }
 
-void *TypeString::dup(const void *s) const {
-	if (!s)
-		return nullptr;
-
-	if (flags & _MALLOC)
-		return iso::strdup((const char*)s);
-
-	uint32	size = (len(s) + 1) << log2_char_size();
-	void	*t	= Is64Bit() ? allocate<64>::alloc(size) : allocate<32>::alloc(size);
-	memcpy(t, s, size);
-	return t;
+void TypeString::free(void* data) const {
+	if (void *p = ReadPtr(data)) {
+		if (flags & ALLOC) {
+			if (Is64Bit()) {
+				if (flags & _MALLOC)
+					iso::free(p);
+				else
+					allocate<64>::free(p);
+			} else {
+				allocate<32>::free(p);
+			}
+		}
+	}
 }
 
 //-----------------------------------------------------------------------------
-//	openarrays
+//	TypeComposite
+//-----------------------------------------------------------------------------
+
+uint32 TypeComposite::GetSize() const {
+	if (true || (flags & FINDSIZE)) {
+		uint32	size = 0;
+		for (auto &i : *this)
+			size = max(size, i.end());
+		return param1 ? align_pow2(size, param1) : size;
+	}
+	return !count ? 0 : !param1 ? back().end() : align_pow2(back().end(), param1);
+}
+
+uint32 TypeComposite::CalcAlignment() const {
+	uint32	a = 1;
+	for (auto &i : *this)
+		a = align(a, i.type->GetAlignment());
+	return a;
+}
+
+int TypeComposite::GetIndex(const tag2 &id, int from) const {
+	if (flags & CRCIDS) {
+		crc32	c = id.get_crc32();
+		for (uint32 i = from; i < count; i++)
+			if (c == (crc32&)(*this)[i].id)
+				return i;
+	} else if (tag s = id) {
+		for (uint32 i = from; i < count; i++)
+			if (s == (*this)[i].id.get_tag())
+				return i;
+	} else {
+		crc32	c = id.get_crc32();
+		for (uint32 i = from; i < count; i++)
+			if (c == (*this)[i].id.get_crc(false))
+				return i;
+	}
+	return -1;
+}
+
+uint32 TypeComposite::Add(const Type* type, tag1 id, bool packed) {
+	if (!type || type->Dodgy())
+		this->flags |= TYPE_DODGY;
+
+	Element	*e			= end();
+	size_t	offset		= 0;
+	auto	alignment	= type->GetAlignment();
+
+	if (alignment > (1 << param1))
+		param1 = log2(alignment);
+
+	if (count) {
+		offset = e[-1].end();
+		if (!packed)
+			offset = align(offset, alignment);
+	}
+
+	e->set(id, type, offset);
+	count++;
+	return uint32(offset);
+}
+
+TypeComposite *TypeComposite::Duplicate(void *defaults) const {
+	int		n		= Count();
+	uint32	size	= defaults ? GetSize() : 0;
+	TypeComposite	*c = new(n, size) TypeComposite(n);
+	c->param1		= param1;
+	memcpy(c->begin(), begin(), n * sizeof(Element));
+
+	if (defaults) {
+		c->flags |= DEFAULT;
+		memcpy(c->end(), defaults, size);
+	}
+	return c;
+}
+
+//-----------------------------------------------------------------------------
+//	Open Arrays
 //-----------------------------------------------------------------------------
 
 template<int B> OpenArrayHead *OpenArrayAlloc<B>::Create(OpenArrayHead *h, uint32 subsize, uint32 align, uint32 count) {
-	Destroy(h, align);
 	return count ? Create(subsize, align, count, count) : 0;
 }
 
@@ -868,36 +940,11 @@ ptr<void,64> TypeReference::get(void* data) const {
 }
 
 //-----------------------------------------------------------------------------
-//	FindByType
-//-----------------------------------------------------------------------------
-/*
-template<int B> ptr<void, B> &FindByType(ptr<void, B> *i, ptr<void, B> *e, const Type *type, int crit) {
-	for (; i != e; ++i) {
-		if (i->IsType(type, crit))
-			return *i;
-	}
-	return iso_nil<B>;
-}
-
-template<int B> ptr<void, B> &FindByType(ptr<void, B> *i, ptr<void, B> *e, tag2 id) {
-	for (; i != e; ++i) {
-		if (i->IsType(id))
-			return *i;
-	}
-	return iso_nil<B>;
-}
-
-template<> ptr<void>	&anything::FindByType(const Type *type, int crit)	{ return ISO::FindByType(begin(), end(), type, crit); }
-template<> ptr<void>	&anything::FindByType(tag2 id)						{ return ISO::FindByType(begin(), end(), id); }
-template<> ptr64<void>	&anything64::FindByType(const Type *type, int crit)	{ return ISO::FindByType(begin(), end(), type, crit); }
-template<> ptr64<void>	&anything64::FindByType(tag2 id)					{ return ISO::FindByType(begin(), end(), id); }
-*/
-//-----------------------------------------------------------------------------
 //	MakeRawPtr / MakeRawPtrExternal
 //-----------------------------------------------------------------------------
 
 template<int B> void *MakeRawPtrSize(const Type *type, tag2 id, uint32 size) {
-	Value	*v		= new(allocate<B>::alloc(sizeof(Value) + size)) Value(id, Value::NATIVE | (B == 32 ? Value::MEMORY32 : 0), type);
+	Value	*v		= new(allocate<B>::alloc(sizeof(Value) + size)) Value(id, Value::NATIVE | (Value::MEMORY32 * (B == 32)), type);
 	memset(v + 1, 0, size);
 	return v + 1;
 }
@@ -907,7 +954,7 @@ template void *MakeRawPtrSize<64>(const Type *type, tag2 id, uint32 size);
 
 template<int B> void *MakeRawPtrExternal(const Type *type, const char *filename, tag2 id) {
 	size_t	size	= strlen(filename) + 1;
-	Value	*v		= new(type && type->Is64Bit() ? allocate<B>::alloc(sizeof(Value) + size) : allocate<32>::alloc(sizeof(Value) + size)) Value(id, Value::EXTERNAL | Value::NATIVE | (B == 32 ? Value::MEMORY32 : 0), type);
+	Value	*v		= new(type && type->Is64Bit() ? allocate<B>::alloc(sizeof(Value) + size) : allocate<32>::alloc(sizeof(Value) + size)) Value(id, Value::EXTERNAL | Value::NATIVE | (Value::MEMORY32 * (B == 32)), type);
 	char	*p		= (char*)(v + 1);
 	memcpy(p, filename, size);
 	return p;
@@ -1010,7 +1057,6 @@ static int Delete(const Type *type, void *data, uint32 flags) {
 }
 
 bool Value::Delete() {
-//	TRACE("deleting 0x%08x: ", this) << leftjustify(type, 16) << ID() << '\n';
 	bool	weak	= !!(flags & WEAKREFS);
 	int		ret		= 0;
 
@@ -1045,7 +1091,7 @@ bool Value::Delete() {
 //	Compare
 //-----------------------------------------------------------------------------
 
-static bool NeedsFullCompare(const Type *type, int flags) {
+static bool NeedsFullCompare(const Type *type, TRAVERSAL flags) {
 	if (!type)
 		return false;
 
@@ -1061,12 +1107,12 @@ static bool NeedsFullCompare(const Type *type, int flags) {
 		case OPENARRAY:	return true;
 		case ARRAY:		return NeedsFullCompare(((TypeArray*)type)->subtype, flags);
 		case USER:		return NeedsFullCompare(((TypeUser*)type)->subtype, flags);
-		case REFERENCE:	return !!(flags & DUPF_DEEP);
+		case REFERENCE:	return !!(flags & TRAV_DEEP);
 		default:		return false;
 	}
 }
 
-static bool CompareDataFull(const Type *type, const void *data1, const void *data2, int flags) {
+static bool CompareDataFull(const Type *type, const void *data1, const void *data2, TRAVERSAL flags) {
 	switch (type->GetType()) {
 		case STRING:
 			return *((TypeString*)type)->get_memory(data1) == *((TypeString*)type)->get_memory(data2);
@@ -1118,26 +1164,25 @@ static bool CompareDataFull(const Type *type, const void *data1, const void *dat
 			return true;
 		}
 		case USER:
-			//ISO_TRACEF("CompareDataFull:") << type << '\n';
 			return CompareDataFull(((TypeUser*)type)->subtype, data1, data2, flags);
 
 		case REFERENCE:
 			return (type->Is64Bit() ? (*(uint64*)data1 == *(uint64*)data2) : (*(uint32*)data1 == *(uint32*)data2))
-				|| ((flags & DUPF_DEEP) && CompareData(GetPtr(type->ReadPtr(data1)), GetPtr(type->ReadPtr(data2)), flags));
+				|| ((flags & TRAV_DEEP) && CompareData(GetPtr(type->ReadPtr(data1)), GetPtr(type->ReadPtr(data2)), flags));
 
 		default:
 			return false;
 	}
 }
 
-bool CompareData(const Type *type, const void *data1, const void *data2, int flags) {
+bool CompareData(const Type *type, const void *data1, const void *data2, TRAVERSAL flags) {
 	return data1 == data2 || (NeedsFullCompare(type, flags)
 		? CompareDataFull(type, data1, data2, flags)
 		: memcmp(data1, data2, type->GetSize()) == 0
 	);
 }
 
-bool CompareData(ptr<void> p1, ptr<void> p2, int flags) {
+bool CompareData(ptr<void> p1, ptr<void> p2, TRAVERSAL flags) {
 	if (!p1)
 		return !p2;
 
@@ -1154,9 +1199,9 @@ bool CompareData(ptr<void> p1, ptr<void> p2, int flags) {
 //	Duplicate
 //-----------------------------------------------------------------------------
 
-int _Duplicate(const Type *type, void *data, int flags, void *physical_ram) {
+int _Duplicate(const Type *type, void *data, TRAVERSAL flags, void *physical_ram) {
 
-	if (!(flags & DUPF_NOINITS) && type->GetType() == USER && (type->flags & TypeUser::INITCALLBACK)) {
+	if (!(flags & TRAV_NOINITS) && type->GetType() == USER && (type->flags & TypeUser::INITCALLBACK)) {
 		int	ret = _Duplicate(((TypeUser*)type)->subtype, data, flags, physical_ram);
 
 		if (type->flags & TypeUser::LOCALSUBTYPE)
@@ -1167,12 +1212,12 @@ int _Duplicate(const Type *type, void *data, int flags, void *physical_ram) {
 
 	type	= type->SkipUser();
 
-	switch (type->GetType()) {
+	switch (TypeType(type)) {
 		case STRING: {
-			if (!(flags & DUPF_DUPSTRINGS) && !(type->flags & TypeString::ALLOC))
+			if (!(flags & TRAV_DUPSTRINGS) && !(type->flags & TypeString::ALLOC))
 				return 0;
 			if (const void *p = type->ReadPtr(data))
-				type->WritePtr(data, ((TypeString*)type)->dup(p));
+				((TypeString*)type)->set(data, p);
 			return 1;
 		}
 
@@ -1224,9 +1269,9 @@ int _Duplicate(const Type *type, void *data, int flags, void *physical_ram) {
 				Value	*v		= GetHeader(data);
 				uint32	pflags	= v->Flags();
 				v->addref();
-				if (!(pflags & (Value::EXTERNAL | Value::CRCTYPE)) && (flags & DUPF_DEEP))
-					Duplicate(v->ID(), v->GetType(), data, (pflags & Value::HASEXTERNAL) ? flags : (flags & ~DUPF_CHECKEXTERNALS));
-				if ((flags & DUPF_CHECKEXTERNALS) && (pflags & (Value::EXTERNAL | Value::HASEXTERNAL)))
+				if (!(pflags & (Value::EXTERNAL | Value::CRCTYPE)) && (flags & TRAV_DEEP))
+					Duplicate(v->ID(), v->GetType(), data, flags - (TRAV_CHECKEXTERNALS * !!(pflags & Value::HASEXTERNAL)));
+				if ((flags & TRAV_CHECKEXTERNALS) && (pflags & (Value::EXTERNAL | Value::HASEXTERNAL)))
 					return 3;
 			}
 			return 1;
@@ -1249,9 +1294,9 @@ void CopyData(const Type *type, const void *srce, void *dest) {
 //-----------------------------------------------------------------------------
 //	CheckHasExternals
 //-----------------------------------------------------------------------------
-bool _CheckHasExternals(const ptr<void> &p, int flags, int depth);
+bool _CheckHasExternals(const ptr<void> &p, TRAVERSAL flags, int depth);
 
-bool _CheckHasExternals(const Type *type, void *data, int flags, int depth) {
+bool _CheckHasExternals(const Type *type, void *data, TRAVERSAL flags, int depth) {
 	type = type->SkipUser();
 
 	bool	ret		= false;
@@ -1260,7 +1305,7 @@ bool _CheckHasExternals(const Type *type, void *data, int flags, int depth) {
 			for (auto &i : *(const TypeComposite*)type) {
 				if (_CheckHasExternals(i.type, (uint8*)data + i.offset, flags, depth)) {
 					ret = true;
-					if (flags & DUPF_EARLYOUT)
+					if (flags & TRAV_EARLYOUT)
 						break;
 				}
 			}
@@ -1272,7 +1317,7 @@ bool _CheckHasExternals(const Type *type, void *data, int flags, int depth) {
 				for (int i = 0, c = array.Count(); i < c; i++) {
 					if (_CheckHasExternals(array.subtype, (char*)data + array.subsize * i, flags, depth)) {
 						ret = true;
-						if (flags & DUPF_EARLYOUT)
+						if (flags & TRAV_EARLYOUT)
 							break;
 					}
 				}
@@ -1286,7 +1331,7 @@ bool _CheckHasExternals(const Type *type, void *data, int flags, int depth) {
 				for (int n = GetCount(OpenArrayHead::Get(data)); n--; data = (uint8*)data + array->subsize) {
 					if (_CheckHasExternals(array->subtype, data, flags, depth)) {
 						ret = true;
-						if (flags & DUPF_EARLYOUT)
+						if (flags & TRAV_EARLYOUT)
 							break;
 					}
 				}
@@ -1303,13 +1348,13 @@ bool _CheckHasExternals(const Type *type, void *data, int flags, int depth) {
 	return ret;
 }
 
-bool _CheckHasExternals(const ptr<void> &p, int flags, int depth) {
+bool _CheckHasExternals(const ptr<void> &p, TRAVERSAL flags, int depth) {
 	if (p) {
 		if (p.IsExternal())
 			return true;
 
 		if (depth > 0) {
-			if (flags & DUPF_DEEP) {
+			if (flags & TRAV_DEEP) {
 				if (!p.TestFlags(Value::TEMP_USER)) {
 					p.SetFlags(Value::TEMP_USER);
 					bool	has = _CheckHasExternals(p.GetType(), p, flags, depth - 1);
@@ -1330,8 +1375,8 @@ bool _CheckHasExternals(const ptr<void> &p, int flags, int depth) {
 	return false;
 }
 
-bool CheckHasExternals(const ptr<void> &p, int flags, int depth) {
-	if (flags & DUPF_DEEP) {
+bool CheckHasExternals(const ptr<void> &p, TRAVERSAL flags, int depth) {
+	if (flags & TRAV_DEEP) {
 		bool ret = _CheckHasExternals(p, flags, depth);
 		p.ClearFlags(Value::TEMP_USER);
 		Browser(p).ClearTempFlags();
@@ -1406,7 +1451,7 @@ void FlipData(const Type *type, void *data, bool big, bool flip) {
 					return;
 				bool	flip = !!(v->flags & Value::ISBIGENDIAN) != big;
 				if (flip)
-					v->flags	= v->flags ^ Value::ISBIGENDIAN;
+					v->flags	^= Value::ISBIGENDIAN;
 				FlipData(v->type, data, big, flip);
 			}
 			break;
@@ -1422,7 +1467,7 @@ void SetBigEndian(ptr<void> p, bool big) {
 			return;
 		bool	flip = !!(v->flags & Value::ISBIGENDIAN) != big;
 		if (flip)
-			v->flags	= v->flags ^ Value::ISBIGENDIAN;
+			v->flags	^= Value::ISBIGENDIAN;
 		FlipData(v->type, p, big, flip);
 	}
 }
@@ -1485,23 +1530,43 @@ template<int B> int _GetIndex(tag2 id, const ptr<void, B> *p, uint32 n) {
 	return -1;
 }
 
-uint32 Browser::GetSize() const {
-	if (!type)
-		return 0;
-	uint32 size = type->GetSize();
-	if (size == 0 && type->GetType() == VIRTUAL && !type->Fixed()) {
-		Virtual	*virt = (Virtual*)type;
-		uint32	count = virt->Count(virt, data);
-		if (count == 0 || ~count == 0)
-			size = virt->Deref(virt, data).GetSize();
-		else
-			size = virt->Index(virt, data, 0).GetSize() * count;
+uint64 Browser::GetSize() const {
+	if (auto type2 = type->_SkipUser(type)) {
+		auto size = type2->GetSize();
+		if (size == 0 && type2->GetType() == VIRTUAL && !type2->Fixed()) {
+			Virtual	*virt = (Virtual*)type2;
+			uint32	count = virt->Count(virt, data);
+			if (count == 0 || ~count == 0)
+				size = virt->Deref(virt, data).GetSize();
+			else
+				size = virt->Index(virt, data, 0).GetSize() * (uint64)count;
+		}
+		return size;
 	}
-	return size;
+	return 0;
 }
 
-void Browser::UnsafeSet(const void *srce) const {
-	memcpy(data, srce, type->GetSize());
+uint32 Browser::GetSubSize() const {
+	void		*data = this->data;
+	for (const Type *type = this->type; type;) {
+		switch (type->GetType()) {
+			case STRING:	return ((TypeString*)type)->char_size();
+			case ARRAY:		return ((TypeArray*)type)->subsize;
+			case OPENARRAY:	return ((TypeOpenArray*)type)->subsize;
+			case REFERENCE:
+				data	= type->ReadPtr(data);
+				type	= !data || GetHeader(data)->IsExternal() ? 0 : GetHeader(data)->GetType();
+				break;
+
+			case USER:
+				type = ((TypeUser*)type)->subtype;
+				break;
+
+			default:
+				return 0;
+		}
+	}
+	return 0;
 }
 
 uint32 Browser::Count() const {
@@ -1877,7 +1942,7 @@ const Browser Browser::Insert(int i) const {
 					if (virt->Count(virt, data) == 0)
 						return virt->Deref(virt, data).Insert(i);
 				}
-				fallthrough
+				//fallthrough
 			default:
 				type = 0;
 				break;
@@ -1935,7 +2000,7 @@ const Browser Browser::Append() const {
 					if (Browser2 b = virt->Deref(virt, data))
 						return b.Append();
 				}
-				fallthrough
+				//fallthrough
 			default:
 				type = 0;
 				break;
@@ -2127,13 +2192,51 @@ range<stride_iterator<void>> Browser::GetArray(tag2 id)	const {
 					if (Browser2 b = virt->Deref(virt, data))
 						return b.GetArray(id);
 				}
-				fallthrough
+				//fallthrough
 			default:
 				type = 0;
 				break;
 		}
 	}
 	return {};
+}
+
+const_memory_block Browser::RawData() const {
+	void		*data = this->data;
+	for (const Type *type = this->type; type;) {
+		switch (type->GetType()) {
+			default:
+				return {data, type->GetSize()};
+
+			case OPENARRAY:
+				if (void *p = type->ReadPtr(data)) {
+					auto	array	= (TypeOpenArray*)type;
+					auto	h		= OpenArrayHead::Get(p);
+					return {GetData(h), array->subsize * h->count};
+				}
+				type = 0;
+				break;
+
+			case REFERENCE:
+				data	= type->ReadPtr(data);
+				type	= !data || GetHeader(data)->IsExternal() ? 0 : GetHeader(data)->GetType();
+				break;
+
+			case USER:
+				type = ((TypeUser*)type)->subtype;
+				break;
+
+			case VIRTUAL:
+				if (!type->Fixed()) {
+					Virtual	*virt = (Virtual*)type;
+					if (Browser2 b = virt->Deref(virt, data))
+						return b.RawData();
+				}
+				type = 0;
+				break;
+		}
+	}
+	return none;
 }
 
 //-----------------------------------------------------------------------------
@@ -2157,7 +2260,7 @@ ptr_machine<void> Browser2::_GetPtr() const {
 					return b._GetPtr();
 				}
 			}
-			fallthrough
+			//fallthrough
 		default:
 			return Duplicate();
 	}
@@ -2195,7 +2298,7 @@ const Browser2 Browser::operator*() const {
 	return Browser2();
 }
 
-const Browser2 Browser::FindByType(const Type *t, int crit) const {
+const Browser2 Browser::FindByType(const Type *t, MATCH crit) const {
 	if (TypeType(type->SkipUser()) == REFERENCE)
 		return (**this).FindByType(t, crit);
 
@@ -2292,6 +2395,8 @@ const Browser2 Browser2::Parse(string_scan spec, const char_set &set, const Type
 							b.SetMember(id, p);
 						}
 						b = p;
+					} else {
+						return {};
 					}
 					//b = GetOrAddMember(b, id, create_type);
 				}
@@ -2368,22 +2473,40 @@ const Browser2 Browser2::Index(tag2 id) const {
 				}
 				return Browser2();
 			}
-			case ARRAY:
-				if (TypeType(((TypeArray*)type)->subtype->SkipUser()) == REFERENCE) {
-					if (const ptr<void> *i = _Find(id, (const ptr<void>*)data, ((TypeArray*)type)->Count()))
-						return *i;
+			case ARRAY: {
+				auto	subtype = ((TypeArray*)type)->subtype->SkipUser();
+				if (TypeType(subtype) == REFERENCE) {
+					if (subtype->Is64Bit()) {
+						if (auto i = _Find(id, (const ptr<void,64>*)data, ((TypeArray*)type)->Count()))
+							return *i;
+					} else {
+						if (auto i = _Find(id, (const ptr<void,32>*)data, ((TypeArray*)type)->Count()))
+							return *i;
+					}
 				}
 				type = 0;
 				break;
+			}
 
 			case OPENARRAY: {
 				TypeOpenArray	&array	= *(TypeOpenArray*)type;
-				if (TypeType(array.subtype->SkipUser()) == REFERENCE) {
+				auto			subtype	= array.subtype->SkipUser();
+				if (TypeType(subtype) == REFERENCE) {
 					data = type->ReadPtr(data);
-					if (const ptr<void> *i = _Find(id, (const ptr<void>*)data, GetCount(OpenArrayHead::Get(data)))) {
-						if (i->GetType())
-							return *i;
-						return MakeBrowser(*i);
+					auto	count = GetCount(OpenArrayHead::Get(data));
+
+					if (subtype->Is64Bit()) {
+						if (auto i = _Find(id, (const ptr<void,64>*)data, count)) {
+							if (i->GetType())
+								return *i;
+							return MakeBrowser(*i);
+						}
+					} else {
+						if (auto i = _Find(id, (const ptr<void,32>*)data, count)) {
+							if (i->GetType())
+								return *i;
+							return MakeBrowser(*i);
+						}
 					}
 				}
 				type = 0;
@@ -2647,7 +2770,7 @@ Browser2::iterator Browser2::end() const {
 //-----------------------------------------------------------------------------
 //	Browser::s_setget
 //-----------------------------------------------------------------------------
-
+/*
 template<> bool Browser::s_setget<bool>::get(void *data, const Type *type, bool &t) {
 	while (type) {
 		switch (type->GetType()) {
@@ -2681,11 +2804,13 @@ template<> bool Browser::s_setget<bool>::get(void *data, const Type *type, bool 
 	}
 	return false;
 }
-
+*/
 bool Browser::s_setget<const char*>::get(void *data, const Type *type, const char *&t) {
 	while (type) {
 		switch (type->GetType()) {
 			case STRING:
+				if (((TypeString*)type)->log2_char_size())
+					return false;
 				t = (const char*)type->ReadPtr(data);
 				return true;
 			case REFERENCE:
@@ -2787,13 +2912,14 @@ bool Browser::s_setget<string>::get(void *data, const Type *type, string &t) {
 			}
 			case STRING: {
 				TypeString	*ts = (TypeString*)type;
-				const void	*p = ts->ReadPtr(data);
-				switch (ts->log2_char_size()) {
-					default:	t = (const char*)p; break;
-					case 1:		t = (const char16*)p; break;
-					case 2:		t = (const char32*)p; break;
-					case 3:		t = (const uint64*)p; break;
-				}
+				t = ts->get(ts->ReadPtr(data));
+				//const void	*p = ts->ReadPtr(data);
+				//switch (ts->log2_char_size()) {
+				//	default:	t = (const char*)p; break;
+				//	case 1:		t = (const char16*)p; break;
+				//	case 2:		t = (const char32*)p; break;
+				//	case 3:		t = (const uint64*)p; break;
+				//}
 				return true;
 			}
 
@@ -2927,8 +3053,8 @@ template<> void base_select<void, 2>::set(const void* p) {
 const char *store_string(const char *id) {
 	static hash_map<uint32, const char*, true>	h;
 
-	if (!id)
-		return id;
+	if (!id || !id[0])
+		return nullptr;
 
 	uint32		c	= CRC32C::calc(id);
 	auto		s	= h[c];

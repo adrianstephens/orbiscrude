@@ -69,9 +69,7 @@ struct Group {
 
 enum DeltaEnum {
 	EvenOdd		= 1,
-	OddEven		= -1,
 	EvenOddSkip = 1 << 30,
-	OddEvenSkip,
 };
 struct CaseFold {
 	char32	lo, hi;

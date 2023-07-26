@@ -9,6 +9,7 @@
 #include "disassembler.h"
 
 #include "filetypes/code/pdb.h"
+#include "filetypes/code/bitcode.h"
 
 namespace iso {
 
@@ -179,7 +180,7 @@ struct ParsedSPDB : PDB {
 	Disassembler::Locations	locations;
 	string					compiler, profile, entry, defines;
 
-	ParsedSPDB(istream_ref file, const char *path = 0);
+	ParsedSPDB(istream_ref file, Disassembler::SharedFiles &shared_files, const char *path = 0);
 	CV::DATASYMHLSL	*FindUniform(uint16 type, uint16 slot);
 };
 
@@ -209,7 +210,6 @@ struct ParsedSDBGC {
 };
 
 string GetPDBFirstFilename(istream_ref file);
-
 
 }	// namespace iso
 

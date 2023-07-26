@@ -8,8 +8,9 @@ namespace iso {
 
 struct MeshBuilder {
 	dynamic_array<SubMesh::face>	f;
-	dynamic_array<uint16>			map;
+	dynamic_array<uint32>			map;
 	uint32							num_verts;
+	uint32							max_verts_per_mesh = ~0u;
 
 	void		_ClearBatch() {
 		f.clear();
@@ -18,7 +19,7 @@ struct MeshBuilder {
 	}
 
 	MeshBuilder() {}
-	MeshBuilder(uint32 max_tris, uint32 max_verts) {
+	MeshBuilder(uint32 max_tris, uint32 max_verts, uint32 max_verts_per_mesh = ~0u) : max_verts_per_mesh(max_verts_per_mesh) {
 		ReserveFaces(max_tris);
 		ReserveVerts(max_verts);
 	}
@@ -55,8 +56,8 @@ inline stride_iterator<void> GetVertexComponent(const ISO::Type *type, void *p, 
 template<typename T> stride_iterator<T> GetArrayComponent(const ISO::Element *e, void *p, uint32 stride)	{ return GetArrayComponent(e, p, stride); }
 template<typename T> stride_iterator<T> GetVertexComponent(const ISO::Type *type, void *p, uint32 i)		{ return GetVertexComponent(type, p, i); }
 template<typename T> stride_iterator<T> GetVertexComponent(const ISO::Type *type, void *p, tag2 id)			{ return GetVertexComponent(type, p, id); }
-template<typename T> stride_iterator<T> GetVertexComponent(ISO_ptr<void> p, uint32 i)			{ return GetVertexComponent(p.GetType(), p, i); }
-template<typename T> stride_iterator<T> GetVertexComponent(ISO_ptr<void> p, tag2 id)			{ return GetVertexComponent(p.GetType(), p, id); }
+template<typename T> stride_iterator<T> GetVertexComponent(ISO_ptr<void> p, uint32 i)						{ return GetVertexComponent(p.GetType(), p, i); }
+template<typename T> stride_iterator<T> GetVertexComponent(ISO_ptr<void> p, tag2 id)						{ return GetVertexComponent(p.GetType(), p, id); }
 
 struct ModelBuilder : ISO_ptr<Model3>, MeshBuilder {
 	const ISO::Type					*vert_type;
@@ -114,11 +115,9 @@ template<typename I> inline float GetArea(I i) {
 	return len(GetNormal(i)) * half;
 }
 
-template<typename I> void GetFaceNormals(float3 *face_norms, I faces, uint32 nfaces) {
-	while (nfaces--) {
-		*face_norms++	= GetNormal(*faces);
-		++faces;
-	}
+template<typename F> void GetFaceNormals(float3 *face_norms, F&& faces) {
+	for (auto &&i : faces)
+		*face_norms++	= GetNormal(i);
 }
 
 template<typename I> inline void AddNormal(NormalRecord *norms, I i, const float3 &fn) {
@@ -126,11 +125,9 @@ template<typename I> inline void AddNormal(NormalRecord *norms, I i, const float
 	norms[i[1]].Add(fn, 1);
 	norms[i[2]].Add(fn, 1);
 }
-template<typename I> void AddNormals(NormalRecord *norms, const float3 *face_norms, I faces, uint32 nfaces) {
-	while (nfaces--) {
-		AddNormal(norms, *faces, *face_norms++);
-		++faces;
-	}
+template<typename F> void AddNormals(NormalRecord *norms, const float3 *face_norms, F&& faces) {
+	for (auto &&i : faces)
+		AddNormal(norms, i, *face_norms++);
 }
 
 //-----------------------------------------------------------------------------
@@ -161,8 +158,8 @@ void GenerateTangents(const FC &faces, VC verts, NI norms, UI uvs, TI tans) {
 		float3	v0	= (float3)verts[i0];
 		float3	v1	= (float3)verts[i1] - v0;
 		float3	v2	= (float3)verts[i2] - v0;
-		float3	sdir(v1 * m.xx + v2 * m.xy);
-		float3	tdir(v1 * m.yx + v2 * m.yy);
+		float3	sdir(v1 * m.x.x + v2 * m.x.y);
+		float3	tdir(v1 * m.y.x + v2 * m.y.y);
 
 		tan1[i0] += sdir;
 		tan1[i1] += sdir;
@@ -203,8 +200,8 @@ struct MeshCacheParams {
 	}
 };
 
-template<typename T> T *MeshSort(T *faces, uint32 nfaces, stride_iterator<float3p> verts, param(float3) centre);
-template<typename T> T *MeshOptimise(T *faces, uint32 nfaces, uint32 nverts, const MeshCacheParams &params);
+template<typename T> void MeshSort(range<T*> faces, stride_iterator<float3p> verts, param(float3) centre);
+template<typename T> void MeshOptimise(range<T*> faces, uint32 nverts, const MeshCacheParams &params);
 
 const ISO::Element *GetVertexComponentElement(const ISO_ptr<void> &verts, tag2 id);
 
@@ -221,35 +218,61 @@ ISO_ptr<void> AnythingToStruct(anything &params, tag2 id = tag2());
 ISO_ptr<void> AnythingToNamedStruct(tag2 name, anything &params, tag2 id);
 ISO_ptr<void> AssignToStruct(ISO::Type *t, anything &params, tag2 id);
 
-uint32 GetCacheCost(const uint32 *indices, uint32 ntris, uint32 fifo_size = 14, uint32 alternatePrim = 256);
-template<typename T> uint32 GetCacheCost(const T *indices, uint32 ntris, uint32 fifo_size = 14) {
-	uint32	*temp	= new uint32[ntris * 3];
-	copy_n(indices, temp, ntris * 3);
-	uint32 cost = GetCacheCost(temp, ntris, fifo_size);
-	delete[] temp;
+uint32 GetCacheCost(range<const uint32*> indices, uint32 fifo_size = 14, uint32 alternatePrim = 256);
+template<typename T> uint32 GetCacheCost(range<const T*> indices, uint32 fifo_size = 14) {
+	temp_array<uint32>	temp(indices);
+	return GetCacheCost(temp, fifo_size);
+}
+
+uint32 VertexCacheOptimizerHillclimber(range<const uint32*> indices, uint32 nverts, uint32 *outIndices, uint32 hillClimberIterations, uint32 fifo_size = 14, uint32 alternatePrim = 256);
+template<typename T> uint32 VertexCacheOptimizerHillclimber(range<const T*> indices, uint32 nverts, T *outIndices, uint32 hillClimberIterations, uint32 fifo_size = 14, uint32 alternatePrim = 256) {
+	temp_array<uint32>	temp(indices);
+	temp_array<uint32>	out(indices.size());
+	uint32 cost = VertexCacheOptimizerHillclimber(temp, nverts, out, hillClimberIterations, fifo_size, alternatePrim);
+	copy(out, outIndices);
 	return cost;
 }
 
-uint32 VertexCacheOptimizerHillclimber(const uint32 *indices, uint32 ntris, uint32 nverts, uint32 *outIndices, uint32 hillClimberIterations, uint32 fifo_size = 14, uint32 alternatePrim = 256);
-template<typename T> uint32 VertexCacheOptimizerHillclimber(const T *indices, uint32 ntris, uint32 nverts, T *outIndices, uint32 hillClimberIterations, uint32 fifo_size = 14, uint32 alternatePrim = 256) {
-	uint32	*temp	= new uint32[ntris * 3];
-	uint32	*out	= new uint32[ntris * 3];
-	copy_n(indices, temp, ntris * 3);
-	uint32 cost = VertexCacheOptimizerHillclimber(temp, ntris, nverts, out, hillClimberIterations, fifo_size, alternatePrim);
-	copy_n(out, outIndices, ntris * 3);
-	delete[] temp;
-	return cost;
-}
-
-void VertexCacheOptimizerForsyth(const uint32* indices, uint32 ntris, uint32 nverts, uint32 *outIndices, uint32 cache_size = 32);
+void VertexCacheOptimizerForsyth(range<const uint32*> indices, uint32 nverts, uint32 *outIndices, uint32 cache_size = 32);
 template<typename T> void VertexCacheOptimizerForsyth(const T *indices, uint32 ntris, uint32 nverts, T *outIndices, uint32 cache_size = 32) {
-	uint32	*temp	= new uint32[ntris * 3];
-	uint32	*out	= new uint32[ntris * 3];
-	copy_n(indices, temp, ntris * 3);
-	VertexCacheOptimizerForsyth(temp, ntris, nverts, out);
-	copy_n(out, outIndices, ntris * 3);
-	delete[] temp;
+	temp_array<uint32>	temp(indices);
+	temp_array<uint32>	out(indices.size());
+	VertexCacheOptimizerForsyth(temp, nverts, out);
+	copy(out, outIndices);
 }
+
+struct InlineMeshlet {
+	struct PackedTriangle {
+		uint32 i0 : 10;
+		uint32 i1 : 10;
+		uint32 i2 : 10;
+		uint32 spare : 2;
+	};
+	struct CullData {
+		sphere	bound;
+		float3	axis;
+		float	spread;
+		float	apex;
+		float	OcclusionPotential(position3 centre) const {
+			return dot(bound.centre() - centre, axis);
+		}
+	};
+
+	dynamic_array<uint32>			unique_indices;
+	dynamic_array<PackedTriangle>	primitives;
+
+	template<typename T> uint32	num_new(const T* tri) const {
+		uint32 count = 3;
+		for (auto &i : unique_indices)
+			count -= (i == tri[0] || i == tri[1] || i == tri[2]);
+		return count;
+	}
+	template<typename T> void	add(const T *tri);
+	CullData	ComputeCullData(const range<stride_iterator<const float3p>> &verts) const;
+};
+
+template<typename T> dynamic_array<InlineMeshlet> Meshletize(uint32 max_verts, uint32 max_prims, range<const T*> indices, range<stride_iterator<const float3p>> verts);
+
 
 }
 

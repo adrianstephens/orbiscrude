@@ -19,14 +19,18 @@
 #include "extra/indexer.h"
 
 #include "..\dx_shared\dx_gpu.h"
+#include "..\dx_shared\view_dxbc.h"
 #include "..\dx_shared\dx_fields.h"
+
 #include "filetypes/3d/model_utils.h"
 #include "view_dx11gpu.rc.h"
 #include "resource.h"
 #include "hook_com.h"
 #include "stack_dump.h"
 #include "dx11/dx11_record.h"
-#include "dx\dxgi_read.h"
+#include "dx/dxgi_read.h"
+#include "dx/spdb.h"
+#include "dx/sim_dxbc.h"
 
 #include <d3dcompiler.h>
 
@@ -123,17 +127,8 @@ struct DX11Assets {
 		string				GetName()		const { return item->name; }
 		uint64				GetSize()		const { return item->info.length(); }
 		const dx::DXBC*		DXBC()			const { return item->info; }
-
-		memory_block		GetUCode()		const {
-			if (dx::SHEX *shex = DXBC()->GetBlob<dx::SHEX>())
-				return shex->GetUCode();
-			if (dx::SHDR *shdr = DXBC()->GetBlob<dx::SHDR>())
-				return shdr->GetUCode();
-			return empty;
-		}
-		uint64				GetUCodeAddr()	const	{
-			return GetUCode() - (const char*)item->info;
-		}
+		const_memory_block	GetUCode()		const { dx::DXBC::UcodeHeader header; return DXBC()->GetUCode(header); }
+		uint64				GetUCodeAddr()	const { return GetUCode() - (const char*)item->info; }
 	};
 	
 	dynamic_array<MarkerRecord>			markers;
@@ -175,12 +170,15 @@ struct DX11Assets {
 		auto &r = shaders.emplace_back(&item, stage);
 
 		if (auto spdb = r.DXBC()->GetBlob(dx::DXBC::ShaderPDB)) {
-			auto	parsed	= ParsedSPDB(memory_reader(spdb));
+			item.name	= GetPDBFirstFilename(memory_reader(spdb));
+			/*
+			auto	parsed	= ParsedSPDB(memory_reader(spdb), con->files, shader_path);
 			if (auto start = parsed.locations.begin()) {
 				r.entry	= parsed.entry;
 				r.file		= parsed.files[start->file]->name;
-				item.name	= (parsed.entry << '(' << parsed.files[start->file]->name << ')').to_string();
+				item.name	= to_string(parsed.entry << '(' << parsed.files[start->file]->name << ')');
 			}
+			*/
 		}
 		return r;
 	}
@@ -443,7 +441,7 @@ struct DX11State : DeviceContext_State2 {
 	}
 
 	Topology2 GetTopology() const {
-		return dx::GetTopology((dx::PrimitiveType)prim, InstanceCount > 1 ? VertexCount : 0);
+		return {dx::GetTopology(prim), InstanceCount > 1 ? VertexCount : 0};
 	}
 
 	BackFaceCull CalcCull(bool flipped) const {
@@ -466,7 +464,7 @@ struct DX11StateParser {
 	DX11StateParser(DX11State &state) : state(state), curr_state(0), last_data(none) {}
 
 	bool	Process1(DX11Assets *assets, const COMRecording::header *h) {
-		const void *p = h->data();
+		const uint16 *p = h->data();
 		switch (h->id) {
 			case RecDeviceContext::tag_InitialState:
 				static_cast<DeviceContext_State&>(state) = *(DeviceContext_State*)p;
@@ -499,7 +497,7 @@ struct DX11StateParser {
 				state.StartInstance			= 0;
 				state.InstanceCount			= 1;
 				}); return true;
-			case RecDeviceContext::tag_Map: COMParse(p, [this](ID3D11Resource *rsrc, UINT sub, D3D11_MAP MapType, UINT MapFlags, D3D11_MAPPED_SUBRESOURCE *mapped) {
+			case RecDeviceContext::tag_Map: COMParse(p, [](ID3D11Resource *rsrc, UINT sub, D3D11_MAP MapType, UINT MapFlags, D3D11_MAPPED_SUBRESOURCE *mapped) {
 			}); break;
 			case RecDeviceContext::tag_Unmap: COMParse(p, [this, assets](ID3D11Resource *rsrc, UINT sub) {
 				auto	&m = state.mods[tagged_pointer<ID3D11Resource>(rsrc,sub)].put();
@@ -561,11 +559,11 @@ struct DX11StateParser {
 			case RecDeviceContext::tag_VSSetSamplers: COMParse(p, [this](UINT slot, UINT num, counted<ID3D11SamplerState*,1> pp) {
 				copy_n(pp.begin(), state.vs.smp + slot, num);
 			}); break;
-			case RecDeviceContext::tag_Begin: COMParse(p, [this](ID3D11Asynchronous *async) {
+			case RecDeviceContext::tag_Begin: COMParse(p, [](ID3D11Asynchronous *async) {
 			}); break;
-			case RecDeviceContext::tag_End: COMParse(p, [this](ID3D11Asynchronous *async) {
+			case RecDeviceContext::tag_End: COMParse(p, [](ID3D11Asynchronous *async) {
 			}); break;
-			case RecDeviceContext::tag_SetPredication: COMParse(p, [this](ID3D11Predicate *pred, BOOL PredicateValue) {
+			case RecDeviceContext::tag_SetPredication: COMParse(p, [](ID3D11Predicate *pred, BOOL PredicateValue) {
 			}); break;
 			case RecDeviceContext::tag_GSSetShaderResources: COMParse(p, [this](UINT slot, UINT num, counted<ID3D11ShaderResourceView*,1> pp) {
 				copy_n(pp.begin(), state.gs.srv + slot, num);
@@ -601,7 +599,7 @@ struct DX11StateParser {
 				copy_n(pp.begin(), state.so_buffer, num);
 				copy_n(offsets.begin(), state.so_offset, num);
 			}); break;
-			case RecDeviceContext::tag_DrawAuto: COMParse(p, [this]() {
+			case RecDeviceContext::tag_DrawAuto: COMParse(p, []() {
 			}); return true;
 			case RecDeviceContext::tag_DrawIndexedInstancedIndirect: COMParse(p, [this](ID3D11Buffer *buffer, UINT offset) {
 				state.IndirectBuffer = buffer;
@@ -627,30 +625,30 @@ struct DX11StateParser {
 			case RecDeviceContext::tag_RSSetScissorRects: COMParse(p, [this](UINT num, counted<const D3D11_RECT,0> rects) {
 				copy_n(rects.begin(), state.scissor, state.num_scissor = num);
 			}); break;
-			case RecDeviceContext::tag_CopySubresourceRegion: COMParse(p, [this](ID3D11Resource *dst, UINT DstSubresource, UINT DstX, UINT DstY, UINT DstZ, ID3D11Resource *src, UINT SrcSubresource, const D3D11_BOX *pSrcBox) {
+			case RecDeviceContext::tag_CopySubresourceRegion: COMParse(p, [](ID3D11Resource *dst, UINT DstSubresource, UINT DstX, UINT DstY, UINT DstZ, ID3D11Resource *src, UINT SrcSubresource, const D3D11_BOX *pSrcBox) {
 			});  return true;
-			case RecDeviceContext::tag_CopyResource: COMParse(p, [this](ID3D11Resource *dst, ID3D11Resource *src) {
+			case RecDeviceContext::tag_CopyResource: COMParse(p, [](ID3D11Resource *dst, ID3D11Resource *src) {
 			});  return true;
-			case RecDeviceContext::tag_UpdateSubresource: COMParse(p, [this, assets](ID3D11Resource *dst, UINT DstSubresource, const D3D11_BOX *pDstBox, const void *pSrcData, UINT SrcRowPitch, UINT SrcDepthPitch) {
+			case RecDeviceContext::tag_UpdateSubresource: COMParse(p, [this](ID3D11Resource *dst, UINT DstSubresource, const D3D11_BOX *pDstBox, const void *pSrcData, UINT SrcRowPitch, UINT SrcDepthPitch) {
 				state.mods[tagged_pointer<ID3D11Resource>(dst,DstSubresource)] = exchange(last_data, none);
 			}); return true;
-			case RecDeviceContext::tag_CopyStructureCount: COMParse(p, [this](ID3D11Buffer *pDstBuffer, UINT DstAlignedByteOffset, ID3D11UnorderedAccessView *pSrcView) {
+			case RecDeviceContext::tag_CopyStructureCount: COMParse(p, [](ID3D11Buffer *pDstBuffer, UINT DstAlignedByteOffset, ID3D11UnorderedAccessView *pSrcView) {
 			}); break;
-			case RecDeviceContext::tag_ClearRenderTargetView: COMParse(p, [this](ID3D11RenderTargetView *pRenderTargetView, const FLOAT ColorRGBA[4]) {
+			case RecDeviceContext::tag_ClearRenderTargetView: COMParse(p, [](ID3D11RenderTargetView *pRenderTargetView, const FLOAT ColorRGBA[4]) {
 			});  return true;
-			case RecDeviceContext::tag_ClearUnorderedAccessViewUint: COMParse(p, [this](ID3D11UnorderedAccessView *uav, const UINT Values[4]) {
+			case RecDeviceContext::tag_ClearUnorderedAccessViewUint: COMParse(p, [](ID3D11UnorderedAccessView *uav, const UINT Values[4]) {
 			});  return true;
-			case RecDeviceContext::tag_ClearUnorderedAccessViewFloat: COMParse(p, [this](ID3D11UnorderedAccessView *uav, const FLOAT Values[4]) {
+			case RecDeviceContext::tag_ClearUnorderedAccessViewFloat: COMParse(p, [](ID3D11UnorderedAccessView *uav, const FLOAT Values[4]) {
 			});  return true;
-			case RecDeviceContext::tag_ClearDepthStencilView: COMParse(p, [this](ID3D11DepthStencilView *dsv, UINT ClearFlags, FLOAT Depth, UINT8 Stencil) {
+			case RecDeviceContext::tag_ClearDepthStencilView: COMParse(p, [](ID3D11DepthStencilView *dsv, UINT ClearFlags, FLOAT Depth, UINT8 Stencil) {
 			});  return true;
-			case RecDeviceContext::tag_GenerateMips: COMParse(p, [this](ID3D11ShaderResourceView *pShaderResourceView) {
+			case RecDeviceContext::tag_GenerateMips: COMParse(p, [](ID3D11ShaderResourceView *pShaderResourceView) {
 			});  return true;
-			case RecDeviceContext::tag_SetResourceMinLOD: COMParse(p, [this](ID3D11Resource *rsrc, FLOAT MinLOD) {
+			case RecDeviceContext::tag_SetResourceMinLOD: COMParse(p, [](ID3D11Resource *rsrc, FLOAT MinLOD) {
 			}); break;
-			case RecDeviceContext::tag_ResolveSubresource: COMParse(p, [this](ID3D11Resource *dst, UINT DstSubresource, ID3D11Resource *src, UINT SrcSubresource, DXGI_FORMAT Format) {
+			case RecDeviceContext::tag_ResolveSubresource: COMParse(p, [](ID3D11Resource *dst, UINT DstSubresource, ID3D11Resource *src, UINT SrcSubresource, DXGI_FORMAT Format) {
 			}); break;
-			case RecDeviceContext::tag_ExecuteCommandList: COMParse(p, [this](ID3D11CommandList *pCommandList, BOOL RestoreContextState) {
+			case RecDeviceContext::tag_ExecuteCommandList: COMParse(p, [](ID3D11CommandList *pCommandList, BOOL RestoreContextState) {
 			});  return true;
 			case RecDeviceContext::tag_HSSetShaderResources: COMParse(p, [this](UINT slot, UINT num, counted<ID3D11ShaderResourceView*,1> pp) {
 				copy_n(pp.begin(), state.hs.srv + slot, num);
@@ -691,21 +689,21 @@ struct DX11StateParser {
 			case RecDeviceContext::tag_CSSetConstantBuffers: COMParse(p, [this](UINT slot, UINT num, counted<ID3D11Buffer*,1> pp) {
 				copy_n(pp.begin(), state.cs.cb + slot, num);
 			}); break;
-			case RecDeviceContext::tag_ClearState: COMParse(p, [this]() {
+			case RecDeviceContext::tag_ClearState: COMParse(p, []() {
 			}); break;
-			case RecDeviceContext::tag_Flush: COMParse(p, [this]() {
+			case RecDeviceContext::tag_Flush: COMParse(p, []() {
 			}); break;
-			case RecDeviceContext::tag_FinishCommandList: COMParse(p, [this](BOOL RestoreDeferredContextState, ID3D11CommandList **pp) {
+			case RecDeviceContext::tag_FinishCommandList: COMParse(p, [](BOOL RestoreDeferredContextState, ID3D11CommandList **pp) {
 			});  return true;
 		//ID3D11DeviceContext1
-			case RecDeviceContext::tag_CopySubresourceRegion1: COMParse(p, [this](ID3D11Resource *dst, UINT DstSubresource, UINT DstX, UINT DstY, UINT DstZ, ID3D11Resource *src, UINT SrcSubresource, const D3D11_BOX *pSrcBox, UINT CopyFlags) {
+			case RecDeviceContext::tag_CopySubresourceRegion1: COMParse(p, [](ID3D11Resource *dst, UINT DstSubresource, UINT DstX, UINT DstY, UINT DstZ, ID3D11Resource *src, UINT SrcSubresource, const D3D11_BOX *pSrcBox, UINT CopyFlags) {
 			}); break;
-			case RecDeviceContext::tag_UpdateSubresource1: COMParse(p, [this, assets](ID3D11Resource *dst, UINT DstSubresource, const D3D11_BOX *pDstBox, const void *pSrcData, UINT SrcRowPitch, UINT SrcDepthPitch, UINT CopyFlags) {
+			case RecDeviceContext::tag_UpdateSubresource1: COMParse(p, [this](ID3D11Resource *dst, UINT DstSubresource, const D3D11_BOX *pDstBox, const void *pSrcData, UINT SrcRowPitch, UINT SrcDepthPitch, UINT CopyFlags) {
 				state.mods[tagged_pointer<ID3D11Resource>(dst,DstSubresource)] = exchange(last_data, none);
 			}); break;
-			case RecDeviceContext::tag_DiscardResource: COMParse(p, [this](ID3D11Resource *rsrc) {
+			case RecDeviceContext::tag_DiscardResource: COMParse(p, [](ID3D11Resource *rsrc) {
 			}); break;
-			case RecDeviceContext::tag_DiscardView: COMParse(p, [this](ID3D11View *pResourceView) {
+			case RecDeviceContext::tag_DiscardView: COMParse(p, [](ID3D11View *pResourceView) {
 			}); break;
 			case RecDeviceContext::tag_VSSetConstantBuffers1: COMParse(p, [this](UINT slot, UINT num, counted<ID3D11Buffer*,1> pp, const UINT *cnst, const UINT *numc) {
 				copy_n(pp.begin(), state.vs.cb + slot, num);
@@ -734,9 +732,9 @@ struct DX11StateParser {
 				curr_state		= state;
 				static_cast<DeviceContext_State&>(this->state) = states[state];
 			}); break;
-			case RecDeviceContext::tag_ClearView: COMParse(p, [this](ID3D11View *pView, const FLOAT Color[4], const D3D11_RECT *pRect, UINT num) {
+			case RecDeviceContext::tag_ClearView: COMParse(p, [](ID3D11View *pView, const FLOAT Color[4], const D3D11_RECT *pRect, UINT num) {
 			}); break;
-			case RecDeviceContext::tag_DiscardView1: COMParse(p, [this](ID3D11View *pResourceView, const D3D11_RECT *pRects, UINT num) {
+			case RecDeviceContext::tag_DiscardView1: COMParse(p, [](ID3D11View *pResourceView, const D3D11_RECT *pRects, UINT num) {
 			}); break;
 		//ID3D11DeviceContext2
 			case RecDeviceContext::tag_UpdateTileMappings:
@@ -888,7 +886,7 @@ struct DX11Replay : COMReplay<DX11Replay> {
 	void	CreateObjects(const DX11Assets &assets);
 	void	RunTo(const dynamic_array<Recording> &recordings, uint32 addr);
 	void	RunGen(const dynamic_array<Recording> &recordings);
-	dx::SimulatorDXBC::Resource GetResource(const DX11Assets::ItemRecord *item);
+	dx::Resource GetResource(const DX11Assets::ItemRecord *item);
 };
 
 bool DX11Replay::Init(IDXGIAdapter *adapter) {
@@ -979,7 +977,7 @@ void UnmapCopy(ID3D11Resource *res, int sub, const D3D11_MAPPED_SUBRESOURCE &map
 }
 
 bool DX11Replay::Process(const COMRecording::header *h) {
-	const void *p = h->data();
+	const uint16 *p = h->data();
 //	ISO_TRACEF("process: %i\n", h->id);
 
 	switch (h->id) {
@@ -1247,13 +1245,13 @@ void DX11Replay::RunGen(const dynamic_array<Recording> &recordings) {
 	fiber::yield(offset);
 }
 
-dx::SimulatorDXBC::Resource DX11Replay::GetResource(const DX11Assets::ItemRecord *item) {
-	dx::SimulatorDXBC::Resource	r;
+dx::Resource DX11Replay::GetResource(const DX11Assets::ItemRecord *item) {
+	dx::Resource	r;
 
 	if (!item)
 		return r;
 
-	ID3D11Resource *res = is_view(item->type)		? ((const RecView<D3D11_SHADER_RESOURCE_VIEW_DESC>*)item->info)->resource
+	ID3D11Resource *res = is_view(item->type)		? ((const RecView<D3D11_SHADER_RESOURCE_VIEW_DESC>*)item->info)->resource//.get()
 						: is_resource(item->type)	? (ID3D11Resource*)item->obj
 						: nullptr;
 
@@ -1548,12 +1546,18 @@ struct DX11Connection : DX11Assets {
 		WT_DATA,
 	};
 
-	CallStackDumper				stack_dumper;
-	dynamic_array<Recording>	recordings;
-	uint64						frequency;
+//	ref_ptr<DXConnection>		con;
 
-	DX11Connection() : stack_dumper(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES), frequency(0) {}
-	DX11Connection(HANDLE process, const char *executable) : stack_dumper(process, SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES, BuildSymbolSearchPath(filename(executable).dir())), frequency(0) {}
+	CallStackDumper				stack_dumper;
+	Disassembler::SharedFiles	files;
+	dynamic_array<Recording>	recordings;
+	uint64						frequency	= 0;
+	string						shader_path;
+
+	DX11Connection() : stack_dumper(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES) {}
+	DX11Connection(DXConnection *con) : stack_dumper(con->process, SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES, BuildSymbolSearchPath(con->process.Filename().dir())) {
+		shader_path = separated_list(transformc(GetSettings("Paths/source_path"), [](const ISO::Browser2 &i) { return i.GetString(); }), ";");
+	}
 	
 	void					GetAssets(progress prog);
 	bool					GetStatistics();
@@ -1804,9 +1808,9 @@ void DX11Connection::GetAssets(progress prog) {
 						for (int i = 0; i < num; i++)
 							AddUse(pp[i], true);
 					}); break;
-					case RecDeviceContext::tag_CopySubresourceRegion: COMParse(p, [this](ID3D11Resource *dst, UINT DstSubresource, UINT DstX, UINT DstY, UINT DstZ, ID3D11Resource *src, UINT SrcSubresource, const D3D11_BOX *pSrcBox) {
+					case RecDeviceContext::tag_CopySubresourceRegion: COMParse(p, [](ID3D11Resource *dst, UINT DstSubresource, UINT DstX, UINT DstY, UINT DstZ, ID3D11Resource *src, UINT SrcSubresource, const D3D11_BOX *pSrcBox) {
 					}); break;
-					case RecDeviceContext::tag_CopyResource: COMParse(p, [this](ID3D11Resource *dst, ID3D11Resource *src) {
+					case RecDeviceContext::tag_CopyResource: COMParse(p, [](ID3D11Resource *dst, ID3D11Resource *src) {
 					}); break;
 					case RecDeviceContext::tag_UpdateSubresource: COMParse(p, [this](ID3D11Resource *dst, UINT DstSubresource, const D3D11_BOX *pDstBox, const void *pSrcData, UINT SrcRowPitch, UINT SrcDepthPitch) {
 						AddUse(dst, true);
@@ -1842,17 +1846,18 @@ void DX11Connection::GetAssets(progress prog) {
 							if (ShaderRecord *shader = FindShader(s.shader)) {
 								AddUse(shader->item);
 
-								dx::DeclReader	decl(shader->GetUCode());
+								dx::DeclResources	decl;
+								Read(decl, shader->GetUCode());
 
 								for (auto &i : decl.cb)
-									AddUse(s.cb[i.index]);
+									AddUse(s.cb[i.index()]);
 								for (auto &i : decl.srv)
-									AddUse(s.srv[i.index]);
+									AddUse(s.srv[i.index()]);
 								for (auto &i : decl.smp)
-									AddUse(s.smp[i.index]);
+									AddUse(s.smp[i.index()]);
 
 								for (auto &i : decl.uav)
-									AddUse((compute ? state.cs_uav : state.ps_uav)[i.index]);
+									AddUse((compute ? state.cs_uav : state.ps_uav)[i.index()]);
 							}
 						}
 					}
@@ -2043,7 +2048,7 @@ union RESOURCE_DESC {
 };
 
 struct DX11ShaderState : dx::Shader {
-	struct CBV : dx::SimulatorDXBC::Buffer {
+	struct CBV : dx::Buffer {
 		DX11Assets::ItemRecord	*item;
 		void	init(DX11Assets::ItemRecord	*_item, const D3D11_BUFFER_DESC *desc, const void *data) {
 			item	= _item;
@@ -2051,20 +2056,20 @@ struct DX11ShaderState : dx::Shader {
 			n		= desc->ByteWidth;
 		}
 	};
-	struct SRV : dx::SimulatorDXBC::Resource {
+	struct SRV : dx::Resource {
 		DX11Assets::ItemRecord	*item;
 		bool	own_mem;
 		int		first_sub;
-		using dx::SimulatorDXBC::Resource::init;
+		using dx::Resource::init;
 		SRV() : item(0), own_mem(false), first_sub(0) {}
 		~SRV() { if (own_mem) iso::free(p); }
 		SRV&	init(DX11Assets::ItemRecord	*_item, const D3D11_SHADER_RESOURCE_VIEW_DESC *desc, DX11Assets::ItemRecord *res);
 	};
-	struct UAV : dx::SimulatorDXBC::Resource {
+	struct UAV : dx::Resource {
 		DX11Assets::ItemRecord	*item;
 		bool	own_mem;
 		int		first_sub;
-		using dx::SimulatorDXBC::Resource::init;
+		using dx::Resource::init;
 		UAV() : item(0), own_mem(false), first_sub(0) {}
 		~UAV() { if (own_mem) iso::free(p); }
 		UAV&	init(DX11Assets::ItemRecord	*_item, const D3D11_UNORDERED_ACCESS_VIEW_DESC *desc, DX11Assets::ItemRecord *res);
@@ -2076,15 +2081,27 @@ struct DX11ShaderState : dx::Shader {
 	hash_map<uint32, UAV>		uav;
 	hash_map<uint32, DX11Assets::ItemRecord*>	smp;
 	hash_map<dx::SystemValue, uint32>	inputs, outputs;
+	uint32						non_system_inputs;
 
 	DX11ShaderState()	{}
 	DX11ShaderState(const DX11Assets::ShaderRecord *rec) : dx::Shader(rec->stage, rec->item->info), name(rec->item->name) {}
 	DX11ShaderState(const DX11Assets::ItemRecord *item) : dx::Shader(GetStage(item->type), item->info), name(item->name) {}
 	bool	init(DX11Connection *con, const DX11State::Stage &stage, ID3D11UnorderedAccessView *const *stage_uav, const DX11State::mods_t &mods);
 	void	InitSimulator(dx::SimulatorDXBC &sim, uint32 start, const Topology2 &top) const;
+
+	auto	GetThreadGroup() const { return dx::GetThreadGroupDXBC(GetUCode()); }
+
+	Disassembler::State *Disassemble() const {
+		static Disassembler	*dis = Disassembler::Find("DXBC");
+		if (dis)
+			return dis->Disassemble(GetUCode(), GetUCodeAddr());
+		return 0;
+	}
 };
 
 bool DX11ShaderState::init(DX11Connection *con, const DX11State::Stage &stage, ID3D11UnorderedAccessView *const *stage_uav, const DX11State::mods_t &mods) {
+	non_system_inputs = 0;
+
 	auto rec = con->FindShader(stage.shader);
 	if (!rec)
 		return false;
@@ -2093,26 +2110,29 @@ bool DX11ShaderState::init(DX11Connection *con, const DX11State::Stage &stage, I
 
 	dx::Shader::init(rec->stage, rec->item->info);
 	
-	dx::DeclReader	decl(GetUCode());
+	dx::DeclResources	decl;
+	Read(decl, GetUCode());
 
 	for (auto &i : decl.inputs) {
-		if (i.system)
-			inputs[(dx::SystemValue)i.system]	= i.index;
+		if (i->system)
+			inputs[i->system]	= i.index();
+		else
+			non_system_inputs |= 1 << i.index();
 	}
 	for (auto &i : decl.outputs) {
-		if (i.system)
-			outputs[(dx::SystemValue)i.system]	= i.index;
+		if (i->system)
+			outputs[i->system]	= i.index();
 	}
 
 	for (auto &i : decl.cb) {
-		if (auto *item = con->FindItem(stage.cb[i.index])) {
-			cb[i.index]->init(item, item->info, get(mods[tagged_pointer<ID3D11Resource>(stage.cb[i.index], 0)].or_default(item->GetData())));
+		if (auto *item = con->FindItem(stage.cb[i.index()])) {
+			cb[i.index()]->init(item, item->info, get(mods[tagged_pointer<ID3D11Resource>(stage.cb[i.index()], 0)].or_default(item->GetData())));
 		}
 	}
 	for (auto &i : decl.srv) {
-		if (auto *item = con->FindItem(stage.srv[i.index])) {
+		if (auto *item = con->FindItem(stage.srv[i.index()])) {
 			const RecView<D3D11_SHADER_RESOURCE_VIEW_DESC> *desc = item->info;
-			auto	&s	= srv[i.index]->init(item, desc->pdesc, con->FindItem(desc->resource));
+			auto	&s	= srv[i.index()]->init(item, desc->pdesc, con->FindItem(desc->resource));
 			bool	mod = false;
 			for (int i = s.first_sub, n = i + s.num_subs(); i < n; i++) {
 				if (mods[tagged_pointer<ID3D11Resource>((ID3D11Resource*)s.item->obj, i)].exists()) {
@@ -2136,9 +2156,9 @@ bool DX11ShaderState::init(DX11Connection *con, const DX11State::Stage &stage, I
 
 	if (stage_uav) {
 		for (auto &i : decl.uav) {
-			if (auto *item = con->FindItem(stage_uav[i.index])) {
+			if (auto *item = con->FindItem(stage_uav[i.index()])) {
 				const RecView<D3D11_UNORDERED_ACCESS_VIEW_DESC> *desc = item->info;
-				auto	&s	= uav[i.index]->init(item, desc->pdesc, con->FindItem(desc->resource));
+				auto	&s	= uav[i.index()]->init(item, desc->pdesc, con->FindItem(desc->resource));
 				bool	mod = false;
 				for (int i = s.first_sub, n = i + s.num_subs(); i < n; i++) {
 					if (mods[tagged_pointer<ID3D11Resource>((ID3D11Resource*)s.item->obj, i)].exists()) {
@@ -2161,8 +2181,8 @@ bool DX11ShaderState::init(DX11Connection *con, const DX11State::Stage &stage, I
 	}
 
 	for (auto &i : decl.smp) {
-		if (auto *item = con->FindItem(stage.smp[i.index]))
-			smp[i.index] = item;
+		if (auto *item = con->FindItem(stage.smp[i.index()]))
+			smp[i.index()] = item;
 	}
 
 	return true;
@@ -2194,7 +2214,7 @@ DX11ShaderState::SRV& DX11ShaderState::SRV::init(DX11Assets::ItemRecord	*_item, 
 			}
 			case D3D11_SRV_DIMENSION_BUFFER: {
 				uint32	element_size = rdesc->buffer.MiscFlags & D3D11_RESOURCE_MISC_BUFFER_STRUCTURED ? rdesc->buffer.StructureByteStride : DXGI_COMPONENTS(vdesc->Format).Bytes();
-				init(dx::RESOURCE_DIMENSION_BUFFER, vdesc->Format, 1, vdesc->Buffer.NumElements * element_size);
+				init(dx::RESOURCE_DIMENSION_BUFFER, vdesc->Format, element_size, vdesc->Buffer.NumElements);
 				set_mem(slice(vdesc->Buffer.FirstElement * element_size));
 				break;
 			}
@@ -2273,7 +2293,7 @@ DX11ShaderState::UAV& DX11ShaderState::UAV::init(DX11Assets::ItemRecord *_item, 
 			}
 			case D3D11_UAV_DIMENSION_BUFFER: {
 				uint32	element_size = rdesc->buffer.MiscFlags & D3D11_RESOURCE_MISC_BUFFER_STRUCTURED ? rdesc->buffer.StructureByteStride : DXGI_COMPONENTS(vdesc->Format).Bytes();
-				init(dx::RESOURCE_DIMENSION_BUFFER, vdesc->Format, 1, vdesc->Buffer.NumElements * element_size);
+				init(dx::RESOURCE_DIMENSION_BUFFER, vdesc->Format, element_size, vdesc->Buffer.NumElements);
 				set_mem(slice(vdesc->Buffer.FirstElement * element_size));
 				break;
 			}
@@ -2328,18 +2348,18 @@ void DX11ShaderState::InitSimulator(dx::SimulatorDXBC &sim, uint32 start, const 
 		switch (i.hash()) {
 			case dx::SV_VERTEX_ID:
 				if (top.chunks)
-					sim.SetScalarRegFile(dx::Operand::TYPE_INPUT, *i, transform(make_int_iterator(start), [per_instance = top.chunks](int i) { return i % per_instance; }));
+					sim.SetInput<int>(*i, transform(make_int_iterator(start), [per_instance = top.chunks](int i) { return i % per_instance; }));
 				else
-					sim.SetScalarRegFile(dx::Operand::TYPE_INPUT, *i, make_int_iterator(start));
+					sim.SetInput<int>(*i, make_int_iterator(start));
 				break;
 			case dx::SV_PRIMITIVE_ID:
-				sim.SetScalarRegFile(dx::Operand::TYPE_INPUT, *i, transform(make_int_iterator(start), [&top](int i) { return top.PrimFromVertex(i, false); }));
+				sim.SetInput<int>(*i, transform(make_int_iterator(start), [&top](int i) { return top.PrimFromVertex(i, false); }));
 				break;
 			case dx::SV_INSTANCE_ID:
 				if (top.chunks)
-					sim.SetScalarRegFile(dx::Operand::TYPE_INPUT, *i, transform(make_int_iterator(start), [per_instance = top.chunks](int i) { return i / per_instance; }));
+					sim.SetInput<int>(*i, transform(make_int_iterator(start), [per_instance = top.chunks](int i) { return i / per_instance; }));
 				else
-					sim.SetScalarRegFile(dx::Operand::TYPE_INPUT, *i, scalar(0));
+					sim.SetInput<int>(*i, scalar(0));
 				break;
 
 			default:
@@ -2359,14 +2379,14 @@ Control MakeBoundView(const WindowPos &wpos, const DX11ShaderState &stage, int i
 		case 1: {//srv
 			if (DX11ShaderState::SRV	&srv = stage.srv[i])
 				return is_buffer(srv.dim)
-					? MakeBufferWindow(wpos, srv.item->GetName(), 'BF', TypedBuffer(srv, 16, ctypes.get_type<float[4]>()))
+					? MakeBufferWindow(wpos, srv.item->GetName(), 'BF', TypedBuffer(srv, srv.width, dx::to_c_type(srv.format)))//, 16, ctypes.get_type<float[4]>()))
 					: BitmapWindow(wpos, dx::GetBitmap(0, srv), srv.item->GetName(), true);
 			break;
 		}
 		case 2: {//uav
 			if (DX11ShaderState::UAV	&uav = stage.uav[i])
 				return is_buffer(uav.dim)
-					? MakeBufferWindow(wpos, uav.item->GetName(), 'BF', TypedBuffer(uav, 16, ctypes.get_type<float[4]>()))
+					? MakeBufferWindow(wpos, uav.item->GetName(), 'BF', TypedBuffer(uav, uav.width, dx::to_c_type(uav.format)))//, 16, ctypes.get_type<float[4]>()))
 					: BitmapWindow(wpos, dx::GetBitmap(0, uav), uav.item->GetName(), true);
 			break;
 		};
@@ -2559,7 +2579,8 @@ HTREEITEM	DX11StateControl::AddShader(HTREEITEM h, const DX11ShaderState &shader
 	}
 
 	HTREEITEM	h2	= rt.AddText(h, "Registers");
-	dx::DeclReader	decl(shader.GetUCode());
+	dx::DeclResources	decl;
+	Read(decl, shader.GetUCode());
 
 //	for (auto &i : decl.inputs) {
 //		if (i.system)
@@ -2571,20 +2592,20 @@ HTREEITEM	DX11StateControl::AddShader(HTREEITEM h, const DX11ShaderState &shader
 //	}
 
 	for (auto &i : decl.cb) {
-		if (auto *bound = shader.cb.check(i.index))
-			rt.AddFields(rt.Add(h2, buffer_accum<256>("b") << i.index, ST_BOUND_RESOURCE, shader.stage * 256 + 0 + i.index), bound->item);
+		if (auto *bound = shader.cb.check(i.index()))
+			rt.AddFields(rt.Add(h2, buffer_accum<256>("b") << i.index(), ST_BOUND_RESOURCE, shader.stage * 256 + 0 + i.index()), bound->item);
 	}
 	for (auto &i : decl.srv) {
-		if (auto *bound = shader.srv.check(i.index))
-			rt.AddFields(rt.Add(h2, buffer_accum<256>("t") << i.index, ST_BOUND_RESOURCE, shader.stage * 256 + 64 + i.index), bound->item);
+		if (auto *bound = shader.srv.check(i.index()))
+			rt.AddFields(rt.Add(h2, buffer_accum<256>("t") << i.index(), ST_BOUND_RESOURCE, shader.stage * 256 + 64 + i.index()), bound->item);
 	}
 	for (auto &i : decl.uav) {
-		if (auto *bound = shader.uav.check(i.index))
-			rt.AddFields(rt.Add(h2, buffer_accum<256>("u") << i.index, ST_BOUND_RESOURCE, shader.stage * 256 + 128 + i.index), bound->item);
+		if (auto *bound = shader.uav.check(i.index()))
+			rt.AddFields(rt.Add(h2, buffer_accum<256>("u") << i.index(), ST_BOUND_RESOURCE, shader.stage * 256 + 128 + i.index()), bound->item);
 	}
 	for (auto &i : decl.smp) {
-		if (auto *bound = shader.smp.check(i.index))
-			rt.AddFields(rt.AddText(h2, buffer_accum<256>("s") << i.index), bound);
+		if (auto *bound = shader.smp.check(i.index()))
+			rt.AddFields(rt.AddText(h2, buffer_accum<256>("s") << i.index()), bound);
 	}
 		
 	return h;
@@ -2652,7 +2673,7 @@ LRESULT	DX11ShaderWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 
 DX11ShaderWindow::DX11ShaderWindow(const WindowPos &wpos, DX11Connection *con, const DX11ShaderState &shader)
 	: SplitterWindow(SWF_VERT | SWF_PROP)
-	, CodeHelper(HLSLcolourerRE(), none, GetSettings("General/shader source").GetInt(1))
+	, CodeHelper(HLSLcolourerRE(), none, GetSettings("General/shader source").Get(Disassembler::SHOW_SOURCE))
 	, tree(con)
 	, shader(shader)
 {
@@ -2662,7 +2683,7 @@ DX11ShaderWindow::DX11ShaderWindow(const WindowPos &wpos, DX11Connection *con, c
 	SplitterWindow	*split2 = new SplitterWindow(SplitterWindow::SWF_HORZ | SplitterWindow::SWF_FROM2ND | SplitterWindow::SWF_DELETE_ON_DESTROY);
 	split2->Create(_GetPanePos(0), 0, CHILD | CLIPSIBLINGS | VISIBLE);
 
-	ParsedSPDB		spdb(memory_reader(shader.DXBC()->GetBlob(dx::DXBC::ShaderPDB)));
+	ParsedSPDB		spdb(memory_reader(shader.DXBC()->GetBlob(dx::DXBC::ShaderPDB)), con->files, con->shader_path);
 	locations = move(spdb.locations);
 	FixLocations(shader.GetUCodeAddr());
 
@@ -2708,32 +2729,35 @@ class DX11ShaderDebuggerWindow : public MultiSplitterWindow, DebugWindow {
 	DX11StateControl		tree;
 	ComboControl			thread_control;
 	const DX11ShaderState	&shader;
-	ParsedSPDB				spdb;
 	dynamic_array<int>		bp;
 	dynamic_array<uint64>	bp_offsets;
-	uint64					pc;
+	const void				*op;
 	uint32					step_count;
 	uint32					thread;
-	dx::SHADERSTAGE			stage;
 
 	void	ToggleBreakpoint(int32 offset) {
-		if (DebugWindow::ToggleBreakpoint(OffsetToLine(offset)))
-			bp_offsets.insert(lower_boundc(bp_offsets, offset), offset);
+		auto	i = lower_boundc(bp_offsets, offset);
+		if (i == bp_offsets.end() || *i != offset)
+			bp_offsets.insert(i, offset);
 		else
-			bp_offsets.erase(lower_boundc(bp_offsets, offset));
+			bp_offsets.erase(i);
+		DebugWindow::Invalidate(Margin());
 	}
 public:
 	dx::SimulatorDXBC		sim;
-	Control&	control()	{ return *(MultiSplitterWindow*)this; }
+
+	uint64		Address(const void *p)	const	{ return p ? base + sim.Offset(p) : 0; }
+	Control&	control()						{ return *(MultiSplitterWindow*)this; }
 
 	LRESULT Proc(MSG_ID message, WPARAM wParam, LPARAM lParam);
 	void	Update() {
-		SetPC(AddressToLine(pc));
-		regs->Update(sim, stage, spdb, pc, thread);
+		uint32	pc	= sim.Offset(op);
+		SetPC(OffsetToLine(pc));
+		regs->Update(pc, pc + base, thread);
 		if (locals)
-			locals->Update(sim, spdb, pc, thread);
+			locals->Update(pc, pc + base, thread);
 	}
-	DX11ShaderDebuggerWindow(const WindowPos &wpos, const char *title, const DX11ShaderState &shader, DX11Connection *con, int mode);
+	DX11ShaderDebuggerWindow(const WindowPos &wpos, const char *title, const DX11ShaderState &shader, DX11Connection *con, Disassembler::MODE mode);
 
 	void	SetThread(int _thread)	{
 		thread = _thread;
@@ -2742,32 +2766,30 @@ public:
 			thread_control.SetItemData(i, thread_control.Add(to_string(i)));
 		thread_control.Select(thread);
 
-		auto	*op = sim.Begin();
-		while (op->IsDeclaration())
-			op = op->next();
-		pc	= sim.Address(op);
+		op = (const dx::Opcode*)sim.Run(0);
 	
 		Update();
 	}
 };
 
-DX11ShaderDebuggerWindow::DX11ShaderDebuggerWindow(const WindowPos &wpos, const char *title, const DX11ShaderState &shader, DX11Connection *con, int mode)
+DX11ShaderDebuggerWindow::DX11ShaderDebuggerWindow(const WindowPos &wpos, const char *title, const DX11ShaderState &shader, DX11Connection *con, Disassembler::MODE mode)
 	: MultiSplitterWindow(2, SWF_VERT | SWF_PROP | SWF_DELETE_ON_DESTROY)
 	, DebugWindow(HLSLcolourerRE(), none, mode)
 	, accel(GetAccelerator())
 	, tree(con)
-	, shader(shader), spdb(memory_reader(shader.DXBC()->GetBlob(dx::DXBC::ShaderPDB)))
+	, shader(shader)
 	, step_count(0), thread(0)
-	, stage(shader.stage)
 {
 	MultiSplitterWindow::Create(wpos, title, CHILD | CLIPCHILDREN | CLIPSIBLINGS | VISIBLE, CLIENTEDGE);// | COMPOSITED);
 
 	SplitterWindow	*split2 = new SplitterWindow(SplitterWindow::SWF_HORZ | SplitterWindow::SWF_FROM2ND | SplitterWindow::SWF_DELETE_ON_DESTROY);
 	split2->Create(GetPanePos(0), 0, CHILD | CLIPSIBLINGS | VISIBLE);
 
+	auto	spdb = make_shared<ParsedSPDB>(memory_reader(shader.DXBC()->GetBlob(dx::DXBC::ShaderPDB)), con->files, con->shader_path);
+
 	DebugWindow::Create(split2->_GetPanePos(0), NULL, CHILD | READONLY | SELECTIONBAR);
-	DebugWindow::locations	= move(spdb.locations);
-	DebugWindow::files		= move(spdb.files);
+	DebugWindow::locations	= move(spdb->locations);
+	DebugWindow::files		= move(spdb->files);
 	DebugWindow::FixLocations(shader.GetUCodeAddr());
 	DebugWindow::SetDisassembly(shader.Disassemble(), true);
 
@@ -2778,7 +2800,7 @@ DX11ShaderDebuggerWindow::DX11ShaderDebuggerWindow(const WindowPos &wpos, const 
 	split2->SetPanes(DebugWindow::hWnd, *tree_title, 100);
 	SetPane(0, *split2);
 	tree.Show();
-
+	
 	// source tabs
 	tabs = 0;
 	if (HasFiles()) {
@@ -2790,7 +2812,7 @@ DX11ShaderDebuggerWindow::DX11ShaderDebuggerWindow(const WindowPos &wpos, const 
 	
 	int	regs_pane	= NumPanes() - 1;
 
-	if (spdb.HasModule(1)) {
+	if (spdb->HasModule(1)) {
 		SplitterWindow	*split3 = new SplitterWindow(SplitterWindow::SWF_HORZ | SplitterWindow::SWF_FROM2ND | SplitterWindow::SWF_DELETE_ON_DESTROY);
 		split3->Create(GetPanePos(regs_pane), 0, CHILD | CLIPSIBLINGS | VISIBLE);
 		SetPane(regs_pane, *split3);
@@ -2799,11 +2821,11 @@ DX11ShaderDebuggerWindow::DX11ShaderDebuggerWindow(const WindowPos &wpos, const 
 		TitledWindow	*locals_title	= new TitledWindow(split3->GetPanePos(1), "Locals");
 		split3->SetPanes(*regs_title, *locals_title);
 
-		regs	= new DXBCRegisterWindow(regs_title->GetChildWindowPos());
-		locals	= new DXBCLocalsWindow(locals_title->GetChildWindowPos(), ctypes);
+		regs	= new DXBCRegisterWindow(regs_title->GetChildWindowPos(), &sim, spdb);
+		locals	= new DXBCLocalsWindow(locals_title->GetChildWindowPos(), &sim, spdb, ctypes);
 
 	} else {
-		regs	= new DXBCRegisterWindow(GetPanePos(regs_pane));
+		regs	= new DXBCRegisterWindow(GetPanePos(regs_pane), &sim, spdb);
 		locals	= nullptr;
 		SetPane(regs_pane, *regs);
 	}
@@ -2852,35 +2874,29 @@ LRESULT DX11ShaderDebuggerWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lPa
 					break;
 
 				case DebugWindow::ID_DEBUG_RUN: {
-					auto	*op		= sim.AddressToOp(pc);
 					while (op) {
 						++step_count;
-						op	= sim.ProcessOp(op);
+						op	= sim.Continue(op, 1);
 						uint32	offset	= sim.Offset(op);
 						auto	i		= lower_boundc(bp_offsets, offset);
 						if (i != bp_offsets.end() && *i == offset)
 							break;
 					}
-					pc	= sim.Address(op);
 					Update();
 					return 0;
 				}
 
 				case DebugWindow::ID_DEBUG_STEPOVER:
-					if (pc) {
+					if (op) {
 						++step_count;
-						auto	*op = sim.AddressToOp(pc);
-						op	= sim.ProcessOp(op);
-						pc	= sim.Address(op);
+						op	= sim.Continue(op, 1);
 						Update();
 					}
 					return 0;
 
 				case DebugWindow::ID_DEBUG_STEPBACK:
 					if (step_count) {
-						sim.Reset();
-						auto	*op = sim.Run(--step_count);
-						pc			= sim.Address(op);
+						op = sim.Run(--step_count);
 						Update();
 					}
 					return 0;
@@ -2910,6 +2926,31 @@ LRESULT DX11ShaderDebuggerWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lPa
 		case WM_NOTIFY: {
 			NMHDR	*nmh = (NMHDR*)lParam;
 			switch (nmh->code) {
+				case d2d::PAINT_INFO::CODE: {
+					auto	*info	= (d2d::PAINT_INFO*)nmh;
+					uint32	pc		= sim.Offset(op);
+					if (int id = nmh->idFrom) {
+						uint32	pc_line	= ~0;
+						if (auto loc = OffsetToSource(pc)) {
+							if ((uint16)loc->file == id)
+								pc_line = loc->line - 1;
+						}
+						dynamic_array<uint32>	bp1 = transformc(bp_offsets, [this, id](uint32 offset)->uint32 {
+							if (auto loc = OffsetToSource(offset)) {
+								if ((uint16)loc->file == id)
+									return loc->line - 1;
+							}
+							return ~0;
+						});
+						app::DrawBreakpoints(nmh->hwndFrom, info->target, pc_line, bp1);
+
+					} else {
+						dynamic_array<uint32>	bp1 = transformc(bp_offsets, [this](uint32 offset)->uint32 { return OffsetToLine(offset); });
+						app::DrawBreakpoints(nmh->hwndFrom, info->target, OffsetToLine(pc), bp1);
+					}
+					return 0;
+				}
+
 				case NM_CUSTOMDRAW:
 					if (nmh->hwndFrom == tree)
 						return tree.CustomDraw((NMCUSTOMDRAW*)nmh);
@@ -2917,7 +2958,7 @@ LRESULT DX11ShaderDebuggerWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lPa
 
 				case NM_CLICK:
 					if (wParam == 'RG') {
-						regs->AddOverlay((NMITEMACTIVATE*)lParam, sim);
+						regs->AddOverlay((NMITEMACTIVATE*)lParam);
 
 					} else if (nmh->hwndFrom == tree) {
 						if (HTREEITEM hItem = tree.hot) {
@@ -2952,10 +2993,10 @@ LRESULT DX11ShaderDebuggerWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lPa
 //-----------------------------------------------------------------------------
 
 class DX11BatchWindow : public StackWindow {
-	struct Target : dx::SimulatorDXBC::Resource {
+	struct Target : dx::Resource {
 		ISO_ptr_machine<void>	p;
-		void init(const char *name, const dx::SimulatorDXBC::Resource &r) {
-			dx::SimulatorDXBC::Resource::operator=(r);
+		void init(const char *name, dx::Resource &&r) {
+			dx::Resource::operator=(move(r));
 			ConcurrentJobs::Get().add([this, name] {
 				p = dx::GetBitmap(name, *this);
 			});
@@ -2979,8 +3020,6 @@ public:
 	dynamic_array<VertStream>	verts;
 	TypedBuffer					index_buffer;
 	dynamic_array<Target>		targets;
-
-	uint3p						dim;
 	
 	indices						ix;
 	Topology2					topology;
@@ -3013,13 +3052,13 @@ public:
 
 	LRESULT Proc(MSG_ID message, WPARAM wParam, LPARAM lParam);
 	DX11BatchWindow(const WindowPos &wpos, string_param title, DX11Connection *con, uint32 addr, DX11Replay *replay);
-	int		InitSimulator(dx::SimulatorDXBC &sim, const DX11ShaderState &shader, int thread, dynamic_array<uint16> &indices, Topology2 &top);
-	Control	MakeShaderOutputs(const WindowPos &wpos, dx::SHADERSTAGE stage, bool mesh);
+	int		InitSimulator(dx::SimulatorDXBC &sim, const DX11ShaderState &shader, int thread, dynamic_array<uint32> &indices, Topology2 &top);
+	Control	MakeShaderOutput(const WindowPos &wpos, dx::SHADERSTAGE stage, bool mesh);
 	void	VertexMenu(dx::SHADERSTAGE stage, int i, ListViewControl lv);
 	Control	DebugPixel(uint32 target, const Point &pt);
 };
 
-string get_name(const dx::ISGN *isgn, const dx::SIG::Element &e) {
+string get_name(const dx::DXBC::BlobT<dx::DXBC::InputSignature> *isgn, const dx::SIG::Element &e) {
 	if (e.semantic_index)
 		return string(e.name.get(isgn)) << e.semantic_index;
 	return e.name.get(isgn);
@@ -3035,24 +3074,22 @@ DX11BatchWindow::DX11BatchWindow(const WindowPos &wpos, string_param title, DX11
 
 	con->GetStateAt(state, addr);
 
+	DX11Assets::ItemRecord	*indirect_buffer	= is_indirect(state.draw_id) ? con->FindItem(state.IndirectBuffer) : nullptr;
+	const void				*indirect_commands	= indirect_buffer ? (const char*)(replay ? replay->GetResource(indirect_buffer) : state.GetModdedData(indirect_buffer)) + state.IndirectOffset : nullptr;
+
 	if (is_compute(state.draw_id)) {
 		//compute
-		const DX11State::Stage	&stage	= state.GetStage(dx::CS);
+		const DX11State::Stage	&stage	= state.GetStage(dx::CS11);
 		shaders[0].init(con, stage, state.cs_uav, state.mods);
 		
-		dim		= state.ThreadGroupCount;
-		if (is_indirect(state.draw_id)) {
-			if (auto item = con->FindItem(state.IndirectBuffer))
-				dim	= *(replay ? (const uint3p*)replay->GetResource(item) : (const uint3p*)state.GetModdedData(item));
-		}
-
-		dx::Decls	decls(shaders[0].GetUCode());
+		if (indirect_commands)
+			state.ThreadGroupCount = *(const uint3p*)indirect_commands;
 
 		SplitterWindow	*split2 = new SplitterWindow(SplitterWindow::SWF_VERT | SplitterWindow::SWF_DELETE_ON_DESTROY);
 		split2->Create(GetChildWindowPos(), 0, CHILD | CLIPSIBLINGS | VISIBLE);
 		split2->SetPanes(
 			tree.Create(split2->_GetPanePos(0)),
-			app::MakeComputeGrid(split2->_GetPanePos(1), 0, 'CG', dim, decls.thread_group),
+			*new ComputeGrid(split2->_GetPanePos(1), 0, 'CG', state.ThreadGroupCount, shaders[0].GetThreadGroup()),
 			400
 		);
 
@@ -3060,17 +3097,34 @@ DX11BatchWindow::DX11BatchWindow(const WindowPos &wpos, string_param title, DX11
 		HTREEITEM	h1 = tree.AddShader(TreeControl::Item(buffer_accum<256>("Compute Shader: ") << shaders[0].name).Image(tree.ST_SHADER).StateImage(0).Insert(tree), shaders[0]);
 		rt.Add(h1, "Outputs", tree.ST_OUTPUTS, dx::CS);
 
-		if (is_indirect(state.draw_id)) {
-			if (auto item = con->FindItem(state.IndirectBuffer)) {
-				HTREEITEM	h	= TreeControl::Item("Indirect").Bold().Expand().Insert(tree);
-				rt.AddFields(h, item);
-			}
+		if (indirect_buffer) {
+			HTREEITEM	h	= TreeControl::Item("Indirect").Bold().Expand().Insert(tree);
+			rt.AddFields(h, indirect_buffer);
+			if (indirect_commands)
+				rt.AddFields(h,	(const uint32(*)[3])&state.ThreadGroupCount);
 		}
 
 	} else if (is_draw(state.draw_id)) {
 		//draw
 		topology	= state.GetTopology();
 		culling		= state.CalcCull(true);
+
+		if (indirect_commands) {
+			if (is_indexed(state.draw_id)) {
+				auto	args = (D3D11_DRAW_INDEXED_INSTANCED_INDIRECT_ARGS*)indirect_commands;
+				state.VertexCount	= args->IndexCountPerInstance;
+				state.BaseVertex	= args->BaseVertexLocation;
+				state.StartIndex	= args->StartIndexLocation;
+				state.StartInstance	= args->StartInstanceLocation;
+				state.InstanceCount	= args->InstanceCount;
+			} else {
+				auto	args = (D3D11_DRAW_INSTANCED_INDIRECT_ARGS*)indirect_commands;
+				state.VertexCount	= args->VertexCountPerInstance;
+				state.BaseVertex	= args->StartVertexLocation;
+				state.StartInstance	= args->StartInstanceLocation;
+				state.InstanceCount	= args->InstanceCount;
+			}
+		}
 
 		if (state.IsIndexed()) {
 			uint32	stride	= state.ib.format == DXGI_FORMAT_R16_UINT ? 2 : 4;
@@ -3103,31 +3157,36 @@ DX11BatchWindow::DX11BatchWindow(const WindowPos &wpos, string_param title, DX11
 			targets[state.num_rtv].init("depth", replay->GetResource(con->FindItem(state.dsv)));
 		}
 
-		if (DX11Assets::ItemRecord *ia = con->FindItem(state.ia)) {
-			COMParse2(ia->info, [this, con](counted<const D3D11_INPUT_ELEMENT_DESC,1> desc, UINT num, counted<const uint8,3> code, SIZE_T length) {
-				verts.resize(num);
+		for (int i = 0; i < 5; i++)
+			shaders[i].init(con, state.GetStage(i), i == dx::PS ? state.ps_uav : nullptr, state.mods);
 
-				auto	num_verts = ix.max_index() + 1;
-				auto	rec		= con->FindShader(state.GetStage(dx::VS).shader);
-				auto	*in		= rec->DXBC()->GetBlob<dx::ISGN>();
+		if (shaders[dx::VS].non_system_inputs) {
+			if (DX11Assets::ItemRecord *ia = con->FindItem(state.ia)) {
+				COMParse2(ia->info, [this, con](counted<const D3D11_INPUT_ELEMENT_DESC,1> desc, UINT num, counted<const uint8,3> code, SIZE_T length) {
+					verts.resize(num);
 
-				uint32	offset = 0;
-				for (int i = 0; i < num; i++) {
-					auto	&d	= desc[i];
-					int		j	= d.InputSlot;
+					auto	num_verts = ix.max_index() + 1;
+					auto	rec		= con->FindShader(state.GetStage(dx::VS).shader);
+					auto	*in		= rec->DXBC()->GetBlob<dx::DXBC::InputSignature>();
 
-					if (d.AlignedByteOffset != D3D11_APPEND_ALIGNED_ELEMENT)
-						offset = d.AlignedByteOffset;
+					uint32	offset = 0;
+					for (int i = 0; i < num; i++) {
+						auto	&d	= desc[i];
+						int		j	= d.InputSlot;
 
-					verts[i].input_slot		= d.InputSlot;
-					verts[i].buffer			= state.GetModded(con, state.vb[j].buffer, dx::to_c_type(d.Format), state.vb[j].stride, state.vb[j].offset + offset, num_verts);
-					verts[i].buffer.divider	= d.InstanceDataStepRate;
-					verts[i].offset			= offset;
-					verts[i].element		= in ? in->find_by_semantic(d.SemanticName, d.SemanticIndex) : 0;
+						if (d.AlignedByteOffset != D3D11_APPEND_ALIGNED_ELEMENT)
+							offset = d.AlignedByteOffset;
 
-					offset				+= verts[i].buffer.stride;
-				}
-			});
+						verts[i].input_slot		= d.InputSlot;
+						verts[i].buffer			= state.GetModded(con, state.vb[j].buffer, dx::to_c_type(d.Format), state.vb[j].stride, state.vb[j].offset + offset, num_verts);
+						verts[i].buffer.divider	= d.InstanceDataStepRate;
+						verts[i].offset			= offset;
+						verts[i].element		= in ? in->find_by_semantic(d.SemanticName, d.SemanticIndex) : 0;
+
+						offset				+= verts[i].buffer.stride;
+					}
+				});
+			}
 		}
 
 		if (verts && verts[0].buffer) {
@@ -3197,11 +3256,8 @@ DX11BatchWindow::DX11BatchWindow(const WindowPos &wpos, string_param title, DX11
 			"Geometry Shader",
 		};
 		for (int i = 0; i < 5; i++) {
-			dx::SHADERSTAGE			s		= (dx::SHADERSTAGE)i;
-			const DX11State::Stage	&stage	= state.GetStage(i);
-			ID3D11UnorderedAccessView *const *stage_uav = i == dx::PS ? state.ps_uav : i == dx::CS ? state.cs_uav : 0;
-			if (shaders[i].init(con, stage, stage_uav, state.mods)) {
-				HTREEITEM	h1 = tree.AddShader(TreeControl::Item(buffer_accum<256>(shader_names[i]) << ": " << shaders[i].name).Image(tree.ST_SHADER).StateImage(i).Insert(tree, h), shaders[i]);
+			if (auto &s = shaders[i]) {
+				HTREEITEM	h1 = tree.AddShader(TreeControl::Item(buffer_accum<256>(shader_names[i]) << ": " << s.name).Image(tree.ST_SHADER).StateImage(i).Insert(tree, h), s);
 
 				switch (i) {
 					case dx::VS: {
@@ -3209,12 +3265,14 @@ DX11BatchWindow::DX11BatchWindow(const WindowPos &wpos, string_param title, DX11
 						if (state.IsIndexed())
 							rt.AddFields(rt.AddText(h2, "IndexBuffer"), &state.ib);
 
-						if (DX11Assets::ItemRecord *item = con->FindItem(state.ia))
-							rt.AddFields(rt.AddText(h2, format_string("InputLayout: ") << item->name), (const INPUT_LAYOUT*)item->info);
+						if (s.non_system_inputs) {
+							if (DX11Assets::ItemRecord *item = con->FindItem(state.ia))
+								rt.AddFields(rt.AddText(h2, format_string("InputLayout: ") << item->name), (const INPUT_LAYOUT*)item->info);
+						}
 
 						int		vi	= 0;
-						auto	*in	= shaders[dx::VS].DXBC()->GetBlob<dx::ISGN>();
-						for (auto &vb : state.vb) {
+					#if 0
+						for (auto &i : s.GetSignatureIn()) {
 							if (DX11Assets::ItemRecord *item = con->FindItem(vb.buffer)) {
 								HTREEITEM	h = rt.AddFields(rt.AddText(h2, format_string("[%i]", vi)), &vb);
 								for (auto &v : verts) {
@@ -3224,6 +3282,26 @@ DX11BatchWindow::DX11BatchWindow(const WindowPos &wpos, string_param title, DX11
 							}
 							++vi;
 						}
+					#else
+						auto	*in	= s.DXBC()->GetBlob<dx::DXBC::InputSignature>();
+						for (auto &vb : state.vb) {
+							bool	used = false;
+							for (auto &v : verts) {
+								if (used = v.input_slot == vi && v.element)
+									break;
+							}
+							if (used) {
+								if (DX11Assets::ItemRecord *item = con->FindItem(vb.buffer)) {
+									HTREEITEM	h = rt.AddFields(rt.AddText(h2, format_string("[%i]", vi)), &vb);
+									for (auto &v : verts) {
+										if (v.input_slot == vi && v.element)
+											rt.AddText(h, format_string("%s: v%i @ %i", get_name(in, *v.element).begin(), v.element->register_num, v.offset));
+									}
+								}
+							}
+							++vi;
+						}
+					#endif
 						break;
 					}
 					case dx::GS: {
@@ -3241,19 +3319,18 @@ DX11BatchWindow::DX11BatchWindow(const WindowPos &wpos, string_param title, DX11
 						break;
 					}
 				}
-				rt.Add(h1, "Outputs", tree.ST_OUTPUTS, s);
+				rt.Add(h1, "Outputs", tree.ST_OUTPUTS, i);
 			}
 		}
 
-		if (is_indirect(state.draw_id)) {
-			if (auto item = con->FindItem(state.IndirectBuffer)) {
-				HTREEITEM	h	= TreeControl::Item("Indirect").Bold().Expand().Insert(tree);
-				rt.AddFields(h, item);
+		if (indirect_buffer) {
+			HTREEITEM	h	= TreeControl::Item("Indirect").Bold().Expand().Insert(tree);
+			rt.AddFields(h, indirect_buffer);
+			if (indirect_commands)
 				rt.AddFields(h,
 					is_indexed(state.draw_id) ? fields<D3D11_DRAW_INDEXED_INSTANCED_INDIRECT_ARGS>::f : fields<D3D11_DRAW_INSTANCED_INDIRECT_ARGS>::f,
-					replay ? (const void*)replay->GetResource(item) : (const void*)state.GetModdedData(item)
+					indirect_commands
 				);
-			}
 		}
 
 	}
@@ -3316,20 +3393,20 @@ LRESULT DX11BatchWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 								case DX11StateControl::ST_VERTICES: {
 									if (verts) {
 										int			nb		= verts.size32();
-										auto		buffers	= new_auto(named<TypedBuffer>, nb);
+										temp_array<named<TypedBuffer>>	buffers(nb);
 										auto		title	= str<256>(GetText()) << "\\Inputs";
 
-										dx::ISGN	*isgn	= shaders[dx::VS].DXBC()->GetBlob<dx::ISGN>();
+										auto		*isgn	= shaders[dx::VS].DXBC()->GetBlob<dx::DXBC::InputSignature>();
 										for (auto &v : verts) {
 											int		i	= verts.index_of(v);
-											buffers[i]	= {v.element ? get_name(isgn, *v.element) : "unused", v.buffer};
+											buffers[i]	= {v.element ? get_name(isgn, *v.element) : "unused", move(v.buffer)};
 										}
 
 										if (topology.type == Topology::UNKNOWN) {
-											MakeVertexWindow(AddView(new_tab), title, 'VI', buffers, nb, ix, state.InstanceCount);
+											MakeVertexWindow(AddView(new_tab), title, 'VI', buffers, ix, state.InstanceCount);
 										} else {
 											MeshVertexWindow	*m	= new MeshVertexWindow(AddView(new_tab), title);
-											VertexWindow		*vw	= MakeVertexWindow(m->_GetPanePos(0), 0, 'VI', buffers, nb, ix, state.InstanceCount);
+											VertexWindow		*vw	= MakeVertexWindow(m->_GetPanePos(0), 0, 'VI', buffers, ix, state.InstanceCount);
 											MeshWindow			*mw	= MakeMeshView(m->GetPanePos(1), topology, verts[0].buffer, ix, one, culling, MeshWindow::PERSPECTIVE);
 											m->SetPanes(*vw, *mw, 50);
 										}
@@ -3338,7 +3415,7 @@ LRESULT DX11BatchWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 								}
 
 								case DX11StateControl::ST_OUTPUTS:
-									Busy(), MakeShaderOutputs(AddView(new_tab), i.Param(), ctrl);
+									Busy(), MakeShaderOutput(AddView(new_tab), i.Param(), ctrl);
 									return 0;
 							}
 						}
@@ -3420,48 +3497,35 @@ LRESULT DX11BatchWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 	return StackWindow::Proc(message, wParam, lParam);
 }
 
-template<typename D, typename S> void copy_vert_stream(const D &dest, const S &srce, dx::SIG::ComponentType type) {
-	switch (type) {
-		case dx::SIG::SINT32:
-			rcopy(element_cast<point4>(dest), srce);
-			break;
-		case dx::SIG::UINT32:
-			rcopy(element_cast<uint4p>(dest), srce);
-			break;
-		default:
-			rcopy(dest, srce);
-			break;
-	}
-}
-	
-int DX11BatchWindow::InitSimulator(dx::SimulatorDXBC &sim, const DX11ShaderState &shader, int thread, dynamic_array<uint16> &indices, Topology2 &top) {
+int DX11BatchWindow::InitSimulator(dx::SimulatorDXBC &sim, const DX11ShaderState &shader, int thread, dynamic_array<uint32> &indices, Topology2 &top) {
+	using namespace dx;
 	int	start = thread < 0 ? 0 : thread;
 
-	sim.Init(shader.GetUCode(), shader.GetUCodeAddr());
+	DXBC::UcodeHeader header;
+	sim.Init(&header, shader.DXBC()->GetUCode(header));
 
 	switch (shader.stage) {
 		case dx::PS: {
-			dx::SimulatorDXBC	sim2;
-			dx::OSGN			*vs_out = 0;
-			dx::OSG5			*gs_out = 0;
+			SimulatorDXBC	sim2;
+			dx::Signature	out;
 
 			if (auto &gs = shaders[dx::GS]) {
 				InitSimulator(sim2, gs, 0, indices, top);
-				gs_out	= gs.DXBC()->GetBlob<dx::OSG5>();
+				out		= gs.GetSignatureOut();
 			} else if (auto &ds = shaders[dx::DS]) {
 				InitSimulator(sim2, ds, 0, indices, top);
-				vs_out	= ds.DXBC()->GetBlob<dx::OSGN>();
+				out	= ds.GetSignatureOut();
 			} else {
 				auto	&vs = shaders[dx::VS];
 				InitSimulator(sim2, vs, 0, indices, top);
-				vs_out	= vs.DXBC()->GetBlob<dx::OSGN>();
+				out	= vs.GetSignatureOut();
 			}
 			
 			sim2.Run();
 			
 			shader.InitSimulator(sim, start, top);
 
-			auto	*ps_in	= shader.DXBC()->GetBlob<dx::ISGN>();
+			auto	*ps_in	= shader.DXBC()->GetBlob<dx::DXBC::InputSignature>();
 			int		n		= triangle_row(64 / 4);
 			float	duv		= 1 / float(n * 2 - 1);
 
@@ -3470,19 +3534,21 @@ int DX11BatchWindow::InitSimulator(dx::SimulatorDXBC &sim, const DX11ShaderState
 				float	u	= triangle_col(thread / 4) * 2 * duv;
 				float	v	= triangle_row(thread / 4) * 2 * duv;
 				for (auto &in : ps_in->Elements())
-					sim.InterpolateInputQuad(0, in.register_num, GetTriangle(sim2, in.name.get(ps_in), in.semantic_index, vs_out, gs_out, 0, 1, 2), u, v, u + duv, v + duv);
+					GetTriangle(&sim2, in.name.get(ps_in), in.semantic_index, out, 0, 1, 2)
+					.Interpolate4(sim.GetOutput<float4p>(in.register_num).begin(), u, v, u + duv, v + duv);
 				return thread & 3;
 
 			} else {
 				sim.SetNumThreads(triangle_number(triangle_row(64 / 4)) * 4);
 				for (auto &in : ps_in->Elements()) {
-					auto	tri = GetTriangle(sim2, in.name.get(ps_in), in.semantic_index, vs_out, gs_out, 0, 1, 2);
-					int		r	= in.register_num;
-					for (int u = 0, t = 0; u < n; u++) {
+					auto	tri		= GetTriangle(&sim2, in.name.get(ps_in), in.semantic_index, out, 0, 1, 2);
+					auto	dest	= sim.GetRegFile<float4p>(Operand::TYPE_INPUT, in.register_num).begin();
+					for (int u = 0; u < n; u++) {
 						float	uf0 = float(u * 2) * duv;
-						for (int v = 0; v <= u; v++, t += 4) {
+						for (int v = 0; v <= u; v++) {
 							float	vf0 = float(v * 2) * duv;
-							sim.InterpolateInputQuad(t, r, tri, uf0, vf0, uf0 + duv, vf0 + duv);
+							tri.Interpolate4(dest, uf0, vf0, uf0 + duv, vf0 + duv);
+							dest	+= 4;
 						}
 					}
 				}
@@ -3496,8 +3562,8 @@ int DX11BatchWindow::InitSimulator(dx::SimulatorDXBC &sim, const DX11ShaderState
 			InitSimulator(sim2, vs, 0, indices, top);
 			sim2.Run();
 
-			auto	 *vs_out	= vs.DXBC()->GetBlob<dx::OSGN>();
-			auto	 *hs_in		= shader.DXBC()->GetBlob<dx::ISGN>();
+			auto	 *vs_out	= vs.DXBC()->GetBlob<DXBC::OutputSignature>();
+			auto	 *hs_in		= shader.DXBC()->GetBlob<DXBC::InputSignature>();
 			for (auto &in : hs_in->Elements()) {
 				if (!sim.HasInput(in.register_num)) {
 					if (auto *x = vs_out->find_by_semantic(in.name.get(hs_in), in.semantic_index)) {
@@ -3510,12 +3576,12 @@ int DX11BatchWindow::InitSimulator(dx::SimulatorDXBC &sim, const DX11ShaderState
 
 			for (auto &in : hs_in->Elements()) {
 				if (auto *x = vs_out->find_by_semantic(in.name.get(hs_in), in.semantic_index)) {
-					auto	s = sim2.GetRegFile(dx::Operand::TYPE_OUTPUT, x->register_num);
+					auto	s = sim2.GetOutput<float4p>(x->register_num);
 					if (sim.HasInput(in.register_num)) {
-						copy(s, sim.GetRegFile(dx::Operand::TYPE_INPUT, in.register_num));
+						copy(s, sim.GetRegFile<float4p>(dx::Operand::TYPE_INPUT, in.register_num));
 					} else {
 						// set outputs in case there's no cp phase
-						copy(s, sim.GetRegFile(dx::Operand::TYPE_OUTPUT_CONTROL_POINT, in.register_num));
+						copy(s, sim.GetRegFile<float4p>(dx::Operand::TYPE_OUTPUT_CONTROL_POINT, in.register_num));
 					}
 				}
 			}
@@ -3530,7 +3596,7 @@ int DX11BatchWindow::InitSimulator(dx::SimulatorDXBC &sim, const DX11ShaderState
 			InitSimulator(sim2, hs, 0, indices, top);
 			sim2.Run();
 
-			Tesselation	tess = GetTesselation(sim.tess_domain, sim2.GetRegFile(dx::Operand::TYPE_INPUT_PATCH_CONSTANT));
+			Tesselation	tess = GetTesselation(sim.tess_domain, sim2.GetRegFile<float4p>(dx::Operand::TYPE_INPUT_PATCH_CONSTANT));
 
 			if (thread < 0) {
 				int	num	= tess.uvs.size32();
@@ -3542,17 +3608,17 @@ int DX11BatchWindow::InitSimulator(dx::SimulatorDXBC &sim, const DX11ShaderState
 
 			start	= tess.indices[start];
 			auto	*uvs	= tess.uvs + start;
-			for (auto &i : sim.GetRegFile(dx::Operand::TYPE_INPUT_DOMAIN_POINT)) {
+			for (auto &i : sim.GetRegFile<float4p>(dx::Operand::TYPE_INPUT_DOMAIN_POINT)) {
 				i = float4{uvs->x, uvs->y, 1 - uvs->x - uvs->y, 0};
 				++uvs;
 			}
 
-			auto	 *hs_out	= hs.DXBC()->GetBlob<dx::OSGN>();
-			auto	 *ds_in		= shader.DXBC()->GetBlob<dx::ISGN>();
+			auto	 *hs_out	= hs.DXBC()->GetBlob<DXBC::OutputSignature>();
+			auto	 *ds_in		= shader.DXBC()->GetBlob<DXBC::InputSignature>();
 			for (auto &in : ds_in->Elements()) {
 				if (sim.HasPatchInput(in.register_num)) {
 					if (auto *x = hs_out->find_by_semantic(in.name.get(ds_in), in.semantic_index))
-						rcopy(sim.GetRegFile(dx::Operand::TYPE_INPUT_CONTROL_POINT, in.register_num), sim2.GetRegFile(dx::Operand::TYPE_OUTPUT_CONTROL_POINT, x->register_num).begin());
+						rcopy(sim.GetRegFile<float4p>(dx::Operand::TYPE_INPUT_CONTROL_POINT, in.register_num), sim2.GetRegFile<float4p>(dx::Operand::TYPE_OUTPUT_CONTROL_POINT, x->register_num).begin());
 				}
 			}
 			shader.InitSimulator(sim, start, top);
@@ -3588,18 +3654,14 @@ int DX11BatchWindow::InitSimulator(dx::SimulatorDXBC &sim, const DX11ShaderState
 
 			for (auto &i : verts) {
 				if (auto *e = i.element) {
-					auto	dest = sim.GetRegFile(dx::Operand::TYPE_INPUT, e->register_num);
 					if (i.buffer.divider) {
-						copy_vert_stream(dest, make_indexed_iterator(i.buffer.clamped_begin(), transform(make_int_iterator(start), [d = i.buffer.divider * nv](int i) { return i / d; })), e->component_type);
+						sim.SetInput(e->register_num, e->component_type, make_indexed_iterator(i.buffer.clamped_begin(), transform(make_int_iterator(start), [d = i.buffer.divider * nv](int i) { return i / d; })));
 					} else {
 						auto	mod = transform(make_int_iterator(start), [nv](int i) { return i % nv; });
-						if (deindex) {
-							//copy_vert_stream(dest, make_indexed_iterator(i.buffer.clamped_begin(), ix.begin() + start), e->component_type);
-							copy_vert_stream(dest, make_indexed_iterator(i.buffer.clamped_begin(), make_indexed_iterator(ix.begin(), mod)), e->component_type);
-						} else {
-							//copy_vert_stream(dest, i.buffer.clamped_begin() + start, e->component_type);
-							copy_vert_stream(dest, make_indexed_iterator(i.buffer.clamped_begin(), mod), e->component_type);
-						}
+						if (deindex)
+							sim.SetInput(e->register_num, e->component_type, make_indexed_iterator(i.buffer.clamped_begin(), make_indexed_iterator(ix.begin(), mod)));
+						else
+							sim.SetInput(e->register_num, e->component_type, make_indexed_iterator(i.buffer.clamped_begin(), mod));
 					}
 				}
 			}
@@ -3608,16 +3670,17 @@ int DX11BatchWindow::InitSimulator(dx::SimulatorDXBC &sim, const DX11ShaderState
 		}
 
 		case dx::GS: {
-			auto	in_topology	= GetTopology(sim.gs_input ? sim.gs_input : dx::PRIMITIVE_POINT);
+			auto	in_topology	= GetTopology(sim.input_prim ? sim.input_prim : dx::PRIMITIVE_POINT);
 			auto	&vs			= shaders[dx::VS];
-			int		vs_start	= in_topology.VertexFromPrim(start / sim.max_output, false);
+			int		vs_start	= in_topology.VertexFromPrim(start / sim.max_output);
 
-			dx::SimulatorDXBC	sim2(in_topology.VertexFromPrim((start + sim.NumThreads()) / sim.max_output + 1, false) - vs_start);
+			dx::SimulatorDXBC	sim2;
+			sim2.SetNumThreads(in_topology.VertexFromPrim((start + sim.NumThreads()) / sim.max_output + 1) - vs_start);
 			InitSimulator(sim2, vs, vs_start, indices, top);
 			sim2.Run();
 			
 			if (thread < 0) {
-				int	num	= in_topology.PrimFromVertex(ix.max_index(), false) + 1;
+				int	num	= in_topology.PrimFromVertex(ix.max_index()) + 1;
 				sim.SetNumThreads(thread == -1 ? min(num, 64) : num);
 			} else if (!sim.NumThreads()) {
 				sim.SetNumThreads(1);
@@ -3625,19 +3688,19 @@ int DX11BatchWindow::InitSimulator(dx::SimulatorDXBC &sim, const DX11ShaderState
 
 			shader.InitSimulator(sim, 0, top);
 
-			auto	 *vs_out	= vs.DXBC()->GetBlob<dx::OSGN>();
-			auto	 *gs_in		= shader.DXBC()->GetBlob<dx::ISGN>();
+			auto	 *vs_out	= vs.DXBC()->GetBlob<DXBC::OutputSignature>();
+			auto	 *gs_in		= shader.DXBC()->GetBlob<DXBC::InputSignature>();
 			for (auto &in : gs_in->Elements()) {
 				if (auto *x = vs_out->find_by_semantic(in.name.get(gs_in), in.semantic_index))
-					sim.SetRegFile(dx::Operand::TYPE_INPUT, in.register_num, sim2.GetRegFile(dx::Operand::TYPE_OUTPUT, x->register_num).begin());
+					sim.SetInput<float4p>(in.register_num, sim2.GetOutput<float4p>(x->register_num).begin());
 			}
-			top	= GetTopology(sim.gs_output);
+			top	= GetTopology(sim.output_topology);
 			return 0;
 		}
 
 		case dx::CS: {
-			uint32x3	group		= sim.thread_group;
-			uint32x3	dim2		= dim;
+			uint32x3	group		= {sim.thread_group[0], sim.thread_group[1], sim.thread_group[2]};
+			uint32x3	dim2		= state.ThreadGroupCount;
 			uint32		group_size	= group.x * group.y * group.z;
 			uint32x3	total		= group * dim2;
 			uint32		start		= 0;
@@ -3659,17 +3722,17 @@ int DX11BatchWindow::InitSimulator(dx::SimulatorDXBC &sim, const DX11ShaderState
 			shader.InitSimulator(sim, start, top);
 			if (sim.HasInput(dx::SimulatorDXBC::vThreadID))
 				rcopy(
-					element_cast<uint4p>(sim.GetRegFile(dx::Operand::TYPE_INPUT, dx::SimulatorDXBC::vThreadID)),
+					sim.GetRegFile<uint4p>(dx::Operand::TYPE_INPUT, dx::SimulatorDXBC::vThreadID),
 					transform(int_iterator<int>(start), [&](int i) { return concat(split_index(i, total.xy), i); })
 				);
 			if (sim.HasInput(dx::SimulatorDXBC::vThreadGroupID))
 				rcopy(
-					element_cast<uint4p>(sim.GetRegFile(dx::Operand::TYPE_INPUT, dx::SimulatorDXBC::vThreadGroupID)),
+					sim.GetRegFile<uint4p>(dx::Operand::TYPE_INPUT, dx::SimulatorDXBC::vThreadGroupID),
 					scalar(split_index(start / group_size, dim2))
 				);
 			if (sim.HasInput(dx::SimulatorDXBC::vThreadIDInGroup))
 				rcopy(
-					element_cast<uint4p>(sim.GetRegFile(dx::Operand::TYPE_INPUT, dx::SimulatorDXBC::vThreadIDInGroup)),
+					sim.GetRegFile<uint4p>(dx::Operand::TYPE_INPUT, dx::SimulatorDXBC::vThreadIDInGroup),
 					transform(int_iterator<int>(start), [&](int i) { return concat(split_index(i, group.xy), i % group_size); })
 			);
 
@@ -3682,7 +3745,9 @@ int DX11BatchWindow::InitSimulator(dx::SimulatorDXBC &sim, const DX11ShaderState
 	}
 }
 
-Control DX11BatchWindow::MakeShaderOutputs(const WindowPos &wpos, dx::SHADERSTAGE stage, bool mesh) {
+Control DX11BatchWindow::MakeShaderOutput(const WindowPos &wpos, dx::SHADERSTAGE stage, bool mesh) {
+	using namespace dx;
+
 	auto				&shader = GetShader(stage);
 	dx::SimulatorDXBC	sim;
 
@@ -3691,12 +3756,12 @@ Control DX11BatchWindow::MakeShaderOutputs(const WindowPos &wpos, dx::SHADERSTAG
 //		return app::MakeComputeGrid(GetChildWindowPos(), dim, sim.thread_group);
 //	}
 
-	dynamic_array<uint16>	ib;
+	dynamic_array<uint32>	ib;
 	Topology2				top;
 	
 	InitSimulator(sim, shader, mesh ? -2 : -1, ib, top);
 	
-	Control		c	= app::MakeShaderOutput(wpos, sim, shader, ib);
+	Control		c	= app::MakeShaderOutput(wpos, &sim, shader, ib);
 
 	if (!mesh)
 		return c;
@@ -3708,16 +3773,13 @@ Control DX11BatchWindow::MakeShaderOutputs(const WindowPos &wpos, dx::SHADERSTAG
 		case dx::VS: {
 			bool				final	= !shaders[dx::DS] && !shaders[dx::GS];
 			int					out_reg	= 0;
-			if (auto *sig = find_if_check(shader.DXBC()->GetBlob<dx::OSGN>()->Elements(), [](const dx::SIG::Element &i) { return i.system_value == dx::SV_POSITION; }))
+			if (auto *sig = find_if_check(shader.DXBC()->GetBlob<DXBC::OutputSignature>()->Elements(), [](const dx::SIG::Element &i) { return i.system_value == dx::SV_POSITION; }))
 				out_reg = sig->register_num;
-
-			malloc_block		output_verts(sizeof(float4p) * sim.NumThreads());
-			copy(sim.GetRegFile(dx::Operand::TYPE_OUTPUT, out_reg), (float4p*)output_verts);
 
 			MeshVertexWindow	*m		= new MeshVertexWindow(GetChildWindowPos(), "Shader Output");
 			MeshWindow			*mw		= MakeMeshView(m->GetPanePos(1),
 				top,
-				TypedBuffer(output_verts, sizeof(float4p), ctypes.get_type<float[4]>()),
+				temp_array<float4p>(sim.GetOutput<float4p>(out_reg)),
 				ib.empty() ? indices(sim.NumThreads()) : indices(ib),
 				viewport, culling,
 				final ? MeshWindow::SCREEN_PERSP : MeshWindow::PERSPECTIVE
@@ -3734,14 +3796,11 @@ Control DX11BatchWindow::MakeShaderOutputs(const WindowPos &wpos, dx::SHADERSTAG
 		}
 
 		case dx::GS: {
-			uint32				num_verts	= sim.NumThreads() * sim.MaxOutput();
-			malloc_block		output_verts(sizeof(float4p) * num_verts);
-			copy(sim.GetStreamFileAll(0), (float4p*)output_verts);
-
+			uint32				num_verts		= sim.NumThreads() * sim.MaxOutput();
 			MeshVertexWindow	*m	= new MeshVertexWindow(GetChildWindowPos(), "Shader Output");
 			MeshWindow			*mw	= MakeMeshView(m->GetPanePos(1),
 				top,
-				TypedBuffer(output_verts, sizeof(float4p), ctypes.get_type<float[4]>()),
+				temp_array<float4p>(sim.GetOutput<float4p>(0)),
 				num_verts,
 				viewport, culling,
 				MeshWindow::SCREEN_PERSP
@@ -3756,11 +3815,11 @@ Control DX11BatchWindow::MakeShaderOutputs(const WindowPos &wpos, dx::SHADERSTAG
 		}
 
 		case dx::HS: {
-			Tesselation			tess	= GetTesselation(sim.tess_domain, sim.GetRegFile(dx::Operand::TYPE_INPUT_PATCH_CONSTANT));
+			Tesselation			tess	= GetTesselation(sim.tess_domain, sim.GetRegFile<float4p>(dx::Operand::TYPE_INPUT_PATCH_CONSTANT));
 			SplitterWindow		*m		= new SplitterWindow(GetChildWindowPos(), "Shader Output", SplitterWindow::SWF_VERT | SplitterWindow::SWF_PROP);
 			MeshWindow			*mw		= MakeMeshView(m->GetPanePos(1),
 				top,
-				TypedBuffer(memory_block(tess.uvs.begin(), tess.uvs.end()), sizeof(tess.uvs[0]), ctypes.get_type<float[2]>()),
+				tess.uvs,
 				tess.indices,
 				one, culling,
 				MeshWindow::PERSPECTIVE
@@ -3771,13 +3830,10 @@ Control DX11BatchWindow::MakeShaderOutputs(const WindowPos &wpos, dx::SHADERSTAG
 
 		case dx::DS: {
 			bool				final	= !shaders[dx::GS];
-			malloc_block		output_verts(sizeof(float4p) * sim.NumThreads());
-			copy(sim.GetRegFile(dx::Operand::TYPE_OUTPUT), (float4p*)output_verts);
-
 			MeshVertexWindow	*m	= new MeshVertexWindow(GetChildWindowPos(), "Shader Output");
 			MeshWindow			*mw	= MakeMeshView(m->GetPanePos(1),
 				top,
-				TypedBuffer(output_verts, sizeof(float4p), ctypes.get_type<float[4]>()),
+				temp_array<float4p>(sim.GetOutput<float4p>(0)),
 				ib,
 				viewport, culling,
 				final ? MeshWindow::SCREEN_PERSP : MeshWindow::PERSPECTIVE
@@ -3815,9 +3871,9 @@ void DX11BatchWindow::VertexMenu(dx::SHADERSTAGE stage, int i, ListViewControl l
 	switch (menu.Track(*this, GetMousePos(), TPM_NONOTIFY | TPM_RETURNCMD)) {
 		//Debug
 		case 1: {
-			dynamic_array<uint16>	ib;
+			dynamic_array<uint32>	ib;
 			Topology2				top;
-			auto	*debugger	= new DX11ShaderDebuggerWindow(GetChildWindowPos(), "Debugger", shader, con, GetSettings("General/shader source").GetInt(1));
+			auto	*debugger	= new DX11ShaderDebuggerWindow(GetChildWindowPos(), "Debugger", shader, con, GetSettings("General/shader source").Get(Disassembler::SHOW_SOURCE));
 			int		thread		= InitSimulator(debugger->sim, shader, i, ib, top);
 			debugger->SetThread(thread);
 			PushView(debugger->control());
@@ -3851,11 +3907,11 @@ void DX11BatchWindow::VertexMenu(dx::SHADERSTAGE stage, int i, ListViewControl l
 
 		//Simulated Trace
 		case 4: {
-			dynamic_array<uint16>	ib;
+			dynamic_array<uint32>	ib;
 			Topology2				top;
 			dx::SimulatorDXBC		sim;
 			int						thread = InitSimulator(sim, shader, i, ib, top);
-			PushView(MakeDXBCTraceWindow(GetChildWindowPos(), sim, thread, 1000));
+			PushView(*new DXBCTraceWindow(GetChildWindowPos(), &sim, thread, 1000));
 			break;
 		}
 		//Save
@@ -3880,44 +3936,39 @@ void DX11BatchWindow::VertexMenu(dx::SHADERSTAGE stage, int i, ListViewControl l
 }
 
 Control DX11BatchWindow::DebugPixel(uint32 target, const Point &pt) {
-	dx::SimulatorDXBC	sim2;
-	dx::OSGN			*vs_out = 0;
-	dx::OSG5			*gs_out = 0;
+	using namespace dx;
 
-	dynamic_array<uint16>	ib;
+	SimulatorDXBC			sim2;
+	dx::Signature			out;
+	dynamic_array<uint32>	ib;
 	Topology2				top;
 
 	if (auto &gs = shaders[dx::GS]) {
 		InitSimulator(sim2, gs, -2, ib, top);
-		gs_out	= gs.DXBC()->GetBlob<dx::OSG5>();
+		out	= gs.GetSignatureOut();
 	} else if (auto &ds = shaders[dx::DS]) {
 		InitSimulator(sim2, ds, -2, ib, top);
-		vs_out	= ds.DXBC()->GetBlob<dx::OSGN>();
+		out	= ds.GetSignatureOut();
 	} else {
 		auto	&vs = shaders[dx::VS];
 		InitSimulator(sim2, vs, -2, ib, top);
-		vs_out	= vs.DXBC()->GetBlob<dx::OSGN>();
+		out	= vs.GetSignatureOut();
 	}
 			
 	sim2.Run();
 			
-	dynamic_array<float4p>	output_verts;
-	if (gs_out)
-		output_verts = sim2.GetStreamFileAll(0);
-	else
-		output_verts = sim2.GetRegFile(dx::Operand::TYPE_OUTPUT, 0);
-
+	dynamic_array<float4p>	output_verts = sim2.GetOutput<float4p>(0);
 	uint32	num_verts	= ib ? ib.size32() : output_verts.size32();
-	uint32	num_prims	= top.p2v.verts_to_prims(num_verts);
-
+	uint32	num_prims	= top.verts_to_prims(num_verts);
 	dynamic_array<cuboid>	exts(num_prims);
-	cuboid					*ext	= exts;
+	cuboid	*ext		= exts;
+
 	if (ib) {
-		auto	prims = make_prim_iterator(top.p2v, make_indexed_iterator(output_verts.begin(), make_const(ib.begin())));
+		auto	prims = make_prim_iterator(top, make_indexed_iterator(output_verts.begin(), make_const(ib.begin())));
 		for (auto &&i : make_range_n(prims, num_prims))
 			*ext++ = get_extent<position3>(i);
 	} else {
-		auto	prims = make_prim_iterator(top.p2v, output_verts.begin());
+		auto	prims = make_prim_iterator(top, output_verts.begin());
 		for (auto &&i : make_range_n(prims, num_prims))
 			*ext++ = get_extent<position3>(i);
 	}
@@ -3933,7 +3984,7 @@ Control DX11BatchWindow::DebugPixel(uint32 target, const Point &pt) {
 	int			v[3];
 
 	if (ib) {
-		auto	prims	= make_prim_iterator(top.p2v, make_indexed_iterator(output_verts.begin(), make_const(ib.begin())));
+		auto	prims	= make_prim_iterator(top, make_indexed_iterator(output_verts.begin(), make_const(ib.begin())));
 		int		face	= oct.shoot_ray(ray, 0.25f, [prims](int i, param(ray3) r, float &t) {
 			return prim_check_ray(prims[i], r, t);
 		});
@@ -3941,9 +3992,9 @@ Control DX11BatchWindow::DebugPixel(uint32 target, const Point &pt) {
 			return Control();
 
 		tri3 = prim_triangle(prims[face]);
-		copy(make_prim_iterator(top.p2v, ib.begin())[face], v);
+		copy(make_prim_iterator(top, ib.begin())[face], v);
 	} else {
-		auto	prims	= make_prim_iterator(top.p2v, output_verts.begin());
+		auto	prims	= make_prim_iterator(top, output_verts.begin());
 		int		face	= oct.shoot_ray(ray, 0.25f, [prims](int i, param(ray3) r, float &t) {
 			return prim_check_ray(prims[i], r, t);
 		});
@@ -3951,24 +4002,26 @@ Control DX11BatchWindow::DebugPixel(uint32 target, const Point &pt) {
 			return Control();
 
 		tri3 = prim_triangle(prims[face]);
-		copy(make_prim_iterator(top.p2v, int_iterator<int>(0))[face], v);
+		copy(make_prim_iterator(top, int_iterator<int>(0))[face], v);
 	}
 	
 	auto	&ps			= shaders[dx::PS];
-	auto	*debugger	= new DX11ShaderDebuggerWindow(AddView(false), "Debugger", ps, con, GetSettings("General/shader source").GetInt(1));
-	auto	*ps_in		= ps.DXBC()->GetBlob<dx::ISGN>();
+	auto	*debugger	= new DX11ShaderDebuggerWindow(AddView(false), "Debugger", ps, con, GetSettings("General/shader source").Get(Disassembler::SHOW_SOURCE));
 
 	float3x4	para	= tri3.inv_matrix();
 	float3		uv0		= para * position3(pt0, one);
 	float3		uv1		= uv0 + para.x / viewport.x;
 	float3		uv2		= uv0 + para.y / viewport.x;
 
-	debugger->sim.Init(ps.GetUCode(), ps.GetUCodeAddr());
+	DXBC::UcodeHeader header;
+	debugger->sim.Init(&header, ps.DXBC()->GetUCode(header));
 	debugger->sim.SetNumThreads(4);
 	ps.InitSimulator(debugger->sim, 0, Topology2());
 
+	auto	*ps_in		= ps.DXBC()->GetBlob<DXBC::InputSignature>();
 	for (auto &in : ps_in->Elements())
-		debugger->sim.InterpolateInputQuad(0, in.register_num, GetTriangle(sim2, in.name.get(ps_in), in.semantic_index, vs_out, gs_out, v[0], v[1], v[2]), uv0.xy, uv1.xy, uv2.xy);
+		GetTriangle(&sim2, in.name.get(ps_in), in.semantic_index, out, v[0], v[1], v[2])
+			.Interpolate4(debugger->sim.GetRegFile<float4p>(dx::Operand::TYPE_INPUT, in.register_num).begin(), uv0.xy, uv1.xy, uv2.xy);
 
 	debugger->SetThread(thread);
 	return debugger->control();
@@ -4043,11 +4096,11 @@ public:
 		SetFocus();
 	}
 
-	ViewDX11GPU(MainWindow &main, const WindowPos &pos, HANDLE process, const filename &executable) : SplitterWindow(SWF_VERT|SWF_DOCK), DX11Connection(process, executable) {
+	ViewDX11GPU(MainWindow &main, const WindowPos &pos, DXConnection *con) : SplitterWindow(SWF_VERT|SWF_DOCK), DX11Connection(con) {
 		format			= init_format;
 		context_item	= 0;
 
-		SplitterWindow::Create(pos, executable.name(), CHILD | CLIPCHILDREN);
+		SplitterWindow::Create(pos, con->process.Filename().name(), CHILD | CLIPCHILDREN);
 		toolbar_gpu = main.CreateToolbar(IDR_TOOLBAR_DX11GPU);
 		Rebind(this);
 		SetFocus();
@@ -4097,7 +4150,7 @@ Control MakeItemView(const WindowPos &wpos, DX11Connection *con, DX11Assets::Ite
 
 		case RecItem::Buffer: {
 			const D3D11_BUFFER_DESC	*desc = rec->info;
-			return MakeBufferWindow(wpos, rec->GetName(), 'BF', TypedBuffer(memory_block(unconst(desc + 1), desc->ByteWidth), 0, 0));//16, ctypes.get_type<float[4]>()));
+			return MakeBufferWindow(wpos, rec->GetName(), 'BF', TypedBuffer(memory_block(unconst(desc + 1), desc->ByteWidth), 0));//16, ctypes.get_type<float[4]>()));
 		}
 
 		case RecItem::Texture1D:
@@ -4125,22 +4178,22 @@ struct DX11ItemsList : EditableListView<DX11ItemsList, Subclass<DX11ItemsList, E
 		int	dir = SetColumn(GetHeader(), col);
 		switch (col) {
 			case 0:
-				sort(sorted_order, [this, col](int a, int b) {
+				sort(sorted_order, [this](int a, int b) {
 					return SortCompare(table[a].GetName(), table[b].GetName());
 				});
 				break;
 			case 1:
-				sort(sorted_order, [this, col](int a, int b) {
+				sort(sorted_order, [this](int a, int b) {
 					return SortCompare(usedat[a], usedat[b]);
 				});
 				break;
 			case 2:
-				sort(sorted_order, [this, col](int a, int b) {
+				sort(sorted_order, [this](int a, int b) {
 					return SortCompare(writtenat[a], writtenat[b]);
 				});
 				break;
 			case 3:
-				sort(sorted_order, [this, col](int a, int b) {
+				sort(sorted_order, [this](int a, int b) {
 					return SortCompare(table[a].GetSize(), table[b].GetSize());
 				});
 				break;
@@ -4232,9 +4285,7 @@ struct DX11ItemsList : EditableListView<DX11ItemsList, Subclass<DX11ItemsList, E
 		: Base(con->items)
 		, con(con), writtenat(usedat.size()), sorted_order(int_range(usedat.size32()))
 	{
-		Create(wpos, "Items", CHILD | CLIPSIBLINGS | VISIBLE | REPORT | AUTOARRANGE | SINGLESEL | SHOWSELALWAYS | OWNERDATA, NOEX, ID);
-
-		SetExtendedStyle(GRIDLINES | DOUBLEBUFFER | FULLROWSELECT);
+		Create(wpos, "Items", ID, CHILD | CLIPSIBLINGS | VISIBLE | REPORT | AUTOARRANGE | SINGLESEL | SHOWSELALWAYS | OWNERDATA);
 		Column("name").Width(200).Insert(*this, 0);
 		Column("used at").Width(100).Insert(*this, 1);
 		Column("modified at").Width(100).Insert(*this, 2);
@@ -4261,21 +4312,23 @@ struct ResourceTable {
 	struct Record {
 		RecItem::TYPE		type;
 
-		UINT				Width;
-		UINT				Height;
-		UINT				Depth;	//ArraySize
-		UINT				MipLevels;
-		DXGI_FORMAT			Format;
-		DXGI_SAMPLE_DESC	SampleDesc;//2d
-		D3D11_USAGE			Usage;
-		UINT				BindFlags;
-		UINT				CPUAccessFlags;
-		UINT				MiscFlags;
+		UINT				Width			= 0;
+		UINT				Height			= 0;
+		UINT				Depth			= 0;	//ArraySize
+		UINT				MipLevels		= 0;
+		DXGI_FORMAT			Format			= DXGI_FORMAT_UNKNOWN;
+		DXGI_SAMPLE_DESC	SampleDesc		= {0, 0};	//2d
+		D3D11_USAGE			Usage			= D3D11_USAGE_DEFAULT;
+		UINT				BindFlags		= 0;
+		UINT				CPUAccessFlags	= 0;
+		UINT				MiscFlags		= 0;
 
 		DX11Assets::ItemRecord	*item;
 
 		Record(DX11Assets::ItemRecord &item) : type(item.type), item(&item) {
-			clear(SampleDesc);
+			if (!item.info)
+				return;
+
 			switch (undead(type)) {
 				case RecItem::Buffer: {
 					const D3D11_BUFFER_DESC	*d	= item.info;
@@ -4343,6 +4396,7 @@ struct ResourceTable {
 		for (auto &i : items) {
 			int	x = -1;
 			switch (undead(i.type)) {
+				case RecItem::Buffer:
 				case RecItem::Texture1D:
 				case RecItem::Texture2D:
 				case RecItem::Texture3D:
@@ -4407,7 +4461,7 @@ struct DX11ResourcesList : ResourceTable, EditableListView<DX11ResourcesList, Su
 	DX11ResourcesList(const WindowPos &wpos, DX11Connection *_con) : ResourceTable(_con->items), Base(records), con(_con)
 		, images(ImageList::Create(DeviceContext::ScreenCaps().LogPixels() * (2 / 3.f), ILC_COLOR32, 1, 1))
 	{
-		Create(wpos, "Resources", CHILD | CLIPSIBLINGS | VISIBLE | REPORT | AUTOARRANGE | SINGLESEL | SHOWSELALWAYS, NOEX, ID);
+		Create(wpos, "Resources", ID, CHILD | CLIPSIBLINGS | VISIBLE | REPORT | AUTOARRANGE | SINGLESEL | SHOWSELALWAYS);
 
 		SetIcons(images);
 		SetSmallIcons(images);
@@ -4460,7 +4514,7 @@ struct DX11ShadersList : EditableListView<DX11ShadersList, Subclass<DX11ShadersL
 	}
 
 	DX11ShadersList(const WindowPos &wpos, DX11Connection *_con) : Base(_con->shaders), con(_con) {
-		Create(wpos, "Shaders", CHILD | CLIPSIBLINGS | VISIBLE | REPORT | AUTOARRANGE | SINGLESEL | SHOWSELALWAYS, GRIDLINES | DOUBLEBUFFER | FULLROWSELECT, ID);
+		Create(wpos, "Shaders", ID, CHILD | CLIPSIBLINGS | VISIBLE | REPORT | AUTOARRANGE | SINGLESEL | SHOWSELALWAYS);
 
 		RunThread([this]{
 			addref();
@@ -4662,7 +4716,7 @@ void DX11TimingWindow::Paint(const DeviceContextPaint &dc) {
 				{d2d, colour(0,1,0)}	//CS green
 			};
 
-			float	xs	= trans.xx;
+			float	xs	= trans.x.x;
 			for (int i = batch0; i < batch1;) {
 				//collect batches that are too close horizontally
 				int		i0		= i++;
@@ -4689,7 +4743,7 @@ void DX11TimingWindow::Paint(const DeviceContextPaint &dc) {
 			d2d::SolidBrush	textbrush(d2d, colour(one));
 
 			float	t0	= -100;
-			float	s	= trans.xx * rfreq;
+			float	s	= trans.x.x * rfreq;
 			float	o	= trans.z.x;
 			for (int i = batch0; i < batch1; i++) {
 				float	t1	= ((con.batches[i].timestamp + con.batches[i+1].timestamp) / 2) * s + o;
@@ -4737,7 +4791,7 @@ uint8 ViewDX11GPU::cursor_indices[][3] = {
 LRESULT ViewDX11GPU::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 		case WM_CREATE: {
-			tree.Create(_GetPanePos(0), NULL, CHILD | CLIPSIBLINGS | VISIBLE | VSCROLL | tree.HASLINES | tree.HASBUTTONS | tree.LINESATROOT | tree.SHOWSELALWAYS, CLIENTEDGE);
+			tree.Create(_GetPanePos(0), none, CHILD | CLIPSIBLINGS | VISIBLE | VSCROLL | tree.HASLINES | tree.HASBUTTONS | tree.LINESATROOT | tree.SHOWSELALWAYS, CLIENTEDGE);
 			italics = tree.GetFont().GetParams().Italic(true);
 			TabWindow	*t = new TabWindow;
 			SetPanes(tree, t->Create(_GetPanePos(1), "tabs", CHILD | CLIPCHILDREN | VISIBLE), 400);
@@ -4848,6 +4902,9 @@ LRESULT ViewDX11GPU::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 						case DX11ItemsList::ID:
 							DX11ItemsList::Cast(nmh->hwndFrom)->SortOnColumn1(((NMLISTVIEW*)nmh)->iSubItem);
 							return 0;
+						case DX11ResourcesList::ID:
+							DX11ResourcesList::Cast(nmh->hwndFrom)->SortOnColumn(((NMLISTVIEW*)nmh)->iSubItem);
+							return 0;
 						case DX11ShadersList::ID:
 							DX11ShadersList::Cast(nmh->hwndFrom)->SortOnColumn(((NMLISTVIEW*)nmh)->iSubItem);
 							return 0;
@@ -4924,7 +4981,7 @@ LRESULT ViewDX11GPU::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 			replay.CreateObjects(*this);
 			replay.RunTo(recordings, addr);
 
-			dx::SimulatorDXBC::Resource	res = replay->GetResource(FindItem(batch.rtv));
+			dx::Resource	res = replay->GetResource(FindItem(batch.rtv));
 			auto	p	= dx::GetBitmap("target", res);
 			Control	c	= SelectTab('JG');
 			if (c) {
@@ -4968,7 +5025,8 @@ void ViewDX11GPU::TreeSelection(HTREEITEM hItem) {
 			uint64	pc		= i.Image2() ? *(uint64*)i.Param() : (uint64)i.Param();
 			auto	frame	= stack_dumper.GetFrame(pc);
 			if (frame.file && exists(frame.file)) {
-				EditControl	c = MakeSourceWindow(Dock(new_tab ? DOCK_TAB : DOCK_TABID, 'SC'), frame.file, HLSLcolourerRE(), malloc_block::unterminated(FileInput(frame.file)), 0, 0, EditControl::READONLY);
+				auto	file	= files.get(frame.file);
+				EditControl	c = MakeSourceWindow(Dock(new_tab ? DOCK_TAB : DOCK_TABID, 'SC'), file, HLSLcolourerRE(), none, EditControl::READONLY);
 				c.id	= 'SC';
 				ShowSourceLine(c, frame.line);
 			}
@@ -5026,8 +5084,8 @@ field_info DX11DeviceContext_commands[] = {
 	{"DrawAuto",										ff()},
 	{"DrawIndexedInstancedIndirect(%0)",				ff(fp<ID3D11Buffer*>("buffer"), fp<UINT>("AlignedByteOffsetForArgs"))},
 	{"DrawInstancedIndirect(%0,%1)",					ff(fp<ID3D11Buffer*>("buffer"), fp<UINT>("AlignedByteOffsetForArgs"))},
-	{"Dispatch",										ff(fp<UINT>("ThreadGroupCountX"), fp<UINT>("ThreadGroupCountY"), fp<UINT>("ThreadGroupCountZ"))},
-	{"DispatchIndirect",								ff(fp<ID3D11Buffer*>("buffer"), fp<UINT>("AlignedByteOffsetForArgs"))},
+	{"Dispatch(%0,%1,%2)",								ff(fp<UINT>("ThreadGroupCountX"), fp<UINT>("ThreadGroupCountY"), fp<UINT>("ThreadGroupCountZ"))},
+	{"DispatchIndirect(%0,%1)",							ff(fp<ID3D11Buffer*>("buffer"), fp<UINT>("AlignedByteOffsetForArgs"))},
 	{"RSSetState",										ff(fp<ID3D11RasterizerState*>("pRasterizerState"))},
 	{"RSSetViewports",									ff(fp<UINT>("num"), fp<counted<const D3D11_VIEWPORT,0>>("viewports"))},
 	{"RSSetScissorRects",								ff(fp<UINT>("num"), fp<counted<const D3D11_RECT,0>>("rects"))},
@@ -5035,10 +5093,10 @@ field_info DX11DeviceContext_commands[] = {
 	{"CopyResource",									ff(fp<ID3D11Resource*>("dst"), fp<ID3D11Resource*>("src"))},
 	{"UpdateSubresource(%0,%1)",						ff(fp<ID3D11Resource*>("dst"), fp<UINT>("DstSubresource"), fp<const D3D11_BOX*>("pDstBox"), fp<const void*>("pSrcData"), fp<UINT>("SrcRowPitch"), fp<UINT>("SrcDepthPitch"))},
 	{"CopyStructureCount",								ff(fp<ID3D11Buffer*>("pDstBuffer"), fp<UINT>("DstAlignedByteOffset"), fp<ID3D11UnorderedAccessView*>("pSrcView"))},
-	{"ClearRenderTargetView",							ff(fp<ID3D11RenderTargetView*>("pRenderTargetView"), fp<const FLOAT[4]>("ColorRGBA[4]"))},
+	{"ClearRenderTargetView(%0)",						ff(fp<ID3D11RenderTargetView*>("pRenderTargetView"), fp<const FLOAT[4]>("ColorRGBA[4]"))},
 	{"ClearUnorderedAccessViewUint",					ff(fp<ID3D11UnorderedAccessView*>("uav"), fp<const UINT>("Values[4]"))},
 	{"ClearUnorderedAccessViewFloat",					ff(fp<ID3D11UnorderedAccessView*>("uav"), fp<const FLOAT>("Values[4]"))},
-	{"ClearDepthStencilView",							ff(fp<ID3D11DepthStencilView*>("dsv"), fp<UINT>("ClearFlags"), fp<FLOAT>("Depth"), fp<UINT8>("Stencil"))},
+	{"ClearDepthStencilView(%0)",						ff(fp<ID3D11DepthStencilView*>("dsv"), fp<UINT>("ClearFlags"), fp<FLOAT>("Depth"), fp<UINT8>("Stencil"))},
 	{"GenerateMips",									ff(fp<ID3D11ShaderResourceView*>("pShaderResourceView"))},
 	{"SetResourceMinLOD",								ff(fp<ID3D11Resource*>("rsrc"), fp<FLOAT>("MinLOD"))},
 	{"ResolveSubresource",								ff(fp<ID3D11Resource*>("dst"), fp<UINT>("DstSubresource"), fp<ID3D11Resource*>("src"), fp<UINT>("SrcSubresource"), fp<DXGI_FORMAT>("Format"))},
@@ -5210,6 +5268,9 @@ static void PutCommands(RegisterTree &rt, HTREEITEM h, field_info *nf, const_mem
 			p = p->next();
 		}
 
+		if (p == e)
+			break;
+
 		HTREEITEM	h2;
 		if (p->id == 0xffff) {
 			h2 = rt.AddText(h, "WithObject", addr);
@@ -5348,16 +5409,17 @@ void ViewDX11GPU::ExpandTree(HTREEITEM h) {
 //	EditorDX11RSX
 //-----------------------------------------------------------------------------
 
-class EditorDX11 : public app::EditorGPU, public app::MenuItemCallbackT<EditorDX11>, DXCapturer {
-	filename	fn;
-	Menu		recent;
+class EditorDX11 : public app::EditorGPU, public app::MenuItemCallbackT<EditorDX11>, public Handles2<EditorDX11, AppEvent> {
+	filename				fn;
+	Menu					recent;
+	ref_ptr<DXConnection>	con;
 	dynamic_array<DWORD>	pids;
 
 	void	Grab(ViewDX11GPU *view);
 
 	void	TogglePause() {
-		Call<void>(paused ? INTF_Continue : INTF_Pause);
-		paused = !paused;
+		con->Call<void>(con->paused ? INTF_Continue : INTF_Pause);
+		con->paused = !con->paused;
 	}
 
 	virtual bool Matches(const ISO::Browser &b) {
@@ -5378,47 +5440,14 @@ class EditorDX11 : public app::EditorGPU, public app::MenuItemCallbackT<EditorDX
 	}
 
 #ifndef ISO_EDITOR
-	virtual bool	Command(MainWindow &main, ID id, MODE mode) {
-		if (mode == MODE_home) {
-			MultiSplitterWindow	*ms = MultiSplitterWindow::Cast(main.GetChild());
-			EditControl	e(ms->AppendPane(100), "Hello from DX11", Control::VISIBLE | Control::CHILD);
-			ms->SetPane(ms->NumPanes() - 1, e);
-			return false;
-		}
-
-		if ((main.GetDropDown(ID_ORBISCRUDE_GRAB).GetItemStateByID(ID_ORBISCRUDE_GRAB_DX11) & MF_CHECKED) && EditorGPU::Command(main, id, mode))
+	virtual bool	Command(MainWindow &main, ID id) {
+		if ((main.GetDropDown(ID_ORBISCRUDE_GRAB).GetItemStateByID(ID_ORBISCRUDE_GRAB_DX11) & MF_CHECKED) && EditorGPU::Command(main, id))
 			return true;
 
 		switch (id) {
-			case 0: {
-				Menu	menu	= main.GetDropDown(ID_ORBISCRUDE_GRAB);
-				recent			= Menu::Create();
-				recent.SetStyle(MNS_NOTIFYBYPOS);
-
-				int		id		= 1;
-				for (auto i : GetSettings("DX11/Recent"))
-					Menu::Item(i.GetString(), id++).Param(static_cast<MenuItemCallback*>(this)).AppendTo(recent);
-				Menu::Item("New executable...", 0).Param(static_cast<MenuItemCallback*>(this)).AppendTo(recent);
-				recent.Separator();
-
-				pids.clear();
-				ModuleSnapshot	snapshot(0, TH32CS_SNAPPROCESS);
-				id		= 0x1000;
-				for (auto i : snapshot.processes()) {
-					filename	path;
-					if (FindModule(i.th32ProcessID, "dx11crude.dll", path)) {
-						pids.push_back(i.th32ProcessID);
-						Menu::Item(i.szExeFile, id++).Param(static_cast<MenuItemCallback*>(this)).AppendTo(recent);
-					}
-				}
-
-				Menu::Item("Set Executable for DX11", ID_ORBISCRUDE_GRAB_DX11).SubMenu(recent).InsertByPos(menu, 0);
-				break;
-			}
-
 			case ID_ORBISCRUDE_PAUSE: {
 				Menu	menu	= main.GetDropDown(ID_ORBISCRUDE_GRAB);
-				if (mode == MODE_click && (menu.GetItemStateByID(ID_ORBISCRUDE_GRAB_DX11) & MF_CHECKED)) {
+				if (menu.GetItemStateByID(ID_ORBISCRUDE_GRAB_DX11) & MF_CHECKED) {
 					TogglePause();
 				}
 				break;
@@ -5426,13 +5455,13 @@ class EditorDX11 : public app::EditorGPU, public app::MenuItemCallbackT<EditorDX
 
 			case ID_ORBISCRUDE_GRAB: {
 				Menu	menu	= main.GetDropDown(ID_ORBISCRUDE_GRAB);
-				if (mode == MODE_click && (menu.GetItemStateByID(ID_ORBISCRUDE_GRAB_DX11) & MF_CHECKED)) {
+				if (menu.GetItemStateByID(ID_ORBISCRUDE_GRAB_DX11) & MF_CHECKED) {
 
-					if (!process.Active())
-						OpenProcess(fn, string(main.DescendantByID(ID_EDIT + 2).GetText()), string(main.DescendantByID(ID_EDIT + 1).GetText()), "dx11crude.dll");
+					if (!con->process.Active())
+						con->OpenProcess(fn, string(main.DescendantByID(ID_EDIT + 2).GetText()), string(main.DescendantByID(ID_EDIT + 1).GetText()), "dx11crude.dll");
 
 					main.SetTitle("new");
-					Grab(new ViewDX11GPU(main, main.Dock(DOCK_TAB), process.hProcess, fn));
+					Grab(new ViewDX11GPU(main, main.Dock(DOCK_TAB), con));
 				}
 				break;
 			}
@@ -5442,6 +5471,57 @@ class EditorDX11 : public app::EditorGPU, public app::MenuItemCallbackT<EditorDX
 #endif
 
 public:
+	void operator()(AppEvent *ev) {
+		if (ev->state == AppEvent::BEGIN) {
+			auto	main	= MainWindow::Get();
+			Menu	menu	= main->GetDropDown(ID_ORBISCRUDE_GRAB);
+			recent			= Menu::Create();
+			recent.SetStyle(MNS_NOTIFYBYPOS);
+
+		#if 0
+			int		id		= 1;
+			for (auto i : GetSettings("DX11/Recent"))
+				Menu::Item(i.GetString(), id++).Param(static_cast<MenuItemCallback*>(this)).AppendTo(recent);
+			Menu::Item("New executable...", 0).Param(static_cast<MenuItemCallback*>(this)).AppendTo(recent);
+			recent.Separator();
+
+			pids.clear();
+			ModuleSnapshot	snapshot(0, TH32CS_SNAPPROCESS);
+			id		= 0x1000;
+			for (auto i : snapshot.processes()) {
+				filename	path;
+				if (FindModule(i.th32ProcessID, "dx11crude.dll", path)) {
+					pids.push_back(i.th32ProcessID);
+					Menu::Item(i.szExeFile, id++).Param(static_cast<MenuItemCallback*>(this)).AppendTo(recent);
+				}
+			}
+			Menu::Item("Set Executable for DX11", ID_ORBISCRUDE_GRAB_DX11).SubMenu(recent).InsertByPos(menu, 0);
+		#else
+			auto	cb = new_lambda<MenuCallback>([this](Control c, Menu m) {
+				while (m.RemoveByPos(0));
+
+				int		id		= 1;
+				for (auto i : GetSettings("DX11/Recent"))
+					Menu::Item(i.GetString(), id++).Param(static_cast<MenuItemCallback*>(this)).AppendTo(m);
+				Menu::Item("New executable...", 0).Param(static_cast<MenuItemCallback*>(this)).AppendTo(m);
+				m.Separator();
+
+				pids.clear();
+				ModuleSnapshot	snapshot(0, TH32CS_SNAPPROCESS);
+				id		= 0x1000;
+				for (auto i : snapshot.processes()) {
+					filename	path;
+					if (FindModule(i.th32ProcessID, "dx11crude.dll", path)) {
+						pids.push_back(i.th32ProcessID);
+						Menu::Item(i.szExeFile, id++).Param(static_cast<MenuItemCallback*>(this)).AppendTo(m);
+					}
+				}
+				});
+			Menu::Item("Set Executable for DX11", ID_ORBISCRUDE_GRAB_DX11).SubMenu(recent).Param(cb).InsertByPos(menu, 0);
+		#endif
+		}
+	}
+
 	void	operator()(Control c, Menu::Item i) {
 		ISO::Browser2	settings	= GetSettings("DX11/Recent");
 		int				id			= i.ID();
@@ -5473,11 +5553,12 @@ public:
 		recent.RadioDirect(id, 0, recent.Count());
 		//CreateReadPipe(pipe);
 
+		con	= new DXConnection;
 		const char *dll_name	= "dx11crude.dll";
 
 		if (id & 0x1000) {
-			OpenProcess(pids[id & 0xfff], dll_name);
-			fn = process.Filename();
+			con->OpenProcess(pids[id & 0xfff], dll_name);
+			fn = con->process.Filename();
 
 		} else {
 			fn = settings[id - 1].GetString();
@@ -5488,10 +5569,10 @@ public:
 				exec_dir = home.ItemText(ID_EDIT + 2);
 			}
 
-			OpenProcess(fn, exec_dir, exec_cmd, dll_name);
+			con->OpenProcess(fn, exec_dir, exec_cmd, dll_name);
 			if (resume_after) {
 				ISO_OUTPUT("Resuming process\n");
-				Call<void>(INTF_Continue);
+				con->Call<void>(INTF_Continue);
 			}
 		}
 	}
@@ -5506,7 +5587,7 @@ void	EditorDX11::Grab(ViewDX11GPU *view) {
 	RunThread([this, view,
 		progress = Progress(WindowPos(*view, AdjustRect(view->GetRect().Centre(500, 30), Control::OVERLAPPED | Control::CAPTION, false)), "Capturing", 0)
 	]() mutable {
-		auto	stats = Call<CaptureStats>(INTF_CaptureFrames, until_halt ? 0x7ffffff : num_frames);
+		auto	stats = con->Call<CaptureStats>(INTF_CaptureFrames, until_halt ? 0x7ffffff : num_frames);
 
 		if (stats.num_items == 0) {
 			view->SendMessage(WM_ISO_ERROR, 0, (LPARAM)"\nFailed to capture");
@@ -5516,7 +5597,7 @@ void	EditorDX11::Grab(ViewDX11GPU *view) {
 		int						counts[RecItem::NUM_TYPES] = {};
 		hash_multiset<string>	name_counts;
 
-		auto	items = Call<with_size<dynamic_array<RecItem2>>>(INTF_GetItems);
+		auto	items = con->Call<with_size<dynamic_array<RecItem2>>>(INTF_GetItems);
 		for (auto &i : items) {
 			if (i.name) {
 				if (int n = name_counts.insert(i.name))
@@ -5530,14 +5611,14 @@ void	EditorDX11::Grab(ViewDX11GPU *view) {
 
 		progress.Reset("Collecting assets", stats.num_items);
 
-		view->recordings = Call<with_size<dynamic_array<Recording>>>(INTF_GetRecordings);
+		view->recordings = con->Call<with_size<dynamic_array<Recording>>>(INTF_GetRecordings);
 
-		for(auto &i : view->items) {
+		for (auto &i : view->items) {
 			switch (i.type) {
 				case RecItem::ShaderResourceView: {
 					const RecView<D3D11_SHADER_RESOURCE_VIEW_DESC>	*v = i.info;
 					if (!view->FindItem((ID3D11DeviceChild*)v->resource)) {
-						auto	r = Call<RecItem2>(INTF_GetResource, uintptr_t(i.obj));
+						auto	r = con->Call<RecItem2>(INTF_GetResource, uintptr_t(i.obj));
 						unconst(v->resource) = static_cast<ID3D11Resource*>(r.obj);
 						auto	type = undead(r.type);
 						r.name << get_field_name(type) << '#' << counts[type]++;
@@ -5552,13 +5633,13 @@ void	EditorDX11::Grab(ViewDX11GPU *view) {
 			}
 		}
 
-		for(auto &i : view->items) {
+		for (auto &i : view->items) {
 			switch (i.type) {
 				case RecItem::Buffer:
 				case RecItem::Texture1D:
 				case RecItem::Texture2D:
 				case RecItem::Texture3D:
-					Call<malloc_block_all>(INTF_ResourceData, uintptr_t(i.obj)).copy_to(i.info.extend(i.GetSize()));
+					con->Call<malloc_block_all>(INTF_ResourceData, uintptr_t(i.obj)).copy_to(i.info.extend(i.GetSize()));
 					break;
 			}
 			progress.Set(view->items.index_of(i) + 1);
@@ -5566,9 +5647,9 @@ void	EditorDX11::Grab(ViewDX11GPU *view) {
 
 		if (resume_after) {
 			ISO_OUTPUT("Resuming process\n");
-			Call<void>(INTF_Continue);
+			con->Call<void>(INTF_Continue);
 		} else {
-			paused = true;
+			con->paused = true;
 		}
 
 		view->GetAssets(&progress);

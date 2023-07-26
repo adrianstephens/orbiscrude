@@ -13,7 +13,8 @@
     <ClCompile>
       <PreprocessorDefinitions>USE_ZLIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalOptions Condition="'$(Platform)'=='x64'">/Zc:threadSafeInit- %(AdditionalOptions)</AdditionalOptions>
-    </ClCompile>
+		<EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
+	</ClCompile>
   </ItemDefinitionGroup>
   <Import Project="$(SharedDir)shared.props" />
 </Project>

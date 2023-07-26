@@ -548,7 +548,7 @@ Disassembler::State *DisassemblerPPC::Disassemble(const iso::memory_block &block
 		} else {
 			ba.format("unknown opcode 0x%08x", op);
 		}
-		state->lines.push_back((const char*)ba);
+		state->lines.push_back(ba);
 	}
 	return state;
 }

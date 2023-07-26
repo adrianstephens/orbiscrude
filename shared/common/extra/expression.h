@@ -182,7 +182,7 @@ template<class value, class C> value expression::evaluate(C &ctx) {
 					opsp--;
 					if (opsp->op != OP_QUE)
 						iso_throw("Misplaced ':'");
-					fallthrough
+					//fallthrough
 				default: {
 					opsp--;
 					value	v2;

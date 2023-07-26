@@ -23,8 +23,6 @@ using iso::crc32;
 #define ISO_NULL	ISO::ptr<void>()
 #define ISO_NULL64	ISO::ptr64<void>()
 
-struct Type;
-
 //-----------------------------------------------------------------------------
 //	pointers
 //-----------------------------------------------------------------------------
@@ -93,6 +91,22 @@ template<typename T, int B> void base_select<T,B>::set(const void *p) {
 	}
 	ISO_CHEAPASSERT(0);
 }
+
+template<> iso_export void*	base_fixed<void>::get_base();
+template<> iso_export void**base_select<void, 2>::get_base();
+template<> iso_export void	base_select<void, 2>::set(const void* p);
+
+static const int PTRBITS = sizeof(void*) * 8;
+
+template<typename T, int N, int B> struct ptr_type;
+template<typename T, int N>	struct ptr_type<T, N, N>			: T_type<pointer<T>> {};
+template<typename T>		struct ptr_type<T, 32, 64>			: T_type<soft_pointer<T, base_fixed_shift<void, 2>>> {};
+template<typename T>		struct ptr_type<T, 64, 32>			: T_type<soft_pointer<T, base_absolute<uint64>>> {};
+
+template<typename T, int N, int B = PTRBITS> using ptr_t = typename ptr_type<T, N, B>::type;
+using void_ptr32 = ptr_t<void, 32>;
+using void_ptr64 = ptr_t<void, 64>;
+
 //-----------------------------------------------------------------------------
 //	allocation
 //-----------------------------------------------------------------------------
@@ -157,24 +171,9 @@ template<int B> struct allocate {
 //-----------------------------------------------------------------------------
 
 iso_export const char*	store_string(const char* id);
-template<> iso_export void*	base_fixed<void>::get_base();
-template<> iso_export void**base_select<void, 2>::get_base();
-template<> iso_export void	base_select<void, 2>::set(const void* p);
 
-static const int PTRBITS = sizeof(void*) * 8;
-
-template<typename T, int N, int B = PTRBITS> struct ptr_type;
-template<typename T, int N>	struct ptr_type<T, N, N>			{ typedef pointer<T> type; };
-template<typename T>		struct ptr_type<T, 32, 64>			{ typedef soft_pointer<T, base_fixed_shift<void, 2>> type; };
-template<typename T>		struct ptr_type<T, 64, 32>			{ typedef soft_pointer<T, base_absolute<uint64>> type; };
-template<>					struct ptr_type<const Type, 32, 64> { typedef soft_pointer<const Type, base_select<void, 2>> type; };
-
-typedef ptr_type<void, 32>::type	void_ptr32;
-typedef ptr_type<void, 64>::type	void_ptr64;
-typedef ptr_type<const Type, 32>::type type_ptr;
-
-template<typename C, int N> struct ptr_string : public string_base<typename ptr_type<C, N>::type> {
-	typedef string_base<typename ptr_type<C, N>::type> B;
+template<typename C, int N> struct ptr_string : public string_base<ptr_t<C, N>> {
+	typedef string_base<ptr_t<C, N>> B;
 	inline static C *dup(const C *s) {
 		C *m = 0;
 		if (size_t n = string_len(s)) {
@@ -198,15 +197,19 @@ template<typename C, int N> struct ptr_string : public string_base<typename ptr_
 //	tag
 //-----------------------------------------------------------------------------
 
+class tag2;
+
 // tag - text based id
 class tag : public cstring {
 public:
-	constexpr				tag()					: cstring(0) {}
-	constexpr				tag(int)				: cstring(0) {}
-	template<int N>			tag(const char (&p)[N]) : cstring(store_string(p)) {}
-	template<int N>			tag(char (&p)[N])		: cstring(store_string(p)) {}
-	template<typename T>	tag(const T* const& p, typename T_same<T, char>::type* x = 0) : cstring(store_string(str8(p))) {}
-	template<typename T>	tag(const string_base<T>& p) : cstring(store_string(string(p))) {}
+	constexpr	tag()	: cstring(0) {}
+	constexpr	tag(const tag2 &t2);
+	tag(const tag&)	= default;
+	tag(tag&&)		= default;
+	tag(tag&)		= default;
+	tag(string_ref p)	: cstring(store_string(p)) {}
+	template<typename T, typename=decltype(string_param(declval<T&&>()))>	tag(T&& p) : cstring(store_string(string_param(p))) {}
+
 	tag& operator=(const tag&) = default;
 };
 
@@ -216,34 +219,37 @@ class tag2 {
 	mutable crc32	c;
 public:
 	constexpr				tag2() {}
-	constexpr				tag2(tag t)		: t(t) {}
+	tag2(tag t)		: t(t) {}
+	tag2(tag2&&)		= default;
+	tag2(const tag2&)	= default;
 	constexpr				tag2(int i)		: c((uint32)i)	{}	// to catch nulls
 	explicit constexpr		tag2(crc32 c)	: c(c) {}
 	explicit constexpr		tag2(uint32 c)	: c(c) {}
+	tag2(string_ref p) : t(p) {}
+	template<typename T, typename=decltype(string_param(declval<T&&>()))>	tag2(T&& p) : t(p) {}
 
-	template<int N>			tag2(const char (&p)[N]) : t(p) {}
-	template<int N>			tag2(char (&p)[N]) : t(p)		{}
-	template<typename T>	tag2(const T* const& p, typename T_same<T, char>::type* x = 0) : t(p) {}
-	template<typename T>	tag2(const string_base<T>& p) : t(p) {}
+	tag2&	operator=(const tag2&) = default;
 
 	explicit operator bool()	const	{ return t || c; }
-	operator tag()		const	{ return t; }
+	//operator tag()		const	{ return t; }
 	operator crc32()	const	{ if (!c) c.set(t); return c; }
-	operator tag&()				{ return t; }
+	//operator tag&()				{ return t; }
 	operator crc32&()			{ if (!c) c.set(t); return c; }
 
-	tag		get_tag()	const	{ return t; }
-	crc32	get_crc32()	const	{ return operator crc32(); }
-	tag&	get_tag()			{ return t; }
-	crc32&	get_crc32()			{ return operator crc32&(); }
+	constexpr tag	get_tag()	const	{ return t; }
+	constexpr tag&	get_tag()			{ return t; }
+	crc32			get_crc32()	const	{ if (!c) c.set(t); return c; }
+	crc32&			get_crc32()			{ if (!c) c.set(t); return c; }
 
 	friend bool operator==(const tag2& a, const tag2& b) { return a.t && b.t ? a.t == b.t : a.get_crc32() == b.get_crc32(); }
 	friend bool operator!=(const tag2& a, const tag2& b) { return !(a == b); }
 };
 
+constexpr tag::tag(const tag2 &t2) : cstring(t2.get_tag()) {}
+
 // storage of id - either a tag or a crc32
 class tag1 {
-	typedef ptr_type<const char, 32>::type S;
+	typedef ptr_t<const char, 32> S;
 	uint32	u;
 public:
 	constexpr tag1()		: u(0) {}
@@ -253,7 +259,7 @@ public:
 	crc32	get_crc()			const { return *(const crc32*)this; }
 	tag		get_tag()			const { return force_cast<tag>(((S*)this)->get()); }
 	crc32	get_crc(int iscrc)	const { return iscrc ? get_crc() : crc32(get_tag()); }
-	tag		get_tag(int iscrc)	const { return iscrc ? tag(0) : get_tag(); }
+	tag		get_tag(int iscrc)	const { return iscrc ? tag() : get_tag(); }
 	tag2	get_tag2(int iscrc) const { return iscrc ? tag2(get_crc()) : tag2(get_tag()); }
 	operator uint32()			const { return u; }
 };
@@ -293,6 +299,38 @@ iso_export const char*	to_string(const tag2& t);
 //	Types
 //-----------------------------------------------------------------------------
 
+struct Type;
+template<typename T> Type*			getdef();
+template<typename T> inline Type*	getdef(const T& t) { return getdef<T>(); }
+
+enum MATCH {
+	MATCH_DEFAULT				= 0,
+	MATCH_NOUSERRECURSE			= 1 << 0,	// user types are not recursed into for sameness check
+	MATCH_NOUSERRECURSE_RHS		= 1 << 1,	// RHS user types are not recursed into for sameness check
+	MATCH_NOUSERRECURSE_BOTH	= 1 << 2,	// if both types are user, do not recurse for sameness check
+	MATCH_MATCHNULLS			= 1 << 3,	// null types match anything
+	MATCH_MATCHNULL_RHS			= 1 << 4,	// RHS null matches anything
+	MATCH_IGNORE_SIZE			= 1 << 5,	// ignore 64-bittedness
+	MATCH_IGNORE_INTERPRETATION	= 1 << 6,	// ignore sign flags, etc, that only affect interpretation
+	MATCH_COMPOSITE_EXTRA		= 1 << 7,	// check array-like and wrapper composites
+};
+constexpr MATCH operator|(MATCH a, MATCH b) { return MATCH((int)a | (int)b); }
+constexpr MATCH operator-(MATCH a, MATCH b) { return MATCH((int)a & ~b); }
+constexpr MATCH operator*(MATCH a, bool b)	{ return b ? a : MATCH_DEFAULT; }
+
+enum TRAVERSAL {
+	TRAV_DEFAULT				= 0,
+	TRAV_DEEP					= 1 << 0,
+	TRAV_CHECKEXTERNALS			= 1 << 1,
+	TRAV_NOINITS				= 1 << 2,
+	TRAV_EARLYOUT				= 1 << 3,	// stop checking when found an external
+	TRAV_DUPSTRINGS				= 1 << 4,	// duplicate strings, even if not ALLOC
+	TRAV_MEMORY32				= 1 << 5,
+};
+constexpr TRAVERSAL operator|(TRAVERSAL a, TRAVERSAL b) { return TRAVERSAL((int)a | (int)b); }
+constexpr TRAVERSAL operator-(TRAVERSAL a, TRAVERSAL b) { return TRAVERSAL((int)a & ~(int)b); }
+constexpr TRAVERSAL operator*(TRAVERSAL a, bool b)		{ return b ? a : TRAV_DEFAULT; }
+
 enum TYPE {
 	UNKNOWN,
 	INT,
@@ -308,24 +346,10 @@ enum TYPE {
 	TOTAL,
 };
 
-//constexpr TYPE operator|(TYPE a, int b) { return TYPE(uint8(a) | b); }
-
-template<typename T> Type*			getdef();
-template<typename T> inline Type*	getdef(const T& t) { return getdef<T>(); }
-
-enum MATCH {
-	MATCH_NOUSERRECURSE			= 1 << 0,	// user types are not recursed into for sameness check
-	MATCH_NOUSERRECURSE_RHS		= 1 << 1,	// RHS user types are not recursed into for sameness check
-	MATCH_NOUSERRECURSE_BOTH	= 1 << 2,	// if both types are user, do not recurse for sameness check
-	MATCH_MATCHNULLS			= 1 << 3,	// null types match anything
-	MATCH_MATCHNULL_RHS			= 1 << 4,	// RHS null matches anything
-	MATCH_IGNORE_SIZE			= 1 << 5,	// ignore 64-bittedness
-	MATCH_IGNORE_INTERPRETATION	= 1 << 6,	// ignore sign flags, etc, that only affect interpretation
-};
-
 struct Type {
 	enum FLAGS {
 		//common flags
+		NONE		= 0,
 		TYPE_32BIT	= 0 << 4,
 		TYPE_64BIT	= 1 << 4,
 		TYPE_PACKED	= 1 << 5,
@@ -335,7 +359,6 @@ struct Type {
 		TYPE_MASKEX	= TYPE_MASK | TYPE_64BIT,
 
 		// type specific flags
-		NONE		= 0,
 		FLAG0		= 0x100 << 0,
 		FLAG1		= 0x100 << 1,
 		FLAG2		= 0x100 << 2,
@@ -368,30 +391,34 @@ struct Type {
 		uint32 u;
 	};
 	friend constexpr FLAGS operator|(FLAGS a, FLAGS b)	{ return FLAGS(uint16(a) | uint16(b)); }
+	
+	template<TYPE T> struct TypeT;
 
 	iso_export static const Type*	_SubType(const Type* type);
 	iso_export static const Type*	_SkipUser(const Type* type);
-	iso_export static uint32		_GetSize(const Type* type);
-	iso_export static uint32		_GetAlignment(const Type* type);
+	iso_export static uint32		_Size(const Type* type);
+	iso_export static uint32		_Alignment(const Type* type);
 	iso_export static bool			_Is(const Type* type, const tag2& id);
 	iso_export static bool			_ContainsReferences(const Type* type);
 	iso_export static bool			_IsPlainData(const Type* type, bool flip = false);
-	iso_export static bool			_Same(const Type* type1, const Type* type2, int criteria);
+	iso_export static bool			_Same(const Type* type1, const Type* type2, MATCH criteria);
 
 	friend const Type*			SubType(const Type* type)									{ return _SubType(type); }
 	friend const Type*			SkipUser(const Type* type)									{ return _SkipUser(type); }
-	friend uint32				GetSize(const Type* type)									{ return _GetSize(type); }
-	friend uint32				GetAlignment(const Type* type)								{ return _GetAlignment(type); }
+	friend uint64				GetSize(const Type* type)									{ return _Size(type); }
+	friend uint32				GetAlignment(const Type* type)								{ return _Alignment(type); }
 	friend bool					Is(const Type* type, const tag2& id)						{ return _Is(type, id); }
 	friend bool					ContainsReferences(const Type* type)						{ return _ContainsReferences(type); }
 	friend bool					IsPlainData(const Type* type, bool flip = false)			{ return _IsPlainData(type, flip); }
-	friend bool					Same(const Type* type1, const Type* type2, int criteria)	{ return _Same(type1, type2, criteria); }
+	friend bool					Same(const Type* type1, const Type* type2, MATCH criteria = MATCH_DEFAULT)	{ return _Same(type1, type2, criteria); }
 	friend TYPE					TypeType(const Type* type)									{ return type ? (TYPE)(type->flags & TYPE_MASK) : UNKNOWN; }
+	friend TYPE					TypeTypeEx(const Type* type)								{ return type ? (TYPE)(type->flags & TYPE_MASKEX) : UNKNOWN; }
 	friend FLAGS				Flags(const Type* type)										{ return type ? (FLAGS)type->flags : NONE; }
 	friend TYPE					SkipUserType(const Type* type)								{ return TypeType(_SkipUser(type)); }
 	friend FLAGS				SkipUserFlags(const Type* type)								{ return Flags(_SkipUser(type)); }
 
 public:
+	
 	Type(TYPE t, FLAGS f = NONE) : flags(t | f), param1(0), param2(0) {}
 	Type(TYPE t, FLAGS f, uint8 p1, uint8 p2 = 0) : flags(t | f), param1(p1), param2(p2) {}
 
@@ -399,13 +426,13 @@ public:
 	constexpr TYPE				GetTypeEx()								const { return (TYPE)(flags & TYPE_MASKEX); }
 	const Type*					SubType()								const { return _SubType(this); }
 	const Type*					SkipUser()								const { return _SkipUser(this); }
-	uint32						GetSize()								const { return _GetSize(this); }
-	uint32						GetAlignment()							const { return _GetAlignment(this); }
+	uint64						GetSize()								const { return _Size(this); }
+	uint32						GetAlignment()							const { return _Alignment(this); }
 	bool						Is(tag2 id)								const { return _Is(this, id); }
 	bool						ContainsReferences()					const { return _ContainsReferences(this); }
 	bool						IsPlainData(bool flip = false)			const { return _IsPlainData(this, flip); }
-	bool						SameAs(const Type* type2, int crit = 0) const { return _Same(this, type2, crit); }
-	template<typename T> bool	SameAs(int crit = 0)					const { return _Same(this, getdef<T>(), crit); }
+	bool						SameAs(const Type* type2, MATCH crit = MATCH_DEFAULT) const { return _Same(this, type2, crit); }
+	template<typename T> bool	SameAs(MATCH crit = MATCH_DEFAULT)		const { return _Same(this, getdef<T>(), crit); }
 	template<typename T> bool	Is()									const { return this == getdef<T>(); }
 	constexpr bool				Dodgy()									const { return !!(flags & TYPE_DODGY); }
 	constexpr bool				Fixed()									const { return !!(flags & TYPE_FIXED); }
@@ -414,10 +441,18 @@ public:
 	void*						ReadPtr(const void* data)				const { return Is64Bit() ? ((void_ptr64*)data)->get() : ((void_ptr32*)data)->get(); }
 	void						WritePtr(void* data, void* p)			const { if (Is64Bit()) *(void_ptr64*)data = p; else *(void_ptr32*)data = p; }
 
+	template<TYPE T> typename TypeT<T>::type*		as()		{ return GetType() == T ? (typename TypeT<T>::type*)this : nullptr; }
+	template<TYPE T> const typename TypeT<T>::type*	as() const	{ return GetType() == T ? (const typename TypeT<T>::type*)this : nullptr; }
+
 	void*	operator new(size_t size, void* p) { return p; }
 	void*	operator new(size_t size) { return allocate<32>::alloc(size); }
 	void	operator delete(void* p) { allocate<32>::free(p); }
 };
+
+template<TYPE T> const typename Type::TypeT<T>::type*	TypeAs(const Type* type)		{ return TypeType(type) == T ? (const typename Type::TypeT<T>::type*)type : nullptr; }
+
+template<>					struct ptr_type<const Type, 32, 64> : T_type<soft_pointer<const Type, base_select<void, 2>>> {};
+typedef ptr_t<const Type, 32>	type_ptr;
 
 iso_export string_accum& operator<<(string_accum& a, const Type* const Type);
 inline size_t			to_string(char* s, const Type* const type)	{ return (lvalue(fixed_accum(s, 64)) << type).getp() - s; }
@@ -459,6 +494,7 @@ struct TypeInt : Type {
 		return is_signed() ? sign_extend(v, num_bits()) : sint_bits_t<BITS>(v);
 	}
 };
+template<> struct Type::TypeT<INT> : T_type<TypeInt> {};
 
 template<typename T> struct EnumT {
 	tag1	id;
@@ -503,25 +539,21 @@ struct TypeFloat : Type {
 	template<typename T> static TypeFloat* make() {
 		return make<sizeof(T) * 8, num_traits<T>::exponent_bits, num_traits<T>::is_signed ? SIGN : NONE>();
 	}
-
 	iso_export void		set(void* data, uint64 m, int e, bool s) const;
 	iso_export void		set(void* data, float f) const;
 	iso_export void		set(void* data, double f) const;
-	iso_export void		set(void* data, number n) const {
-		n	= n.to_binary();
-		uint64	m	= abs(n.m);
-		int		i	= leading_zeros(m);
-		set(data, m << i, n.e - i + 62, n.m < 0);
-	}
+	iso_export void		set(void* data, number n) const;
 	iso_export float	get(void* data) const;
 	iso_export double	get64(void* data) const;
 };
+template<> struct Type::TypeT<FLOAT> : T_type<TypeFloat> {};
 
 //-----------------------------------------------------------------------------
 //	TypeString
 //-----------------------------------------------------------------------------
 
 struct TypeString : Type {
+	struct getter;
 	static const FLAGS UTF16 = FLAG0, UTF32 = FLAG1, ALLOC = FLAG2, UNESCAPED = FLAG3, _MALLOC = FLAG4, MALLOC = ALLOC | _MALLOC;
 	TypeString(bool is64bit, FLAGS flags) : Type(STRING, flags | (is64bit ? TYPE_64BIT : NONE)) {}
 	constexpr uint32	GetSize()			const { return Is64Bit() ? 8 : 4; }
@@ -529,29 +561,14 @@ struct TypeString : Type {
 	constexpr uint32	log2_char_size()	const { return (flags / UTF16) & 3; }
 	constexpr uint32	char_size()			const { return 1 << log2_char_size(); }
 
-	//	const char*			get(const void* data) const { return (const char*)ReadPtr(data); }
-	memory_block		get_memory(const void* data) const;
-	uint32				len(const void *s)	const;
-	void*				dup(const void *s)	const;
-
-	void free(void* data) const {
-		if (void *p = ReadPtr(data)) {
-			if (flags & ALLOC) {
-				if (flags & _MALLOC)
-					iso::free(p);
-				else if (Is64Bit())
-					allocate<64>::free(p);
-				else
-					allocate<32>::free(p);
-			}
-		}
-	}
-	void set(void* data, const char *s) const {
-		if (flags & ALLOC)
-			s = (char*)dup(s);
-		WritePtr(data, (void*)s);
-	}
+	iso_export memory_block	get_memory(const void* data)	const;
+	iso_export uint32		len(const void *s)				const;
+//	iso_export void*		dup(const void *s)				const;
+	iso_export void			free(void* data)				const;
+	iso_export void			set(void* data, const void *s)	const;
+	iso_export string_getter<getter> get(void *data)		const;
 };
+template<> struct Type::TypeT<STRING> : T_type<TypeString> {};
 
 //-----------------------------------------------------------------------------
 //	TypeComposite
@@ -626,12 +643,13 @@ struct Element2 {
 };
 
 struct TypeComposite : public Type, public trailing_array2<TypeComposite, Element> {
-	static const FLAGS CRCIDS = FLAG0, DEFAULT = FLAG1, RELATIVEBASE = FLAG2, FORCEOFFSETS = FLAG3;
+	static const FLAGS CRCIDS = FLAG0, DEFAULT = FLAG1, RELATIVEBASE = FLAG2, FORCEOFFSETS = FLAG3, FINDSIZE = FLAG4;
 	uint32			count;
 
 	void*	operator new(size_t size, void* p)				{ return p; }
 	void*	operator new(size_t, uint32 n, uint32 defs = 0)	{ return Type::operator new(calc_size(n) + defs); }
 	void	operator delete(void* p, uint32, uint32)		{ Type::operator delete(p); }
+	void	operator delete(void* p)						{ Type::operator delete(p); }
 
 	TypeComposite(uint32 count = 0, FLAGS flags = NONE) : Type(COMPOSITE, flags), count(count)			{}
 	TypeComposite(uint32 count, FLAGS flags, uint32 log2align) : Type(COMPOSITE, flags), count(count)	{ SetLog2Align(log2align); }
@@ -639,20 +657,39 @@ struct TypeComposite : public Type, public trailing_array2<TypeComposite, Elemen
 	void				SetLog2Align(uint32 log2align)	{ param1 = log2align; }
 	constexpr uint32	size()					const	{ return count; }
 	constexpr uint32	Count()					const	{ return count; }
-	constexpr uint32	GetSize()				const	{ return !count ? 0 : !param1 ? back().end() : align_pow2(back().end(), param1); }
-	uint32				GetAlignment()			const	{ return param1 ? (1 << param1) : CalcAlignment(); }
 	uint32				CalcAlignment()			const;
+	uint32				GetSize()				const;
+	uint32				GetAlignment()			const	{ return param1 ? (1 << param1) : CalcAlignment(); }
 	iso_export int		GetIndex(const tag2& id, int from = 0) const;
 	const Element*		Find(const tag2& id)	const	{ int i = GetIndex(id); return i >= 0 ? begin() + i : 0; }
 	tag2				GetID(const Element* i)	const	{ return i->id.get_tag2(flags & TypeComposite::CRCIDS); }
 	tag2				GetID(int i)			const	{ return (*this)[i].id.get_tag2(flags & TypeComposite::CRCIDS); }
 	const void*			Default()				const	{ return flags & DEFAULT ? (void*)&(*this)[count] : NULL; }
 
+	bool				IsSubclass(const Type *type2, MATCH criteria) const {
+		return count > 0 && !(*this)[0].id && Same((*this)[0].type, type2, criteria);
+	}
+
+	const Type*			IsWrapper()				const { return count == 1 && front().offset == 0 ? front().type : nullptr; }
+	const Type*			IsArrayLike()			const {
+		if (count) {
+			const Type*	type = front().type;
+			uint32		size = type->GetSize(), offset	= 0;
+			for (auto &i : *this) {
+				if (i.type != type || i.offset != offset)
+					return nullptr;
+				offset += size;
+			}
+			return type;
+		}
+		return nullptr;
+	}
+
 	void						Reset()					{ count = 0; flags &= TYPE_MASK; }
 	void						Add(const Element& e)	{ begin()[count++] = e; }
 	iso_export uint32			Add(const Type* type, tag1 id, bool packed = false);
-	uint32						Add(const Type* type, tag id = 0, bool packed = false) 	{ return Add(type, (tag1)id, packed); }
-	template<typename T> uint32 Add(tag id = 0, bool packed = false) 					{ return Add(getdef<T>(), id, packed); }
+	uint32						Add(const Type* type, tag id = tag(), bool packed = false) 	{ return Add(type, (tag1)id, packed); }
+	template<typename T> uint32 Add(tag id = tag(), bool packed = false) 					{ return Add(getdef<T>(), id, packed); }
 	iso_export TypeComposite*	Duplicate(void* defaults = 0) const;
 
 	auto				Components() 			const 	{ return transformc(*this, [this](const ISO::Element &e) { return ISO::Element2(GetID(&e), e); }); }
@@ -660,6 +697,7 @@ struct TypeComposite : public Type, public trailing_array2<TypeComposite, Elemen
 	memory_block		get(void *base, int i)			const { return begin()[i].get(base); }
 	const_memory_block	get(const void *base, int i)	const { return begin()[i].get(base); }
 };
+template<> struct Type::TypeT<COMPOSITE> : T_type<TypeComposite> {};
 
 template<int N> struct TypeCompositeN : TypeComposite, ElementN<N> {
 	TypeCompositeN(uint32 count = N, FLAGS flags = NONE) : TypeComposite(count, flags) {}
@@ -679,10 +717,11 @@ struct TypeArray : Type {
 	TypeArray(const Type* subtype, uint32 n, uint32 subsize)	: Type(ARRAY), count(n), subtype(subtype), subsize(subsize) {}
 	TypeArray(const Type* subtype, uint32 n)					: Type(ARRAY), count(n), subtype(subtype), subsize(subtype->GetSize()) {}
 	constexpr uint32 Count()	const { return count; }
-	constexpr uint32 GetSize()	const { return subsize * count; }
+	constexpr uint64 GetSize()	const { return subsize * (uint64)count; }
 	memory_block		get_memory(void* data)			const	{ return {data, GetSize()}; }
 	const_memory_block	get_memory(const void* data)	const	{ return {data, GetSize()}; }
 };
+template<> struct Type::TypeT<ARRAY> : T_type<TypeArray> {};
 
 template<typename T> struct TypeArrayT : TypeArray {
 	constexpr TypeArrayT(uint32 n) : TypeArray(getdef<T>(), n, sizeof(T)) {}
@@ -704,6 +743,7 @@ struct TypeOpenArray : Type {
 	uint32			get_count(const void* data)		const;
 	memory_block	get_memory(const void* data)	const;
 };
+template<> struct Type::TypeT<OPENARRAY> : T_type<TypeOpenArray> {};
 
 //-----------------------------------------------------------------------------
 //	TypeReference
@@ -717,6 +757,7 @@ struct TypeReference : Type {
 	iso_export void			set(void* data, const ptr<void,64> &p) const;
 	iso_export ptr<void,64>	get(void* data) const;
 };
+template<> struct Type::TypeT<REFERENCE> : T_type<TypeReference> {};
 
 //-----------------------------------------------------------------------------
 //	TypeUser
@@ -739,6 +780,7 @@ struct TypeUser : Type {
 		}
 	}
 };
+template<> struct Type::TypeT<USER> : T_type<TypeUser> {};
 
 //-----------------------------------------------------------------------------
 //	TypeFunction (TBD)
@@ -749,6 +791,7 @@ struct TypeFunction : Type {
 	type_ptr params;
 	TypeFunction(const Type* r, const Type* p) : Type(FUNCTION), rettype(r), params(p) {}
 };
+template<> struct Type::TypeT<FUNCTION> : T_type<TypeFunction> {};
 
 //-----------------------------------------------------------------------------
 //	UserTypes
@@ -811,8 +854,8 @@ struct TypeUserComp : public TypeUserSave, trailing_array<TypeUserComp, Element>
 	void	operator delete(void* p, uint32, uint32)		{ Type::operator delete(p); }
 
 	void						Add(const Element& e) { comp.Add(e); }
-	iso_export uint32			Add(const Type* type, tag id = 0, bool packed = false) { return comp.Add(type, id, packed); }
-	template<typename T> uint32 Add(tag id = 0, bool packed = false) { return comp.Add(getdef<T>(), id, packed); }
+	iso_export uint32			Add(const Type* type, tag id = tag(), bool packed = false) { return comp.Add(type, id, packed); }
+	template<typename T> uint32 Add(tag id = tag(), bool packed = false) { return comp.Add(getdef<T>(), id, packed); }
 };
 
 template<int N> struct TypeUserCompN : public TypeUserComp, ElementN<N> {
@@ -851,7 +894,8 @@ template<int N, int B> struct TypeUserEnumN : TypeUserEnum<B>, EnumTN<uint_bits_
 //-----------------------------------------------------------------------------
 
 struct Value {
-	enum { // flag values
+	enum FLAGS : uint16 { // flag values
+		NONE		= 0,
 		CRCID		= ISO_BIT(16, 0),	// the id is a crc
 		CRCTYPE		= ISO_BIT(16, 1),	// the type is a crc
 		EXTERNAL	= ISO_BIT(16, 2),	// this is an external value
@@ -873,16 +917,27 @@ struct Value {
 #endif
 		FROMBIN = PROCESSED,
 	};
+	friend constexpr FLAGS operator&(FLAGS a, FLAGS b)	{ return FLAGS((int)a & (int)b); }
+	friend constexpr FLAGS operator|(FLAGS a, FLAGS b)	{ return FLAGS((int)a | (int)b); }
+	friend constexpr FLAGS operator-(FLAGS a, FLAGS b)	{ return FLAGS((int)a & ~(int)b); }
+	friend constexpr FLAGS operator*(FLAGS a, bool b)	{ return b ? a : NONE; }
+	friend FLAGS& operator|=(FLAGS &a, FLAGS b) { return a = a | b; }
+	friend FLAGS& operator-=(FLAGS &a, FLAGS b) { return a = a - b; }
+	friend FLAGS& operator^=(FLAGS &a, FLAGS b) { return a = FLAGS(a ^ b); }
 	tag1			id;
 	type_ptr		type;
 	uint32			user;
-	uint16			flags;
+	FLAGS			flags;
 	atomic<uint16>	refs;
 
-	friend bool _IsType(const Value* v, const tag2& id2) { return v && !!v->type && (v->flags & CRCTYPE ? id2.get_crc32() == (crc32&)v->type : v->type->GetType() == USER && ((TypeUser*)v->type.get())->ID() == id2); }
-	friend bool _IsType(const Value* v, const Type* t, int crit = 0) { return Same(!v || v->flags & CRCTYPE ? 0 : (const Type*)v->type, t, crit); }
+	friend bool _IsType(const Value* v, const tag2& id2) {
+		return v && !!v->type && (v->flags & CRCTYPE ? id2.get_crc32() == (crc32&)v->type : v->type->GetType() == USER && ((TypeUser*)v->type.get())->ID() == id2);
+	}
+	friend bool _IsType(const Value* v, const Type* t, MATCH crit = MATCH_DEFAULT) {
+		return Same(!v || v->flags & CRCTYPE ? 0 : (const Type*)v->type, t, crit);
+	}
 
-	Value(tag2 _id, uint16 flags, const Type* type) : type(type), user(0), flags(flags), refs(0) { SetID(_id); }
+	Value(tag2 _id, FLAGS flags, const Type* type) : type(type), user(0), flags(flags), refs(0) { SetID(_id); }
 	Value(tag2 _id, crc32 _type) : user(0), flags(NATIVE | CRCTYPE), refs(0) {
 		(crc32&)type = _type;
 		SetID(_id);
@@ -890,11 +945,11 @@ struct Value {
 
 	void SetID(tag2 id2) {
 		if (tag s = id2) {
-			id = s;
-			flags &= ~CRCID;
+			id		= s;
+			flags	-= CRCID;
 		} else {
-			id = id2.get_crc32();
-			flags |= CRCID;
+			id		= id2.get_crc32();
+			flags	|= CRCID;
 		}
 	}
 
@@ -903,16 +958,17 @@ struct Value {
 	bool			release()	{ return refs-- == 0 && Delete(); }
 
 	tag2			ID()			const { return id.get_tag2(flags & CRCID); }
-	const Type*		GetType()		const { return type; }
+//	const Type*		GetType()		const { return type; }
+	const Type*		GetType()		const { return flags & CRCTYPE ? nullptr : type; }
+
 	uint32			Flags()			const { return flags; }
 	bool			IsExternal()	const { return !!(flags & EXTERNAL); }
 	bool			IsBin()			const { return (flags & FROMBIN) && !(flags & REDIRECT); }
-	bool			HasCRCType()	const { return !!(flags & CRCTYPE); }
 
 	bool			IsID(const tag2& id2)				const { return ID() == id2; }
 	bool			IsType(const tag2& id2)				const { return _IsType(this, id2); }
-	bool			IsType(const Type* t, int crit = 0)	const { return _IsType(this, t, crit); }
-	template<typename T2> bool IsType(int crit = 0)		const { return _IsType(this, getdef<T2>(), crit); }
+	bool			IsType(const Type* t, MATCH crit = MATCH_DEFAULT)	const { return _IsType(this, t, crit); }
+	template<typename T2> bool IsType(MATCH crit = MATCH_DEFAULT)		const { return _IsType(this, getdef<T2>(), crit); }
 };
 
 template<int B> void* MakeRawPtrExternal(const Type* type, const char* filename, tag2 id);
@@ -923,17 +979,16 @@ template<typename D, typename S> struct		_iso_cast			{ static inline D f(S s) { 
 template<typename D, typename S> inline D	iso_cast(S s)		{ return _iso_cast<D, S>::f(s); }
 template<typename D> inline D				iso_cast(void* s)	{ return (D)s; }
 
-typedef ptr_type<void, 32>::type	user_t;
+typedef ptr_t<void, 32>	user_t;
 
 template<typename T, int B> class ptr {
 	template<class T2, int N2> friend class ptr;
 
 protected:
-	typedef typename ptr_type<holder<T>, B>::type P;
+	typedef ptr_t<holder<T>, B> P;
 
 	struct C : Value, holder<T> {
-		static const uint16 vflags = Value::NATIVE | (B == 32 ? Value::MEMORY32 : 0);
-//		C(tag2 id, const Type* type) : Value(id, vflags, type) {}
+		static constexpr auto vflags = Value::NATIVE | (Value::MEMORY32 * (B == 32));
 		template<typename... PP> C(tag2 id, const Type* type, PP&&... pp) : Value(id, vflags, type), holder<T>(forward<PP>(pp)...) {}
 	};
 
@@ -943,7 +998,9 @@ protected:
 		if (!!p)
 			static_cast<C*>(p.get())->addref();
 	}
-	bool release() { return !!p && static_cast<C*>(p.get())->release(); }
+	bool release() {
+		return !!p && static_cast<C*>(p.get())->release();
+	}
 	void set(holder<T>* _p) {
 		release();
 		p = _p;
@@ -953,78 +1010,81 @@ protected:
 			static_cast<C*>(_p)->addref();
 		set(_p);
 	}
-	holder<T>*	detach()				{ holder<T> *r = p; p = 0; return r; }
+	holder<T>*	detach() {
+		return exchange(p, nullptr);
+	}
 	template<typename T2> operator T2**() const; // hide this
 public:
 	typedef T subtype;
 
-	static Value*	Header(T* p) { return static_cast<C*>((holder<T>*)p); }
-	static ptr<T, B> Ptr(T* p) {
-		P t = (holder<T>*)p;
-		return (ptr<T, B>&)t;
-	}
+	static Value*		Header(T* p)	{ return static_cast<C*>((holder<T>*)p); }
+	static ptr<T, B>	Ptr(T* p)		{ P t = (holder<T>*)p; return (ptr<T, B>&)t; }
 
-	ptr() 													: p(0) 					{}
-	explicit ptr(tag2 id)									: p(allocate<B>::allocator().template make<C>(id, getdef<T>()))	{}
+	ptr() 													: p(nullptr)			{}
+	ptr(const _none&) 										: p(nullptr)			{}
 	ptr(const ptr &p2)										: p(p2.p)				{ addref(); }
 	template<typename T2, int B2> ptr(const ptr<T2,B2> &p2)	: p((holder<T>*)(T*)p2)	{ addref(); }
-	template<typename...PP>	ptr(tag2 id, PP&&...pp)			: p(allocate<B>::allocator().template make<C>(id, getdef<T>(), forward<PP>(pp)...)) {}
+	template<typename...P>	ptr(tag2 id, P&&...p)			: p(allocate<B>::allocator().template make<C>(id, getdef<T>(), forward<P>(p)...)) {}
 	ptr(ptr &&p2)											: p(p2.detach()) 		{}
-
+	
 	~ptr()														{ release();}
 
-	ptr&										operator=(const ptr &p2)		{ set_ref(p2.p); return *this; }
-	template<typename T2, int B2> ptr<T2, B>&	operator=(const ptr<T2, B2> &p2){ set_ref((holder<T>*)iso_cast<T*>(p2.get())); return (ptr<T2,B>&)*this; }
-	ptr&										operator=(ptr &&p2)				{ set(p2.detach()); return *this; }
-	template<typename T2, int B2> ptr<T2, B>&	operator=(ptr<T2, B2> &&p2)		{ set((holder<T>*)iso_cast<T*>(&*p2.detach())); return (ptr<T2,B>&)*this; }
+	ptr&					operator=(const ptr &p2)			{ set_ref(p2.p); return *this; }
+	ptr&					operator=(ptr &&p2)					{ swap(p, p2.p); return *this; }
+	template<typename T2, int B2> ptr<T2, B>& operator=(const ptr<T2, B2> &p2)	{ set_ref((holder<T>*)iso_cast<T*>(p2.get())); return (ptr<T2,B>&)*this; }
+	template<typename T2, int B2> ptr<T2, B>& operator=(ptr<T2, B2> &&p2)		{ set((holder<T>*)iso_cast<T*>(&*p2.detach())); return (ptr<T2,B>&)*this; }
 
 	ptr&					Create(tag2 id = tag2())			{ set(allocate<B>::allocator().template make<C>(id, getdef<T>())); return *this; }
-	template<typename T2> ptr& Create(tag2 id, const T2& t)		{ set(allocate<B>::allocator().template make<C>(id, getdef<T>(), t)); return *this; }
+	template<typename...P> ptr& Create(tag2 id, P&&...p)		{ set(allocate<B>::allocator().template make<C>(id, getdef<T>(), forward<P>(p)...)); return *this; }
 	ptr& CreateExternal(const char* filename, tag2 id = tag2())	{ set((holder<T>*)MakeRawPtrExternal<B>(getdef<T>(), filename, id)); return *this; }
-	bool					Clear()								{ bool ret = release(); p = 0; return ret; }
+	bool					Clear()								{ bool ret = release(); p = nullptr; return ret; }
 
-	Value*					Header()				const	{ return static_cast<C*>(p.get()); }
-	const Type*				GetType()				const	{ return p && !Header()->HasCRCType() ? Header()->type : 0; }
-	tag2					ID()					const	{ return p ? Header()->ID() : tag2(); }
-	const char*				External()				const	{ return p && Header()->IsExternal() ? (const char*)&*p : NULL; }
-	uint32					UserInt()				const	{ return p ? Header()->user : 0; }
-	force_inline void*		User()					const	{ return p ? ((user_t&)Header()->user).get() : 0; }
-	uint32					Flags()					const	{ return p ? Header()->flags : 0; }
-	bool					IsExternal()			const	{ return p && Header()->IsExternal(); }
-	bool					IsBin()					const	{ return p && Header()->IsBin(); }
+	Value*					Header()					const	{ return static_cast<C*>(p.get()); }
+	const Type*				GetType()					const	{ return p ? Header()->GetType() : nullptr; }
+	tag2					ID()						const	{ return p ? Header()->ID() : tag2(); }
+	const char*				External()					const	{ return p && Header()->IsExternal() ? (const char*)&*p : NULL; }
+	uint32					UserInt()					const	{ return p ? Header()->user : 0; }
+	force_inline void*		User()						const	{ return p ? ((user_t&)Header()->user).get() : 0; }
+	Value::FLAGS			Flags()						const	{ return p ? Header()->flags : Value::NONE; }
+	bool					IsExternal()				const	{ return p && Header()->IsExternal(); }
+	bool					IsBin()						const	{ return p && Header()->IsBin(); }
 
-	bool					HasCRCType()			const	{ return p && Header()->HasCRCType(); }
-	bool					HasCRCID()				const	{ return p && Header()->HasCRCID(); }
-	bool					IsID(tag2 id)			const	{ return p && Header()->IsID(id); }
-	bool					IsType(tag2 id)			const	{ return p && Header()->IsType(id); }
-	bool					IsType(const Type* t, int crit = 0)	const { return _IsType(Header(), t, crit); }
-	template<typename T2> bool	IsType(int crit = 0) const	{ return IsType(getdef<T2>(), crit); }
+	bool					HasCRCType()				const	{ return TestFlags(Value::CRCTYPE); }
+	bool					HasCRCID()					const	{ return p && Header()->HasCRCID(); }
+	bool					IsID(tag2 id)				const	{ return p && Header()->IsID(id); }
+	bool					IsType(tag2 id)				const	{ return p && Header()->IsType(id); }
+	bool					IsType(const Type* t, MATCH crit = MATCH_DEFAULT)	const { return _IsType(Header(), t, crit); }
+	template<typename T2> bool	IsType(MATCH crit = MATCH_DEFAULT)				const { return IsType(getdef<T2>(), crit); }
 
-	uint32&					UserInt()						{ return Header()->user; }
-	user_t&					User()							{ return (user_t&)Header()->user; }
-	void					SetFlags(uint32 f)		const	{ if (p) Header()->flags |= f;	}
-	void					ClearFlags(uint32 f)	const	{ if (p) Header()->flags &= ~f; }
-	bool					TestFlags(uint32 f)		const	{ return p && Header()->flags & f; }
-	void					SetID(tag2 id)			const	{ if (p) Header()->SetID(id); }
+	uint32&					UserInt()							{ return Header()->user; }
+	user_t&					User()								{ return (user_t&)Header()->user; }
+	void					SetFlags(Value::FLAGS f)	const	{ if (p) Header()->flags |= f;	}
+	void					ClearFlags(Value::FLAGS f)	const	{ if (p) Header()->flags -= f; }
+	bool					TestFlags(Value::FLAGS f)	const	{ return p && Header()->flags & f; }
+	void					SetID(tag2 id)				const	{ if (p) Header()->SetID(id); }
 
-	T*						get()					const	{ return &*p; }
-							operator const T*()		const	{ return &*p; }
-	template<typename T2>	operator T2*()			const	{ return iso_cast<T2*>(&*p); }
-	typename T_traits<T>::ref	operator*()			const	{ return *p; }
-	T*						operator->()			const	{ return &*p; }
-	bool					operator!()				const	{ return !p; }
-	explicit operator		bool()					const	{ return !!p; }
+	T*						get()						const	{ return &*p; }
+							operator const T*()			const	{ return &*p; }
+	template<typename T2>	operator T2*()				const	{ return iso_cast<T2*>(&*p); }
+//	decltype(auto)			operator*()					const	{ return *p; }
+	typename T_traits<T>::ref	operator*()				const	{ return *p; }
+	T*						operator->()				const	{ return &*p; }
+	bool					operator!()					const	{ return !p; }
+	explicit operator		bool()						const	{ return !!p; }
 
 	template<typename T2> bool operator==(const ptr<T2>& p2)	const { return (void*)p == (void*)p2.p; }
-	template<typename T2> bool operator<(const ptr<T2>& p2)		const { return (void*)p < (void*)p2.p; }
+	template<typename T2> bool operator< (const ptr<T2>& p2)	const { return (void*)p < (void*)p2.p; }
+
+	template<typename T2> T2* test_cast(MATCH crit = MATCH_DEFAULT) const { return IsType<T2>(crit) ? (T2*)*this : nullptr; }
 };
 
 template<typename T>	using ptr64			= ptr<T, 64>;
 template<typename T>	using ptr_machine	= ptr<T, PTRBITS>;
+template<int B> ptr<void, B>	iso_nil		= ptr<void, B>();
 
-inline void*					GetUser(const void* p)	{ return p ? ((user_t&)((Value*)p - 1)->user).get() : 0; }
-inline user_t&					GetUser(void* p)		{ return (user_t&)((Value*)p - 1)->user; }
-template<typename T> Value*		GetHeader(T* p)			{ return ptr<T>::Header(p); }
+inline void*						GetUser(const void* p)					{ return p ? ((user_t&)((Value*)p - 1)->user).get() : 0; }
+inline user_t&						GetUser(void* p)						{ return (user_t&)((Value*)p - 1)->user; }
+template<typename T> Value*			GetHeader(T* p)							{ return ptr<T>::Header(p); }
 
 template<int B, typename T>			ptr<T, B>			GetPtr(T* p)		{ return ptr<T, B>::Ptr(p); }
 template<int B, typename T>			ptr<T, B>			GetPtr(const T* p)	{ return ptr<T, B>::Ptr((T*)p); }
@@ -1035,53 +1095,48 @@ template<typename T>				ptr_machine<T>&		GetPtr(const T*& p)	{ return (ptr_machi
 template<int B>						void*				MakeRawPtrSize(const Type* type, tag2 id, uint32 size);
 extern template						void*				MakeRawPtrSize<32>(const Type* type, tag2 id, uint32 size);
 extern template						void*				MakeRawPtrSize<64>(const Type* type, tag2 id, uint32 size);
-template<int B>						void*				MakeRawPtr(const Type* type, tag2 id = tag2())						{ return MakeRawPtrSize<B>(type, id, type->GetSize()); }
 
-template<int B, typename T>			ptr<T, B>			MakePtr(tag2 id)													{ return ptr<T, B>(id); }
-template<int B, typename T, int N>	ptr<T[N], B>		MakePtr(tag2 id, const T (&t)[N])									{ return ptr<T[N], B>(id, (holder<T[N]>&)t); }
-template<int B, int N>				ptr<const char*, B>	MakePtr(tag2 id, const char (&t)[N])								{ return ptr<const char*, B>(id, t); }
-template<int B> inline				ptr<void, B>		MakePtr(const Type* type, tag2 id = tag2())							{ return GetPtr<B>(MakeRawPtrSize<B>(type, id, type->GetSize())); }
-template<int B> inline				ptr<void, B>		MakePtrSize(const Type* type, tag2 id, uint32 size)					{ return GetPtr<B>(MakeRawPtrSize<B>(type, id, size)); }
-template<int B, typename T> inline	ptr<T, B>			MakePtrSize(tag2 id, uint32 size)									{ return GetPtr<B>((T*)MakeRawPtrSize<B>(getdef<T>(), id, size)); }
-template<int B> inline				ptr<void, B>		MakePtrExternal(const Type* type, const char* fn, tag2 id = tag2()) { return GetPtr<B>(MakeRawPtrExternal<B>(type, fn, id)); }
-template<int B, typename T> inline	ptr<T, B>			MakePtrExternal(const char* filename, tag2 id = tag2())				{ return GetPtr<B>((T*)MakeRawPtrExternal<B>(getdef<T>(), filename, id)); }
+template<int B>						void*				MakeRawPtr(const Type* type, tag2 id = tag2())		{ return MakeRawPtrSize<B>(type, id, type->GetSize()); }
+template<int B, typename T, typename U> auto			MakeRawPtr(const Type* type, tag2 id, U&& u)		{ return new(MakeRawPtrSize<B>(type, id, type->GetSize())) T(forward<U>(u)); }
+template<int B, typename T, typename U> auto			MakeRawPtr(tag2 id, U&& u)							{ return new(MakeRawPtrSize<B>(getdef<T>(), id, sizeof(T))) T(forward<U>(u)); }
+template<int B, typename T>			auto				MakeRawPtr(const Type* type, tag2 id, T&& t)		{ return MakeRawPtr<B,T,T>(type, id, forward<T>(t)); }
+template<int B, typename T>			auto				MakeRawPtr(tag2 id, T&& t)							{ return MakeRawPtr<B,T,T>(id, forward<T>(t)); }
+
+template<int B> inline				ptr<void, B>		MakePtrSize(const Type* type, tag2 id, uint32 size)	{ return GetPtr<B>(MakeRawPtrSize<B>(type, id, size)); }
+template<int B, typename T> inline	ptr<T, B>			MakePtrSize(tag2 id, uint32 size)					{ return GetPtr<B>((T*)MakeRawPtrSize<B>(getdef<T>(), id, size)); }
+inline								ptr<void>			MakePtrSize(const Type* type, tag2 id, uint32 size)	{ return MakePtrSize<32>(type, id, size); }
+
 template<int B> inline				ptr<void, B>		MakePtrIndirect(ptr<void, B> p, const Type* type) {
 	ptr<ptr<void, B>, B> p2(p.ID(), p);
 	p2.Header()->type = type;
 	p2.SetFlags(Value::REDIRECT | (p.Flags() & Value::HASEXTERNAL));
 	return p2;
 }
-template<int B, typename T> inline ptr<T, B> MakePtrIndirect(ptr<void, B> p) { return MakePtrIndirect(p, getdef<T>()); }
+template<int B, typename T> inline	ptr<T, B>			MakePtrIndirect(ptr<void, B> p)						{ return MakePtrIndirect(p, getdef<T>()); }
+inline								ptr<void>			MakePtrIndirect(ptr<void> p, const Type* type)		{ return MakePtrIndirect<32>(p, type); }
+template<typename T> inline			ptr<T>				MakePtrIndirect(ptr<void> p)						{ return MakePtrIndirect<32, T>(p); }
 
-template<int B> ptr<void, B>	iso_nil = ptr<void, B>();
+template<int B, typename T>			ptr<T, B>			MakePtr(const Type* type, tag2 id, T &&t)			{ return GetPtr<B>(MakeRawPtr<B>(type, id, forward<T>(t))); }
+template<int B> inline				ptr<void, B>		MakePtr(const Type* type, tag2 id = tag2())			{ return GetPtr<B>(MakeRawPtrSize<B>(type, id, type->GetSize())); }
+template<int B, typename T>			ptr<T, B>			MakePtr(tag2 id)									{ return id; }
+template<int B, typename T>			auto				MakePtr(tag2 id, T&& t)								{ return ptr<noconst_t<noref_t<T>>, B>(id, forward<T>(t)); }
+template<int B, typename T, int N>	ptr<T[N], B>		MakePtr(tag2 id, const T (&t)[N])					{ return {id, (holder<T[N]>&)t}; }
+template<int B, int N>				ptr<const char*, B>	MakePtr(tag2 id, const char (&t)[N])				{ return {id, t}; }
 
-template<typename T>				ptr<T>				MakePtr(tag2 id)													{ return MakePtr<32, T>(id); }
-template<typename T, int N>			ptr<T[N]>			MakePtr(tag2 id, const T (&t)[N])									{ return ptr<T[N], 32>(id, (holder<T[N]>&)t); }
-template<int N>						ptr<const char*>	MakePtr(tag2 id, const char (&t)[N])								{ return ptr<const char*>(id, t); }
-template<typename T> inline			ptr<T>				MakePtrExternal(const char* fn, tag2 id = tag2())					{ return MakePtrExternal<32, T>(fn, id); }
-template<typename T> inline			ptr<T>				MakePtrIndirect(ptr<void> p)										{ return MakePtrIndirect<32, T>(p); }
-template<typename T>				ptr<T>				MakePtrCheck(tag2 id, const T& t)									{ if (!&t) return iso_nil<32>; return MakePtr<32>(id, t); }
+template<typename T>				ptr<T>				MakePtr(const Type* type, tag2 id, T &&t)			{ return MakePtr<32>(type, id, forward<T>(t)); }
+inline								ptr<void>			MakePtr(const Type* type, tag2 id = tag2())			{ return MakePtr<32>(type, id); }
+template<typename T>				ptr<T>				MakePtr(tag2 id)									{ return id; }
+template<typename T>				auto				MakePtr(tag2 id, T&& t)								{ return ptr<noconst_t<noref_t<T>>, 32>(id, forward<T>(t)); }
+template<typename T, int N>			ptr<T[N]>			MakePtr(tag2 id, const T (&t)[N])					{ return {id, (holder<T[N]>&)t}; }
+template<int N>						ptr<const char*>	MakePtr(tag2 id, const char (&t)[N])				{ return {id, t}; }
 
-inline								ptr<void>			MakePtr(const Type* type, tag2 id = tag2())							{ return MakePtr<32>(type, id); }
-inline								ptr<void>			MakePtrSize(const Type* type, tag2 id, uint32 size)					{ return MakePtrSize<32>(type, id, size); }
+template<int B, typename T>			ptr<T, B>			MakePtrCheck(tag2 id, const T& t)					{ if (!&t) return iso_nil<B>; return MakePtr<B>(id, t); }
+template<typename T>				ptr<T>				MakePtrCheck(tag2 id, const T& t)					{ if (!&t) return iso_nil<32>; return MakePtr<32>(id, t); }
+
+template<int B> inline				ptr<void, B>		MakePtrExternal(const Type* type, const char* fn, tag2 id = tag2()) { return GetPtr<B>(MakeRawPtrExternal<B>(type, fn, id)); }
+template<int B, typename T> inline	ptr<T, B>			MakePtrExternal(const char* filename, tag2 id = tag2())				{ return GetPtr<B>((T*)MakeRawPtrExternal<B>(getdef<T>(), filename, id)); }
 inline								ptr<void>			MakePtrExternal(const Type* type, const char* fn, tag2 id = tag2())	{ return MakePtrExternal<32>(type, fn, id); }
-inline								ptr<void>			MakePtrIndirect(ptr<void> p, const Type* type)						{ return MakePtrIndirect<32>(p, type); }
-
-#ifdef USE_RVALUE_REFS
-template<int B, typename T, typename U> auto	MakeRawPtr(const Type* type, tag2 id, U&& u)	{ return new(MakeRawPtrSize<B>(type, id, type->GetSize())) T(forward<U>(u)); }
-template<int B, typename T, typename U> auto	MakeRawPtr(tag2 id, U&& u)					{ return new(MakeRawPtrSize<B>(getdef<T>(), id, sizeof(T))) T(forward<U>(u)); }
-
-template<int B, typename T>			auto		MakeRawPtr(const Type* type, tag2 id, T&& t)	{ return MakeRawPtr<B,T,T>(type, id, forward<T>(t)); }
-template<int B, typename T>			auto		MakeRawPtr(tag2 id, T&& t)					{ return MakeRawPtr<B,T,T>(id, forward<T>(t)); }
-
-template<int B, typename T>			auto		MakePtr(tag2 id, T&& t)						{ return ptr<noconst_t<noref_t<T>>, B>(id, forward<T>(t)); }
-template<typename T>				auto		MakePtr(tag2 id, T&& t)						{ return ptr<noconst_t<noref_t<T>>>(id, forward<T>(t)); }
-template<int B, typename T>			auto		MakePtr(const Type* type, tag2 id, T &&t)	{ return GetPtr<B>(MakeRawPtr<B>(type, id, forward<T>(t))); }
-template<typename T>				auto		MakePtr(const Type* type, tag2 id, T &&t)	{ return GetPtr<32>(MakeRawPtr<32>(type, id, forward<T>(t))); }
-#else
-template<int B, typename T>			ptr<T, B>	MakePtr(tag2 id, const T& t) { return ptr<T, B>(id, t); }
-template<typename T>				ptr<T>		MakePtr(tag2 id, const T& t) { return MakePtr<32>(id, t); }
-#endif
+template<typename T> inline			ptr<T>				MakePtrExternal(const char* fn, tag2 id = tag2())					{ return MakePtrExternal<32, T>(fn, id); }
 
 //-----------------------------------------------------------------------------
 //	weak
@@ -1093,18 +1148,16 @@ struct weak : public e_treenode<weak, true> {
 		Value* get() { return (Value*)this - 1; }
 	};
 
-	typedef locked_s<tree_t, Mutex> locked_tree;
-
-	static locked_tree tree() {
+	static auto tree() {
 		static tree_t		tree;
 		static Mutex		m;
-		return locked_tree(tree, m);
+		return locked(tree, m);
 	}
 
 	static weak* get(void* _p) {
 		A* p = (A*)_p;
 		if (p->get()->flags & Value::WEAKREFS) {
-			if (weak* w = find(tree().get(), p)) {
+			if (weak* w = &*find(tree().get(), p)) {
 				w->addref();
 				return w;
 			}
@@ -1123,19 +1176,21 @@ struct weak : public e_treenode<weak, true> {
 
 	void set(A* _p) {
 		if (p) {
-			p->get()->flags &= ~Value::WEAKREFS;
-			tree().get().remove(this);
+			p->get()->flags -= Value::WEAKREFS;
+			tree()->remove(this);
 		}
 		if (p = _p) {
+			child[0] = child[1] = nullptr;
 			p->get()->flags |= Value::WEAKREFS;
-			tree().get().insert(this);
+			tree()->insert(this);
 		}
 	}
 
 	static void remove(const Value* v) {
-		if (weak* w = find(tree().get(), (A*)(v + 1))) {
+		auto	t = tree();
+		if (weak* w = &*find(t.get(), (A*)(v + 1))) {
 			w->p = 0;
-			tree().get().remove(w);
+			t->remove(w);
 		}
 	}
 
@@ -1144,13 +1199,13 @@ struct weak : public e_treenode<weak, true> {
 	weak(A* _p) : p(_p), weak_refs(0) {
 		if (p) {
 			p->get()->flags |= Value::WEAKREFS;
-			tree().get().insert(this);
+			tree()->insert(this);
 		}
 	}
 	~weak() {
 		if (p) {
-			p->get()->flags &= ~Value::WEAKREFS;
-			tree().get().remove(this);
+			p->get()->flags -= Value::WEAKREFS;
+			tree()->remove(this);
 		}
 	}
 };
@@ -1237,13 +1292,11 @@ struct OpenArrayHead {
 	uint32 max;
 	uint32 count : 31, bin : 1;
 
-	//	void operator delete(void*);
-
-	friend uint32 GetCount(const OpenArrayHead* h)	{ return h ? h->count : 0; }
-	friend uint8* GetData(const OpenArrayHead* h)	{ return h ? (uint8*)(h + 1) : 0; }
+	friend uint32	GetCount(const OpenArrayHead* h)		{ return h ? h->count : 0; }
+	friend uint8*	GetData(const OpenArrayHead* h)			{ return h ? (uint8*)(h + 1) : 0; }
 	friend memory_block GetMemory(const OpenArrayHead* h, uint32 subsize)	{ return {GetData(h), subsize * GetCount(h)}; }
 
-	OpenArrayHead(uint32 _max, uint32 _count) : max(_max), count(_count), bin(0) {}
+	OpenArrayHead(uint32 max, uint32 count) : max(max), count(count), bin(0) {}
 	void			SetCount(uint32 _count)						{ count = _count; }
 	void			SetBin(bool _bin)							{ bin = _bin; }
 	void*			GetElement(int i, uint32 subsize)	const	{ return (uint8*)(this + 1) + subsize * i; }
@@ -1277,14 +1330,13 @@ template<int B> struct OpenArrayAlloc {
 		if (h && !h->bin)
 			A::free(adjust(h, align));
 	}
-
 	static OpenArrayHead* Create(uint32 subsize, uint32 align, uint32 max, uint32 count) {
 		ISO_ASSERT(count < 0x80000000u);
-		return max ? ISO_VERIFY(new (adjust(A::alloc(alloc_size(subsize, align, max), align), align)) OpenArrayHead(max, count)) : 0;
+		return max ? ISO_VERIFY(new(adjust(A::alloc(alloc_size(subsize, align, max), align), align)) OpenArrayHead(max, count)) : 0;
 	}
 	static OpenArrayHead* Resize(OpenArrayHead* h, uint32 subsize, uint32 align, uint32 max, uint32 count) {
 		ISO_ASSERT(count < 0x80000000u);
-		return ISO_VERIFY(new (adjust(A::realloc(adjust(h, align), alloc_size(subsize, align, max), align), align)) OpenArrayHead(max, count));
+		return ISO_VERIFY(new(adjust(A::realloc(adjust(h, align), alloc_size(subsize, align, max), align), align)) OpenArrayHead(max, count));
 	}
 	iso_export static OpenArrayHead* Create(OpenArrayHead* h, uint32 subsize, uint32 align, uint32 count);
 	iso_export static OpenArrayHead* Create(OpenArrayHead* h, const Type* type, uint32 count);
@@ -1293,7 +1345,7 @@ template<int B> struct OpenArrayAlloc {
 	iso_export static OpenArrayHead* Insert(OpenArrayHead* h, uint32 subsize, uint32 align, int i, bool clear = false);
 };
 
-template<int B> ptr<void, B> &FindByType(ptr<void, B> *i, ptr<void, B> *e, const Type *type, int crit) {
+template<int B> ptr<void, B> &FindByType(ptr<void, B> *i, ptr<void, B> *e, const Type *type, MATCH crit) {
 	for (; i != e; ++i) {
 		if (i->IsType(type, crit))
 			return *i;
@@ -1311,7 +1363,7 @@ template<int B> ptr<void, B> &FindByType(ptr<void, B> *i, ptr<void, B> *e, tag2 
 
 template<typename T, int B = 32> class OpenArrayView {
 protected:
-	typename ptr_type<T, B>::type	p;
+	ptr_t<T, B>			p;
 	OpenArrayView(T *p) : p(p) {}
 public:
 	typedef T				*iterator;
@@ -1331,8 +1383,8 @@ public:
 	const T&		operator[](tag2 id)	const	{ int i = _GetIndex(id, *this, 0); return i < 0 ? (T&)iso_nil<PTRBITS> : (*this)[i]; }
 
 	T&						FindByType(tag2 id)						{ return ISO::FindByType(begin(), end(), id); }
-	T&						FindByType(const Type* t, int crit = 0)	{ return ISO::FindByType(begin(), end(), t, crit); }
-	template<typename U> ptr<U, B>	FindByType(int crit = 0)		{ return FindByType(getdef<U>(), crit); }
+	T&						FindByType(const Type* t, MATCH crit = MATCH_DEFAULT)	{ return ISO::FindByType(begin(), end(), t, crit); }
+	template<typename U> ptr<U, B>	FindByType(MATCH crit = MATCH_DEFAULT)			{ return FindByType(getdef<U>(), crit); }
 
 	size_t			size()		const	{ return Count(); }
 	uint32			size32()	const	{ return Count(); }
@@ -1356,7 +1408,7 @@ public:
 
 template<int B> class OpenArrayView<void, B> {
 protected:
-	typename ptr_type<void, B>::type	p;
+	ptr_t<void, B>			p;
 	OpenArrayView(void *p) : p(p) {}
 	OpenArrayHead* Header() const { return OpenArrayHead::Get(p); }
 
@@ -1380,10 +1432,10 @@ public:
 	BASE	View() const		{ return *this; }
 
 	OpenArray() {}
-	OpenArray(OpenArray &&b)		: BASE(exchange(b.p, nullptr)) {}
-	OpenArray(uint32 count)			: BASE((T*)GetData(OpenArrayAlloc<B>::Create((uint32)sizeof(T), align, count, count))) {
-		fill_new_n(p.get(), count);
-	}
+	OpenArray(OpenArray &&b)			: BASE(exchange(b.p, nullptr)) {}
+	OpenArray(uint32 count)				: BASE((T*)GetData(OpenArrayAlloc<B>::Create((uint32)sizeof(T), align, count, count))) { fill_new_n(p.get(), count); }
+	OpenArray(initializer_list<T> c)	: OpenArray(c.size())		{ copy_new_n(c.begin(), p.get(), c.size()); }
+
 	template<typename C, typename = enable_if_t<has_begin_v<C>>> OpenArray(const C& c) {
 		using iso::begin;
 		uint32	count = num_elements32(c);
@@ -1391,10 +1443,10 @@ public:
 		copy_new_n(begin(c), p.get(), count);
 	}
 	template<typename R, typename=is_reader_t<R>>	OpenArray(R &&r, size_t n) : OpenArray(n) { readn(r, BASE::begin(), n); }
-
-	OpenArray(const const_memory_block &mem) : OpenArray(make_range<const T>(mem)) {}
-	OpenArray(const memory_block &mem) : OpenArray(make_range<const T>(mem)) {}
-	OpenArray(const malloc_block &mem) : OpenArray(make_range<const T>(mem)) {}
+	
+	OpenArray(const const_memory_block &mem)	: OpenArray(make_range<const T>(mem)) {}
+	OpenArray(const memory_block &mem)			: OpenArray(make_range<const T>(mem)) {}
+	OpenArray(const malloc_block &mem)			: OpenArray(make_range<const T>(mem)) {}
 
 	~OpenArray() { Clear(); }
 
@@ -1404,9 +1456,11 @@ public:
 	//	construct_array_it(p.get(), b.Count(), b.begin());
 	//}
 
-	OpenArray	Dup() const {
-		return *this;
-	}
+	friend OpenArray	copy(const OpenArray &a)	{ return a; }
+
+	//OpenArray	Dup() const {
+	//	return *this;
+	//}
 
 	OpenArray& Create(uint32 count, bool init = true) {
 		T*				t = p;
@@ -1462,6 +1516,9 @@ public:
 		p = t = (T*)GetData(h);
 		return t + GetCount(h) - 1;
 	}
+	T& Append(const T &t) {
+		return *new (_Append()) T(t);
+	}
 	template<typename T2> T& Append(T2 &&t) {
 		return *new (_Append()) T(forward<T2>(t));
 	}
@@ -1478,6 +1535,13 @@ public:
 				p[0] = p[-1];
 			return p[0] = t;
 		}
+	}
+
+	template<typename A> uint32	AppendMulti(A &&c)	{
+		uint32	offset = size32();
+		Resize(offset + c.size32());
+		copy(c, &*this[offset]);
+		return offset;
 	}
 
 	T*	detach() { return exchange(p, nullptr); }
@@ -1523,27 +1587,18 @@ public:
 
 template<typename T, int B> inline size_t num_elements(const OpenArrayView<T, B>& t) { return t.Count(); }
 
-template<int B, typename C> auto	MakePtrArray(tag id, const C& c)				{ return ptr<OpenArray<typename container_traits<C>::element>, B>(id, c); }
+template<int B, typename C> auto	MakePtrArray(tag id, const C& c)				{ return ptr<OpenArray<element_t<C>>, B>(id, c); }
 template<typename C> auto			MakePtrArray(tag id, const C& c)				{ return MakePtrArray<32>(id, c); }
-template<typename C, int B> C		LoadPtrArray(const ptr<void, B>& p)				{ return *(const OpenArray<typename container_traits<C>::element>*)p; }
-template<typename C, int B> void	LoadPtrArray(const ptr<void, B>& p, C& dest)	{ dest = *(const OpenArray<typename container_traits<C>::element>*)p; }
+template<typename C, int B> C		LoadPtrArray(const ptr<void, B>& p)				{ return *(const OpenArray<element_t<C>>*)p; }
+template<typename C, int B> void	LoadPtrArray(const ptr<void, B>& p, C& dest)	{ dest = *(const OpenArray<element_t<C>>*)p; }
 
 //-----------------------------------------------------------------------------
 //	duplicate/copy/flip/compare blocks of data
 //-----------------------------------------------------------------------------
 
-enum DUPF {
-	DUPF_DEEP			= 1 << 0,
-	DUPF_CHECKEXTERNALS = 1 << 1,
-	DUPF_NOINITS		= 1 << 2,
-	DUPF_EARLYOUT		= 1 << 3,	// stop checking when found an external
-	DUPF_DUPSTRINGS		= 1 << 4,	// duplicate strings, even if not ALLOC
-	DUPF_MEMORY32		= 1 << 5,
-};
+iso_export int		_Duplicate(const Type* type, void* data, TRAVERSAL flags = TRAV_DEFAULT, void* physical_ram = 0);
 
-iso_export int		_Duplicate(const Type* type, void* data, int flags = 0, void* physical_ram = 0);
-
-template<int B> void* _DuplicateT(tag2 id, const Type* type, void* data, int flags = 0, uint16 pflags = 0) {
+template<int B> void* _DuplicateT(tag2 id, const Type* type, void* data, TRAVERSAL flags = TRAV_DEFAULT, Value::FLAGS pflags = Value::NONE) {
 	if (!data)
 		return NULL;
 
@@ -1557,8 +1612,8 @@ template<int B> void* _DuplicateT(tag2 id, const Type* type, void* data, int fla
 	return p;
 }
 
-inline ptr_machine<void>	Duplicate(tag2 id, const Type* type, void* data, int flags = 0, uint16 pflags = 0) {
-	return GetPtr(flags & DUPF_MEMORY32
+inline ptr_machine<void>	Duplicate(tag2 id, const Type* type, void* data, TRAVERSAL flags = TRAV_DEFAULT, Value::FLAGS pflags = Value::NONE) {
+	return GetPtr(flags & TRAV_MEMORY32
 		? _DuplicateT<32>(id, type, data, flags, pflags)
 		: _DuplicateT<64>(id, type, data, flags, pflags)
 	);
@@ -1566,14 +1621,14 @@ inline ptr_machine<void>	Duplicate(tag2 id, const Type* type, void* data, int fl
 
 template<class T> inline T DuplicateData(const T& t, bool deep = false) {
 	T t2 = t;
-	_Duplicate(getdef<T>(), &t2, deep ? DUPF_DEEP : 0);
+	_Duplicate(getdef<T>(), &t2, TRAV_DEEP * deep);
 	return t2;
 }
 
 template<class T, int B> inline ptr<T, B> Duplicate(tag2 id, const ptr<T, B>& p, bool deep = false) {
 	auto	ptrflags	= p.Flags();
 	auto	pflags		= ptrflags & (Value::REDIRECT | Value::SPECIFIC | Value::ALWAYSMERGE);
-	auto	dupflags 	= (deep ? DUPF_DEEP : 0) | ((ptrflags & Value::HASEXTERNAL) ? DUPF_CHECKEXTERNALS : 0);
+	auto	dupflags 	= (TRAV_DEEP * deep) | (TRAV_CHECKEXTERNALS * !!(ptrflags & Value::HASEXTERNAL));
 	return GetPtr<B>((T*)(
 		p.Flags() & Value::MEMORY32
 			? _DuplicateT<32>(id, p.GetType(), p, dupflags, pflags)
@@ -1585,23 +1640,26 @@ template<class T, int B> inline ptr<T, B> Duplicate(const ptr<T, B>& p, bool dee
 }
 
 template<int B, class T, int B2> inline ptr<T, B> Duplicate(tag2 id, const ptr<T, B2>& p, bool deep = false) {
-	return GetPtr<B>((T*)_DuplicateT<B>(id, p.GetType(), p, (deep ? DUPF_DEEP : 0) | ((p.Flags() & Value::HASEXTERNAL) ? DUPF_CHECKEXTERNALS : 0), p.Flags() & (Value::REDIRECT | Value::SPECIFIC | Value::ALWAYSMERGE)));
+	return GetPtr<B>((T*)_DuplicateT<B>(id, p.GetType(), p, (TRAV_DEEP * deep) | (TRAV_CHECKEXTERNALS * !!(p.Flags() & Value::HASEXTERNAL)), p.Flags() & (Value::REDIRECT | Value::SPECIFIC | Value::ALWAYSMERGE)));
 }
 template<int B, class T, int B2> inline ptr<T, B> Duplicate(const ptr<T, B2>& p, bool deep = false) {
 	return Duplicate<B>(p.ID(), p, deep);
 }
 
 
-iso_export bool CompareData(const Type* type, const void* data1, const void* data2, int flags = 0);
+iso_export bool CompareData(const Type* type, const void* data1, const void* data2, TRAVERSAL flags = TRAV_DEFAULT);
 iso_export void CopyData(const Type* type, const void* srce, void* dest);
 iso_export void FlipData(const Type* type, const void* srce, void* dest);
-iso_export bool CompareData(ptr<void> p1, ptr<void> p2, int flags = 0);
+iso_export bool CompareData(ptr<void> p1, ptr<void> p2, TRAVERSAL flags = TRAV_DEFAULT);
 iso_export void SetBigEndian(ptr<void> p, bool big);
-iso_export bool CheckHasExternals(const ptr<void>& p, int flags = DUPF_EARLYOUT, int depth = 64);
+iso_export bool CheckHasExternals(const ptr<void>& p, TRAVERSAL flags = TRAV_EARLYOUT, int depth = 64);
 
-template<class T> inline void CopyData(const T* srce, T* dest) { CopyData(getdef<T>(), srce, dest); }
-template<class T> inline void FlipData(const T* srce, void* dest) { FlipData(getdef<T>(), srce, dest); }
-template<class T> inline bool CompareData(const T* data1, const T* data2, int flags = 0) { return CompareData(getdef<T>(), data1, data2, flags); }
+template<class T> inline void CopyData(const T* srce, T* dest)		{ CopyData(getdef<T>(), srce, dest); }
+template<class T> inline void FlipData(const T* srce, void* dest)	{ FlipData(getdef<T>(), srce, dest); }
+
+template<class T> inline bool CompareData(const T* data1, const T* data2, TRAVERSAL flags = TRAV_DEFAULT) {
+	return CompareData(getdef<T>(), data1, data2, flags);
+}
 
 //-----------------------------------------------------------------------------
 //	def type definition creators
@@ -1719,9 +1777,9 @@ template<class T> inline bool CompareData(const T* data1, const T* data2, int fl
 #define ISO_SETFIELDT1(i, e, t)				ISO_SETFIELDXT1(i, e, STRINGIFY2(e), t)
 #define ISO_SETFIELDX1(i, e, n)				fields[i].set(tag(n), getdef(((_S*)1)->e), iso_offset(_S, e), sizeof(((_S*)1)->e))
 
-#define ISO_SETFIELDXT(i, e, n, t)			fields[i].template set2<_T, t>(MAKE_FIELD(&_S::e, n))
+#define ISO_SETFIELDXT(i, e, n, t)			fields[i].template set2<_T, t>(meta::field<decltype(&_S::e), &_S::e>(n))  
 #define ISO_SETFIELDT(i, e, t)				ISO_SETFIELDXT(i, e, STRINGIFY2(e), t)
-#define ISO_SETFIELDX(i, e, n)				fields[i].template set<_T>(MAKE_FIELD(&_S::e, n))
+#define ISO_SETFIELDX(i, e, n)				fields[i].template set<_T>(meta::field<decltype(&_S::e), &_S::e>(n))	
 #define ISO_SETFIELD(i, e)					ISO_SETFIELDX(i, e, STRINGIFY2(e))
 
 // set up 2 to 8 composite fields
@@ -1734,30 +1792,30 @@ template<class T> inline bool CompareData(const T* data1, const T* data2, int fl
 #define ISO_SETFIELDS8(i, E1, E2, E3, E4, E5, E6, E7, E8) ISO_SETFIELDS4(i, E1, E2, E3, E4), ISO_SETFIELDS4(i + 4, E5, E6, E7, E8)
 
 //using variadic macros
-#define _FIELD(x)	, MAKE_FIELD(&_S::x, #x)
+#define _FIELD(x)	, meta::field<decltype(&_S::x), &_S::x>(#x)
 #define ISO_SETFIELDS(i, ...)			Init<_T>(i VA_APPLY(_FIELD, __VA_ARGS__))
 #define ISO_SETFIELDS_EXP0(X)
 #define ISO_SETFIELDS_EXP1(X)			ISO_SETFIELDS(X)
 
-#define ISO_DEFCOMPV(S, ...)			ISO_DEFCOMP(S, VA_NUM(__VA_ARGS__))				{ ISO_SETFIELDS(0, __VA_ARGS__); } }
-#define ISO_DEFCOMPPV(S, P, ...)		ISO_DEFCOMPP(S, P, VA_NUM(__VA_ARGS__))			{ ISO_SETFIELDS(0, __VA_ARGS__); } }
-#define ISO_DEFCOMPVT(S, T, ...)		ISO_DEFCOMPT(S, T, VA_NUM(__VA_ARGS__))			{ ISO_SETFIELDS(0, __VA_ARGS__); } }
-#define ISO_DEFCOMPBV(S, B, ...)		ISO_DEFCOMP(S, VA_NUM(__VA_ARGS__)+1)			{ ISO_SETBASE(0, B); ISO_SETFIELDS(1, __VA_ARGS__); } }
-#define ISO_DEFCOMPBVT(S, T, B, ...)	ISO_DEFCOMPT(S, T, VA_NUM(__VA_ARGS__)+1)		{ ISO_SETBASE(0, B); ISO_SETFIELDS(1, __VA_ARGS__); } }
+#define ISO_DEFCOMPV(S, ...)			ISO_DEFCOMP(S, VA_NUM(__VA_ARGS__))					{ ISO_SETFIELDS(0, __VA_ARGS__); } }
+#define ISO_DEFCOMPPV(S, P, ...)		ISO_DEFCOMPP(S, P, VA_NUM(__VA_ARGS__))				{ ISO_SETFIELDS(0, __VA_ARGS__); } }
+#define ISO_DEFCOMPVT(S, T, ...)		ISO_DEFCOMPT(S, T, VA_NUM(__VA_ARGS__))				{ ISO_SETFIELDS(0, __VA_ARGS__); } }
+#define ISO_DEFCOMPBV(S, B, ...)		ISO_DEFCOMP(S, VA_NUM(__VA_ARGS__)+1)				{ ISO_SETBASE(0, B); ISO_SETFIELDS(1, __VA_ARGS__); } }
+#define ISO_DEFCOMPBVT(S, T, B, ...)	ISO_DEFCOMPT(S, T, VA_NUM(__VA_ARGS__)+1)			{ ISO_SETBASE(0, B); ISO_SETFIELDS(1, __VA_ARGS__); } }
 
-#define ISO_DEFUSERCOMPVT(S, T, ...)	ISO_DEFUSERCOMPT(S, T, VA_NUM(__VA_ARGS__))		{ ISO_SETFIELDS(0, __VA_ARGS__); } }
-#define ISO_DEFUSERCOMPXVT(S, n, ...)	_ISO_DEFUSERCOMP(S, VA_NUM(__VA_ARGS__), n, NONE)		{ ISO_SETFIELDS(0, __VA_ARGS__); } }
+#define ISO_DEFUSERCOMPVT(S, T, ...)	ISO_DEFUSERCOMPT(S, T, VA_NUM(__VA_ARGS__))			{ ISO_SETFIELDS(0, __VA_ARGS__); } }
+#define ISO_DEFUSERCOMPXVT(S, n, ...)	_ISO_DEFUSERCOMP(S, VA_NUM(__VA_ARGS__), n, NONE)	{ ISO_SETFIELDS(0, __VA_ARGS__); } }
 
 // param element variadic
-#define ISO_DEFUSERCOMPPV(S, P, ...)	ISO_DEFUSERCOMPP(S, P, VA_NUM(__VA_ARGS__))		{ ISO_SETFIELDS(0, __VA_ARGS__); } }
-#define ISO_DEFUSERCOMPPXV(S, P, n,...)	ISO_DEFUSERCOMPPX(S, P, VA_NUM(__VA_ARGS__), n)	{ ISO_SETFIELDS(0, __VA_ARGS__); } }
+#define ISO_DEFUSERCOMPPV(S, P, ...)	ISO_DEFUSERCOMPP(S, P, VA_NUM(__VA_ARGS__))			{ ISO_SETFIELDS(0, __VA_ARGS__); } }
+#define ISO_DEFUSERCOMPPXV(S, P, n,...)	ISO_DEFUSERCOMPPX(S, P, VA_NUM(__VA_ARGS__), n)		{ ISO_SETFIELDS(0, __VA_ARGS__); } }
 
-#define ISO_DEFUSERCOMPV(S, ...)		ISO_DEFUSERCOMP(S, VA_NUM(__VA_ARGS__))			{ ISO_SETFIELDS(0, __VA_ARGS__); } }
-#define ISO_DEFUSERCOMPXV(S, n,...)		ISO_DEFUSERCOMPX(S, VA_NUM(__VA_ARGS__), n)		{ ISO_SETFIELDS(0, __VA_ARGS__); } }
-#define ISO_DEFUSERCOMPFV(S, F, ...)	ISO_DEFUSERCOMPF(S, VA_NUM(__VA_ARGS__), F)		{ ISO_SETFIELDS(0, __VA_ARGS__); } }
-#define ISO_DEFUSERCOMPXFV(S, n, F,...)	ISO_DEFUSERCOMPXF(S, VA_NUM(__VA_ARGS__), n, F)	{ ISO_SETFIELDS(0, __VA_ARGS__); } }
-#define ISO_DEFUSERCOMPVT2(S, ...)		ISO_DEFUSERCOMPT2(S, VA_NUM(__VA_ARGS__))		{ ISO_SETFIELDS(0, __VA_ARGS__); } }
-#define ISO_DEFUSERCOMPVT2X(S, n, ...)	ISO_DEFUSERCOMPT2X(S, VA_NUM(__VA_ARGS__), n)	{ ISO_SETFIELDS(0, __VA_ARGS__); } }
+#define ISO_DEFUSERCOMPV(S, ...)		ISO_DEFUSERCOMP(S, VA_NUM(__VA_ARGS__))				{ ISO_SETFIELDS(0, __VA_ARGS__); } }
+#define ISO_DEFUSERCOMPXV(S, n,...)		ISO_DEFUSERCOMPX(S, VA_NUM(__VA_ARGS__), n)			{ ISO_SETFIELDS(0, __VA_ARGS__); } }
+#define ISO_DEFUSERCOMPFV(S, F, ...)	ISO_DEFUSERCOMPF(S, VA_NUM(__VA_ARGS__), F)			{ ISO_SETFIELDS(0, __VA_ARGS__); } }
+#define ISO_DEFUSERCOMPXFV(S, n, F,...)	ISO_DEFUSERCOMPXF(S, VA_NUM(__VA_ARGS__), n, F)		{ ISO_SETFIELDS(0, __VA_ARGS__); } }
+#define ISO_DEFUSERCOMPVT2(S, ...)		ISO_DEFUSERCOMPT2(S, VA_NUM(__VA_ARGS__))			{ ISO_SETFIELDS(0, __VA_ARGS__); } }
+#define ISO_DEFUSERCOMPVT2X(S, n, ...)	ISO_DEFUSERCOMPT2X(S, VA_NUM(__VA_ARGS__), n)		{ ISO_SETFIELDS(0, __VA_ARGS__); } }
 
 #define ISO_DEFUSERCOMPPV(S, P, ...)	ISO_DEFUSERCOMPP(S, P, VA_NUM(__VA_ARGS__))			{ ISO_SETFIELDS(0, __VA_ARGS__); } }
 
@@ -1769,9 +1827,9 @@ template<class T> inline bool CompareData(const T* data1, const T* data2, int fl
 
 // header for user-enum def
 #define ISO_DEFUSERENUMXF(S, N, n, B, F) template<> struct ISO::def<S> : public ISO::TypeUserEnumN<N, B> { typedef S _S; def() : TypeUserEnumN<N, B>(n, F)
-#define ISO_DEFUSERENUMX(S, N, n) ISO_DEFUSERENUMXF(S, N, n, 32, NONE)
-#define ISO_DEFUSERENUMF(S, N, B, F) ISO_DEFUSERENUMXF(S, N, #S, B, F)
-#define ISO_DEFUSERENUM(S, N) ISO_DEFUSERENUMXF(S, N, #S, BIT_COUNT<S>, NONE)
+#define ISO_DEFUSERENUMX(S, N, n)		ISO_DEFUSERENUMXF(S, N, n, sizeof(S) * 8, NONE)
+#define ISO_DEFUSERENUMF(S, N, B, F)	ISO_DEFUSERENUMXF(S, N, #S, B, F)
+#define ISO_DEFUSERENUM(S, N)			ISO_DEFUSERENUMXF(S, N, #S, BIT_COUNT<S>, NONE)
 #define ISO_SETENUMX(i, e, n) enums[i].set(n, e)
 
 #define ISO_ENUM(x)	, #x, x
@@ -1783,8 +1841,8 @@ template<class T> inline bool CompareData(const T* data1, const T* data2, int fl
 #define ISO_DEFUSERENUMXFQV(S, n, B, F, ...)	ISO_DEFUSERENUMXF(S, VA_NUM(__VA_ARGS__), n, B, F) { ISO_SETENUMSQ(0, __VA_ARGS__); } }
 #define ISO_DEFUSERENUMXV(S, n, ...)			ISO_DEFUSERENUMXF(S, VA_NUM(__VA_ARGS__), n, 32, NONE) { ISO_SETENUMS(0, __VA_ARGS__); } }
 #define ISO_DEFUSERENUMXQV(S, n, ...)			ISO_DEFUSERENUMXF(S, VA_NUM(__VA_ARGS__), n, 32, NONE) { ISO_SETENUMSQ(0, __VA_ARGS__); } }
-#define ISO_DEFUSERENUMV(S, ...)				ISO_DEFUSERENUMXFV(S, #S, 32, NONE, __VA_ARGS__)
-#define ISO_DEFUSERENUMQV(S, ...)				ISO_DEFUSERENUMXFQV(S, #S, 32, NONE, __VA_ARGS__)
+#define ISO_DEFUSERENUMV(S, ...)				ISO_DEFUSERENUMXFV(S, #S, sizeof(S) * 8, NONE, __VA_ARGS__)
+#define ISO_DEFUSERENUMQV(S, ...)				ISO_DEFUSERENUMXFQV(S, #S, sizeof(S) * 8, NONE, __VA_ARGS__)
 
 //// set up 1 to 8 enum values
 //#define ISO_SETENUM(i, e) ISO_SETENUMX(i, e, STRINGIFY2(e))
@@ -1826,9 +1884,11 @@ template<typename T> struct def<packed<T>> : def<T>			{ def() { (&*this)->flags 
 template<typename T> struct def<packed<constructable<T>>>	{ Type* operator&() { return getdef<packed<T>>(); }};
 template<typename T> struct def<packed<const T>>			{ Type* operator&() { return getdef<packed<T>>(); }};
 
+template<typename R, typename T> struct def<_read_as<R,T>> : def_same<R> {};
+
 template<typename T> struct def<holder<T>> : TypeComposite {
 	Element element;
-	def() : TypeComposite(1), element(0, getdef<T>(), 0, sizeof(T)) {}
+	def() : TypeComposite(1), element(none, getdef<T>(), 0, sizeof(T)) {}
 };
 
 template<typename T, int B> struct def<ptr<T, B>> : TypeReference {
@@ -1915,10 +1975,10 @@ ISO_DEFSAME(tag, const char*);
 
 template<> struct def<GUID> : public TypeUserCompN<4> {
 	def() : TypeUserCompN<4>("GUID", NONE, (GUID*)0,
-		0, &GUID::Data1,
-		0, &GUID::Data2,
-		0, &GUID::Data3,
-		0, &GUID::Data4
+		tag(), &GUID::Data1,
+		tag(), &GUID::Data2,
+		tag(), &GUID::Data3,
+		tag(), &GUID::Data4
 	) {}
 };
 
@@ -1942,14 +2002,14 @@ template<typename T, int O> struct TL_elements {
 	};
 	Element		a;
 	TL_elements<B, (uint32)sizeof(temp)> b;
-	TL_elements() : a(0, getdef<A>(), size_t(&((temp*)1)->a) - 1, sizeof(A)) {}
+	TL_elements() : a(none, getdef<A>(), size_t(&((temp*)1)->a) - 1, sizeof(A)) {}
 };
 template<typename T> struct TL_elements<T, 0> {
 	typedef meta::TL_head_t<T>	A;
 	typedef meta::TL_tail_t<T>	B;
 	Element		a;
 	TL_elements<B, (uint32)sizeof(A)> b;
-	TL_elements() : a(0, getdef<A>(), 0, sizeof(A)) {}
+	TL_elements() : a(none, getdef<A>(), 0, sizeof(A)) {}
 };
 template<int O> struct TL_elements<type_list<>, O> {};
 
@@ -1983,8 +2043,8 @@ public:
 	template<typename T> explicit Browser(const OpenArray<T>& t) : type(getdef(t)), data((void*)&t) {}
 
 	TYPE								GetType()			const { return type ? type->GetType() : UNKNOWN; }
-	bool								Is(const Type* t, int crit = 0) const { return Same(type, t, crit); }
-	template<typename T> bool			Is(int crit = 0)	const { return Is(getdef<T>(), crit); }
+	bool								Is(const Type* t, MATCH crit = MATCH_DEFAULT)	const { return Same(type, t, crit); }
+	template<typename T> bool			Is(MATCH crit = MATCH_DEFAULT)					const { return Is(getdef<T>(), crit); }
 	bool								Is(tag2 id)			const { return type && type->Is(id); }
 	const char*							External()			const { const Type* t = type->SkipUser(); return t && t->GetType() == REFERENCE ? GetPtr(t->ReadPtr(data)).External() : 0; }
 	bool								HasCRCType()		const { const Type* t = type->SkipUser(); return t && t->GetType() == REFERENCE && GetPtr(t->ReadPtr(data)).HasCRCType(); }
@@ -2001,14 +2061,15 @@ public:
 	iso_export int						GetIndex(tag2 id, int from = 0) const;
 	iso_export tag2						GetName()			const;
 	iso_export tag2						GetName(int i)		const;
-	iso_export uint32					GetSize()			const;
+	iso_export uint64					GetSize()			const;
+	iso_export uint32					GetSubSize()		const;
 	iso_export bool						Resize(uint32 n)	const;
 	iso_export const Browser			Append()			const;
 	iso_export bool						Remove(int i)		const;
 	iso_export const Browser			Insert(int i)		const;
 	iso_export const Browser2			FindByType(tag2 id) const;
-	iso_export const Browser2			FindByType(const Type* t, int crit = 0) const;
-	template<typename T> const Browser2 FindByType(int crit = 0) const;
+	iso_export const Browser2			FindByType(const Type* t, MATCH crit = MATCH_DEFAULT) const;
+	template<typename T> const Browser2 FindByType(MATCH crit = MATCH_DEFAULT) const;
 
 	Browser								SkipUser()			const { return Browser(type->SkipUser(), data); }
 	uint32								GetAlignment()		const { return type->GetAlignment(); }
@@ -2017,23 +2078,25 @@ public:
 	template<typename T> as<T>			As()				const { return as<T>(*this); }
 	bool								Check(tag2 id)		const { return GetIndex(id) >= 0; }
 
-	explicit operator bool()	const	{ return !!data; }
+	explicit operator bool()	const	{ return type || data; }
 	operator void*()			const	{ return data; }
 	operator const void*()		const	{ return data; }
+	operator const_memory_block()const	{ return {data, GetSize()}; }
+	const_memory_block					RawData() const;
 
 #if 0
 	template<typename T>				operator T*()			const	{ ASSERT(type->SameAs<T>()); return (T*)data; }
 	template<typename T>				operator ptr<T>&()		const	{ ASSERT(type->SameAs<T>()); return ptr<T>::Ptr((T*)data); }
 #else
 	template<typename T>				operator T*()			const;
-	template<typename T>				operator OpenArray<T>*()const;
+	template<typename T, int B>			operator OpenArray<T,B>*()const;
+	template<typename T, int B>			operator OpenArray<T,B>&()const	{ return *(OpenArray<T,B>*)*this; }
 	template<typename T, int B>			operator ptr<T, B>*()	const	{ return (ptr<T, B>*)((SkipUserFlags(type) & Type::TYPE_MASKEX) == (REFERENCE | (B == 64 ? Type::TYPE_64BIT : Type::TYPE_32BIT)) ? data : 0); }
 	template<typename T>				operator T**()			const;//	{ static_assert(false, "nope"); };	//	{ COMPILEASSERT(0); return (T**)0; }
 	template<typename T, int B>			operator ptr<T, B>()	const	{ return ptr<T, B>::Ptr((T*)data); }
 	template<typename T> T*				check()					const;
 
 #endif
-	operator							const_memory_block()	const	{ return const_memory_block(data, GetSize()); }
 
 	getter<const Browser>				get()				const { return *this; }
 	getter<const Browser>				Get()				const { return *this; }
@@ -2051,16 +2114,16 @@ public:
 //	template<typename T, int B = 32> ptr<T, B>	ReadPtr()			const { return ptr<T, B>::Ptr((T*)type->SkipUser()->ReadPtr(data)); }
 	inline const Browser2				GetMember(crc32 id) const;
 
-	iso_export void						UnsafeSet(const void* srce) const;
-	template<typename T> bool			Set(T&& t)			const { return s_setget<noref_cv_t<T>>::set(data, type, forward<T>(t)); }
+	void								UnsafeSet(const void* srce)		const { memcpy(data, srce, type->GetSize()); }
+	template<typename T> bool			Set(T&& t)						const { return s_setget<noref_cv_t<T>>::set(data, type, forward<T>(t)); }
 
-	template<typename T> bool			SetMember(tag2 id, const T& t) const;
+	template<typename T> bool			SetMember(tag2 id, const T& t)	const;
 	template<int N> bool				SetMember(tag2 id, const char (&t)[N]) const { return SetMember(id, (const char*)t); }
-	template<typename T, int B> bool	SetMember(tag2 id, ptr<T, B> t) const;
+	template<typename T, int B> bool	SetMember(tag2 id, ptr<T, B> t)	const;
 
 	iso_export int						ParseField(string_scan& s)	const;
 	iso_export bool						Update(const char* s, bool from = false) const;
-	ptr_machine<void>					Duplicate(tag2 id = tag2(), int flags = DUPF_CHECKEXTERNALS) const { return ISO::Duplicate(id, type, data, flags); }
+	ptr_machine<void>					Duplicate(tag2 id = tag2(), TRAVERSAL flags = TRAV_CHECKEXTERNALS) const { return ISO::Duplicate(id, type, data, flags); }
 	void								ClearTempFlags()		const { ClearTempFlags(*this); }
 	inline const Browser2				Parse(string_scan s, const char_set &set = ~char_set(" \t.[/\\"))	const;
 	inline void							Apply(const Type* type, void f(void*)) const;
@@ -2149,22 +2212,31 @@ inline const Browser2	Browser::operator[](int i)		const	{ return Index(i); }
 inline const Browser2	Browser::Parse(string_scan spec, const char_set &set)	const	{ return Browser2(*this).Parse(spec, set); }
 
 template<typename T>	Browser::operator T*() const	{
-	switch (TypeType(type)) {
+	switch (SkipUserType(type)) {
 		case REFERENCE:
+//		case OPENARRAY:	return **this;
 		case OPENARRAY: return (T*)(**this).data;
-		default: return (T*)data;
+		default:		return (T*)data;
 	}
 }
-//	if (!is_any(TypeType(type), REFERENCE, OPENARRAY)) return (T*)data; return **this; }
-template<typename T>	Browser::operator OpenArray<T>*() const	{
-	if (is_any(SkipUserType(type), REFERENCE, VIRTUAL)) return **this; return (OpenArray<T>*)data;
+
+template<typename T, int B>	Browser::operator OpenArray<T,B>*() const	{
+	switch (SkipUserType(type)) {
+		case REFERENCE:
+		case VIRTUAL:	return **this;
+		case OPENARRAY:
+		//	ISO_ASSERT(Is<OpenArray<T>>());
+			return (OpenArray<T, B>*)data;
+		default:
+			return nullptr;
+	}
 }
+
 template<typename T>	T *Browser::check() const {
 	switch (TypeType(type)) {
 		case REFERENCE:
 		case OPENARRAY: return (**this).check<T>();
-		default: 
-			return Is<T>() ? (T*)data : nullptr;
+		default: 		return Is<T>() ? (T*)data : nullptr;
 	}
 }
 
@@ -2177,7 +2249,7 @@ inline void Browser::Apply(const Type* type, void f(void*, void*), void* param) 
 	ClearTempFlags();
 }
 
-template<typename T> inline const Browser2 Browser::FindByType(int crit) const { return FindByType(getdef<T>(), crit); }
+template<typename T> inline const Browser2 Browser::FindByType(MATCH crit) const { return FindByType(getdef<T>(), crit); }
 
 template<typename T> inline Browser		MakeBrowser(T* t)				{ return Browser(getdef<T>(), (void*)t); }
 template<typename T> inline Browser		MakeBrowser(T& t)				{ return Browser(getdef<T>(), (void*)&t); }
@@ -2208,7 +2280,7 @@ public:
 	operator void*()									const { return p; }
 	template<typename T> T		get()					const { return Browser(p).get<T>(); }
 	getter<const PtrBrowser>	get()					const { return *this; }
-	const Browser2				Parse(const char* s, const char_set &set = ~char_set(" \t.[/\\"), const Type *create_type = 0)	const { return Browser2(p).Parse(s, set, create_type); }
+	const Browser2				Parse(const char* s, const char_set &set = ~char_set(" \t.[/\\"), const Type *create_type = 0)	const { return Browser2(p).Parse(str(s), set, create_type); }
 };
 
 class browser_root : public Browser {
@@ -2251,8 +2323,9 @@ struct Virtual : Type {
 
 	uint32		GetSize() const { return param16; }
 	bool		IsVirtPtr(void* data) {
-		uint32 c = Count(this, data);
-		return !c || !~c;
+		return (bool)Deref(this, data);
+		//uint32 c = Count(this, data);
+		//return !c || !~c;
 	}
 	template<typename T> Virtual(T*, size_t size, FLAGS flags = NONE) : Type(VIRTUAL, flags), Count(T::Count), GetName(T::GetName), GetIndex(T::GetIndex), Index(T::Index), Deref(T::Deref), Resize(T::Resize), Delete(T::Delete), Update(T::Update), Convert(T::Convert) {
 		if (!(flags & VIRTSIZE))
@@ -2492,7 +2565,7 @@ template<typename T> struct def<cached_range<T>>			: TISO_virtualarray<cached_ra
 template<typename T, int N> struct def<split_range<T, N>>	: TISO_virtualarray<split_range<T, N>>	{};
 
 template<typename T, typename I>	tag2	_GetName(const sparse_element<T, I>& t)	{ return _GetName(*t); }
-template<typename T, typename I, typename S> struct def<sparse_array<T, I, S>>	: TISO_virtualarray<dynamic_array<sparse_element<T, I>>>	{};
+//template<typename T, typename I, typename S> struct def<sparse_array<T, I, S>>	: TISO_virtualarray<dynamic_array<sparse_element<T, I>>>	{};
 
 // uses cached_range to provide operator[]
 template<typename T> struct TISO_virtualcachedarray : VirtualT2<T> {
@@ -2507,6 +2580,7 @@ template<typename K, typename T> struct def<hash_map<K, T>> : TISO_virtualcached
 template<typename K, typename T> struct def<hash_map_with_key<K, T>> : TISO_virtualcachedarray<hash_map_with_key<K, T>> {};
 //	static Browser2 Index(hash_map_with_key<K, T>& a, int i)	{ return MakeBrowser(nth(begin(a), i).key_val()); }
 //};
+template<typename T, typename I, typename S> struct def<sparse_array<T, I, S>>	: TISO_virtualcachedarray<sparse_array<T, I, S>>	{};
 
 template<typename T> struct def<e_list<T>>					: TISO_virtualcachedarray<e_list<T>>		{};
 template<typename T> struct def<list<T>>					: TISO_virtualcachedarray<list<T>>			{};
@@ -2653,7 +2727,7 @@ template<typename T, typename A = xint64> struct VStartBin : pair<A, T> {
 
 template<typename T, typename A> struct def<VStartBin<T,A>> : TypeUser { def() : TypeUser("StartBin", getdef<typename VStartBin<T>::B>()) {} };
 
-struct StartBin : VStartBin<OpenArray<xint8> > {
+struct StartBin : VStartBin<OpenArray<xint8, 64> > {
 	StartBin()											{}
 	StartBin(uint64 addr, uint32 size, const void *p)	{ a = addr; memcpy(b.Create(size, false), p, size); }
 };
@@ -2663,7 +2737,8 @@ struct StartBinMachine : VStartBin<OpenArray<xint8, PTRBITS> > {
 	StartBinMachine(uint64 addr, uint32 size, const void *p)	{ a = addr; memcpy(b.Create(size, false), p, size); }
 };
 
-ISO_DEFUSER(StartBin, StartBin::B);
+//ISO_DEFUSER(StartBin, StartBin::B);
+ISO_DEFUSER(StartBin, VStartBin<memory_block>::B);
 
 //-------------------------------------
 // others
@@ -2877,7 +2952,7 @@ template<typename T> bool Browser::SetMember(tag2 id, const T& t) const {
 					Virtual* virt = (Virtual*)type;
 					return virt->Deref(virt, data).SetMember(id, t);
 				}
-				fallthrough
+				//fallthrough
 
 			default:
 				return false;
@@ -2929,7 +3004,7 @@ template<typename T, int B> bool Browser::SetMember(tag2 id, ptr<T, B> t) const 
 					Virtual* virt = (Virtual*)type;
 					return virt->Deref(virt, data).SetMember(id, t);
 				}
-				fallthrough
+				//fallthrough
 			default:
 				return false;
 		}
@@ -2938,6 +3013,22 @@ template<typename T, int B> bool Browser::SetMember(tag2 id, ptr<T, B> t) const 
 }
 
 bool soft_set(void *dst, const Type *dtype, const void *src, const Type *stype);
+
+template<typename T, typename = void> struct s_browser_from_string {
+	static bool f(void* data, const Type* type, T& t) { return false; }
+};
+
+template<typename T> struct s_browser_from_string<T, void_t<decltype(from_string(declval<const char*>(), declval<T&>()))>> {
+	static bool f(void* data, const Type* type, T& t) {
+		if (const void* p = type->ReadPtr(data)) {
+			switch (((TypeString*)type)->log2_char_size()) {
+				case 0:	return !!from_string((const char*)p, t);
+				//case 1:	from_string((const char16*)p, t);
+			}
+		}
+		return false;
+	}
+};
 
 template<typename T, typename V> struct Browser::s_setget {
 	static bool	get(void* data, const Type* type, T& t) {
@@ -2948,37 +3039,33 @@ template<typename T, typename V> struct Browser::s_setget {
 	}
 };
 
-template<> bool Browser::s_setget<bool>::get(void* data, const Type* type, bool &t);
+//template<> bool Browser::s_setget<bool>::get(void* data, const Type* type, bool &t);
 
-template<typename T> struct Browser::s_setget<T, enable_if_t<is_builtin_num<T>>> {
+template<typename T> struct Browser::s_setget<T, enable_if_t<is_builtin_num<T> || is_char<T> || same_v<T, bool> || is_enum<T>>> {
 	static bool get(void* data, const Type* type, T& t) {
 		while (type) {
 			switch (type->GetType()) {
 				case INT:
-					t = T(((TypeInt*)type)->get<(uint32)sizeof(T) * 8>(data)) / ((TypeInt*)type)->frac_factor();
+					t = T(((TypeInt*)type)->get<(uint32)sizeof(T) * 8>(data) / ((TypeInt*)type)->frac_factor());
 					return true;
 				case FLOAT:
 					t = ((TypeFloat*)type)->num_bits() > 32 ? T(((TypeFloat*)type)->get64(data)) : T(((TypeFloat*)type)->get(data));
 					return true;
 				case STRING:
-					if (const void* p = type->ReadPtr(data)) {
-						switch (((TypeString*)type)->log2_char_size()) {
-							case 0:	return !!from_string((const char*)p, t);
-							//case 1:	from_string((const char16*)p, t);
-						}
-					}
-					return false;
+					return s_browser_from_string<T>::f(data, type, t);
 				case REFERENCE: {
 					void* p = type->ReadPtr(data);
 					type	= !p || GetHeader(p)->IsExternal() ? 0 : GetHeader(p)->GetType();
 					data	= p;
 					break;
 				}
-				case USER: type = ((TypeUser*)type)->subtype; break;
+				case USER:
+					type = ((TypeUser*)type)->subtype;
+					break;
 				case VIRTUAL:
 					if (!type->Fixed())
 						return ((Virtual*)type)->Deref((Virtual*)type, data).Read(t);
-					fallthrough
+					//fallthrough
 				default: return false;
 			}
 		}
@@ -2999,7 +3086,7 @@ template<typename T> struct Browser::s_setget<T, enable_if_t<is_builtin_num<T>>>
 				case VIRTUAL:
 					if (!type->Fixed())
 						return ((Virtual*)type)->Deref((Virtual*)type, data).Set(t);
-					fallthrough
+					//fallthrough
 				default: return false;
 			}
 		}
@@ -3253,9 +3340,10 @@ template<typename T>				using ISO_ptr64			= ISO::ptr<T, 64>;
 template<class T>					using ISO_ptr_machine	= ISO::ptr_machine<T>;
 template<typename T, int B = 32>	using ISO_openarray		= ISO::OpenArray<T,B>;
 template<typename T>				using ISO_openarray_machine		= ISO::OpenArray<T,ISO::PTRBITS>;
-template<typename T> using iso_ptr32 = typename ISO::ptr_type<T, 32>::type;
+template<typename T> using iso_ptr32 = ISO::ptr_t<T, 32>;
 
 using ISO::anything;
+using ISO::anything64;
 using ISO::anything_machine;
 
 inline uint32	vram_align(uint32 a)				{ return ISO::iso_bin_allocator().align(a); }

@@ -60,7 +60,9 @@ struct bool32 {
 	bool	v;
 	operator bool() const { return v; }
 	bool read(istream_ref file) {
-		auto	x = file.get<uint32>();
+		uint32	x;
+		if (!file.read(x))
+			return false;
 		v = !!x;
 		return x < 2;
 	}
@@ -87,10 +89,10 @@ struct FTransform {
 };
 
 struct FBox {
-	FVector Min;
-	FVector Max;
-	uint8 IsValid;
-	bool read(istream_ref file) { return iso::read(file, Min, Max, IsValid); }
+	FVector	Min;
+	FVector	Max;
+	uint8	IsValid;
+	bool read(istream_ref file) { return file.read(Min, Max, IsValid); }
 };
 
 struct FSphere {
@@ -227,6 +229,8 @@ struct FName {
 //	loading
 //-----------------------------------------------------------------------------
 
+struct FLinkerTables;
+
 struct FPackageIndex {
 	int32			Index;
 
@@ -246,8 +250,6 @@ struct FObjectResource {
 	FPackageIndex	OuterIndex;
 	ISO_ptr<ISO_ptr<void>>	p;
 };
-
-struct FLinkerTables;
 
 struct istream_linker : reader<istream_linker>, reader_ref<istream_ref> {
 	istream_ref		bulk_file;
@@ -271,7 +273,7 @@ struct FSoftObjectPath {
 	FName2	AssetPathName;
 	FString	SubPathString;
 	bool	read(istream_linker& file) {
-		return iso::read(file, AssetPathName, SubPathString);
+		return file.read(AssetPathName, SubPathString);
 	}
 };
 
@@ -313,7 +315,8 @@ struct TBitArray : dynamic_bitarray<uint32> {
 
 template<typename T> struct TSparseArray : sparse_array<T, uint32, uint32> {
 	typedef	sparse_array<T, uint32, uint32>	B;
-	T&	operator[](int i) const	{ return B::get(i); }
+	const T&	operator[](int i) const	{ return get(B::get(i)); }
+	T&			operator[](int i)		{ return get(B::get(i)); }
 	bool read(istream_ref file) {
 		TBitArray AllocatedIndices;
 		file.read(AllocatedIndices);
@@ -331,7 +334,7 @@ template<typename K, typename V> struct TMap : public map<K, V> {
 		while (len-- && !file.eof()) {
 			K	k = file.template get<K>();
 			V	v = file.template get<V>();
-			put(move(k), move(v));
+			emplace(move(k), move(v));
 		}
 		return true;
 	}
@@ -502,7 +505,7 @@ struct FProperty : FField {
 
 	bool read(istream_linker& file) {
 		return FField::read(file)
-			&& iso::read(file, ArrayDim, ElementSize, PropertyFlags, RepIndex, RepNotifyFunc, BlueprintReplicationCondition);
+			&& file.read(ArrayDim, ElementSize, PropertyFlags, RepIndex, RepNotifyFunc, BlueprintReplicationCondition);
 	}
 };
 
@@ -514,7 +517,7 @@ struct FBoolProperty : FProperty {
 
 	bool read(istream_linker& file) {
 		uint8 BoolSize, NativeBool;
-		return FProperty::read(file) && iso::read(file, FieldSize, ByteOffset, ByteMask, FieldMask, BoolSize, NativeBool);
+		return FProperty::read(file) && file.read(FieldSize, ByteOffset, ByteMask, FieldMask, BoolSize, NativeBool);
 	}
 };
 
@@ -541,7 +544,7 @@ struct FEnumProperty	: FProperty {
 	TInlinePtr<FProperty>	UnderlyingProp;	// The property which represents the underlying type of the enum
 	TPtr<UEnum>				Enum;			// The enum represented by this property
 	bool read(istream_linker& file) {
-		return FProperty::read(file) && file.read(Enum) && file.read(UnderlyingProp);
+		return FProperty::read(file) && file.read(Enum, UnderlyingProp);
 	}
 };
 
@@ -568,7 +571,7 @@ struct FMapProperty		: FProperty {
 	TInlinePtr<FProperty>	KeyProp;
 	TInlinePtr<FProperty>	ValueProp;
 	bool read(istream_linker& file) {
-		return FProperty::read(file) && file.read(KeyProp) && file.read(ValueProp);
+		return FProperty::read(file) && file.read(KeyProp, ValueProp);
 	}
 };
 
@@ -618,7 +621,6 @@ struct FInterfaceProperty : FProperty {
 	}
 };
 
-
 //-----------------------------------------------------------------------------
 //	objects
 //-----------------------------------------------------------------------------
@@ -637,7 +639,6 @@ struct UStruct : UObject {
 
 	bool read(istream_linker& file);
 };
-
 
 struct FImplementedInterface {
 	TPtr<UClass>	Class;

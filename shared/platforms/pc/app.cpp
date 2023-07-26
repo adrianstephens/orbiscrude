@@ -1,6 +1,7 @@
 #include "app.h"
 #include "hook.h"
-#include "utilities.h"
+//#include "utilities.h"
+#include "events.h"
 #include "gesture.h"
 #include "shader.h"
 
@@ -28,7 +29,7 @@ Touch MakeTouch(param(float2) &p, Touch::PHASE phase) {
 	return t;
 }
 
-LRESULT Application::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+LRESULT Application::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 		case WM_SIZE:
 			if (output)
@@ -76,13 +77,13 @@ LRESULT Application::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 		}
 
 		case WM_KEYDOWN: {
-			if (KeyboardKey *k = find(keys, int(wParam)))
+			if (KeyboardKey *k = &*find(keys, int(wParam)))
 				Controller::_SetButton(k->button);
 			break;
 		}
 
 		case WM_KEYUP: {
-			if (KeyboardKey *k = find(keys, int(wParam)))
+			if (KeyboardKey *k = &*find(keys, int(wParam)))
 				Controller::_ClearButton(k->button);
 			break;
 		}

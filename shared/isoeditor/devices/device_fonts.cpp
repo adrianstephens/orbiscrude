@@ -70,11 +70,11 @@ struct ViewFont : public Window<ViewFont> {
 		return Point(x * scale, y * scale - si.Pos());
 	}
 
-	LRESULT Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+	LRESULT Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 		switch (message) {
 			case WM_SIZE: {
 				Point	size(lParam);
-				if (target.Resize(size))
+				if (!target.Resize(size))
 					target.DeInit();
 
 				SetSize(size, scale);
@@ -180,10 +180,10 @@ struct ViewFonts : public Window<ViewFonts> {
 
 	ISO_ptr<ISO_openarray<ISO_ptr<LOGFONT> > > fonts;
 
-	LRESULT Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+	LRESULT Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 		switch (message) {
 			case WM_SIZE:
-				if (target.Resize(win::Point(lParam)))
+				if (!target.Resize(win::Point(lParam)))
 					target.DeInit();
 				si.SetPage(win::Point(lParam).y);
 				SetScroll(si);
@@ -223,7 +223,7 @@ struct ViewFonts : public Window<ViewFonts> {
 					for (int i = i0; i < i1; ++i) {
 						LOGFONT *lf	= (*fonts)[i];
 						Rect	rect(0, i * scale - si.Pos(), 100000, scale);
-						target.DrawText(rect, str16(lf->lfFaceName), label, black);
+						target.DrawText(rect, &lf->lfFaceName[0], label, black);
 						target.DrawText(rect.Subbox(100,0,0,0), text, d2d::Font(write, str16(lf->lfFaceName), scale * .8f), black);
 						//target.DrawText(rect.Subbox(100,0,0,0), text, d2d_fonts[i], black);
 					}

@@ -6,10 +6,6 @@ namespace iso {
 
 typed_nullptr<field>		fields<_none>::f;
 
-IdentifierT<string>	Identifier(const char *prefix, const char *name, IDFMT format, IDTYPE type) {
-	return IdentifierT<string>(str(prefix) + name, format, type);
-}
-
 string_accum& FormatIdentifier(string_accum &sa, const char *p, IDFMT format, IDTYPE type) {
 	bool	prefixes = !!(format & (IDFMT_SEMANTIC_PREFIX|IDFMT_TYPE_PREFIX));
 	if (format & IDFMT_STORAGE_PREFIX) {
@@ -82,106 +78,34 @@ string_accum& FormatIdentifier(string_accum &sa, const char *p, IDFMT format, ID
 	}
 	return sa;
 }
-#if 0
-string FormatIdentifier(const char *p, IDFMT format, IDTYPE type) {
-	string_builder	b;
 
-	bool	prefixes = !!(format & (IDFMT_SEMANTIC_PREFIX|IDFMT_TYPE_PREFIX));
-	if (format & IDFMT_STORAGE_PREFIX) {
-		switch (type & IDTYPE_STORAGE_MASK) {
-			case IDTYPE_MEMBER:	b << "m_"; break;
-			case IDTYPE_STATIC:	b << "s_"; break;
-			case IDTYPE_GLOBAL:	b << "g_"; break;
-		}
-	}
-	if (prefixes) {
-		for (int n = type & IDTYPE_POINTER_MASK; --n;)
-			b.putc('p');
-	}
-	if (format & IDFMT_SEMANTIC_PREFIX) {
-		switch (type & IDTYPE_SEMANTIC_MASK) {
-			case IDTYPE_DIFFERENCE:	b.putc('d'); break;
-			case IDTYPE_COUNT:		b.putc('c'); break;
-			case IDTYPE_RANGE:		b << "rg"; break;
-			case IDTYPE_INDEX:		b.putc('i'); break;
-			case IDTYPE_BYTECOUNT:	b << "cb"; break;
-			case IDTYPE_WORDCOUNT:	b << "cw"; break;
-			case IDTYPE_DWORDCOUNT:	b << "cdw"; break;
-			default:				 prefixes = false; break;
-		}
-	}
-	switch (format & IDFMT_MASK) {
-		case IDFMT_LEAVE:
-			b.merge(p, string_len(p));
-			break;
+//-----------------------------------------------------------------------------
 
-		case IDFMT_LOWER:
-			if (prefixes)
-				b.putc('_');
-			while (char c = *p++)
-				b.putc(to_lower(c));
-			break;
+//bool
 
-		case IDFMT_LOWER_NOUL:
-			if (prefixes)
-				b.putc('_');
-			while (char c = *p++) {
-				if (c != '_')
-					b.putc(to_lower(c));
-			}
-			break;
-
-		case IDFMT_UPPER:
-			while (char c = *p++)
-				b.putc(to_upper(c));
-			break;
-
-		case IDFMT_UPPER_NOUL:
-			while (char c = *p++) {
-				if (c != '_')
-					b.putc(to_upper(c));
-			}
-			break;
-
-		case IDFMT_CAMEL:
-			if (prefixes)
-				b.putc(to_upper(*p++));
-			while (char c = *p++) {
-				if (c == '_')
-					c = to_upper(*p++);
-				else
-					c = to_lower(c);
-				b.putc(c);
-			}
-			break;
-	}
-	return b;//.detach();
-}
-#endif
-
-//special
-
-const char **field_names_none::s	= 0;
-const char *field_names_hex::s[]	= {0};
-const char *field_names_signed::s[]	= {0};
-
-template<> const char *field_names<float>::s[]		= {0};
 template<> const char *field_names<bool>::s[]		= {"false", "true"};
 template<> const char *field_names<_not<bool>>::s[]	= {"true", "false"};
 template<> field_value field_values<bool>::s[] = {
-	"false",					false,
-	"true",						true,
+	"false",	false,
+	"true",		true,
 	0
 };
 
-const char *sPointer[]		= {0};
+//special
+
+const char **field_names_none::s	= nullptr;
+const char *field_names_hex::s[]	= {nullptr};
+const char *field_names_signed::s[]	= {nullptr};
+template<> const char *field_names<float>::s[]		= {nullptr};
+
 const char *sString[]		= {0};
+const char *sString16[]		= {0};
 const char *sRelString[]	= {0};
 const char *sDec[]			= {0};
-const char *sCustom[]		= {"<custom>"};
 const char *sEnable[] 		= {"disable", "enable"};
 const char *sOn[] 			= {"off", "on"};
 const char *sPowersOfTwo[] 	= {"1","2","4","8","16","32","64","128","256"};
+const char *sCustom[]		= {"<custom>"};
 field		float_field[]	= {{ 0, 0, 32, 0,0, sFloat}, 0};
 field		empty_field[]	= {{0}};
 
@@ -195,6 +119,8 @@ field custom_ptr_field[] = {
 	{0, sizeof(void*) * 8}
 };
 
+//-----------------------------------------------------------------------------
+
 uint32 BiggestValue(const field_value *vals) {
 	uint32 biggest = 0;
 	for (const field_value *i = vals; i->name; i++) {
@@ -204,76 +130,89 @@ uint32 BiggestValue(const field_value *vals) {
 	return biggest;
 }
 
-const field_value *BiggestFactor(const field_value *vals, uint32 v) {
-	const field_value *biggest = 0;
-	for (const field_value *i = vals; i->name; i++) {
+const field_bit *BiggestFactor(const field_bit *vals, uint32 v) {
+	const field_bit *biggest = 0;
+	for (const field_bit *i = vals; i->name; i++) {
 		if (i->value <= v && (!biggest || i->value >= biggest->value))
 			biggest = i;
 	}
 	return biggest;
 }
 
-//-----------------------------------------------------------------------------
+string_accum& PutConst(string_accum &a, IDFMT fmt, const char *const *p, int val, const char *prefix) {
+	if (!p[val])
+		return a << val;
+	a << prefix << p[val];
+	if (fmt & IDFMT_CONSTNUMS)
+		a << '(' << val << ')';
+	return a;
+}
+
+string_accum& PutConst(string_accum &a, IDFMT fmt, const field_value *p, int val, const char *prefix) {
+	while (p->name) {
+		if (val == p->value) {
+			a << prefix << p->name;
+			if (fmt & IDFMT_CONSTNUMS)
+				a << "(0x" << hex(val) << ')';
+			return a;
+		}
+		++p;
+	}
+	return a << "0x" << hex(val);
+}
+
+string_accum& PutConst(string_accum &a, IDFMT fmt, const field_bit *p, int val, const char *prefix, char sep) {
+	bool	any		= false;
+	int		val0	= val;
+	while (const field_bit *i = BiggestFactor(p, val)) {
+		if (any)
+			a << sep;
+		any = true;
+
+		a << prefix << i->name;
+		if (i->value == 0)
+			break;
+
+		int	mult = val / i->value;
+		if (mult > 1)
+			a << '*' << mult;
+
+		val -= i->value * mult;
+		if (val == 0)
+			break;
+	}
+	if (any) {
+		if (val)
+			a << sep << "0x" << hex(val);
+		if (fmt & IDFMT_CONSTNUMS)
+			a << "(0x" << hex(val) << ')';
+		return a;
+	}
+
+	return a << "0x" << hex(val);
+}
 
 string_accum &PutConst(string_accum &a, IDFMT fmt, const char *const *names, uint32 val, uint8 mode) {
+	if (fmt & IDFMT_NONAMES)
+		return a << val;
+
+	const char *prefix = "";
 	if (mode & field::MODE_PREFIX) {
 		field_prefix<const char*>	*p = (field_prefix<const char*>*)names;
 		if (!(fmt & IDFMT_NOPREFIX))
-			a << p->prefix;
+			prefix	= p->prefix;
 
 		names	= p->names;
 		mode	&= ~field::MODE_PREFIX;
 	}
+
+	if (!names)
+		return a << val;
+
 	switch (mode) {
-		case field::MODE_NONE:// direct index
-			if (!names || !names[val] || (fmt & IDFMT_NONAMES)) {
-				a << val;
-			} else {
-				a << names[val];
-				if (fmt & IDFMT_CONSTNUMS)
-					a << '(' << val << ')';
-			}
-			break;
-		case field::MODE_VALUES:// table of field_value
-			for (const field_value *values = (field_value*)names; values->name; values++) {
-				if (val == values->value) {
-					a << values->name;
-					if (fmt & IDFMT_CONSTNUMS)
-						a << '(' << val << ')';
-					return a;
-				}
-			}
-			a << "0x" << hex(val);
-			break;
-		case field::MODE_BITS: {// bits from field_value
-			bool	any = false;
-			while (const field_value *i = BiggestFactor((field_value*)names, val)) {
-				if (!any) {
-					if (i->value == val) {
-						a << i->name;
-						if (fmt & IDFMT_CONSTNUMS)
-							a << '(' << val << ')';
-						return a;
-					}
-					any = true;
-				} else {
-					a << '|';
-				}
-				a << i->name;
-				if (i->value == 0)
-					break;
-				int	mult = val / i->value;
-				if (mult > 1)
-					a << '*' << mult;
-				val -= i->value * mult;
-				if (val == 0)
-					return a;
-			}
-			if (any)
-				a << '|';
-			a << val;
-			break;
-		}
+		case field::MODE_NONE:		return PutConst(a, fmt, names, val, prefix);
+		case field::MODE_VALUES:	return PutConst(a, fmt, (field_value*)names, val, prefix);
+		case field::MODE_BITS:		return PutConst(a, fmt, (field_bit*)names, val, prefix);
 	}
 	return a;
 }
@@ -289,6 +228,11 @@ string_accum &PutConst(string_accum &a, IDFMT fmt, const field *pf, uint64 val) 
 	if (pf->values == sString) {
 		if (val)
 			return a << '"' << (const char*)val << '"';//"<string>";//(const char*)val;
+		return a << "<nil>";
+	}
+	if (pf->values == sString16) {
+		if (val)
+			return a << '"' << (const char16*)val << '"';//"<string>";//(const char*)val;
 		return a << "<nil>";
 	}
 	if ((pf->num > 32 && pf->values == 0) || pf->values == sHex || pf->values == sCustom)
@@ -370,13 +314,14 @@ string_accum &PutFields(string_accum &sa, IDFMT fmt, const field *pf, const uint
 //FieldPutter
 //-----------------------------------------------------------------------------
 
-void	FieldPutter::AddHex(const uint32 *vals, uint32 n, uint32 addr) {
+void FieldPutter::AddHex(const uint32 *vals, uint32 n, uint32 addr) {
 	while (n--) {
 		Line(0, format_string("0x%08x", *vals++), addr);
 		addr += 4;
 	}
 }
-void	FieldPutter::AddArray(const field *pf, const uint32le *p, uint32 stride, uint32 n, uint32 addr) {
+
+void FieldPutter::AddArray(const field *pf, const uint32le *p, uint32 stride, uint32 n, uint32 addr) {
 	if (stride == 0) {
 		uint32	s = Terminator(pf)->start;
 		ISO_ASSERT(s);
@@ -388,9 +333,29 @@ void	FieldPutter::AddArray(const field *pf, const uint32le *p, uint32 stride, ui
 	}
 
 	for (uint32 i = 0; i < n; i++) {
-		Open(format_string("[%i]", i), addr + stride * i);
-		AddFields(pf, p + stride * i, addr + stride * i, 0);
+		Open(format_string("[%i]", i), addr + stride * i * 4);
+		AddFields(pf, p + stride * i, addr + stride * i * 4, 0);
 		Close();
+	}
+}
+
+void FieldPutter::AddPointer(const field *pf, const uint32 *p, uint32 addr, uint32 offset, const field *pf2, const uint32 *p2) {
+	buffer_accum<64>	ba(FieldName(pf));
+	if (p2) {
+		if (pf->shift)
+			ba << '[' << pf->get_companion_value(p, offset) << ']';
+		else
+			ba << "->";
+		Open(ba, addr);
+		if (format & IDFMT_FOLLOWPTR) {
+			if (pf->shift)
+				AddArray(pf2, p2, 0, pf->get_companion_value(p, offset), addr);
+			else
+				AddFields(pf2, p2, addr, 0);
+		}
+		Close();
+	} else {
+		Line(ba, "0", addr);
 	}
 }
 
@@ -405,65 +370,25 @@ void FieldPutter::AddField(const field *pf, const uint32 *p, uint32 addr, uint32
 					Close();
 				break;
 
-			case field::MODE_POINTER: {
-				buffer_accum<64>	ba(FieldName(pf));
-				if (uint32le *p2 = ((uint32le**)p)[(offset + pf->start) / 64]) {
-					if (pf->shift)
-						ba << '[' << pf->get_companion_value(p, offset) << ']';
-					else
-						ba << "->";
-					Open(ba, addr);
-					if (format & IDFMT_FOLLOWPTR) {
-						if (pf->shift)
-							AddArray((const field*)pf->values, p2, 0, pf->get_companion_value(p, offset));
-						else
-							AddFields((const field*)pf->values, p2, 0, 0);
-					}
-					Close();
-				} else {
-					Line(ba, "0", addr);
-				}
+			case field::MODE_POINTER:
+				AddPointer(pf, p, addr, offset, (const field*)pf->values, ((uint32le**)p)[(offset + pf->start) / 64]);
 				break;
-			}
 
 			case field::MODE_RELPTR: {
-				//buffer_accum<64>	ba(Identifier(prefix, pf->name, format));
-				buffer_accum<64>	ba(FieldName(pf));
-				uint32le	*p0 = (uint32le*)((char*)p + (offset + pf->start) / 8);
-				if (*p0) {
-					if (pf->shift)
-						ba << '[' << pf->get_companion_value(p, offset) << ']';
-					else
-						ba << "->";
-					Open(ba, addr);
-					if (format & IDFMT_FOLLOWPTR) {
-						if (pf->shift)
-							AddArray((const field*)pf->values, (uint32le*)((char*)p0 + *p0), 0, pf->get_companion_value(p, offset));
-						else
-							AddFields((const field*)pf->values, (uint32le*)((char*)p0 + *p0), 0, 0);
-					}
-					Close();
-				} else {
-					Line(ba, "0", addr);
-				}
+				int32le		*p0 = (int32le*)((char*)p + (offset + pf->start) / 8);
+				AddPointer(pf, p, addr, offset, (const field*)pf->values, *p0 ? (uint32le*)((char*)p0 + *p0) : nullptr);
 				break;
 			}
 			case field::MODE_CUSTOM_PTR: {
-				buffer_accum<64>	ba(FieldName(pf));
-				ba << "->";
-				Open(ba, addr);
-				if (format & IDFMT_FOLLOWPTR) {
-					if (auto ret = make_unique(((field_follow_func)pf->values)(pf, p, offset)))
-						AddFields(ret->pf, ret->p, 0, 0);
-				}
-				Close();
+				auto ret = make_unique(((field_follow_func)pf->values)(pf, p, offset));
+				AddPointer(pf, p, addr, offset, ret ? ret->pf : nullptr, ret ? ret->p : nullptr);
 				break;
 			}
 		}
 
 	} else if (pf->offset == field::MODE_CUSTOM) {
 		if (pf->shift)
-			Line(FieldName(pf), ((field_callback_func)pf->values)(lvalue(buffer_accum<256>()), pf, p, offset, addr + offset), addr + offset);
+			Line(FieldName(pf), ((field_callback_func*)pf->values)(lvalue(buffer_accum<256>()), pf, p, offset, addr + offset), addr + offset);
 		else
 			Callback(pf, p, offset, addr);
 	} else {
@@ -548,7 +473,7 @@ uint64 GetField(string_scan &ss, const field *pf) {
 	if (pf->values == sFloat)
 		return force_cast<uint32>(ss.get<float>());
 
-	if (pf->values == sString)
+	if (pf->values == sString || pf->values == sString16)
 		return 0;
 
 	return GetConst(ss, pf->values, pf->num, pf->has_values() ? pf->offset : 0);
@@ -637,7 +562,7 @@ const field *_Index(const field *pf, int &i, const uint32 *&p, uint32 &offset, b
 						break;
 					}
 					case field::MODE_RELPTR: {
-						const uint32le	*p0 = (uint32le*)((char*)p + (offset + pf->start) / 8);
+						const int32le	*p0 = (int32le*)((char*)p + (offset + pf->start) / 8);
 						if (*p0 && follow_ptr) {
 							uint32	offset2	= 0;
 							const uint32	*p2	= (uint32le*)((char*)p0 + *p0);

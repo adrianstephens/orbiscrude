@@ -58,7 +58,7 @@ class ViewBitmap : ViewBitmap_base, public Window<ViewBitmap>, public WindowTime
 	D2D_Marker				marker;
 	com_ptr<ID2D1Bitmap>	d2d_bitmap;
 
-	histogram		hist;
+	histogram4		hist;
 
 	static filename	fn;
 
@@ -120,19 +120,19 @@ class ViewBitmap : ViewBitmap_base, public Window<ViewBitmap>, public WindowTime
 
 	void UpdateHist() {
 		hist.reset();
-		if (auto hdr = test_cast<HDRbitmap64>(bm)) {
+		if (auto hdr = bm.test_cast<HDRbitmap64>()) {
 			if (selection.Width() && selection.Height()) {
 				Rect	r	= selection & bitmap_rect;
-				hist.add(hdr->Block(r.Left(), r.Top(), r.Width(), r.Height()), histogram::scale_offset(HDRpixel(chan_range.a, alpha_range.a), HDRpixel(chan_range.b, alpha_range.b)));
+				hist.add(hdr->Block(r.Left(), r.Top(), r.Width(), r.Height()), histogram4::scale_offset(HDRpixel(rgb_range.a, alpha_range.a), HDRpixel(rgb_range.b, alpha_range.b)));
 				hist.init_medians();
 			} else {
-				hist.init(hdr, HDRpixel(chan_range.a, alpha_range.a), HDRpixel(chan_range.b, alpha_range.b));
+				hist.init(hdr, HDRpixel(rgb_range.a, alpha_range.a), HDRpixel(rgb_range.b, alpha_range.b));
 			}
 		} else {
 			bitmap64	*bm = this->bm;
 			if (selection.Width() && selection.Height()) {
 				Rect	r	= selection & bitmap_rect;
-				hist.add(bm->Block(r.Left(), r.Top(), r.Width(), r.Height()));
+				hist.add(bm->Block(r.Left(), r.Top(), r.Width(), r.Height()), [](const ISO_rgba &x) { return reinterpret_cast<const uint8x4&>(x); });
 				hist.init_medians();
 			} else {
 				hist.init(bm);
@@ -142,7 +142,7 @@ class ViewBitmap : ViewBitmap_base, public Window<ViewBitmap>, public WindowTime
 	void Paint();
 
 public:
-	LRESULT Proc(UINT message, WPARAM wParam, LPARAM lParam);
+	LRESULT Proc(MSG_ID message, WPARAM wParam, LPARAM lParam);
 
 	ViewBitmap(const WindowPos &wpos, const ISO_ptr_machine<void> &p, const char *text, bool auto_scale)
 		: checker(Bitmap::Load(IDB_CHECKER, LR_CREATEDIBSECTION), float2x3((float2x2)scale(10)))
@@ -164,7 +164,7 @@ public:
 
 };
 
-LRESULT ViewBitmap::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+LRESULT ViewBitmap::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 		case WM_CREATE:
 			toolbar.Create(*this, NULL, CHILD | CLIPSIBLINGS | VISIBLE | ToolBarControl::FLAT | ToolBarControl::TOOLTIPS);
@@ -206,7 +206,7 @@ LRESULT ViewBitmap::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 			toolbar.Move(rects[0]);
 			if (flags.test(AUTO_SCALE))
 				Autoscale(rects[1].Width(), rects[1].Height());
-			if (target.Resize(size))
+			if (!target.Resize(size))
 				DiscardDeviceResources();
 			Invalidate();
 			return 0;
@@ -287,7 +287,7 @@ LRESULT ViewBitmap::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 		}
 
 		case WM_MOUSEMOVE: {
-			Point	mouse	= Point(lParam);
+			Point	mouse(lParam);
 
 			if (prevbutt != wParam) {
 				prevmouse	= mouse;
@@ -317,7 +317,7 @@ LRESULT ViewBitmap::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 							would_drag = DRAG_GRID_HEIGHT;
 					}
 				} else {
-					//histogram
+					//histogram4
 					if (mouse.y - hist_rect.Top() < 8) {
 						if (abs(mouse.x - hist_rect.Left() - disp_range.a * hist_rect.Width()) < 8)
 							would_drag = DRAG_MIN;
@@ -368,7 +368,7 @@ LRESULT ViewBitmap::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 				prevmouse	= mouse;
 				Invalidate();
 			}
-			tooltip.Track(GetMousePos() + SystemMetrics::CursorSize());
+			tooltip.Track();
 			return 0;
 		}
 
@@ -404,7 +404,7 @@ LRESULT ViewBitmap::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 				}
 				tooltip.Activate(*this);
 				tooltip.Invalidate();
-				tooltip.Track(GetMousePos() + Point(15, 15));
+				tooltip.Track();
 				update_bitmap	= bm.IsType<HDRbitmap64>();
 				Invalidate();
 			}
@@ -421,6 +421,7 @@ LRESULT ViewBitmap::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 						d2d_bitmap.clear();
 						update_bitmap = true;
 						Invalidate();
+						Update();
 						return true;
 					}
 					break;
@@ -455,13 +456,13 @@ LRESULT ViewBitmap::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 				case ID_BITMAP_AUTOCONTRAST: {
 					float		c0 = 1e38f, c1 = -c0;
 					for (int i = 0; i < 4; i++) {
-						if (channels & bit(i) && col_range.a[i] != col_range.b[i]) {
-							c0 = min(c0, col_range.a[i]);
-							c1 = max(c1, col_range.b[i]);
+						if (channels & bit(i) && chan_range.a[i] != chan_range.b[i]) {
+							c0 = min(c0, chan_range.a[i]);
+							c1 = max(c1, chan_range.b[i]);
 						}
 					}
-					disp_range.a	= (c0 - chan_range.a) / (chan_range.b - chan_range.a);
-					disp_range.b	= (c1 - chan_range.a) / (chan_range.b - chan_range.a);
+					disp_range.a	= (c0 - rgb_range.a) / (rgb_range.b - rgb_range.a);
+					disp_range.b	= (c1 - rgb_range.a) / (rgb_range.b - rgb_range.a);
 					update_bitmap	= bm.IsType<HDRbitmap64>();
 
 					if (TrackBarControlF t = ChildByID(ID_BITMAP_MIN))
@@ -520,7 +521,7 @@ LRESULT ViewBitmap::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 						}
 					}
 //					if (GetSave(hWnd, fn, "Save As", "Image Files\0*.bmp;*.jpg;*.tga\0All Files (*.*)\0*.*\0"))
-					if (GetSave(hWnd, fn, "Save As", ba))
+					if (GetSave(hWnd, fn, "Save As", ba.term()))
 						Busy(), FileHandler::Write(bm, fn);
 					break;
 				}
@@ -597,7 +598,7 @@ LRESULT ViewBitmap::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 								Point	pt		= ToClient(GetMousePos());
 								if (OverHistogram(pt)) {
 									if (bm.IsType<HDRbitmap64>()) {
-										sa.format("Histogram[%f]", (pt.x - hist_rect.Left()) * (chan_range.b - chan_range.a) / hist_rect.Width() + chan_range.a);
+										sa.format("Histogram[%f]", (pt.x - hist_rect.Left()) * (rgb_range.b - rgb_range.a) / hist_rect.Width() + rgb_range.a);
 									} else {
 										int	i = (pt.x - hist_rect.Left()) * 256 / hist_rect.Width();
 										sa.format("Histogram[%i]", i);
@@ -650,7 +651,7 @@ void ViewBitmap::Paint() {
 	if (selection.Width() && selection.Height())
 		DrawSelection(target, selection);
 
-	// draw histogram
+	// draw histogram4
 	if (flags.test(DISP_HIST)) {
 		DrawHistogram(target, hist_rect, hist, channels);
 
@@ -699,10 +700,10 @@ class ViewThumbnail : public Window<ViewThumbnail> {
 	}
 
 public:
-	LRESULT Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+	LRESULT Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 		switch (message) {
 			case WM_SIZE:
-				if (target.Resize(Point(lParam)))
+				if (!target.Resize(Point(lParam)))
 					DiscardDeviceResources();
 				Invalidate();
 				return 0;

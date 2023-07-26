@@ -6,8 +6,6 @@
 namespace iso {
 
 deferred_deletes _dd, cleanup_dd;
-rng<simple_random>				random;
-rng<mersenne_twister32_19937>	random2(123456789);
 
 static const char *usage_names[] = {
 	"POSITION",
@@ -20,34 +18,38 @@ static const char *usage_names[] = {
 	"BLENDINDICES",
 };
 
+const char* get_name(USAGE u) {
+	return usage_names[u];
+}
+
 static const struct { crc32 id; USAGE usage; } known_uses1[] = {
-	{"pos",			USAGE_POSITION 		},
-	{"position",	USAGE_POSITION 		},
-	{"norm",		USAGE_NORMAL		},
-	{"normal",		USAGE_NORMAL		},
-	{"colour",		USAGE_COLOR			},
-	{"color",		USAGE_COLOR			},
-	{"col",			USAGE_COLOR			},
-	{"texcoord",	USAGE_TEXCOORD		},
-	{"uv",			USAGE_TEXCOORD		},
-	{"tangent",		USAGE_TANGENT		},
-	{"binormal",	USAGE_BINORMAL		},
-	{"weights",		USAGE_BLENDWEIGHT	},
-	{"bones",		USAGE_BLENDINDICES	},
-	{"indices",		USAGE_BLENDINDICES	},
-	{"POSITION",	USAGE_POSITION 		},
-	{"NORMAL",		USAGE_NORMAL		},
-	{"COLOR",		USAGE_COLOR			},
-	{"TEXCOORD",	USAGE_TEXCOORD		},
-	{"TANGENT",		USAGE_TANGENT		},
-	{"BINORMAL",	USAGE_BINORMAL		},
-	{"BLENDWEIGHT",	USAGE_BLENDWEIGHT	},
-	{"BLENDINDICES",USAGE_BLENDINDICES	},
+	{"pos"_crc32,			USAGE_POSITION 		},
+	{"position"_crc32,		USAGE_POSITION 		},
+	{"norm"_crc32,			USAGE_NORMAL		},
+	{"normal"_crc32,		USAGE_NORMAL		},
+	{"colour"_crc32,		USAGE_COLOR			},
+	{"color"_crc32,			USAGE_COLOR			},
+	{"col"_crc32,			USAGE_COLOR			},
+	{"texcoord"_crc32,		USAGE_TEXCOORD		},
+	{"uv"_crc32,			USAGE_TEXCOORD		},
+	{"tangent"_crc32,		USAGE_TANGENT		},
+	{"binormal"_crc32,		USAGE_BINORMAL		},
+	{"weights"_crc32,		USAGE_BLENDWEIGHT	},
+	{"bones"_crc32,			USAGE_BLENDINDICES	},
+	{"indices"_crc32,		USAGE_BLENDINDICES	},
+	{"POSITION"_crc32,		USAGE_POSITION 		},
+	{"NORMAL"_crc32,		USAGE_NORMAL		},
+	{"COLOR"_crc32,			USAGE_COLOR			},
+	{"TEXCOORD"_crc32,		USAGE_TEXCOORD		},
+	{"TANGENT"_crc32,		USAGE_TANGENT		},
+	{"BINORMAL"_crc32,		USAGE_BINORMAL		},
+	{"BLENDWEIGHT"_crc32,	USAGE_BLENDWEIGHT	},
+	{"BLENDINDICES"_crc32,	USAGE_BLENDINDICES	},
 };
 
 static const struct { crc32 id; USAGE2 usage; } known_uses2[] = {
-	{"centre",			{USAGE_POSITION, 	1}},
-	{"smooth_normal",	{USAGE_NORMAL,		1}},
+	{"centre"_crc32,		{USAGE_POSITION, 	1}},
+	{"smooth_normal"_crc32,	{USAGE_NORMAL,		1}},
 };
 
 USAGE2::USAGE2(crc32 id) : usage(USAGE_UNKNOWN), index(0) {

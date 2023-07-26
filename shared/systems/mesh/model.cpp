@@ -76,7 +76,9 @@ static S_comptype known_types[] = {
 #endif
 
 	#undef TYPE
+	{ISO::getdef<uint16[3]>(), GetComponentType<uint16[4]>()},
 	{ISO::getdef<uint8[3]>(), GetComponentType<unorm8[4]>()},
+	{ISO::getdef<int8[3]>(), GetComponentType<norm8[4]>()},
 };
 
 ComponentType GetComponentType(const ISO::Type *type) {
@@ -184,7 +186,7 @@ VertexElement* GetVertexElements(VertexElement *pve, const ISO::TypeComposite *v
 	for (auto i : vertex_type->Components()) {
 		ComponentType	type = GetComponentType(i.type.get());
 		if (type != GetComponentType<void>()) {
-			USAGE2	usage(i.id);
+			USAGE2	usage(i.id.get_crc32());
 
 			if (usage == USAGE_TEXCOORD)
 				tex_index	= max(tex_index, usage.index) + 1;
@@ -198,49 +200,75 @@ VertexElement* GetVertexElements(VertexElement *pve, const ISO::TypeComposite *v
 }
 
 void SubMeshPlat::Init(void *physram) {
+	auto	verts	= ((SubMesh*)this)->verts;
 	if (!verts)
 		return;
 
 	renderdata	*rd = new renderdata;
 	verts.User() = rd;
 
-	PrimType	prim	= PRIM_TRILIST;
-	uint8		vpp		= GetVertsPerPrim();
-	uint8		vpp2	= vpp;
-
-	if (vpp > 3)
-		prim	= vpp == 4 ? PRIM_QUADLIST : PatchPrim(vpp);
-
-	if (flags & STRIP) {
-		vpp2	-= 2;
-		prim	= StripPrim(prim);
-	}
-	if (flags & ADJACENCY) {
-		vpp2	*= 2;
-		prim	= AdjacencyPrim(prim);
-	}
-
 	ISO::Browser	b(RemoveDoubles(verts));
 	rd->vert_size	= b[0].GetSize();
 	rd->nverts		= b.Count();
-	rd->nindices	= indices.Count() * vpp2;
-	rd->prim		= prim;
 
-	rd->vb.Init(b[0], rd->nverts * rd->vert_size);
-	rd->ib.Init(indices[0].begin(), rd->nindices);
+	void	*indices	= nullptr;
+	uint32	index_size	= 0;
+	uint32	index_num	= 0;
 
-	VertexElement	ve[16];
-	auto		pve = GetVertexElements(ve, (const ISO::TypeComposite*)b[0].GetTypeDef()->SkipUser());
+	auto	me		= ISO::ptr<SubMeshPlat>::Ptr(this);
+	auto	type	= me.GetType()->SkipUser();
+	if (auto comp = type->as<ISO::COMPOSITE>()) {
+		if (auto i = comp->Find("indices")) {
+			auto	i2		= i->type->as<ISO::OPENARRAY>();
+			auto	head	= i2->get_header(i->get(this));
+			index_size	= i2->subsize;
+			index_num	= GetCount(head);
+			indices		= GetData(head);
+		}
+	}
 
-#ifdef USE_DX11
-	pass		*p	= (*technique)[0];
-	const void	*vs	= p->sub[SS_VERTEX].raw();
-	rd->vd.Init(ve, pve - ve, vs);
-#else
-	rd->vd = ve;
-#endif
+	pass	*p	= (*technique)[0];
+	if (p->Has(SS_VERTEX)) {
+		uint32		vpp	= index_size / sizeof(uint32);
+		rd->nindices	= index_num * vpp;
+
+		if (flags & STRIP)
+			vpp		+= 2;
+		if (flags & ADJACENCY)
+			vpp		/= 2;
+
+		PrimType	prim	= vpp == 3 ? PRIM_TRILIST : vpp == 4 ? PRIM_QUADLIST : PatchPrim(vpp);
+
+		if (flags & STRIP)
+			prim	= StripPrim(prim);
+		if (flags & ADJACENCY)
+			prim	= AdjacencyPrim(prim);
+
+		rd->prim	= prim;
+
+		rd->vb.Init(b[0], align(rd->nverts * rd->vert_size, 16));
+		rd->ib.Init((uint32*)indices, rd->nindices);
+
+		VertexElement	ve[16];
+		auto		pve = GetVertexElements(ve, (const ISO::TypeComposite*)b[0].GetTypeDef()->SkipUser());
+
+	#ifdef USE_DX11
+		const void	*vs	= p->sub[SS_VERTEX].raw();
+		rd->vd.Init(ve, pve - ve, vs);
+	#else
+		rd->vd = ve;
+	#endif
+
+	} else {
+		_Buffer	&vb = rd->vb;
+		_Buffer	&ib = rd->ib;
+		rd->nindices	= index_num;
+		vb.Init(b[0], rd->nverts, rd->vert_size, MEM_DEFAULT);
+		ib.Init(indices, index_num * index_size, MEM_DEFAULT);
+	}
 }
 void SubMeshPlat::DeInit() {
+	auto	verts	= ((SubMesh*)this)->verts;
 	if (verts && verts.Header()->refs == 0xffff) {
 		delete (renderdata*)verts.User().get();
 		verts.User() = 0;
@@ -248,17 +276,26 @@ void SubMeshPlat::DeInit() {
 }
 void SubMeshPlat::Render(GraphicsContext &ctx) {
 	PROFILE_CPU_EVENT("SubMeshPlat");
+	auto	verts	= ((SubMesh*)this)->verts;
 	if (!verts.User())
 		Init(0);
 
 	renderdata	*rd = (renderdata*)verts.User().get();
-	ctx.SetVertexType(rd->vd);
-	ctx.SetVertices(0, rd->vb, rd->vert_size);
-	ctx.SetIndices(rd->ib);
-	ctx.DrawIndexedVertices(PrimType(rd->prim), 0, rd->nverts, 0, rd->nindices);
+	pass		*p	= (*technique)[0];
+	if (p->Has(SS_VERTEX)) {
+		ctx.SetVertexType(rd->vd);
+		ctx.SetVertices(0, rd->vb, rd->vert_size);
+		ctx.SetIndices(rd->ib);
+		ctx.DrawIndexedVertices(PrimType(rd->prim), 0, rd->nverts, 0, rd->nindices);
+	} else {
+		ctx.SetBuffer(SS_COMPUTE, rd->vb, 0);
+		ctx.SetBuffer(SS_COMPUTE, rd->ib, GetTexFormat<uint32>(), 1);
+		ctx.Dispatch((rd->nindices + 63) / 64);
+	}
 }
 
 SubMeshPlat::renderdata *SubMeshPlat::GetRenderData() {
+	auto	verts	= ((SubMesh*)this)->verts;
 	if (!verts.User())
 		Init(0);
 
@@ -274,11 +311,11 @@ SubMeshPlat::renderdata *SubMeshPlat::GetRenderData() {
 //-----------------------------------------------------------------------------
 
 class ModelShaderConstants {
-	static hash_map<Model3*, ModelShaderConstants>	hash;
+	static hash_map<void*, ModelShaderConstants>	hash;
 
 	ShaderConstants		*sc;
 
-	static int CountPasses(Model3 *model) {
+	static int CountPasses(Model *model) {
 	#if 1
 		return model->submeshes.Count() * 4;
 	#else
@@ -294,7 +331,7 @@ public:
 //	void	Set(uint32 key)			{ sc = make((Model3*)key, ISO::Browser()); }
 //	void	Clear(uint32 key)		{ delete_array<ShaderConstants>(sc, CountPasses((Model3*)key));	}
 
-	static ShaderConstants* get(World *w, Model3 *m) {
+	static ShaderConstants* get(World *w, Model *m) {
 		ShaderConstants *&sc = hash[m]->sc;
 		if (!sc) {
 			auto	*c = w->GetItem<ShaderConsts>(crc32());
@@ -302,19 +339,18 @@ public:
 		}
 		return sc;
 	}
-	static void				remove(Model3 *m) {
-		if (ModelShaderConstants *msc = hash.remove(m))
+	static void				remove(Model *m) {
+		if (ModelShaderConstants *msc = hash.remove_value(m).exists_ptr())
 			delete_array(msc->sc, CountPasses(m));
 	}
-	static ShaderConstants*	make(Model3 *m, ISO::Browser b);
+	static ShaderConstants*	make(Model *m, ISO::Browser b);
 };
 
-hash_map<Model3*, ModelShaderConstants>	ModelShaderConstants::hash;
+hash_map<void*, ModelShaderConstants>	ModelShaderConstants::hash;
 
-ShaderConstants *ModelShaderConstants::make(Model3 *m, ISO::Browser b) {
+ShaderConstants *ModelShaderConstants::make(Model *m, ISO::Browser b) {
 	ShaderConstants	*sc = new_array<ShaderConstants>(CountPasses(m)), *sc1 = sc;
-	for (ISO_openarray<SubMeshPtr>::iterator i = m->submeshes.begin(), ie = m->submeshes.end(); i != ie; ++i, sc1 += 4) {
-		SubMeshBase		*sm		= *i;
+	for (SubMeshBase		*sm : m->submeshes) {
 		ShaderConstants	*sc2	= sc1;
 		for (auto t = sm->technique->begin(), te = sm->technique->end(); t != te; ++t, ++sc2) {
 //			sc2->Init(*t, b ? b : ISO::Browser(sm->parameters));
@@ -325,18 +361,21 @@ ShaderConstants *ModelShaderConstants::make(Model3 *m, ISO::Browser b) {
 				sc2->Init(*t, ISO::Browser(sm->parameters));
 			}
 		}
+		sc1 += 4;
 	}
 	return sc;
 }
 
 ISO_INIT(Model3)	{}
-ISO_DEINIT(Model3)	{ ModelShaderConstants::remove(p); }
+ISO_DEINIT(Model3)	{ ModelShaderConstants::remove((Model*)p); }
+ISO_INIT(Model)	{}
+ISO_DEINIT(Model)	{ ModelShaderConstants::remove(p); }
 
-ShaderConstants *Bind(World *w, Model3 *m) {
+ShaderConstants *Bind(World *w, Model *m) {
 	return ModelShaderConstants::get(w, m);
 }
 
-void PostFix(World *world, GraphicsContext &ctx, Model3 *m) {
+void PostFix(World *world, GraphicsContext &ctx, Model *m) {
 	ShaderConstants	*sc = Bind(world, m);
 #ifdef PLAT_OGL
 	for (ISO_openarray<SubMeshPtr>::iterator i = m->submeshes.begin(), ie = m->submeshes.end(); i != ie; ++i, sc += 4) {
@@ -377,7 +416,7 @@ struct LookupBrowser : ISO::VirtualDefaults {
 };
 */
 struct RenderModelObject : public RenderObject {
-	ISO_ptr<Model3>			model;
+	ISO_ptr<Model>			model;
 	RenderParameters		params;
 	ShaderConstants			*shader_constants;
 	float3x4				world;
@@ -386,7 +425,8 @@ struct RenderModelObject : public RenderObject {
 	void operator()(DestroyMessage &m)	{ delete this; }
 	void operator()(MoveMessage &m)		{ m.Update(Move((obj->GetWorldMat() * GetBox()).get_box()));	}
 
-	RenderModelObject(World *world, Object *_obj, const ISO_ptr<Model3> &_model)
+
+	RenderModelObject(World *world, Object *_obj, const ISO_ptr<Model> &_model)
 		: RenderObject(this, _obj)
 		, model(_model), shader_constants(0)
 	{
@@ -436,7 +476,7 @@ struct RenderModelObject : public RenderObject {
 //		PROFILE_CPU_EVENT(PROFILE_DYNAMIC(buffer_accum<256>() << GetLabel(model.ID()) << world.translation()));
 		buffer_accum<256>	b;
 		b << hex(intptr_t(&model)) << " - " << extra;
-		AlwaysProfileGpuEvent	pfl(re->ctx, b);
+		AlwaysProfileGpuEvent	pfl(re->ctx, b.term());
 
 		int			index	= extra & 0xff;
 		SubMeshBase	*sm		= model->submeshes[index];
@@ -532,7 +572,7 @@ struct RenderModelObject : public RenderObject {
 void Draw(GraphicsContext &ctx, ISO_ptr<Model3> &model) {
 	PROFILE_EVENT(ctx, GetLabel(model.ID()));
 
-	ShaderConstants		*sc = ModelShaderConstants::get(World::Current(), model);
+	ShaderConstants		*sc = ModelShaderConstants::get(World::Current(), (Model*)model.get());
 	for (int i = 0, n = model->submeshes.Count(); i < n; i++) {
 		SubMeshBase	*sm = model->submeshes[i];
 		sc[i * 4].Set(ctx, (*sm->technique)[0]);
@@ -541,12 +581,20 @@ void Draw(GraphicsContext &ctx, ISO_ptr<Model3> &model) {
 }
 
 template<> void TypeHandler<Model3>::Create(const CreateParams &cp, crc32 id, const Model3 *t) {
-	RenderModelObject	*rm = new RenderModelObject(cp.world, cp.obj, ISO::GetPtr(t));
+	RenderModelObject	*rm = new RenderModelObject(cp.world, cp.obj, ISO::GetPtr((Model*)t));
 	RenderAddObjectMessage	m(rm, rm->GetBox(), cp.obj->GetWorldMat());
 	cp.world->Send(m);
 	cp.world->AddBox(m.box);
 }
 TypeHandler<Model3>		thModel3;
+
+template<> void TypeHandler<Model>::Create(const CreateParams &cp, crc32 id, const Model *t) {
+	RenderModelObject	*rm = new RenderModelObject(cp.world, cp.obj, ISO::GetPtr(t));
+	RenderAddObjectMessage	m(rm, rm->GetBox(), cp.obj->GetWorldMat());
+	cp.world->Send(m);
+	cp.world->AddBox(m.box);
+}
+TypeHandler<Model>		thModel;
 
 
 template<typename S> struct RenderShapeModel : RenderObject, ShapeModel<S> {

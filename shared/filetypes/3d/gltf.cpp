@@ -1,8 +1,10 @@
 #include "iso/iso_files.h"
-#include "filetypes/3d/model_utils.h"
+#include "model_utils.h"
 #include "extra/json.h"
 #include "codec/mesh/draco.h"
+#include "codec/mesh/meshopt.h"
 #include "utilities.h"
+#include "usage.h"
 #include "GL/GL.h"
 
 //-----------------------------------------------------------------------------
@@ -66,17 +68,16 @@ ISO_DEFUSERCOMPV(MaterialParams, DiffuseColor, Roughness, SpecularColor, Metalne
 ISO_DEFUSERCOMPV(PBRParameters, material, baseColorTexture, metallicRoughnessTexture, normalTexture, normalScale, occlusionTexture, occlusionStrength, emissiveTexture);
 #endif
 
-
 struct GLTF_loader {
-	JSONval	json;
+	JSONval		json;
+	dynamic_array<malloc_block>	bins;
 
 	struct Buffer {
 		size_t		bytelength;
 		filename	fn;
-		Buffer(const JSONval& j) : bytelength((j/"bytelength").get(-1)) {
-			if (auto x = j / "uri") {
+		Buffer(const JSONval& j) : bytelength((j/"byteLength").get(-1)) {
+			if (auto x = j / "uri")
 				fn = FileHandler::FindAbsolute(filename(x.get<const char*>()));
-			}
 		}
 	};
 
@@ -84,16 +85,9 @@ struct GLTF_loader {
 		int		buffer;
 		size_t	byteLength;
 		size_t	byteOffset;
-		BufferView(const JSONval& j) : buffer((j/"buffer").get(-1)), byteLength((j/"byteLength").get(-1)), byteOffset((j/"byteOffset").get(0)) {}
+		size_t	byteStride;
+		BufferView(const JSONval& j) : buffer((j/"buffer").get(-1)), byteLength((j/"byteLength").get(-1)), byteOffset((j/"byteOffset").get(0)), byteStride((j/"byteStride").get(0)) {}
 	};
-
-	auto	GetData(const BufferView &v) {
-		Buffer		b(json/"buffers"/v.buffer);
-		return make_reader_offset(FileInput(b.fn), v.byteOffset, v.byteLength);
-	}
-	auto	GetData(int v) {
-		return GetData(json/"bufferViews"/v);
-	}
 
 	struct Accessor {
 		enum Component {
@@ -161,17 +155,18 @@ struct GLTF_loader {
 		}
 
 	};
-
+	/*
 	struct Image {
 		string	uri;		//The URI (or IRI) of the image
 		string	mimeType;	//The image’s media type. This field MUST be defined when bufferView is defined
 		int		bufferView;	//The index of the bufferView that contains the image. This field MUST NOT be defined when uri is defined
 		Image(const JSONval& j) :
 			uri			((j/"uri").get("")),
-			mimeType	((j/"minFilter").get("")),
+			mimeType	((j/"mimeType").get("")),
 			bufferView	((j/"bufferView").get(-1))
 		{}
 	};
+	*/
 	struct Sampler {
 		int	magFilter;	//Magnification filter
 		int	minFilter;	//Minification filter
@@ -190,222 +185,313 @@ struct GLTF_loader {
 		Texture(const JSONval& j) : sampler((j/"sampler").get(-1)), source((j/"source").get(-1)) {}
 	};
 	struct TextureInfo {
-		int	index;		//The index of the texture.@ Yes
-		int	texcoord;	//The set index of texture’s TEXCOORD attribute used for texture coordinate mapping.@No, default: 0
-		TextureInfo(const JSONval& j) : index((j/"index").get(0)), texcoord((j/"texcoord").get(0)) {}
+		int	index;		//The index of the texture (required)
+		int	texcoord;	//The set index of texture’s TEXCOORD attribute used for texture coordinate mapping. default: 0
+		TextureInfo(const JSONval& j) : index((j/"index").get(-1)), texcoord((j/"texcoord").get(0)) {}
 	};
 
-	auto	GetTexture(const TextureInfo& info) {
-		Texture	tex(json/"textures"/info.index);
-		Sampler	samp(json/"samplers"/tex.sampler);
-		Image	im(json/"images"/tex.source);
-		return ISO::MakePtrExternal(0, FileHandler::FindAbsolute(im.uri));
-	}
+	memory_block_own	GetDataBuffer(const BufferView &v);
+	memory_block_own	GetDataB(JSONval bv);
 
-	void	ReadMaterial(SubMesh *mesh, const JSONval& mat) {
-		ISO_ptr<PBRParameters>	params(0);
+	auto				GetTexture(const TextureInfo& info);
+	void				ReadMaterial(SubMesh *mesh, const JSONval& mat);
+	ISO_ptr<SubMesh>	ReadPrimitive(const JSONval& prim);
+	ISO_ptr<Model3>		ReadMesh(const JSONval& mesh);
+	ISO_ptr<Node>		ReadNode(const JSONval& node);
+	ISO_ptr<Scene>		ReadScene(const JSONval& scene);
+};
 
-		mesh->parameters	= params;
-		mesh->technique		= ISO::root("data")["gltf"]["gltf"];//ISO::MakePtrExternal(0, "gltf.fx");
+memory_block_own GLTF_loader::GetDataBuffer(const BufferView& v) {
+	Buffer		b(json/"buffers"/v.buffer);
+	if (b.fn.blank())
+		return bins[v.buffer].slice(v.byteOffset, v.byteLength);
 
-		auto	name		= (mat/"name ").get("");
-		auto	alphaCutoff	= (mat/"alphaCutoff").get(0.5f);
-		auto	doubleSided	= (mat/"doubleSided").get(false);
+	FileInput	file(b.fn);
+	file.seek(v.byteOffset);
+	return malloc_block(file, v.byteLength);
+}
 
-		auto	pbr			= mat / "pbrMetallicRoughness";
+memory_block_own GLTF_loader::GetDataB(JSONval bv) {
+	for (auto i : (bv / "extensions").items()) {
+		if (i.a == "EXT_meshopt_compression") {
+			BufferView	v(i.b);
+			size_t		count((i.b / "count").get(0));
 
-		params->baseColorTexture		= GetTexture(pbr/"baseColorTexture");
-		params->metallicRoughnessTexture= GetTexture(pbr/"metallicRoughnessTexture");
-		params->emissiveFactor			= load_vec((mat/"emissiveFactor").get(array<float,3>(0)));
-	#if 1
-		params->baseColorFactor			= load_vec((pbr/"baseColorFactor").get(array<float, 4>(1)));
-		params->metallicFactor			= (pbr/"metallicFactor").get(1.f);
-		params->roughnessFactor			= (pbr/"roughnessFactor").get(1.f);
-	#else
-		params->material.DiffuseColor		= load_vec((pbr/"baseColorFactor").get(array<float, 4>(1))).xyz;
-		params->material.SpecularColor		= one;
-		params->material.Metalness			= (pbr/"metallicFactor").get(1.f);
-		params->material.Roughness			= (pbr/"roughnessFactor").get(1.f);
-		params->material.Anisotropy			= 0;
-	#endif
-		if (auto x = mat/"normalTexture") {
-			params->normalTexture		= GetTexture(x);
-			params->normalScale			= (x/"scale").get(1.f);
-		}
-		if (auto x = mat / "occlusionTexture") {
-			params->occlusionTexture	= GetTexture(x);
-			params->occlusionStrength	= (x/"strength").get(1.f);
-		}
-		if (auto x = mat / "emissiveTexture")
-			params->emissiveTexture		= GetTexture(x);
+			int	mode	= (i.b / "mode").get_enum(
+				"ATTRIBUTES",
+				"TRIANGLES",
+				"INDICES"
+			);
 
-		int	alphaMode;
-		switch (string_hash((mat / "alphaMode").get(""))) {
-			case "OPAQUE"_fnv:	alphaMode = 0; break;
-			case "MASK"_fnv:	alphaMode = 1; break;
-			case "BLEND"_fnv:	alphaMode = 2; break;
-			default:			alphaMode = -1; break;
-		}
-
-		for (auto i : (mat / "extensions").items()) {
-		}
-		for (auto i : (mat / "extras").items()) {
-		}
-	}
-
-	ISO_ptr<SubMesh>	ReadPrimitive(const JSONval& prim) {
-		auto	mode = (prim / "mode").get(4);
-
-		dynamic_array<named<Accessor>>	attributes;
-		for (auto i : (prim / "attributes").items())
-			attributes.emplace_back(string(i.a), json / "accessors" / i.b);
-
-		Accessor	indices(json / "accessors" /(prim/"indices"));
-
-		int		draco_bufferView	= -1;
-		for (auto i : (prim / "extensions").items()) {
-			if (i.a == "KHR_draco_mesh_compression") {
-				draco_bufferView	= (i.b/"bufferView").get(-1);
-
-				for (auto j : (i.b / "attributes").items()) {
-					for (auto& a : attributes) {
-						if (a.name() == j.a) {
-							a.bufferView	= draco_bufferView;
-							a.draco_id		= j.b.get();
-							break;
-						}
+			switch (mode) {
+				case 1: {
+					malloc_block	dest(count * 4);
+					meshopt::decodeIndexBuffer(GetDataBuffer(v), dest, count);
+					if (v.byteStride == 2) {
+						uint16	*p = dest;
+						for (auto i : make_range<uint32>(dest))
+							*p++ = i;
+						dest.resize(count * 2);
 					}
+					return dest;
 				}
+				case 2: {
+					malloc_block	dest(count * 4);
+					meshopt::decodeIndexSequence(GetDataBuffer(v), dest, count);
+					return dest;
+				}
+				default: {
+					malloc_block	dest(count * v.byteStride);
+					meshopt::decodeVertexBuffer(GetDataBuffer(v), dest, count, v.byteStride);
 
+					int	filter	= (i.b / "filter").get_enum(
+						"NONE",
+						"OCTAHEDRAL",
+						"QUATERNION",
+						"EXPONENTIAL"
+					);
+
+					meshopt::defilterVertexBuffer(dest, filter, v.byteStride);
+					return dest;
+				}
 			}
 		}
+	}
 
-		for (auto i : (prim / "extras").items()) {
-		}
+	BufferView	v(bv);
+	return GetDataBuffer(v);
+}
 
-		uint32	num_faces	= indices.count / 3;
-		uint32	num_verts	= 0;
+auto GLTF_loader::GetTexture(const TextureInfo& info) {
+	if (info.index < 0)
+		return ISO_NULL;
 
-		ISO::TypeCompositeN<64>	builder(0);
-		for (auto& a : attributes) {
-			builder.Add(a.ISOType(), a.name());
-			num_verts = max(num_verts, a.count);
-		}
-		
-		ISO_ptr<SubMesh>	mesh(0, builder.Duplicate(), num_verts, num_faces);
-		if (draco_bufferView >= 0) {
-			draco::Reader	dr;
-			auto	file	= GetData(draco_bufferView);
-			if (dr.read(file)) {
-				int32	*i = dr.corner_to_point;
-				for (auto& f : mesh->indices) {
-					f[0] = i[0];
-					f[1] = i[1];
-					f[2] = i[2];
-					i += 3;
-				}
+	Texture	tex(json/"textures"/info.index);
+	Sampler	samp(json/"samplers"/tex.sampler);
 
+	auto	im	= json/"images"/tex.source;
+	if (auto uri = im / "uri")
+		return ISO::MakePtrExternal(0, FileHandler::FindAbsolute(uri.get("")));
+
+	int		i	= (im / "bufferView").get(-1);
+	BufferView	v(json / "bufferViews" / i);
+
+	auto	b = GetDataBuffer(v);
+	return ISO_NULL;
+}
+
+void GLTF_loader::ReadMaterial(SubMesh *mesh, const JSONval& mat) {
+	ISO_ptr<PBRParameters>	params(0);
+
+	mesh->parameters	= params;
+	mesh->technique		= ISO::root("data")["gltf"]["notex_int"];//ISO::MakePtrExternal(0, "gltf.fx");
+
+	auto	name		= (mat/"name ").get("");
+	auto	alphaCutoff	= (mat/"alphaCutoff").get(0.5f);
+	auto	doubleSided	= (mat/"doubleSided").get(false);
+
+	auto	pbr			= mat / "pbrMetallicRoughness";
+
+	params->baseColorTexture		= GetTexture(pbr/"baseColorTexture");
+	params->metallicRoughnessTexture= GetTexture(pbr/"metallicRoughnessTexture");
+	params->emissiveFactor			= load_vec((mat/"emissiveFactor").get(array<float,3>(0)));
+#if 1
+	params->baseColorFactor			= load_vec((pbr/"baseColorFactor").get(array<float, 4>(1)));
+	params->metallicFactor			= (pbr/"metallicFactor").get(1.f);
+	params->roughnessFactor			= (pbr/"roughnessFactor").get(1.f);
+#else
+	params->material.DiffuseColor	= load_vec((pbr/"baseColorFactor").get(array<float, 4>(1))).xyz;
+	params->material.SpecularColor	= one;
+	params->material.Metalness		= (pbr/"metallicFactor").get(1.f);
+	params->material.Roughness		= (pbr/"roughnessFactor").get(1.f);
+	params->material.Anisotropy		= 0;
+#endif
+	if (auto x = mat/"normalTexture") {
+		params->normalTexture		= GetTexture(x);
+		params->normalScale			= (x/"scale").get(1.f);
+	}
+	if (auto x = mat / "occlusionTexture") {
+		params->occlusionTexture	= GetTexture(x);
+		params->occlusionStrength	= (x/"strength").get(1.f);
+	}
+	if (auto x = mat / "emissiveTexture")
+		params->emissiveTexture		= GetTexture(x);
+
+	int	alphaMode;
+	switch (string_hash((mat / "alphaMode").get(""))) {
+		case "OPAQUE"_fnv:	alphaMode = 0; break;
+		case "MASK"_fnv:	alphaMode = 1; break;
+		case "BLEND"_fnv:	alphaMode = 2; break;
+		default:			alphaMode = -1; break;
+	}
+
+	for (auto i : (mat / "extensions").items()) {
+	}
+	for (auto i : (mat / "extras").items()) {
+	}
+}
+
+ISO_ptr<SubMesh> GLTF_loader::ReadPrimitive(const JSONval& prim) {
+	auto	mode = (prim / "mode").get(4);
+
+	dynamic_array<named<Accessor>>	attributes;
+	for (auto i : (prim / "attributes").items())
+		attributes.emplace_back(string(i.a), json / "accessors" / i.b);
+
+	Accessor	indices(json / "accessors" /(prim/"indices"));
+
+	int		draco_bufferView	= -1;
+	for (auto i : (prim / "extensions").items()) {
+		if (i.a == "KHR_draco_mesh_compression") {
+			draco_bufferView	= (i.b/"bufferView").get(-1);
+
+			for (auto j : (i.b / "attributes").items()) {
 				for (auto& a : attributes) {
-					if (auto da = dr.GetAttribute(a.draco_id)) {
-						auto	v = mesh->VertComponentData<uint8>(a.name());
-						da->CopyValues(v, dr.PointToValue(*da->dec));
+					if (a.name() == j.a) {
+						a.bufferView	= draco_bufferView;
+						a.draco_id		= j.b.get();
+						break;
 					}
 				}
 			}
+		}
+	}
 
-		} else {
-			auto	file = GetData(indices.bufferView);
-			file.seek(indices.byteOffset);
-			mesh->indices.read(file, num_faces);
+	for (auto i : (prim / "extras").items()) {
+	}
+
+	uint32	num_faces	= indices.count / 3;
+	uint32	num_verts	= 0;
+
+	ISO::TypeCompositeN<64>	builder(0);
+	int		pos_index	= 0;
+	for (auto& a : attributes) {
+		USAGE2	usage(a.name());
+		if (usage.usage == USAGE_POSITION)
+			pos_index = builder.Count();
+		builder.Add(a.ISOType(), a.name());
+		num_verts = max(num_verts, a.count);
+	}
+
+	if (pos_index) {
+		swap(builder[0], builder[pos_index]);
+		builder.flags |= ISO::TypeComposite::FINDSIZE;
+	}
+
+	ISO_ptr<SubMesh>	mesh(none, builder.Duplicate(), num_verts, num_faces);
+
+	if (draco_bufferView >= 0) {
+		memory_reader_owner	file(GetDataBuffer(json / "bufferViews" / draco_bufferView));
+		draco::Reader	dr;
+		if (dr.read(file)) {
+			int32	*i = dr.corner_to_point;
+			for (auto& f : mesh->indices) {
+				f[0] = i[0];
+				f[1] = i[1];
+				f[2] = i[2];
+				i += 3;
+			}
 
 			for (auto& a : attributes) {
-				auto	file = GetData(a.bufferView);
-				file.seek(a.byteOffset);
-				for (auto&& v : mesh->VertComponentBlock(a.name()))
-					v.read(file);
+				if (auto da = dr.GetAttribute(a.draco_id)) {
+					auto	v = mesh->VertComponentData<uint8>(a.name());
+					da->CopyValues(v, dr.PointToValue(*da->dec));
+				}
 			}
 		}
 
-		if (auto x = prim / "material")
-			ReadMaterial(mesh, (json / "materials")[x]);
+	} else {
+		mesh->indices = make_range<uint16[3]>(GetDataB(json / "bufferViews" / indices.bufferView));
 
-		mesh->UpdateExtents();
-		return mesh;
+		for (auto& a : attributes) {
+			auto	bv		= json / "bufferViews" / a.bufferView;
+			auto	buffer	= GetDataB(bv);
+			auto	dest	= mesh->VertComponentBlock(a.name());
+			auto	srce	= make_strided_block((char*)buffer, dest.size<1>(), BufferView(bv).byteStride, num_verts);
+			copy(srce, dest);
+		}
 	}
 
-	ISO_ptr<Model3>	ReadMesh(const JSONval& mesh) {
-		ISO_ptr<Model3>	model((mesh / "name").get(""));
+	if (auto x = prim / "material")
+		ReadMaterial(mesh, (json / "materials")[x]);
 
-		if (auto x = mesh / "primitives") {
-			for (auto&& i : x)
-				model->submeshes.Append(ReadPrimitive(i));
-			model->UpdateExtents();
-		}
+	mesh->UpdateExtent();
+	return mesh;
+}
 
-		if (auto x = mesh / "extensions")
-			;// object	Dictionary object with extension - specific objects.No
-		if (auto x = mesh / "extras")
-			;// any	Application - specific data.No
-		return model;
+ISO_ptr<Model3> GLTF_loader::ReadMesh(const JSONval& mesh) {
+	ISO_ptr<Model3>	model((mesh / "name").get(""));
+
+	if (auto x = mesh / "primitives") {
+		for (auto&& i : x)
+			model->submeshes.Append(ReadPrimitive(i));
+		model->UpdateExtents();
 	}
 
-	ISO_ptr<Node>	ReadNode(const JSONval& node) {
-		ISO_ptr<Node>	n((node / "name").get(""));
+	if (auto x = mesh / "extensions")
+		;// object	Dictionary object with extension - specific objects.No
+	if (auto x = mesh / "extras")
+		;// any	Application - specific data.No
+	return model;
+}
 
-		scale_rot_trans	transform(one);
-		if (auto x = node / "translation")
-			transform.set_trans(position3(load_vec(x.get<array<float, 3>>())));
+ISO_ptr<Node> GLTF_loader::ReadNode(const JSONval& node) {
+	ISO_ptr<Node>	n((node / "name").get(""));
 
-		if (auto x = node / "rotation")
-			transform.set_rot(load_vec(x.get<array<float, 4>>()));
+	scale_rot_trans	transform(one);
+	if (auto x = node / "translation")
+		transform.set_trans(position3(load_vec(x.get<array<float, 3>>())));
 
-		if (auto x = node / "scale")
-			transform.set_scale(load_vec(x.get<array<float, 3>>()));
+	if (auto x = node / "rotation")
+		transform.set_rot(load_vec(x.get<array<float, 4>>()));
 
-		if (auto x = node / "matrix")
-			n->matrix = (float3x4)force_cast<float4x4>(load_vec(x.get<array<float, 16>>()));
-		else
-			n->matrix = (float3x4)transform;
+	if (auto x = node / "scale")
+		transform.set_scale(load_vec(x.get<array<float, 3>>()));
 
-		if (auto x = node / "mesh") {
-			if (auto mesh = (json / "meshes")[x])
-				n->children.Append(ReadMesh(mesh));
-		}
+	if (auto x = node / "matrix")
+		n->matrix = (float3x4)force_cast<float4x4>(load_vec(x.get<array<float, 16>>()));
+	else
+		n->matrix = (float3x4)transform;
 
-		if (auto x = node / "camera")
-			;// string	The ID of the camera referenced by this node.No
-		if (auto x = node / "skeletons")
-			;// string[]	The ID of skeleton nodes.No
-		if (auto x = node / "skin")
-			;// string	The ID of the skin referenced by this node.No
-		if (auto x = node / "jointName")
-			;// string	Name used when this node is a joint in a skin.No
-		if (auto x = node / "extensions")
-			;// object	Dictionary object with extension - specific objects.No
-		if (auto x = node / "extras")
-			;// any	Application - specific data.No
-
-		if (auto x = node / "children") {
-			auto	nodes = json / "nodes";
-			for (auto&& i : x) {
-				if (JSONval	node = nodes[i])
-					n->children.Append(ReadNode(node));
-			}
-		}
-		return n;
+	if (auto x = node / "mesh") {
+		if (auto mesh = (json / "meshes")[x])
+			n->children.Append(ReadMesh(mesh));
 	}
 
-	ISO_ptr<Scene>	ReadScene(const JSONval& scene) {
-		ISO_ptr<Scene>	p((scene / "name").get(""));
-		auto	root	= p->root.Create("root");
-		auto	nodes	= json / "nodes";
-		for (auto&& i : scene / "nodes") {
+	if (auto x = node / "camera")
+		;// string	The ID of the camera referenced by this node.No
+	if (auto x = node / "skeletons")
+		;// string[]	The ID of skeleton nodes.No
+	if (auto x = node / "skin")
+		;// string	The ID of the skin referenced by this node.No
+	if (auto x = node / "jointName")
+		;// string	Name used when this node is a joint in a skin.No
+	if (auto x = node / "extensions")
+		;// object	Dictionary object with extension - specific objects.No
+	if (auto x = node / "extras")
+		;// any	Application - specific data.No
+
+	if (auto x = node / "children") {
+		auto	nodes = json / "nodes";
+		for (auto&& i : x) {
 			if (JSONval	node = nodes[i])
-				root->children.Append(ReadNode(node));
+				n->children.Append(ReadNode(node));
 		}
-		return p;
 	}
-};
+	return n;
+}
+
+ISO_ptr<Scene> GLTF_loader::ReadScene(const JSONval& scene) {
+	ISO_ptr<Scene>	p((scene / "name").get(""));
+	auto	root	= p->root.Create("root");
+	auto	nodes	= json / "nodes";
+	for (auto&& i : scene / "nodes") {
+		if (JSONval	node = nodes[i])
+			root->children.Append(ReadNode(node));
+	}
+	return p;
+}
+
 
 class GLTFFileHandler : FileHandler {
 	const char*		GetExt()				override { return "gltf"; }
@@ -458,9 +544,9 @@ struct GLB_header {
 };
 
 struct GLB_chunk {
-	enum { JSON = 0x4E4F534A, BIN = 0x004E4942 };
+	enum TYPE : uint32 { JSON = 0x4E4F534A, BIN = 0x004E4942 };
 	uint32	length;
-	uint32	type;
+	TYPE	type;
 	uint8	data[];
 };
 
@@ -480,6 +566,7 @@ class GLBFileHandler : FileHandler {
 		if (!file.read(h) || !h.valid())
 			return ISO_NULL;
 
+		auto	cstart	= file.tell();
 		GLB_chunk	c;
 		file.read(c);
 		if (c.type != c.JSON)
@@ -488,6 +575,14 @@ class GLBFileHandler : FileHandler {
 		GLTF_loader	gltf;
 		if (!gltf.json.read(make_reader_offset(file, c.length)))
 			return ISO_NULL;
+
+		for (;;) {
+			cstart += c.length + 8;
+			file.seek(cstart);
+			if (!file.read(c) || c.type != c.BIN)
+				break;
+			gltf.bins.emplace_back(file, c.length);
+		}
 
 		auto	scenes = gltf.json / "scenes";
 		switch (scenes.size()) {

@@ -111,7 +111,7 @@ struct Parser : string_scan {
 			case 'I': case 'J': case 'K': case 'L': case 'M': case 'N': case 'O': case 'P':
 			case 'Q': case 'R': case 'S': case 'T': case 'U': case 'V': case 'W': case 'X':
 			case 'Y': case 'Z': {
-				value = move(-1).get_token(char_set::identifier);
+				value = move(-1).get_token(char_set::wordchar);
 				return TOK_IDENTIFIER;
 			}
 
@@ -483,12 +483,11 @@ bool MakefileHandler::Write(ISO_ptr<void> p, ostream_ref file) {
 //	dynamic_array<const char *>	src;
 	writer.put_line("SRC\t:=");
 	for (auto &j : targets["ClCompile"]->items) {
-		if (j.IsType<anything>()) {
-			anything	&k = *(anything*)j;
-			if (ISO_ptr<string> include = k["Include"]) {
+		if (auto k = j.test_cast<anything>()) {
+			if (ISO_ptr<string> include = (*k)["Include"]) {
 				ISO::PtrBrowser	cond;
 				bool		flip = false;
-				if (ISO::PtrBrowser exclude = (ISO::ptr_machine<void>)k["ExcludedFromBuild"]) {
+				if (ISO::PtrBrowser exclude = (ISO::ptr_machine<void>)(*k)["ExcludedFromBuild"]) {
 					cond = exclude["Condition"];
 					flip = !(cond ? exclude[1].get<bool>() : exclude.get<bool>());
 				}

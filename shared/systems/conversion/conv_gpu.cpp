@@ -62,7 +62,7 @@ ISO_ptr<HDRbitmap> Average(ISO_ptr<HDRbitmap> bm, int w, int h) {
 	cc.Blit(staging, dst);
 
 	cc.DingDong();
-	cc.Wait(cc.PutFence());
+	cc.PutFence().Wait();
 	copy(staging.Data(cc), element_cast<float4>(bm2->All()));
 	return bm2;
 }
@@ -202,7 +202,7 @@ ISO_ptr<HDRbitmap> SoftMax(ISO_ptr<HDRbitmap> bm, float beta) {
 	cc.Blit(staging, dst);
 
 	cc.DingDong();
-	cc.Wait(cc.PutFence());
+	cc.PutFence().Wait();
 	copy(staging.Data(cc), out);
 	return bm2;
 
@@ -271,7 +271,7 @@ ISO_ptr<HDRbitmap> LogSoftMax(ISO_ptr<HDRbitmap> bm, float beta) {
 	cc.Blit(staging, dst);
 
 	cc.DingDong();
-	cc.Wait(cc.PutFence());
+	cc.PutFence().Wait();
 	copy(staging.Data(cc), out);
 	return bm2;
 }
@@ -384,7 +384,7 @@ template<typename T> void GPU_FFT(ComputeContext& cc, const block<T, 2>& in, con
 
 	cc.Blit(staging, out_r);
 	cc.DingDong();
-	cc.Wait(cc.PutFence());
+	cc.PutFence().Wait();
 
 	copy(staging.Data(cc).template slice<1>(0, out.template size<1>()).template slice<2>(0, out.template size<2>()), out);
 }
@@ -453,7 +453,7 @@ ISO_ptr<HDRbitmap> Convolve(ISO_ptr<HDRbitmap> bm, const block<float, 2>& kernel
 	cc.Blit(staging, fft_bm);
 
 	cc.DingDong();
-	cc.Wait(cc.PutFence());
+	cc.PutFence().Wait();
 
 	copy(staging.Data(cc).slice<1>(0, width).slice<2>(0, height), out);
 	return bm2;

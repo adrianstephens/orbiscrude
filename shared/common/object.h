@@ -46,7 +46,7 @@ template<typename T> crc32 CRC_type(const T &t) {
 	return CRC_type<T>();
 }
 inline crc32 CRC_type(const ISO::Type *type) {
-	return type->GetType() == ISO::USER ? ((ISO::TypeUser*)type)->ID() : crc32();
+	return type->GetType() == ISO::USER ? ((ISO::TypeUser*)type)->ID().get_crc32() : crc32();
 }
 template<typename T> crc32 CRC_type(const ISO_ptr<T> &p) {
 	return CRC_type(p.GetType());
@@ -85,13 +85,13 @@ private:
 	void	Init(World *world, Object *_parent, param(float3x4) mat);
 public:
 	Object()	{ Init(identity); }
-	Object(World *world, param(float3x4) mat, Object *_parent = NULL)										{ Init(world, _parent, mat); }
-	Object(World *world, ISO_ptr<Node> _node, Object *_parent = NULL) : node(_node)							{ Init(world, _parent, node ? float3x4(node->matrix) : identity); }
-	Object(World *world, ISO_ptr<Node> _node, Object *_parent, param(float3x4) offset_mat) : node(_node)	{ Init(world, _parent, node ? float3x4(node->matrix) * offset_mat : offset_mat); }
+	Object(World *world, param(float3x4) mat, Object *_parent = NULL)									{ Init(world, _parent, mat); }
+	Object(World *world, ISO_ptr<Node> node, Object *_parent = NULL) : node(node)						{ Init(world, _parent, node ? float3x4(node->matrix) : identity); }
+	Object(World *world, ISO_ptr<Node> node, Object *_parent, param(float3x4) offset_mat) : node(node)	{ Init(world, _parent, node ? float3x4(node->matrix) * offset_mat : offset_mat); }
 
 	Object(param(float3x4) mat, Object *_parent = NULL);
-	Object(ISO_ptr<Node> _node, Object *_parent = NULL);
-	Object(ISO_ptr<Node> _node, Object *_parent, param(float3x4) offset_mat);
+	Object(ISO_ptr<Node> node, Object *_parent = NULL);
+	Object(ISO_ptr<Node> node, Object *_parent, param(float3x4) offset_mat);
 	~Object();
 
 	tag2					GetName()	 						const	{ return node.ID();	}
@@ -248,7 +248,7 @@ struct Timer : e_link<Timer>, callback<void(TimerMessage&)>, from<fixed_pool<Tim
 struct WorldFrameMessage {
 	World	*world;
 	float	time, dt;
-	WorldFrameMessage(World *_world, float _time, float _dt) : world(_world), time(_time), dt(_dt) {}
+	WorldFrameMessage(World *world, float time, float dt) : world(world), time(time), dt(dt) {}
 };
 struct FrameEvent		: WorldFrameMessage {
 	FrameEvent(World *w, float time, float dt) : WorldFrameMessage(w, time, dt) {}
@@ -315,8 +315,8 @@ public:
 	inline bool		AddEntities(const ISO_ptr<void> &p)										{ return Object::AddEntities(this, p); }
 	inline void		AddEntitiesArray(const anything &a)										{ return Object::AddEntitiesArray(this, a); }
 
-	template<typename T> bool		AddEntity(tag2 id, const T &t)							{ return Object::AddEntity(this, id, CRC_type<T>(), &t); }
-	inline bool						AddEntity(tag2 id, crc32 type, const void *p)			{ return Object::AddEntity(this, id, type, p); }
+	template<typename T> bool		AddEntityByID(tag2 id, const T &t)						{ return Object::AddEntity(this, id, CRC_type<T>(), &t); }
+	inline bool						AddEntityByID(tag2 id, crc32 type, const void *p)		{ return Object::AddEntity(this, id, type, p); }
 	template<typename T> void		SetItem(crc32 id, const T *p);
 	template<typename T> const T*	GetItem(crc32 id);
 };
@@ -325,7 +325,7 @@ struct WorldEvent : Message<WorldEvent> {
 	enum STATE {BEGIN, END, UPDATE};
 	World		*world;
 	STATE		state;
-	WorldEvent(World *w, STATE _state) : world(w), state(_state) {}
+	WorldEvent(World *w, STATE state) : world(w), state(state) {}
 };
 
 template<class M> bool Object::SendUp(const M &m) {
@@ -339,9 +339,9 @@ template<class M> bool Object::SendUp(const M &m) {
 //	inline Object functions that need World
 //-----------------------------------------------------------------------------
 
-inline Object::Object(param(float3x4) mat, Object *_parent)												{ Init(World::Current(), _parent, mat); }
-inline Object::Object(ISO_ptr<Node> _node, Object *_parent) : node(_node)								{ Init(World::Current(), _parent, node ? float3x4(node->matrix) : identity); }
-inline Object::Object(ISO_ptr<Node> _node, Object *_parent, param(float3x4) offset_mat) : node(_node)	{ Init(World::Current(), _parent, node ? float3x4(node->matrix) * offset_mat : offset_mat); }
+inline Object::Object(param(float3x4) mat, Object *_parent)											{ Init(World::Current(), _parent, mat); }
+inline Object::Object(ISO_ptr<Node> node, Object *_parent) : node(node)								{ Init(World::Current(), _parent, node ? float3x4(node->matrix) : identity); }
+inline Object::Object(ISO_ptr<Node> node, Object *_parent, param(float3x4) offset_mat) : node(node)	{ Init(World::Current(), _parent, node ? float3x4(node->matrix) * offset_mat : offset_mat); }
 
 inline void		Object::SetMoved()										{ SetMoved(World::Current()); }
 inline Object*	Object::Detach()										{ Adopt(World::Current(), this); return this; }
@@ -379,7 +379,7 @@ public:
 struct GenericMessage {
 	uint32		id;
 	int			result;
-	GenericMessage(uint32 _id) : id(_id), result(0) {}
+	GenericMessage(uint32 id) : id(id), result(0) {}
 	int	Send()			{ World::Current()->Send(this); return result; }
 	int	Send(World &w)	{ w.Send(this); return result; }
 };
@@ -390,7 +390,7 @@ template<typename T> struct T_GenericMessage : GenericMessage {
 
 struct DebugUpdateMessage {
 	float	time, dt;
-	DebugUpdateMessage(float _time, float _dt) : time(_time), dt(_dt) {}
+	DebugUpdateMessage(float time, float dt) : time(time), dt(dt) {}
 };
 
 //-------------------------------------
@@ -404,9 +404,9 @@ struct CreateParams {
 	num_init<float,1>	quality;
 	float3x4			matrix;
 
-	CreateParams(World *_world, Object *_obj = 0, param(float3x4) _matrix = identity)	: world(_world), obj(_obj), matrix(_matrix)	{}
-	CreateParams(World *_world, Object *_obj, crc32 _bone, param(float3x4) _matrix)		: world(_world), obj(_obj), bone(_bone), matrix(_matrix)	{}
-	CreateParams(World *_world, param(float3x4) _matrix)								: world(_world), obj(NULL), matrix(_matrix)	{}
+	CreateParams(World *world, Object *obj = 0, param(float3x4) matrix = identity)	: world(world), obj(obj), matrix(matrix)	{}
+	CreateParams(World *world, Object *obj, crc32 bone, param(float3x4) matrix)		: world(world), obj(obj), bone(bone), matrix(matrix)	{}
+	CreateParams(World *world, param(float3x4) matrix)								: world(world), obj(NULL), matrix(matrix)	{}
 
 	float	Time() const { return world->Time(); }
 };
@@ -418,10 +418,10 @@ struct CreateMessage : CreateParams {
 	crc32			type;
 	const void		*p;
 
-	CreateMessage(const CreateParams &_cp, crc32 _id, crc32 _type, const void *_p)								: CreateParams(_cp), id(_id), type(_type), p(_p)					{}
-	CreateMessage(World *_world, Object *_obj, param(float3x4) matrix, crc32 _id, crc32 _type, const void *_p)	: CreateParams(_world, _obj, matrix), id(_id), type(_type), p(_p)			{}
-	CreateMessage(World *_world, Object *_obj, param(float3x4) matrix, const ISO_ptr<void> &_p)					: CreateParams(_world, _obj, matrix), id(_p.ID().get_crc32()), type(CRC_type(_p.GetType())), p(_p)	{}
-	template<typename T> CreateMessage(World *_world, Object *_obj, param(float3x4) matrix, crc32 _id, T *t)	: CreateParams(_world, _obj, matrix), id(_id), type(CRC_type<T>()), p(t)	{}
+	CreateMessage(const CreateParams &cp, crc32 id, crc32 type, const void *p)								: CreateParams(cp), id(id), type(type), p(p)					{}
+	CreateMessage(World *world, Object *obj, param(float3x4) matrix, crc32 id, crc32 type, const void *p)	: CreateParams(world, obj, matrix), id(id), type(type), p(p)			{}
+	CreateMessage(World *world, Object *obj, param(float3x4) matrix, const ISO_ptr<void> &p)					: CreateParams(world, obj, matrix), id(p.ID().get_crc32()), type(CRC_type(p.GetType())), p(p)	{}
+	template<typename T> CreateMessage(World *world, Object *obj, param(float3x4) matrix, crc32 id, T *t)	: CreateParams(world, obj, matrix), id(id), type(CRC_type<T>()), p(t)	{}
 };
 
 // inherit from this
@@ -520,7 +520,7 @@ template<typename T> void CreateType(const CreateParams &cp, ISO_ptr<T> &t)		{ i
 struct LoadParams {
 	dynamic_array<ISO_ptr<void> > &hold;
 
-	LoadParams(dynamic_array<ISO_ptr<void> > &_hold) : hold(_hold) {}
+	LoadParams(dynamic_array<ISO_ptr<void> > &hold) : hold(hold) {}
 	ISO_ptr<void>	Hold(ISO::Browser data, tag2 id);
 	void			Hold0(ISO::Browser data, tag2 id);
 	void			LoadExternals(ISO::Browser data);
@@ -537,9 +537,9 @@ struct LoadMessage : LoadParams {
 	crc32			type;
 	const void		*p;
 
-	LoadMessage(LoadParams &lp, crc32 _id, crc32 _type, const void *_p)		: LoadParams(lp), id(_id), type(_type), p(_p)							{}
-	LoadMessage(LoadParams &lp, const ISO_ptr<void> &_p)					: LoadParams(lp), id(_p.ID().get_crc32()), type(CRC_type(_p.GetType())), p(_p)	{}
-	template<typename T> LoadMessage(LoadParams &lp, crc32 _id, T *t)		: LoadParams(lp), id(_id), type(CRC_type<T>()), p(t)					{}
+	LoadMessage(LoadParams &lp, crc32 id, crc32 type, const void *p)		: LoadParams(lp), id(id), type(type), p(p)							{}
+	LoadMessage(LoadParams &lp, const ISO_ptr<void> &p)					: LoadParams(lp), id(p.ID().get_crc32()), type(CRC_type(p.GetType())), p(p)	{}
+	template<typename T> LoadMessage(LoadParams &lp, crc32 id, T *t)		: LoadParams(lp), id(id), type(CRC_type<T>()), p(t)					{}
 };
 
 
@@ -555,7 +555,7 @@ template<> struct DelegateCollection<LoadMessage> {
 
 	void operator()(LoadMessage &m) {
 		if (const load_cb *c = handlers.check(m.type)) {
-			(*c)(m, tag2(m.id), m.p);
+			(*c)(m, m.id, m.p);
 			m.p = 0;
 		}
 	}
@@ -606,7 +606,7 @@ public:
 
 struct PostCreateMessage {
 	Object	*obj;
-	PostCreateMessage(Object *_obj) : obj(_obj)	{}
+	PostCreateMessage(Object *obj) : obj(obj)	{}
 };
 
 //-------------------------------------
@@ -617,7 +617,7 @@ struct GetSetMessage {
 	crc32			id;
 	crc32			type;
 	const void		*p;
-	GetSetMessage(crc32 _id, crc32 _type, const void *_p = 0) : id(_id), type(_type), p(_p) {}
+	GetSetMessage(crc32 id, crc32 type, const void *p = 0) : id(id), type(type), p(p) {}
 };
 
 template<typename T> void		World::SetItem(crc32 id, const T *p) {
@@ -639,7 +639,7 @@ template<typename T> struct GetSetter {
 				m.p	= &t;
 		}
 	}
-	GetSetter(World *_w, T &_t) : w(_w), t(_t) {
+	GetSetter(World *w, T &t) : w(w), t(t) {
 		w->AddHandler<GetSetMessage>(this);
 	}
 	~GetSetter() {
@@ -654,7 +654,7 @@ template<typename T> struct GetSetter<const T> {
 		if (m.type == CRC_type<T>())
 			m.p	= &t;
 	}
-	GetSetter(World *_w, const T &_t) : w(_w), t(_t) {
+	GetSetter(World *w, const T &t) : w(w), t(t) {
 		w->AddHandler<GetSetMessage>(this);
 	}
 	~GetSetter() {
@@ -670,7 +670,7 @@ template<typename T> GetSetter<T> make_GetSetter(World *w, T &t) { return GetSet
 
 struct DestroyMessage {
 	Object	*obj;
-	DestroyMessage(Object *_obj) : obj(_obj)	{}
+	DestroyMessage(Object *obj) : obj(obj)	{}
 };
 
 template<> struct DelegateCollection<DestroyMessage> : DelegateChain<DestroyMessage> {};
@@ -697,6 +697,13 @@ template<typename T> struct CleanerUpper : DeleteOnDestroy<T> {
 	CleanerUpper() : DeleteOnDestroy<T>(World::Current()) {}
 };
 
+template<typename T> struct CreateWithWorld : Handles2<CreateWithWorld<T>, WorldEvent> {
+	void	operator()(WorldEvent *ev) {
+		if (ev->state == WorldEvent::BEGIN)
+			new T(ev->world);
+	}
+};
+
 //-------------------------------------
 //	Query
 //-------------------------------------
@@ -706,7 +713,7 @@ struct LookupMessage {
 	uint32			flags;
 	void			*result;
 	const ISO::Type	*type;
-	LookupMessage(crc32 _id, uint32 _flags = 0) : id(_id), flags(_flags), result(NULL)	{}
+	LookupMessage(crc32 id, uint32 flags = 0) : id(id), flags(flags), result(NULL)	{}
 	template<typename T> void set(T *t)	{ result = t; type = ISO::getdef<T>(); }
 	void set(ISO::Browser &b)			{ result = b; type = b.GetTypeDef(); }
 };
@@ -735,8 +742,8 @@ struct QueryTypeMessage {
 	arbitrary	data;
 
 	QueryTypeMessage()					: enumfn(NULL), type(0), data(0)	{}
-	QueryTypeMessage(crc32 _filter)		: enumfn(NULL), filter(_filter), data(0) {}
-	QueryTypeMessage(enumfn_t *_enumfn) : enumfn(_enumfn) {}
+	QueryTypeMessage(crc32 filter)		: enumfn(NULL), filter(filter), data(0) {}
+	QueryTypeMessage(enumfn_t *enumfn) : enumfn(enumfn) {}
 	void set(crc32 _type, arbitrary _data) {
 		if (enumfn)
 			enumfn(_type, _data);
@@ -766,7 +773,7 @@ struct MoveMessage {
 struct AttachMessage {
 	Object	*obj;
 	bool	attach;
-	AttachMessage(Object *_obj, bool _attach) : obj(_obj), attach(_attach) {}
+	AttachMessage(Object *obj, bool attach) : obj(obj), attach(attach) {}
 };
 
 //-------------------------------------
@@ -778,7 +785,7 @@ struct TriggerMessage {
 	Object	*obj;
 	crc32	dispatch_id;
 	uint32	value;
-	TriggerMessage(Object* _obj, crc32 _dispatch_id = crc32(), uint32 _value = 0U) : obj(_obj), dispatch_id(_dispatch_id), value(_value) {}
+	TriggerMessage(Object* obj, crc32 dispatch_id = crc32(), uint32 value = 0U) : obj(obj), dispatch_id(dispatch_id), value(value) {}
 };
 
 
@@ -790,7 +797,7 @@ template<typename M, typename T> struct EventListener {
 	T						*listener;
 	dynamic_array<Object*>	handlers;
 
-	EventListener(T *_listener) : listener(_listener) {}
+	EventListener(T *listener) : listener(listener) {}
 
 	void Add(Object *obj) {
 		obj->SetHandler<M>(listener);

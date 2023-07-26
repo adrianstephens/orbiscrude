@@ -49,6 +49,10 @@ template<typename T> struct with_s {
 template<typename T> with_s<T> with(T &t)					{ return with_s<T>(t); }
 template<typename T> with_s<T> with(T &t, float timeout)	{ return with_s<T>(t, timeout); }
 
+template<typename T, typename F> auto with_lambda(T &t, F &&f) {
+	return with(t), f();
+}
+
 template<typename T, typename M> struct locked_s : holder<T&>, with_s<M> {
 	locked_s(T &t, M &m) : holder<T&>(t), with_s<M>(m) {}
 };

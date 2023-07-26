@@ -129,8 +129,8 @@ class C_tokeniser {
 	TOKEN				token;
 	string				identifier;
 	streamptr			last_tell;
-	uint32				long_bits, longlong_bits, pointer_bits, bool_bits;
-	TemplateArgs		*template_args;
+	uint32				long_bits = 64, longlong_bits = 128, pointer_bits = 64, bool_bits = 8;
+	TemplateArgs		*template_args	= nullptr;;
 
 	int					Peek()				{ int c = skip_whitespace(reader); reader.put_back(c); return c;	}
 
@@ -192,19 +192,14 @@ const char* C_tokeniser::_keywords[] = {
 };
 hash_map<CRC32Chash, C_tokeniser::TOKEN>	C_tokeniser::keywords;
 
-C_tokeniser::C_tokeniser(text_reader<reader_intf> &reader, C_types &types) : reader(reader), types(types), template_args(0) {
-	long_bits		= 64;
-	longlong_bits	= 128;
-	bool_bits		= 8;
-	pointer_bits	= 64;
-
+C_tokeniser::C_tokeniser(text_reader<reader_intf> &reader, C_types &types) : reader(reader), types(types) {
 	types.add("intptr_t", types.get_static_type<intptr_t>());
 	types.add("uintptr_t", types.get_static_type<uintptr_t>());
 	types.add("size_t", types.get_static_type<size_t>());
 
 	if (keywords.size() == 0) {
-		for (int i = 0; i < num_elements(_keywords); i++)
-			keywords[_keywords[i]] = TOKEN(_TOK_KEYWORDS + i);
+		for (auto i : with_index(_keywords))
+			keywords[*i] = TOKEN(_TOK_KEYWORDS + i.index());
 	}
 	Next();
 }
@@ -251,7 +246,7 @@ C_tokeniser::TOKEN C_tokeniser::GetToken() {
 			case 'I': case 'J': case 'K': case 'L': case 'M': case 'N': case 'O': case 'P':
 			case 'Q': case 'R': case 'S': case 'T': case 'U': case 'V': case 'W': case 'X':
 			case 'Y': case 'Z':
-				identifier = read_token(reader, char_set::identifier, c);
+				identifier = read_token(reader, char_set::wordchar, c);
 				if (TOKEN *k = keywords.check(identifier))
 					return *k;
 				return TOK_IDENTIFIER;
@@ -1340,7 +1335,7 @@ ast::node* C_tokeniser::ParseExpression(const C_type_composite *scope, ast::get_
 						break;
 					}
 
-					identifier	= read_token(reader, char_set::identifier, token);
+					identifier	= read_token(reader, char_set::wordchar, token);
 				}
 				//fall through
 
@@ -1373,7 +1368,7 @@ ast::node* C_tokeniser::ParseExpression(const C_type_composite *scope, ast::get_
 					for (;;) {
 						while (c == ':' && reader.peekc() == ':') {
 							reader.getc();
-							identifier << c << read_token(reader, char_set::identifier, c);
+							identifier << c << read_token(reader, char_set::wordchar, c);
 							c = reader.getc();
 						}
 
@@ -1656,7 +1651,7 @@ string_accum &DumpType1(string_accum &sa, const C_type *type, const char *name, 
 	return sa;
 }
 
-string_accum &iso::DumpType(string_accum &sa, const C_type *type, string_param &&name, int indent, bool _typedef) {
+string_accum &iso::DumpType(string_accum &sa, const C_type *type, string_ref name, int indent, bool _typedef) {
 	return DumpType1(sa, type, name, indent, _typedef);
 }
 

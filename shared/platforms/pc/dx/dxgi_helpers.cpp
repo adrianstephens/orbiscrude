@@ -2,6 +2,9 @@
 
 namespace iso {
 
+
+
+
 com_ptr<IDXGIAdapter1> GetAdapter(int index) {
 	UINT createFlags = 0;
 #ifdef ISO_DEBUG
@@ -71,7 +74,7 @@ com_ptr<IDXGIFactory3> GetDXGIFactory(IUnknown *device) {
 	dxgiDevice->GetAdapter(&dxgiAdapter);
 
 	IDXGIFactory3	*dxgi;
-	dxgiAdapter->GetParent(IID_PPV_ARGS(&dxgi));
+	dxgiAdapter->GetParent(COM_CREATE(&dxgi));
 	return dxgi;
 }
 #endif

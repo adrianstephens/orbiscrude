@@ -14,8 +14,6 @@
 
 using namespace iso;
 
-namespace iso {
-
 class OpenVRSystems {
 	template<typename I, const char *const *version> struct system {
 		I	*p;
@@ -138,15 +136,11 @@ public:
 
 template<> struct _ComponentType<vr::HmdVector3_t> : _ComponentType<float[3]> {};
 
-template<> VertexElements GetVE<vr::RenderModel_Vertex_t>() {
-	static VertexElement ve[] = {
-		VertexElement(&vr::RenderModel_Vertex_t::vPosition,			"position"_usage),
-		VertexElement(&vr::RenderModel_Vertex_t::vNormal,			"normal"_usage),
-		VertexElement(&vr::RenderModel_Vertex_t::rfTextureCoord,	"texcoord"_usage)
-	};
-	return ve;
+template<> static const VertexElements ve<vr::RenderModel_Vertex_t> = (const VertexElement[]) {
+	{&vr::RenderModel_Vertex_t::vPosition,		USAGE_POSITION},//"position"_usage},
+	{&vr::RenderModel_Vertex_t::vNormal,		"normal"_usage},
+	{&vr::RenderModel_Vertex_t::rfTextureCoord,	"texcoord"_usage}
 };
-}
 
 struct OpenVRModel {
 	string	name;

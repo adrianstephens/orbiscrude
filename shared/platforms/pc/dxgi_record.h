@@ -128,7 +128,7 @@ public:
 	HRESULT STDMETHODCALLTYPE ResizeBuffers1(UINT BufferCount, UINT Width, UINT Height, DXGI_FORMAT Format, UINT SwapChainFlags, const UINT *pCreationNodeMask, IUnknown *const *ppPresentQueue);
 
 	void	init(IUnknown *pDevice) {
-		device = query<PresentDevice>(pDevice);
+		device = query<PresentDevice>(pDevice).detach();
 		if (!device)
 			device = last_present_device;
 	}

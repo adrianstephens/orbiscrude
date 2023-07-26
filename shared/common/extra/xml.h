@@ -98,7 +98,7 @@ public:
 		range<Attribute*>	Attributes() const { return range<Attribute*>((Attribute*)(values.begin() + 1), (Attribute*)(values.end())); }
 
 		cstring			Find(const char *name)		const;
-		cstring			Find(const ichar *name)	const;
+		cstring			Find(const ichar *name)		const;
 		cstring			FindWild(const char *name, dynamic_array<count_string> &matches) const;
 		cstring			FindWild(const ichar *name, dynamic_array<count_string> &matches) const;
 
@@ -144,7 +144,7 @@ public:
 	void			SetFlag(Flag f)			{ flags.set(f); }
 	int				GetLineNumber()	const	{ return line_number; }
 	void			AddEntity(const char *name, const char *value)			{ custom_entities[name] = value; }
-	void			AddNamespace(string_param &&name, string_param &&value)	{ namespaces[name] = value; }
+	void			AddNamespace(string_param &&name, string_param &&value)	{ namespaces[move(name)] = value; }
 
 	void			Process(const Data &data, TagType type) {
 		if (type == TAG_DECL && data.values.size() == 3 && str(data.values[0]) == "ENTITY" && str(data.values[1]) != "SYSTEM")
@@ -160,7 +160,7 @@ struct XMLiterator {
 	XMLreader			&xml;
 	XMLreader::Data		&data;
 	XMLreader::TagType	tag;
-	XMLiterator(XMLreader &_xml, XMLreader::Data &_data) : xml(_xml), data(_data), tag(XMLreader::TAG_END) {}
+	XMLiterator(XMLreader &xml, XMLreader::Data &data) : xml(xml), data(data), tag(XMLreader::TAG_END) {}
 
 	bool	IsBeginEnd() {
 		return tag == XMLreader::TAG_BEGINEND;

@@ -457,8 +457,7 @@ LR0::LR0(Context &ctx)
 				row.set(sym - start_symbol);
 		}
 	}
-	EFF.transitive_closure();
-	EFF.reflexive_closure();
+	EFF.reflexive_transitive_closure();
 
 	for (int i = 0; i < nvars; i++) {
 		auto	row = closure.first_base[i];
@@ -954,7 +953,7 @@ struct LINEREADER : string_scan {
 	};
 
 	source_pos	current_pos() const { return source_pos(lineno, line, getp()); }
-	col_t		current_col() const { return int(getp() - line); }
+	col_t		current_col() const { return col_t(int(getp() - line.begin())); }
 
 	void _error(SEVERITY severity, int lineno, const char *line, int column, const char *msg) {
 		static const char sevs[] = "wef";
@@ -1593,7 +1592,7 @@ e_slist<Context::parameter> READER::copy_param() {
 		do {
 			skip_whitespace();
 			auto	type1		= getp();
-			scan(~char_set::identifier);
+			scan(~char_set::wordchar);
 			auto	type1_end	= getp();
 			if (skip_whitespace().peekc() == '<') {
 				if (!skip_to('>'))
@@ -1603,7 +1602,7 @@ e_slist<Context::parameter> READER::copy_param() {
 			skip_whitespace().scan_skip(char_set("*&"));
 			type1_end = getp();
 
-			auto	name	= get_token(char_set::alphanum, char_set::identifier);
+			auto	name	= get_token(char_set::alphanum, char_set::wordchar);
 			auto	type2	= skip_whitespace().getp();
 			if (*type2 == '[') {
 				if (!skip_to(']'))
@@ -3292,7 +3291,7 @@ bool INTERPOLATOR::process_line() {
 			output(b, macro, ctx);
 			if (b.length()) {
 				out.write(before);
-				out.write(b.to_string());
+				out.write(b.term());
 				out.write(after);
 			}
 
@@ -3345,7 +3344,7 @@ int YACC(const ISO::unescaped<string> &fn, const ISO::unescaped<string> &out_fn,
 	yacc::INTERPOLATOR	interp(tmpl, template_fn, ctx, parser, lalr);
 	interp.process();
 
-	lalr.print_graph(make_stream_accum(FileOutput(filename(out_fn).set_ext("gv")))
+	lalr.print_graph(stream_accum<FileOutput>(filename(out_fn).set_ext("gv"))
 	<<	"digraph " << filename(ctx.output_filename).name() << " {\n"
 		"\tedge [fontsize=10];\n"
 		"\tnode [shape=box,fontsize=10];\n"

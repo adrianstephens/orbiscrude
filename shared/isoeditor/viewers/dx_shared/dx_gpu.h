@@ -1,20 +1,23 @@
 #ifndef DX_GPU_H
 #define DX_GPU_H
 
-#include "..\gpu.h"
-#include "dx\dx_shaders.h"
-#include "dx\dxgi_helpers.h"
-#include "dx\spdb.h"
-#include "dx\sim_dxbc.h"
-#include "extra\colourise.h"
+#include "../gpu.h"
+#include "dx/dx_shaders.h"
+#include "dx/dxgi_helpers.h"
+#include "dx/dx_sim.h"
+#include "extra/colourise.h"
 #include "hook_com.h"
 
-namespace iso { namespace dx {
+namespace iso {
+
+struct ParsedSPDB;
+
+namespace dx {
 
 const C_type *to_c_type(DXGI_FORMAT f);
 const C_type *to_c_type(DXGI_COMPONENTS f);
 
-ISO_ptr_machine<void> GetBitmap(const char *name, SimulatorDXBC::Resource &rec);
+ISO_ptr_machine<void> GetBitmap(const char *name, Resource &rec);
 ISO_ptr_machine<void> GetBitmap(const char *name, const void *srce, DXGI_COMPONENTS format, int width, int height, int depth, int mips, int flags);
 
 typedef mutex_memory_cache<uint64>	cache_type;
@@ -39,37 +42,70 @@ struct Shader {
 
 	Shader() : addr(0) {}
 	Shader(SHADERSTAGE stage, const_memory_block data, uint64 addr = 0) : stage(stage), data(data), addr(addr) {}
+
 	void	init(SHADERSTAGE _stage, const_memory_block _data, uint64 _addr = 0) {
 		stage	= _stage;
 		data	= _data;
 		addr	= _addr;
 	}
-	const dx::DXBC *DXBC() const {
+	
+	const	dx::DXBC *DXBC() const {
 		return data;
 	}
-	memory_block	GetUCode() const {
+	const_memory_block	GetUCode() const {
+		DXBC::UcodeHeader header;
 		if (auto dxbc = DXBC())
-			return dxbc->GetUCode();
+			return dxbc->GetUCode(header);
 		return empty;
 	}
-	uint64			GetUCodeAddr() const {
+
+	uint64	GetUCodeAddr() const {
 		return (GetUCode() - (const char*)data) + addr;
 	}
-	Disassembler::State *Disassemble() const {
-		static Disassembler	*dis = Disassembler::Find("DXBC");
-		if (dis)
-			return dis->Disassemble(GetUCode(), GetUCodeAddr());
-		return 0;
+
+	dx::Signature	GetSignatureIn() const {
+		if (auto dxbc = DXBC()) {
+			for (auto &blob : dxbc->Blobs()) {
+				if (auto* sig = blob.as<dx::DXBC::InputSignature>())
+					return sig;
+
+				else if (auto* sig = blob.as<dx::DXBC::InputSignature1>())
+					return sig;
+			}
+		}
+		return {};
+	}
+	dx::Signature	GetSignatureOut() const {
+		if (auto dxbc = DXBC()) {
+		#if 1
+			dx::Signature	sig;
+			dxbc->GetBlobM<dx::DXBC::OutputSignature, dx::DXBC::OutputSignature1, dx::DXBC::OutputSignature5>(sig);
+			return sig;
+		#else
+			for (auto blob : dxbc->Blobs()) {
+				if (auto* sig = blob.as<dx::DXBC::OutputSignature>())
+					return sig;
+
+				else if (auto* sig = blob.as<dx::DXBC::OutputSignature1>())
+					return sig;
+
+				else if (auto* sig = blob.as<dx::DXBC::OutputSignature5>())
+					return sig;
+			}
+		#endif
+		}
+		return {};
 	}
 	operator bool() const { return (bool)data; }
 };
 
-Topology2 GetTopology(PrimitiveType prim, uint32 chunks = 0);
-Topology2 GetTopology(PrimitiveTopology prim);
-Topology2 GetTopology(TessellatorOutputPrimitive prim);
-
-Tesselation GetTesselation(TessellatorDomain domain, range<stride_iterator<const SimulatorDXBC::Register>> pc);
-SimulatorDXBC::Triangle GetTriangle(SimulatorDXBC &sim, const char *semantic_name, int semantic_index, OSGN *vs_out, OSG5 *gs_out, int i0, int i1, int i2);
+Topology	GetTopology(D3D_PRIMITIVE_TOPOLOGY prim);
+Topology	GetTopology(PrimitiveType prim);
+Topology	GetTopology(PrimitiveTopology prim);
+Topology	GetTopology(TessellatorOutputPrimitive prim);
+Tesselation	GetTesselation(TessellatorDomain domain, range<stride_iterator<const float4p>> pc);
+Triangle	GetTriangle(SimulatorDX *sim, const char *semantic_name, int semantic_index, const dx::Signature &sig, int i0, int i1, int i2);
+Triangle	GetTriangle(SimulatorDX *sim, const SIG::Element *e, int i0, int i1, int i2);
 
 } }
 
@@ -79,62 +115,71 @@ const SyntaxColourerRE&	HLSLcolourerRE();
 Control			MakeHTMLViewer(const WindowPos &wpos, const char *title, const char *text, size_t len);
 int				MakeHeaders(ListViewControl lv, int nc, DXGI_COMPONENTS fmt, const char *prefix = 0, const char *suffix = 0);
 void			AddValue(RegisterTree &rt, HTREEITEM h, const char *name, const void *data, D3D_SHADER_VARIABLE_CLASS Class, D3D_SHADER_VARIABLE_TYPE Type, uint32 rows, uint32 cols);
-Control			MakeShaderOutput(const WindowPos &wpos, dx::SimulatorDXBC &sim, const dx::Shader &shader, const indices &ix = indices());
-Control			MakeDXBCTraceWindow(const WindowPos &wpos, dx::SimulatorDXBC &sim, int thread, int max_steps = 0);
+Control			MakeShaderOutput(const WindowPos &wpos, dx::SimulatorDX *sim, const dx::Shader &shader, dynamic_array<uint32> &indices);
+void			AddShaderOutput(Control c, dx::SimulatorDX *sim, const dx::Shader &shader, dynamic_array<uint32> &indices);
+const C_type*	to_c_type(D3D_SHADER_VARIABLE_CLASS Class, D3D_SHADER_VARIABLE_TYPE Type, uint32 rows, uint32 cols);
 
-const C_type *to_c_type(PDB_types &pdb, TI ti);
-const CV::HLSL *get_hlsl_type(PDB_types &pdb, TI ti);
+//-----------------------------------------------------------------------------
+//	DXRegisterWindow
+//-----------------------------------------------------------------------------
 
-class DXBCRegisterWindow : public RegisterWindow {
+class DXRegisterWindow : public RegisterWindow {
+protected:
 	ListBoxControl			reg_overlay;
-
-	uint32	AddReg(dx::Operand::Type type, int index, uint32 offset) {
-		regspecs.push_back() = {type, index};
-		for (int j = 0; j < 4; j++, offset += 4)
-			entries.emplace_back(offset, RegisterName(type, index, 1 << j), float_field);
-		return offset;
-	}
 public:
-	dynamic_array<dx::RegSpec>	regspecs;
+	virtual ~DXRegisterWindow()	{}
+	virtual void	Update(uint32 relpc, uint64 pc, int thread) = 0;
+	virtual void	AddOverlay(ListViewControl lv, int row, int col) = 0;
 
-	DXBCRegisterWindow(const WindowPos &wpos) : RegisterWindow(wpos) {}
-	void	Update(const dx::SimulatorDXBC &sim, dx::SHADERSTAGE stage, ParsedSPDB &spdb, uint64 pc, int thread);
-
-	void	AddOverlay(NMITEMACTIVATE *nma, const dx::SimulatorDXBC &sim) {
-		if (reg_overlay)
-			reg_overlay.Destroy();
-
-		int	item	= nma->iItem;
-		if (item > 0 && (nma->iSubItem == 1 || nma->iSubItem == 2)) {
-			ListViewControl	lv		= nma->hdr.hwndFrom;
-			auto	*rw		= (DXBCRegisterWindow*)lv.FindAncestorByProc<RegisterWindow>();
-			auto	&reg	= rw->regspecs[(item - 1) / 4];
-			auto	vals	= sim.GetRegFile(reg.type, reg.index);
-			int		field	= (item - 1) & 3;
-			Rect	rect	= lv.GetSubItemRect(nma->iItem, nma->iSubItem);
-
-			reg_overlay	= ListBoxControl(WindowPos(lv, rect.Grow(0, 0, 0, (sim.NumThreads() - 1) * rect.Height())), 0, BORDER | CHILD | CLIPCHILDREN | CLIPSIBLINGS | VISIBLE);
-			reg_overlay.SetFont(lv.GetFont());
-
-			for (auto &i : vals)
-				reg_overlay.Add(nma->iSubItem == 1 ? format_string("0x%08x", iorf(i[field])) : format_string("%g", i[field]));
-		}
+	void	AddOverlay(NMITEMACTIVATE *nma) {
+		RemoveOverlay();
+		AddOverlay(nma->hdr.hwndFrom, nma->iItem, nma->iSubItem);
 	}
-
 	void	RemoveOverlay() {
 		if (reg_overlay) {
 			reg_overlay.Destroy();
 			reg_overlay = 0;
 		}
 	}
+
+	LRESULT Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
+		if (message == WM_NCDESTROY) {
+			delete this;
+			return 0;
+		}
+		return RegisterWindow::Proc(message, wParam, lParam);
+
+	}
+	DXRegisterWindow(const WindowPos& wpos) : RegisterWindow(wpos) {
+		Rebind(this);
+	}
 };
 
-class DXBCLocalsWindow : public LocalsWindow {
-	FrameMemoryInterface0	frame;
+//-----------------------------------------------------------------------------
+//	DXLocalsWindow
+//-----------------------------------------------------------------------------
+
+class DXLocalsWindow : public LocalsWindow {
 public:
-	DXBCLocalsWindow(const WindowPos &wpos, const C_types &types) : LocalsWindow(wpos, "Locals", types, &frame) {}
-	void	Update(const dx::SimulatorDXBC &sim, ParsedSPDB &spdb, uint64 pc, int thread);
+	virtual ~DXLocalsWindow()	{}
+	virtual void	Update(uint32 relpc, uint64 pc, int thread) = 0;
+
+	LRESULT Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
+		if (message == WM_CREATE)
+			return 0;
+		if (message == WM_NCDESTROY) {
+			delete this;
+			return 0;
+		}
+		return LocalsWindow::Proc(message, wParam, lParam);
+	}
+
+	DXLocalsWindow(const WindowPos &wpos, const char *title, const C_types &types, memory_interface *mem = 0) : LocalsWindow(wpos, title, types, mem) {
+		Rebind(this);
+	}
 };
+
+//-----------------------------------------------------------------------------
 
 template<typename S> struct stream_memory_interface : iso::memory_interface {
 	S		stream;
@@ -151,20 +196,29 @@ struct ip_memory_interface : iso::memory_interface {
 	static const int INTF_GetMemory = 0;
 	ip_memory_interface(IP4::socket_addr addr) : addr(addr) {}
 	bool	_get(void *buffer, uint64 size, uint64 address) {
-		SocketWait	sock = addr.socket();
-		SocketCallRPC<void>(sock, INTF_GetMemory, address, size);
-		return readbuff_all(sock, buffer, size) == size;
+		if (!address)
+			return false;
+		SocketWait	sock	= addr.connect_or_close(IP4::TCP());
+		auto		size2	= SocketCallRPC<uint32>(sock, INTF_GetMemory, address, size);
+		return readbuff_all(sock, buffer, size2) == size;
 	}
 };
-struct DXCapturer {
+
+struct DXConnection : refs<DXConnection> {
 	Process2			process;
 	bool				paused;
-//	HANDLE				pipe	= 0;
 	IP4::socket_addr	addr;
 
-	DXCapturer() : paused(false), addr(IP4::localhost, PORT(4567)) {}
+	DXConnection();
+	~DXConnection();
 
-	~DXCapturer();
+	template<typename R, typename...P> auto	Call(int func, const P&...p) {
+		return SocketCallRPC<R>(addr.connect_or_close(IP4::TCP()), func, p...);
+	}
+	ip_memory_interface MemoryInterface() {
+		return addr;
+	}
+	void		ConnectDebugOutput();
 	filename	GetDLLPath(const char *dll_name);
 	bool		OpenProcess(uint32 id, const char *dll_name);
 	bool		OpenProcess(const filename &app, const char *dir, const char *args, const char *dll_name, const char *dll_path);
@@ -172,15 +226,6 @@ struct DXCapturer {
 		return OpenProcess(app, dir, args, dll_name, GetDLLPath(dll_name));
 	}
 
-	template<typename R, typename...P> auto	Call(int func, const P&...p) {
-		return SocketCallRPC<R>(addr.socket(), func, p...);
-	}
-
-	ip_memory_interface MemoryInterface() {
-		return addr;
-	}
-
-	void		ConnectDebugOutput();
 };
 
 }

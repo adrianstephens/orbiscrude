@@ -11,7 +11,7 @@
 #endif
 
 ISO::ptr<iso::Model3> OptimiseSkinModel(ISO::ptr<iso::Model3> model, float weight_threshold, float verts_threshold);
-ISO::ptr<void> ReadDX11FX(ISO::tag id, iso::istream_ref file, const iso::filename *fn);
+//ISO::ptr<void> ReadDX11FX(ISO::tag id, iso::istream_ref file, const iso::filename *fn);
 
 namespace iso {
 
@@ -23,6 +23,8 @@ ISO_INIT(PatchModel3)		{}
 ISO_DEINIT(PatchModel3)		{}
 ISO_INIT(Model3)			{}
 ISO_DEINIT(Model3)			{}
+ISO_INIT(Model)				{}
+ISO_DEINIT(Model)			{}
 #endif
 #if defined(ISO_EDITOR) && (defined(PLAT_METAL) || defined(PLAT_MAC))
 ISO_INIT(DataBuffer)		{}
@@ -78,6 +80,7 @@ Platform *Platform::Get(const char *_platform) {
 	return &platform_default;
 }
 
+#if 0
 ISO_ptr<void> Platform::ReadFX(tag id, istream_ref file, const filename *fn) {
 #if defined ISO_EDITOR && !defined PLAT_MAC
 #ifdef USE_DX11
@@ -90,6 +93,7 @@ ISO_ptr<void> Platform::ReadFX(tag id, istream_ref file, const filename *fn) {
 	return ISO_NULL;
 #endif
 }
+#endif
 
 ISO_ptr<bitmap2> Texture2Bitmap(ISO_ptr<bitmap> bm) {
 	if (bm.IsExternal())
@@ -441,6 +445,7 @@ static initialise init(
 	ISO::getdef<Scene>(),
 	ISO::getdef<Children>(),
 	ISO::getdef<BasePose>(),
+	ISO::getdef<Model>(),
 	ISO::getdef<Model3>(),
 	ISO::getdef<Animation>(),
 	ISO::getdef<AnimationHierarchy>(),

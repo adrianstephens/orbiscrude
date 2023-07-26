@@ -81,10 +81,10 @@ void ViewBin::VScroll(float y) {
 		uint64				addr	= AddressFromWindow(ToClient(GetMousePos()));
 		buffer_accum<256>	ba;
 		if (addr < start_addr + getter.length) {
-			tooltip.Update(*this, GetTipText(ba, addr));
+			tooltip.Update(*this, GetTipText(ba, addr).term());
 			tip_state = 2;
 		}
-		//tooltip.Track(GetMousePos() + Point(15, 15));
+		//tooltip.Track();
 	}
 }
 
@@ -139,8 +139,8 @@ void ViewBin::Select(const interval<uint64> &i) {
 	Invalidate();
 }
 
-LRESULT ViewBin::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
-	switch (message) {
+LRESULT ViewBin::Proc(MSG_ID msg, WPARAM wParam, LPARAM lParam) {
+	switch (msg) {
 		case WM_CREATE: {
 			toolbar.Create(*this, NULL, CHILD | VISIBLE);
 
@@ -266,7 +266,7 @@ LRESULT ViewBin::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 						PutNumber(buffer, GetMemory(edit_addr), chars_per_element);
 						buffer[chars_per_element] = 0;
 					}
-					miniedit.Create(*this, NULL, CHILD | VISIBLE | CLIPSIBLINGS | EditControl::AUTOHSCROLL | EditControl::WANTRETURN, CLIENTEDGE,
+					miniedit.Create(*this, none, CHILD | VISIBLE | CLIPSIBLINGS | EditControl::AUTOHSCROLL | EditControl::WANTRETURN, CLIENTEDGE,
 						rect.Grow(4,2,4,2),
 						ID_EDIT
 					);
@@ -328,7 +328,7 @@ LRESULT ViewBin::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 				if (!timer)
 					timer = SetTimer(1, 0);
 			}
-			tooltip.Track(ToScreen(mouse) + Point(15, 15));
+			tooltip.Track();
 			break;
 		}
 
@@ -607,7 +607,7 @@ LRESULT ViewBin::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 							for (uint32 i = begin; i != end; ++i) {
 								buffer_accum<1024>	ba;
 								dis_state->GetLine(ba, i);
-								m.write((const char*)(ba << '\n'));
+								m.write((ba << '\n').term());
 							}
 #endif
 						} else {
@@ -623,7 +623,7 @@ LRESULT ViewBin::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 								fixed_accum	acc(buffer, chars_per_line + 2);
 								PutLine(acc, a - begin, GetMemory(a), min(end - a, uint64(bytes_per_line)), 0, 0, chars_per_element);
 								acc << '\n';
-								m.write((const char*)acc);
+								m.write(acc.term());
 							}
 						}
 						m.putc(0);
@@ -730,7 +730,7 @@ LRESULT ViewBin::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 			delete this;
 			return 0;
 		default:
-			return Super(message, wParam, lParam);
+			return Super(msg, wParam, lParam);
 	}
 	return 0;
 }

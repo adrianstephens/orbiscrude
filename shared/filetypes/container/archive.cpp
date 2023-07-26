@@ -1,6 +1,6 @@
 #include "iso/iso_files.h"
 #include "comms/zlib_stream.h"
-#if HAVE_BZLIB
+#if HAS_BZIP2
 #include "comms/bz2_stream.h"
 #endif
 #include "codec/base64.h"
@@ -22,7 +22,7 @@ class BASE64FileHandler : public FileHandler {
 		char	buffer[64];
 		file.seek(0);
 		uint32	n = file.readbuff(buffer, sizeof(buffer));
-		return n > 16 && !string_find(buffer, ~char_set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=\r\n"), buffer + n) ? CHECK_PROBABLE : CHECK_DEFINITE_NO;
+		return n > 16 && !string_find(buffer, buffer + n, ~char_set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=\r\n")) ? CHECK_PROBABLE : CHECK_DEFINITE_NO;
 	}
 
 	ISO_ptr<void>	Read(tag id, istream_ref file) override {
@@ -38,7 +38,134 @@ class BASE64FileHandler : public FileHandler {
 	}
 } base64;
 
-#ifdef BZ2_STREAM_H
+//-----------------------------------------------------------------------------
+//	TAR
+//-----------------------------------------------------------------------------
+class TARFileHandler : public FileHandler {
+	friend class TGZFileHandler;
+
+	void					WriteDir(anything *dir, ostream_ref file, char *name);
+
+	const char*		GetExt() override { return "tar"; }
+	int				Check(istream_ref file) override {
+		file.seek(0);
+		TARheader	th;
+		return file.read(th) && th.valid() ? CHECK_PROBABLE : CHECK_DEFINITE_NO;
+	}
+public:
+	ISO_ptr<void>	Read(tag id, istream_ref file) override;
+	bool			Write(ISO_ptr<void> p, ostream_ref file) override;
+} tar;
+
+ISO_ptr<void> TARFileHandler::Read(tag id, istream_ref file) {
+	TARheader	th = file.get();
+
+	if (th.filename[0] == 0x1f && (uint8)th.filename[1] == 0x8b) {
+		file.seek(0);
+		GZheader	gz;
+		if (!file.read(gz))
+			return ISO_NULL;
+
+		return Read(id, GZistream(file).me());
+	}
+
+	if (!th.valid())
+		return ISO_NULL;
+
+	ISO_ptr<anything> t(id);
+	bool	raw = WantRaw();
+	char	name_buffer[1024];
+
+	for (;th.filename[0]; th = file.get()) {
+		char	*name	= th.filename;
+		uint64	size;
+		if (th.link == 'L') {
+			get_num_base<8>(skip_whitespace(th.filesize), size);
+			file.readbuff(name_buffer, size_t(size));
+			file.seek_cur((512 - size) & 511);
+			file.read(th);
+			name	= name_buffer;
+			file.seek_cur(512 - sizeof(th));
+		}
+
+		get_num_base<8>(skip_whitespace(th.filesize), size);
+		streamptr	end = (file.tell() + size + 511) & ~511;
+
+		if (!str(name).find("PaxHeader")) {
+			ISO_ptr<Folder> dir = t;
+			if (char *div = strrchr(name, '/')) {
+				*div++ = 0;
+				dir = GetDir(dir, name);
+				name = div;
+			}
+
+			if (*name) {
+				if (th.link == '2') {
+					if (ISO_ptr<void> p = (*dir)[th.linkedfile]) {
+						dir->Append(ISO_ptr<ISO_ptr<void> >(name, p));
+					}
+				} else if (size) {
+					dir->Append(ReadData2(name, file, uint32(size), raw));
+				}
+			}
+		}
+		//stream_skip(file, -size & 511);
+		file.seek(end);
+	}
+
+
+	malloc_block	buffer(65536);
+	malloc_block	buffer2;
+	while (size_t r = file.readbuff(buffer, 65536))
+		buffer2 += buffer.slice_to(r);
+
+	if (uint32 extra = buffer2.size32()) {
+		ISO_ptr<ISO_openarray<uint8> > p("extra");
+		memcpy(p->Create(extra), buffer2, extra);
+		t->Append(p);
+	}
+
+	if (t->Count() == 1 && (*t)[0].IsID((const char*)id))
+		return (*t)[0];
+
+	return t;
+}
+
+void TARFileHandler::WriteDir(anything *dir, ostream_ref file, char *name) {
+	char	*name_end = name + strlen(name);
+
+	for (int i = 0, n = dir->Count(); i < n; i++) {
+		ISO_ptr<void>	p		= (*dir)[i];
+		if (!p)
+			continue;
+
+		strcpy(name_end, p.ID().get_tag());
+
+		if (p.IsType<anything>()) {
+			strcat(name, "/");
+			WriteDir(p, file, name);
+		}
+
+		memory_block	m	= GetRawData(p);
+		TARheader		th(name, 0100644, 0001753, 0001001, m.length(), 0);
+
+		file.write(th);
+		file.writebuff(m, m.length());
+		file.align(512, 0);
+	}
+}
+
+bool TARFileHandler::Write(ISO_ptr<void> p, ostream_ref file) {
+	if (!p.IsType<anything>())
+		return false;
+
+	char	name[256] = "";
+	WriteDir(p, file, name);
+	return true;
+}
+
+
+#ifdef HAS_BZIP2
 
 //-----------------------------------------------------------------------------
 //	BZIP2
@@ -94,132 +221,15 @@ class BZ2FileHandler : public FileHandler {
 		return Write(p, file);
 	}
 } bz2;
+
+class TBZFileHandler : public FileHandler {
+	const char*		GetExt() override { return "tbz"; }
+	ISO_ptr<void>	Read(tag id, istream_ref file) override {
+		return tar.Read(id, BZ2istream(file));
+	}
+} tbz;
+
 #endif
-
-//-----------------------------------------------------------------------------
-//	TAR
-//-----------------------------------------------------------------------------
-class TARFileHandler : public FileHandler {
-	friend class TGZFileHandler;
-
-	void					WriteDir(anything *dir, ostream_ref file, char *name);
-
-	const char*		GetExt() override { return "tar"; }
-	int				Check(istream_ref file) override {
-		file.seek(0);
-		TARheader	th;
-		return file.read(th) && th.valid() ? CHECK_PROBABLE : CHECK_DEFINITE_NO;
-	}
-	ISO_ptr<void>	Read(tag id, istream_ref file) override;
-	bool			Write(ISO_ptr<void> p, ostream_ref file) override;
-} tar;
-
-ISO_ptr<void> TARFileHandler::Read(tag id, istream_ref file) {
-	TARheader	th = file.get();
-
-	if (th.filename[0] == 0x1f && (uint8)th.filename[1] == 0x8b) {
-		file.seek(0);
-		GZheader	gz;
-		if (!file.read(gz))
-			return ISO_NULL;
-
-		return Read(id, GZistream(file).me());
-	}
-
-	if (!th.valid())
-		return ISO_NULL;
-
-	ISO_ptr<anything> t(id);
-	bool	raw = WantRaw();
-	char	name_buffer[1024];
-
-	for (;th.filename[0]; th = file.get()) {
-		char	*name	= th.filename;
-		uint64	size;
-		if (th.link == 'L') {
-			get_num_base<8>(skip_whitespace(th.filesize), size);
-			file.readbuff(name_buffer, size_t(size));
-			file.seek_cur((512 - size) & 511);
-			file.read(th);
-			name	= name_buffer;
-			file.seek_cur(512 - sizeof(th));
-		}
-
-		get_num_base<8>(skip_whitespace(th.filesize), size);
-		streamptr	end = (file.tell() + size + 511) & ~511;
-
-		if (!str(name).find("PaxHeader")) {
-			ISO_ptr<Folder> dir = t;
-			if (char *div = strrchr(name, '/')) {
-				*div++ = 0;
-				dir = GetDir(dir, name);
-				name = div;
-			}
-
-			if (*name) {
-				if (th.link == '2') {
-					if (ISO_ptr<void> p = (*dir)[th.linkedfile]) {
-						dir->Append(ISO_ptr<ISO_ptr<void> >(name, p));
-					}
-				} else {
-					dir->Append(ReadData2(name, file, uint32(size), raw));
-				}
-			}
-		}
-
-		file.seek(end);
-	}
-
-
-	malloc_block	buffer(65536);
-	malloc_block	buffer2;
-	while (size_t r = file.readbuff(buffer, 65536))
-		buffer2 += buffer.slice_to(r);
-
-	if (uint32 extra = buffer2.size32()) {
-		ISO_ptr<ISO_openarray<uint8> > p("extra");
-		memcpy(p->Create(extra), buffer2, extra);
-		t->Append(p);
-	}
-
-	if (t->Count() == 1 && (*t)[0].IsID((const char*)id))
-		return (*t)[0];
-
-	return t;
-}
-
-void TARFileHandler::WriteDir(anything *dir, ostream_ref file, char *name) {
-	char	*name_end = name + strlen(name);
-
-	for (int i = 0, n = dir->Count(); i < n; i++) {
-		ISO_ptr<void>	p		= (*dir)[i];
-		if (!p)
-			continue;
-
-		strcpy(name_end, p.ID().get_tag());
-
-		if (p.IsType<anything>()) {
-			strcat(name, "/");
-			WriteDir(p, file, name);
-		}
-
-		memory_block	m	= GetRawData(p);
-		TARheader		th(name, 0100644, 0001753, 0001001, m.length(), 0);
-
-		file.write(th);
-		file.writebuff(m, m.length());
-		file.align(512, 0);
-	}
-}
-
-bool TARFileHandler::Write(ISO_ptr<void> p, ostream_ref file) {
-	if (!p.IsType<anything>())
-		return false;
-
-	char	name[256] = "";
-	WriteDir(p, file, name);
-	return true;
-}
 
 //-----------------------------------------------------------------------------
 //	GZIP
@@ -238,7 +248,7 @@ class GZFileHandler : public FileHandler {
 		}
 		return ReadData1(id, GZistream(file).me(), 0, true);
 	}
-	ISO_ptr<void>	Read(tag id, istream_ref file, const char *name0) {
+	ISO_ptr<void>	Read2(tag id, istream_ref file, const char *name0) {
 		ISO_ptr<void> p1 = Read1(file, name0);
 		if (p1) {
 			if (ISO_ptr<void> p2 = Read1(file, 0)) {
@@ -262,11 +272,14 @@ class GZFileHandler : public FileHandler {
 	}
 
 	ISO_ptr<void>	ReadWithFilename(tag id, const filename &fn) override {
-		return Read(id, FileInput(fn).me(), fn.name());
+		return Read2(id, FileInput(fn), fn.name());
+	}
+	ISO_ptr64<void>	ReadWithFilename64(tag id, const filename &fn) override {
+		return Read2(id, FileInput(fn), fn.name());
 	}
 
 	ISO_ptr<void>	Read(tag id, istream_ref file) override {
-		return Read(id, file, NULL);
+		return Read2(id, file, NULL);
 	}
 
 	bool			Write(ISO_ptr<void> p, ostream_ref file) override {
@@ -413,7 +426,7 @@ struct ZIPentry : ISO::VirtualDefaults {
 	}
 	ISO_ptr<void>	Deref()	{
 		r->file.seek(p);
-		return ReadRaw(0, zf.Reader(r->file), zf.Length());
+		return ReadRaw(none, zf.Reader(r->file), zf.Length());
 	}
 };
 ISO_DEFUSERVIRTX(ZIPentry, "File");

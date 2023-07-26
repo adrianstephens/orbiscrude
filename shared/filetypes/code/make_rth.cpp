@@ -1889,7 +1889,7 @@ ELEMENT_TYPE HeaderWriter::write_signature_type(string_accum &sa, const ENTRY<Ty
 				CompressedUInt	num_sizes(r);
 
 				for (uint32 i = num_sizes; i--;)
-					sa << '[' << CompressedUInt(r) << ']';
+					sa << '[' << (uint32)CompressedUInt(r) << ']';
 
 				for (uint32 i = rank - num_sizes; i--;)
 					sa << "[]";

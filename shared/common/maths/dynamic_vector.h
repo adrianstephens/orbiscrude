@@ -285,7 +285,7 @@ public:
 			return (*this)[0][0] * (*this)[1][1] - (*this)[0][1] * (*this)[1][0];
 		T det = 0;
 		for (int i = 0; i < m; i++)
-			det += plus_minus((*this)[0][i], i) * minor(0, i).det();
+			det += plus_minus((*this)[0][i], i & 1) * minor(0, i).det();
 		return det;
 	}
 	dynamic_matrix minor(int col, int row) const {
@@ -455,7 +455,7 @@ public:
 		ISO_ASSERT(n == m);
 		E det = 0;
 		for (int i = 0; i < m; i++)
-			det += plus_minus((*this)[0][i], i) * minor(0, i).det();
+			det += plus_minus((*this)[0][i], i & 1) * minor(0, i).det();
 		return det;
 	}
 
@@ -489,7 +489,7 @@ public:
 		// minors and cofactors
 		for (int i = 0; i < n; i++) {
 			for (int j = 0; j < n; j++)
-				inv[j][i] = plus_minus(m.minor(i, j).det(), i + j) * rdet;
+				inv[j][i] = plus_minus(m.minor(i, j).det(), (i + j) & 1) * rdet;
 		}
 		return inv;
 	}

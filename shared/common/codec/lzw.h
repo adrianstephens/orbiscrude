@@ -30,16 +30,15 @@ template<bool be, bool EARLY_CHANGE, int MAXBITS = 12> class LZW_decoder : publi
 	uint8			code_len;
 	int				prev_code;
 	int				next_code;
-	int				clip;
-
-	size_t			offset;
+	int				clip		= 0;
+	size_t			offset		= 0;
 
 	size_t	window_size() const {
 		return table[next_code - 1].start + table[next_code - 1].len + table[prev_code].len;
 	}
 
 public:
-	LZW_decoder(int num_bits) : num_bits(num_bits), code_len(num_bits + 1), prev_code((1 << num_bits) + 1), next_code((1 << num_bits) + 2), clip(0), offset(0) {
+	LZW_decoder(int num_bits) : num_bits(num_bits), code_len(num_bits + 1), prev_code((1 << num_bits) + 1), next_code((1 << num_bits) + 2) {
 		for (int i = 0; i < 256; i++)
 			table[i].len = 1;
 		table[prev_code] = {0, 0};
@@ -99,10 +98,11 @@ public:
 
 				} else {
 					ISO_ASSERT(code == next_code);
-					if (prev_code < restart)
+					if (prev_code < restart) {
 						*dst = prev_code;
-					else
+					} else {
 						clip = win.copy(dst, base, table[prev_code].start, dst + prev_len, dst_end);
+					}
 
 					dst += prev_len;
 					if (dst < dst_end)
@@ -143,10 +143,11 @@ public:
 		uint8	*base	= dst - offset;
 
 		if (window) {
+			uint8	*dst0 = dst;
 			src = process(dst, dst_end, src, src_end, base, external_stationary_window(window));
 			if ((flags & TRANSCODE_PARTIAL) || src < src_end) {
-				if (base < dst)
-					window += memory_block(dst, dst - base - window.length());
+				if (base < dst0)
+					window += memory_block(dst0, dst - base - window.length());
 				else
 					window = memory_block(base, dst - base);//window_size());
 			} else {

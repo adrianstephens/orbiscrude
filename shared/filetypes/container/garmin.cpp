@@ -903,15 +903,15 @@ ISO_ptr<void> ReadGMP(tag id, istream_ref file) {
 	ISO_ptr<anything>	p(id);
 
 	file.seek(h.TreOffset);
-	p->Append(ReadTRE("TRE", istream_offset(file, h.RgnOffset - h.TreOffset).me()));
+	p->Append(ReadTRE("TRE", make_reader_offset(file, h.RgnOffset - h.TreOffset)));
 	file.seek(h.RgnOffset);
-	p->Append(ReadRGN("RGN", istream_offset(file, h.LblOffset - h.RgnOffset).me()));
+	p->Append(ReadRGN("RGN", make_reader_offset(file, h.LblOffset - h.RgnOffset)));
 	file.seek(h.LblOffset);
-	p->Append(ReadLBL("LBL", istream_offset(file, h.NetOffset - h.LblOffset).me()));
+	p->Append(ReadLBL("LBL", make_reader_offset(file, h.NetOffset - h.LblOffset)));
 	file.seek(h.NetOffset);
-	p->Append(ReadNET("NET", istream_offset(file, h.NodOffset - h.NetOffset).me()));
+	p->Append(ReadNET("NET", make_reader_offset(file, h.NodOffset - h.NetOffset)));
 	file.seek(h.NodOffset);
-	p->Append(ReadNOD("NOD", istream_offset(file).me()));
+	p->Append(ReadNOD("NOD", make_reader_offset(file)));
 
 	return p;
 }
@@ -934,8 +934,8 @@ ISO_ptr<void> IMGFileHandler::Read(tag id, istream_ref file) {
 	uint32	bytespercluster	= 1 << (h.E1 + h.E2);
 	int		num_clusters	= (root.file_size + bytespercluster - 1) / bytespercluster;
 
-	istream_offset	file2(xfile);
-	istream_cluster	file4(file2, bytespercluster, root.file_size);
+	//auto	file2	= make_reader_offset(xfile);
+	istream_cluster	file4(xfile, bytespercluster, root.file_size);
 	file4.add_clusters(root.clusters, min(num_clusters, num_elements(root.clusters)));
 	file4.seek(0x200);
 
@@ -980,8 +980,8 @@ ISO_ptr<void> IMGFileHandler::Read(tag id, istream_ref file) {
 }
 
 class TYPFileHandler : public FileHandler {
-	const char*		GetExt() override { return "typ";	}
-	virtual	const char*		GetDescription(){ return "Garmin TYP file"; }
+	const char*		GetExt()			override { return "typ";	}
+	const char*		GetDescription()	override { return "Garmin TYP file"; }
 	ISO_ptr<void>	Read(tag id, istream_ref file) override;
 } typ;
 

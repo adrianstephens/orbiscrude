@@ -35,13 +35,27 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="dx12_fields.cpp" />
+    <ClCompile Include="..\..\..\filetypes\code\bitcode.cpp" />
+    <ClCompile Include="..\..\..\platforms\pc\dx12\dx12_helpers.cpp" />
+    <ClCompile Include="..\..\..\platforms\pc\dx\dis_dxil.cpp" />
+    <ClCompile Include="..\..\..\platforms\pc\dx\sim_dxil.cpp" />
+    <ClCompile Include="..\..\disassemblers\dis_bitcode.cpp" />
+    <ClCompile Include="dx12_fields.cpp">
+      <PreprocessToFile Condition="'$(Configuration)|$(Platform)'=='DebugDX11|x64'">true</PreprocessToFile>
+    </ClCompile>
     <ClCompile Include="view_dx12gpu.cpp" />
+    <ClCompile Include="view_dxil.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\..\filetypes\code\bitcode.h" />
+    <ClInclude Include="..\..\..\platforms\pc\dx12\dx12_helpers.h" />
     <ClInclude Include="..\..\..\platforms\pc\dx12\dx12_record.h" />
+    <ClInclude Include="..\..\..\platforms\pc\dx\dxil.h" />
+    <ClInclude Include="..\..\..\platforms\pc\dx\sim_dxil.h" />
+    <ClInclude Include="..\..\disassemblers\dis_bitcode.h" />
     <ClInclude Include="dx12_fields.h" />
     <ClInclude Include="view_dx12gpu.rc.h" />
+    <ClInclude Include="view_dxil.h" />
   </ItemGroup>
   <ItemGroup>
     <IsoCmd Include="toolbar_dx12gpu.psd">

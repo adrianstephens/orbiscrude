@@ -36,9 +36,8 @@ struct GZheader {
 	GZheader(const char *name = 0) : name(name), crc16(0) {}
 
 	bool read(istream_ref file) {
-		GZmember	gm	= file.get();
-
-		if (!gm.valid())
+		GZmember	gm;
+		if (!file.read(gm) || !gm.valid())
 			return false;
 
 		if (gm.flag & GZmember::TEXTRA) {
@@ -46,10 +45,10 @@ struct GZheader {
 			file.seek_cur(len);
 		}
 		if (gm.flag & GZmember::NAME)
-			for (int i = 0; name[i++] = file.get(););
+			for (int i = 0; name[i++] = file.getc(););
 
 		if (gm.flag & GZmember::COMMENT)
-			while (file.get());
+			while (file.getc());
 
 		if (gm.flag & GZmember::HCRC)
 			crc16 = file.get();

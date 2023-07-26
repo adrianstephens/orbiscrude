@@ -2,6 +2,7 @@
 #include "iso/iso_script.h"
 #include "filetypes/3d/model_utils.h"
 #include "base/algorithm.h"
+#include "utilities.h"
 
 using namespace iso;
 
@@ -304,7 +305,8 @@ ISO_ptr<void> PLYFileHandler::Read(tag id, istream_ref file) {
 		for (int i = 0; i < npoly; i++)
 			ntris += ib[i][itf].Count() - 2;
 
-		uint32	*indices = new uint32[ntris * 3], *pi = indices;
+		temp_array<uint32>	indices(ntris * 3);
+		auto	pi = indices.begin();
 
 		for (int i = 0; i < npoly; i++) {
 			ISO::Browser		fb	= ib[i][itf];
@@ -323,9 +325,9 @@ ISO_ptr<void> PLYFileHandler::Read(tag id, istream_ref file) {
 		VertexCacheOptimizerForsyth(indices, ntris, nvert, indices);
 		uint32	score	= GetCacheCost(indices, ntris);
 #else
-		uint32	score	= VertexCacheOptimizerHillclimber(indices, ntris, nvert, indices, 0);
+		uint32	score	= VertexCacheOptimizerHillclimber(indices, nvert, indices, 0);
 #endif
-		pi = indices;
+		pi = indices.begin();
 		for (int i = 0; i < ntris; i++, pi += 3) {
 			int		v0	= pi[0], v1 = pi[1], v2 = pi[2];
 			int		vb0, vb1, vb2;
@@ -337,8 +339,6 @@ ISO_ptr<void> PLYFileHandler::Read(tag id, istream_ref file) {
 			}
 			model.AddFace(vb0, vb1, vb2);
 		}
-
-		delete[] indices;
 
 #else
 

@@ -112,143 +112,78 @@
 #define VA_TAIL(...)		CONCAT3(VA_TAIL_, VA_MORE(__VA_ARGS__))(__VA_ARGS__)
 #endif
 
-#define _VA1(M,X)			M(X)
-#define _VA2(M,X, ...)		EXPAND(M(X)_VA1 (M,__VA_ARGS__))
-#define _VA3(M,X, ...)		EXPAND(M(X)_VA2 (M,__VA_ARGS__))
-#define _VA4(M,X, ...)		EXPAND(M(X)_VA3 (M,__VA_ARGS__))
-#define _VA5(M,X, ...)		EXPAND(M(X)_VA4 (M,__VA_ARGS__))
-#define _VA6(M,X, ...)		EXPAND(M(X)_VA5 (M,__VA_ARGS__))
-#define _VA7(M,X, ...)		EXPAND(M(X)_VA6 (M,__VA_ARGS__))
-#define _VA8(M,X, ...)		EXPAND(M(X)_VA7 (M,__VA_ARGS__))
-#define _VA9(M,X, ...)		EXPAND(M(X)_VA8 (M,__VA_ARGS__))
-#define _VA10(M,X, ...)		EXPAND(M(X)_VA9 (M,__VA_ARGS__))
-#define _VA11(M,X, ...)		EXPAND(M(X)_VA10(M,__VA_ARGS__))
-#define _VA12(M,X, ...)		EXPAND(M(X)_VA11(M,__VA_ARGS__))
-#define _VA13(M,X, ...)		EXPAND(M(X)_VA12(M,__VA_ARGS__))
-#define _VA14(M,X, ...)		EXPAND(M(X)_VA13(M,__VA_ARGS__))
-#define _VA15(M,X, ...)		EXPAND(M(X)_VA14(M,__VA_ARGS__))
-#define _VA16(M,X, ...)		EXPAND(M(X)_VA15(M,__VA_ARGS__))
-#define _VA17(M,X, ...)		EXPAND(M(X)_VA16(M,__VA_ARGS__))
-#define _VA18(M,X, ...)		EXPAND(M(X)_VA17(M,__VA_ARGS__))
-#define _VA19(M,X, ...)		EXPAND(M(X)_VA18(M,__VA_ARGS__))
-#define _VA20(M,X, ...)		EXPAND(M(X)_VA19(M,__VA_ARGS__))
-#define _VA21(M,X, ...)		EXPAND(M(X)_VA20(M,__VA_ARGS__))
-#define _VA22(M,X, ...)		EXPAND(M(X)_VA21(M,__VA_ARGS__))
-#define _VA23(M,X, ...)		EXPAND(M(X)_VA22(M,__VA_ARGS__))
-#define _VA24(M,X, ...)		EXPAND(M(X)_VA23(M,__VA_ARGS__))
-#define _VA25(M,X, ...)		EXPAND(M(X)_VA24(M,__VA_ARGS__))
-#define _VA26(M,X, ...)		EXPAND(M(X)_VA25(M,__VA_ARGS__))
-#define _VA27(M,X, ...)		EXPAND(M(X)_VA26(M,__VA_ARGS__))
-#define _VA28(M,X, ...)		EXPAND(M(X)_VA27(M,__VA_ARGS__))
-#define _VA29(M,X, ...)		EXPAND(M(X)_VA28(M,__VA_ARGS__))
-#define _VA30(M,X, ...)		EXPAND(M(X)_VA29(M,__VA_ARGS__))
-#define _VA31(M,X, ...)		EXPAND(M(X)_VA30(M,__VA_ARGS__))
-#define _VA32(M,X, ...)		EXPAND(M(X)_VA31(M,__VA_ARGS__))
-#define _VA33(M,X, ...)		EXPAND(M(X)_VA32(M,__VA_ARGS__))
-#define _VA34(M,X, ...)		EXPAND(M(X)_VA33(M,__VA_ARGS__))
-#define _VA35(M,X, ...)		EXPAND(M(X)_VA34(M,__VA_ARGS__))
-#define _VA36(M,X, ...)		EXPAND(M(X)_VA35(M,__VA_ARGS__))
-#define _VA37(M,X, ...)		EXPAND(M(X)_VA36(M,__VA_ARGS__))
-#define _VA38(M,X, ...)		EXPAND(M(X)_VA37(M,__VA_ARGS__))
-#define _VA39(M,X, ...)		EXPAND(M(X)_VA38(M,__VA_ARGS__))
-#define _VA40(M,X, ...)		EXPAND(M(X)_VA39(M,__VA_ARGS__))
-#define _VA41(M,X, ...)		EXPAND(M(X)_VA40(M,__VA_ARGS__))
-#define _VA42(M,X, ...)		EXPAND(M(X)_VA41(M,__VA_ARGS__))
-#define _VA43(M,X, ...)		EXPAND(M(X)_VA42(M,__VA_ARGS__))
-#define _VA44(M,X, ...)		EXPAND(M(X)_VA43(M,__VA_ARGS__))
-#define _VA45(M,X, ...)		EXPAND(M(X)_VA44(M,__VA_ARGS__))
-#define _VA46(M,X, ...)		EXPAND(M(X)_VA45(M,__VA_ARGS__))
-#define _VA47(M,X, ...)		EXPAND(M(X)_VA46(M,__VA_ARGS__))
-#define _VA48(M,X, ...)		EXPAND(M(X)_VA47(M,__VA_ARGS__))
-#define _VA49(M,X, ...)		EXPAND(M(X)_VA48(M,__VA_ARGS__))
-#define _VA50(M,X, ...)		EXPAND(M(X)_VA49(M,__VA_ARGS__))
-#define _VA51(M,X, ...)		EXPAND(M(X)_VA50(M,__VA_ARGS__))
-#define _VA52(M,X, ...)		EXPAND(M(X)_VA51(M,__VA_ARGS__))
-#define _VA53(M,X, ...)		EXPAND(M(X)_VA52(M,__VA_ARGS__))
-#define _VA54(M,X, ...)		EXPAND(M(X)_VA53(M,__VA_ARGS__))
-#define _VA55(M,X, ...)		EXPAND(M(X)_VA54(M,__VA_ARGS__))
-#define _VA56(M,X, ...)		EXPAND(M(X)_VA55(M,__VA_ARGS__))
-#define _VA57(M,X, ...)		EXPAND(M(X)_VA56(M,__VA_ARGS__))
-#define _VA58(M,X, ...)		EXPAND(M(X)_VA57(M,__VA_ARGS__))
-#define _VA59(M,X, ...)		EXPAND(M(X)_VA58(M,__VA_ARGS__))
-#define _VA60(M,X, ...)		EXPAND(M(X)_VA59(M,__VA_ARGS__))
-#define _VA61(M,X, ...)		EXPAND(M(X)_VA60(M,__VA_ARGS__))
-#define _VA62(M,X, ...)		EXPAND(M(X)_VA61(M,__VA_ARGS__))
-#define _VA63(M,X, ...)		EXPAND(M(X)_VA62(M,__VA_ARGS__))
-#define _VA64(M,X, ...)		EXPAND(M(X)_VA63(M,__VA_ARGS__))
-#define VA_APPLY(M,...)		EXPAND(CONCAT3(_VA, VA_NUM(__VA_ARGS__))(M,__VA_ARGS__))
+#define  _VAP1(C,I,M,P,X)		C(M,I,P,X)
+#define  _VAP2(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP1 (C,I+1,M,P,__VA_ARGS__))
+#define  _VAP3(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP2 (C,I+1,M,P,__VA_ARGS__))
+#define  _VAP4(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP3 (C,I+1,M,P,__VA_ARGS__))
+#define  _VAP5(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP4 (C,I+1,M,P,__VA_ARGS__))
+#define  _VAP6(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP5 (C,I+1,M,P,__VA_ARGS__))
+#define  _VAP7(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP6 (C,I+1,M,P,__VA_ARGS__))
+#define  _VAP8(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP7 (C,I+1,M,P,__VA_ARGS__))
+#define  _VAP9(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP8 (C,I+1,M,P,__VA_ARGS__))
+#define _VAP10(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP9 (C,I+1,M,P,__VA_ARGS__))
+#define _VAP11(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP10(C,I+1,M,P,__VA_ARGS__))
+#define _VAP12(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP11(C,I+1,M,P,__VA_ARGS__))
+#define _VAP13(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP12(C,I+1,M,P,__VA_ARGS__))
+#define _VAP14(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP13(C,I+1,M,P,__VA_ARGS__))
+#define _VAP15(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP14(C,I+1,M,P,__VA_ARGS__))
+#define _VAP16(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP15(C,I+1,M,P,__VA_ARGS__))
+#define _VAP17(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP16(C,I+1,M,P,__VA_ARGS__))
+#define _VAP18(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP17(C,I+1,M,P,__VA_ARGS__))
+#define _VAP19(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP18(C,I+1,M,P,__VA_ARGS__))
+#define _VAP20(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP19(C,I+1,M,P,__VA_ARGS__))
+#define _VAP21(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP20(C,I+1,M,P,__VA_ARGS__))
+#define _VAP22(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP21(C,I+1,M,P,__VA_ARGS__))
+#define _VAP23(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP22(C,I+1,M,P,__VA_ARGS__))
+#define _VAP24(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP23(C,I+1,M,P,__VA_ARGS__))
+#define _VAP25(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP24(C,I+1,M,P,__VA_ARGS__))
+#define _VAP26(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP25(C,I+1,M,P,__VA_ARGS__))
+#define _VAP27(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP26(C,I+1,M,P,__VA_ARGS__))
+#define _VAP28(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP27(C,I+1,M,P,__VA_ARGS__))
+#define _VAP29(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP28(C,I+1,M,P,__VA_ARGS__))
+#define _VAP30(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP29(C,I+1,M,P,__VA_ARGS__))
+#define _VAP31(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP30(C,I+1,M,P,__VA_ARGS__))
+#define _VAP32(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP31(C,I+1,M,P,__VA_ARGS__))
+#define _VAP33(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP32(C,I+1,M,P,__VA_ARGS__))
+#define _VAP34(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP33(C,I+1,M,P,__VA_ARGS__))
+#define _VAP35(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP34(C,I+1,M,P,__VA_ARGS__))
+#define _VAP36(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP35(C,I+1,M,P,__VA_ARGS__))
+#define _VAP37(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP36(C,I+1,M,P,__VA_ARGS__))
+#define _VAP38(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP37(C,I+1,M,P,__VA_ARGS__))
+#define _VAP39(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP38(C,I+1,M,P,__VA_ARGS__))
+#define _VAP40(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP39(C,I+1,M,P,__VA_ARGS__))
+#define _VAP41(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP40(C,I+1,M,P,__VA_ARGS__))
+#define _VAP42(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP41(C,I+1,M,P,__VA_ARGS__))
+#define _VAP43(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP42(C,I+1,M,P,__VA_ARGS__))
+#define _VAP44(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP43(C,I+1,M,P,__VA_ARGS__))
+#define _VAP45(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP44(C,I+1,M,P,__VA_ARGS__))
+#define _VAP46(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP45(C,I+1,M,P,__VA_ARGS__))
+#define _VAP47(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP46(C,I+1,M,P,__VA_ARGS__))
+#define _VAP48(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP47(C,I+1,M,P,__VA_ARGS__))
+#define _VAP49(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP48(C,I+1,M,P,__VA_ARGS__))
+#define _VAP50(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP49(C,I+1,M,P,__VA_ARGS__))
+#define _VAP51(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP50(C,I+1,M,P,__VA_ARGS__))
+#define _VAP52(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP51(C,I+1,M,P,__VA_ARGS__))
+#define _VAP53(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP52(C,I+1,M,P,__VA_ARGS__))
+#define _VAP54(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP53(C,I+1,M,P,__VA_ARGS__))
+#define _VAP55(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP54(C,I+1,M,P,__VA_ARGS__))
+#define _VAP56(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP55(C,I+1,M,P,__VA_ARGS__))
+#define _VAP57(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP56(C,I+1,M,P,__VA_ARGS__))
+#define _VAP58(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP57(C,I+1,M,P,__VA_ARGS__))
+#define _VAP59(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP58(C,I+1,M,P,__VA_ARGS__))
+#define _VAP60(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP59(C,I+1,M,P,__VA_ARGS__))
+#define _VAP61(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP60(C,I+1,M,P,__VA_ARGS__))
+#define _VAP62(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP61(C,I+1,M,P,__VA_ARGS__))
+#define _VAP63(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP62(C,I+1,M,P,__VA_ARGS__))
+#define _VAP64(C,I,M,P,X, ...)	EXPAND(C(M,I,P,X)_VAP63(C,I+1,M,P,__VA_ARGS__))
 
-#define _VAP1(M, P,X)		M(P,X)
-#define _VAP2(M, P,X, ...)	EXPAND(M(P,X)_VAP1 (M,P,__VA_ARGS__))
-#define _VAP3(M, P,X, ...)	EXPAND(M(P,X)_VAP2 (M,P,__VA_ARGS__))
-#define _VAP4(M, P,X, ...)	EXPAND(M(P,X)_VAP3 (M,P,__VA_ARGS__))
-#define _VAP5(M, P,X, ...)	EXPAND(M(P,X)_VAP4 (M,P,__VA_ARGS__))
-#define _VAP6(M, P,X, ...)	EXPAND(M(P,X)_VAP5 (M,P,__VA_ARGS__))
-#define _VAP7(M, P,X, ...)	EXPAND(M(P,X)_VAP6 (M,P,__VA_ARGS__))
-#define _VAP8(M, P,X, ...)	EXPAND(M(P,X)_VAP7 (M,P,__VA_ARGS__))
-#define _VAP9(M, P,X, ...)	EXPAND(M(P,X)_VAP8 (M,P,__VA_ARGS__))
-#define _VAP10(M,P,X, ...)	EXPAND(M(P,X)_VAP9 (M,P,__VA_ARGS__))
-#define _VAP11(M,P,X, ...)	EXPAND(M(P,X)_VAP10(M,P,__VA_ARGS__))
-#define _VAP12(M,P,X, ...)	EXPAND(M(P,X)_VAP11(M,P,__VA_ARGS__))
-#define _VAP13(M,P,X, ...)	EXPAND(M(P,X)_VAP12(M,P,__VA_ARGS__))
-#define _VAP14(M,P,X, ...)	EXPAND(M(P,X)_VAP13(M,P,__VA_ARGS__))
-#define _VAP15(M,P,X, ...)	EXPAND(M(P,X)_VAP14(M,P,__VA_ARGS__))
-#define _VAP16(M,P,X, ...)	EXPAND(M(P,X)_VAP15(M,P,__VA_ARGS__))
-#define _VAP17(M,P,X, ...)	EXPAND(M(P,X)_VAP16(M,P,__VA_ARGS__))
-#define _VAP18(M,P,X, ...)	EXPAND(M(P,X)_VAP17(M,P,__VA_ARGS__))
-#define _VAP19(M,P,X, ...)	EXPAND(M(P,X)_VAP18(M,P,__VA_ARGS__))
-#define _VAP20(M,P,X, ...)	EXPAND(M(P,X)_VAP19(M,P,__VA_ARGS__))
-#define _VAP21(M,P,X, ...)	EXPAND(M(P,X)_VAP20(M,P,__VA_ARGS__))
-#define _VAP22(M,P,X, ...)	EXPAND(M(P,X)_VAP21(M,P,__VA_ARGS__))
-#define _VAP23(M,P,X, ...)	EXPAND(M(P,X)_VAP22(M,P,__VA_ARGS__))
-#define _VAP24(M,P,X, ...)	EXPAND(M(P,X)_VAP23(M,P,__VA_ARGS__))
-#define _VAP25(M,P,X, ...)	EXPAND(M(P,X)_VAP24(M,P,__VA_ARGS__))
-#define _VAP26(M,P,X, ...)	EXPAND(M(P,X)_VAP25(M,P,__VA_ARGS__))
-#define _VAP27(M,P,X, ...)	EXPAND(M(P,X)_VAP26(M,P,__VA_ARGS__))
-#define _VAP28(M,P,X, ...)	EXPAND(M(P,X)_VAP27(M,P,__VA_ARGS__))
-#define _VAP29(M,P,X, ...)	EXPAND(M(P,X)_VAP28(M,P,__VA_ARGS__))
-#define _VAP30(M,P,X, ...)	EXPAND(M(P,X)_VAP29(M,P,__VA_ARGS__))
-#define _VAP31(M,P,X, ...)	EXPAND(M(P,X)_VAP30(M,P,__VA_ARGS__))
-#define _VAP32(M,P,X, ...)	EXPAND(M(P,X)_VAP31(M,P,__VA_ARGS__))
-#define _VAP33(M,P,X, ...)	EXPAND(M(P,X)_VAP32(M,P,__VA_ARGS__))
-#define _VAP34(M,P,X, ...)	EXPAND(M(P,X)_VAP33(M,P,__VA_ARGS__))
-#define _VAP35(M,P,X, ...)	EXPAND(M(P,X)_VAP34(M,P,__VA_ARGS__))
-#define _VAP36(M,P,X, ...)	EXPAND(M(P,X)_VAP35(M,P,__VA_ARGS__))
-#define _VAP37(M,P,X, ...)	EXPAND(M(P,X)_VAP36(M,P,__VA_ARGS__))
-#define _VAP38(M,P,X, ...)	EXPAND(M(P,X)_VAP37(M,P,__VA_ARGS__))
-#define _VAP39(M,P,X, ...)	EXPAND(M(P,X)_VAP38(M,P,__VA_ARGS__))
-#define _VAP40(M,P,X, ...)	EXPAND(M(P,X)_VAP39(M,P,__VA_ARGS__))
-#define _VAP41(M,P,X, ...)	EXPAND(M(P,X)_VAP40(M,P,__VA_ARGS__))
-#define _VAP42(M,P,X, ...)	EXPAND(M(P,X)_VAP41(M,P,__VA_ARGS__))
-#define _VAP43(M,P,X, ...)	EXPAND(M(P,X)_VAP42(M,P,__VA_ARGS__))
-#define _VAP44(M,P,X, ...)	EXPAND(M(P,X)_VAP43(M,P,__VA_ARGS__))
-#define _VAP45(M,P,X, ...)	EXPAND(M(P,X)_VAP44(M,P,__VA_ARGS__))
-#define _VAP46(M,P,X, ...)	EXPAND(M(P,X)_VAP45(M,P,__VA_ARGS__))
-#define _VAP47(M,P,X, ...)	EXPAND(M(P,X)_VAP46(M,P,__VA_ARGS__))
-#define _VAP48(M,P,X, ...)	EXPAND(M(P,X)_VAP47(M,P,__VA_ARGS__))
-#define _VAP49(M,P,X, ...)	EXPAND(M(P,X)_VAP48(M,P,__VA_ARGS__))
-#define _VAP50(M,P,X, ...)	EXPAND(M(P,X)_VAP49(M,P,__VA_ARGS__))
-#define _VAP51(M,P,X, ...)	EXPAND(M(P,X)_VAP50(M,P,__VA_ARGS__))
-#define _VAP52(M,P,X, ...)	EXPAND(M(P,X)_VAP51(M,P,__VA_ARGS__))
-#define _VAP53(M,P,X, ...)	EXPAND(M(P,X)_VAP52(M,P,__VA_ARGS__))
-#define _VAP54(M,P,X, ...)	EXPAND(M(P,X)_VAP53(M,P,__VA_ARGS__))
-#define _VAP55(M,P,X, ...)	EXPAND(M(P,X)_VAP54(M,P,__VA_ARGS__))
-#define _VAP56(M,P,X, ...)	EXPAND(M(P,X)_VAP55(M,P,__VA_ARGS__))
-#define _VAP57(M,P,X, ...)	EXPAND(M(P,X)_VAP56(M,P,__VA_ARGS__))
-#define _VAP58(M,P,X, ...)	EXPAND(M(P,X)_VAP57(M,P,__VA_ARGS__))
-#define _VAP59(M,P,X, ...)	EXPAND(M(P,X)_VAP58(M,P,__VA_ARGS__))
-#define _VAP60(M,P,X, ...)	EXPAND(M(P,X)_VAP59(M,P,__VA_ARGS__))
-#define _VAP61(M,P,X, ...)	EXPAND(M(P,X)_VAP60(M,P,__VA_ARGS__))
-#define _VAP62(M,P,X, ...)	EXPAND(M(P,X)_VAP61(M,P,__VA_ARGS__))
-#define _VAP63(M,P,X, ...)	EXPAND(M(P,X)_VAP62(M,P,__VA_ARGS__))
-#define _VAP64(M,P,X, ...)	EXPAND(M(P,X)_VAP63(M,P,__VA_ARGS__))
+#define VA_NOPARAM(M,I,P, ...)	M(__VA_ARGS__)
+#define VA_NOINDEX(M,I, ...)	M(__VA_ARGS__)
+#define VA_INDEX(M,...)			M(__VA_ARGS__)
 
-#define VA_APPLYP(M,P,...)	EXPAND(CONCAT3(_VAP, VA_NUM(__VA_ARGS__))(M,P,__VA_ARGS__))
-
-template<typename>		struct RemoveParentheses;
-template<typename T>	struct RemoveParentheses<void(T)>	{ typedef T type; };
-template<>				struct RemoveParentheses<void()>	{ typedef void type; };
-#define REMOVE_PARENTHESES(X) RemoveParentheses<void(X)>::type
+#define VA_APPLY(M,...)		EXPAND(CONCAT3(_VAP, VA_NUM(__VA_ARGS__))(VA_NOPARAM,	0, M, 0, __VA_ARGS__))
+#define VA_APPLYP(M,P,...)	EXPAND(CONCAT3(_VAP, VA_NUM(__VA_ARGS__))(VA_NOINDEX,	0, M, P, __VA_ARGS__))
+#define VA_APPLYPI(M,P,...)	EXPAND(CONCAT3(_VAP, VA_NUM(__VA_ARGS__))(VA_INDEX,		0, M, P, __VA_ARGS__))
 
 //-----------------------------------------------------------------------------
 //	bitfield helpers
@@ -316,21 +251,7 @@ inline void		operator delete(void *p, const placement &h)		{}
 inline void*	operator new(size_t size, const sized_placement &h)	{ /*ISO_ASSERT(size == h.size);*/ return h.p; }
 inline void		operator delete(void *p, const sized_placement &h)	{}
 
-#if 0
-#ifndef __PLACEMENT_NEW_INLINE
-force_inline void *operator new(size_t, void *p)	{ return p; }
-force_inline void operator delete(void*, void*)		{}
-#define __PLACEMENT_NEW_INLINE
-#endif
-
-#ifndef __PLACEMENT_VEC_NEW_INLINE
-force_inline void *operator new[](size_t, void *p)	{ return p; }
-force_inline void operator delete[](void*, void*)	{}
-#define __PLACEMENT_VEC_NEW_INLINE
-#endif
-#endif
-
-struct xyz;	//here so no namespace crud
+struct xyz;	//here to avoid namespace crud
 
 namespace iso {
 //-----------------------------------------------------------------------------
@@ -366,8 +287,7 @@ typedef	unsigned long		ulong;
 typedef float				float32;
 typedef double				float64;
 
-template<typename T> static constexpr uint32	BIT_COUNT	= sizeof(T) * 8;
-static constexpr uint32 ISO_PTRBITS = BIT_COUNT<void*>;
+template<typename T> static constexpr uint32 BIT_COUNT = sizeof(T) * 8;
 
 struct _none {
 	bool operator==(const _none&)	const	{ return true; }
@@ -377,25 +297,120 @@ struct _none {
 	bool operator<=(const _none&)	const	{ return true; }
 	bool operator>=(const _none&)	const	{ return true; }
 };
-extern _none	none, terminate, empty;
+extern const _none	none, terminate, empty;
+
+//-----------------------------------------------------------------------------
+//	pre meta stuff
+//-----------------------------------------------------------------------------
+
+template<typename T> constexpr bool is_union						= __is_union(T);
+template<typename T> constexpr bool is_class						= __is_class(T);
+template<typename T> constexpr bool is_enum							= __is_enum(T);
+template<typename T> constexpr bool is_pod							= __is_pod(T);
+template<typename T> constexpr bool is_trivially_copyable_v			= __is_trivially_copyable(T);
+template<typename T> constexpr bool is_trivially_destructible_v		= __is_trivially_destructible(T);
+template<typename T> constexpr bool is_trivially_constructible_v	= __is_trivially_constructible(T);
 
 struct T_false	{ static const bool value = false; };
 struct T_true	{ static const bool value = true; };
 
 template<typename T>							struct T_type 				{ typedef T	type; };
+template<typename T>							struct T_true_type			 : T_true, T_type<T> {};
 template<bool b, typename T, typename F>		struct T_if					: T_type<F> {};
 template<typename T, typename F>				struct T_if<true, T, F>		: T_type<T> {};
 template<bool b, typename T, typename F>		using if_t					= typename T_if<b, T, F>::type;
 
-template<typename T>							struct T_true_type : T_true, T_type<T> {};
-
-template<typename A,typename B,typename R=A>	struct T_same				: T_false {};
+template<typename A, typename B, typename R=A>	struct T_same				: T_false {};
 template<typename A, typename R>				struct T_same<A,A,R>		: T_true_type<R> {};
-template<typename A,typename B,typename R=A>	using same_t				= typename T_same<A, B, R>::type;
+template<typename A, typename B, typename R=A>	using same_t				= typename T_same<A, B, R>::type;
 template<typename A, typename B, typename...T>	constexpr bool same_v		= T_same<A, B>::value && same_v<A, T...>;
-template<typename A,typename B>					constexpr bool same_v<A,B>	= T_same<A, B>::value;
+template<typename A, typename B>				constexpr bool same_v<A,B>	= T_same<A, B>::value;
+
+template<typename T, T>						struct T_checktype;
+template<bool b, typename T = void>			struct T_enable_if				{};
+template<typename T>						struct T_enable_if<true, T>		: T_type<T> {};
+template<bool b, typename T = void>			using enable_if_t				= typename T_enable_if<b, T>::type;
+
+template<typename T, typename R=T>			struct T_exists					: T_true_type<R> {};
+template<typename T, typename R=T>			using exists_t					= typename T_exists<T, R>::type;
+template<typename T> 						constexpr bool exists_v			= T_exists<T>::value;
+
+template<typename T>						struct T_is_pointer				: T_false	{};
+template<typename T>						struct T_is_pointer<T*>			: T_true	{};
+template<typename T>						constexpr bool is_pointer_v		= T_is_pointer<T>::value;
+
+template<typename T>						struct T_is_lvalue				: T_false	{};
+template<typename T>						struct T_is_lvalue<const T&>	: T_false	{};
+template<typename T>						struct T_is_lvalue<T&>			: T_true	{};
+template<typename T>						constexpr bool is_lvalue_v		= T_is_lvalue<T>::value;
+
+template<typename...T>						struct T_void					: T_type<void> {};
+template<typename...T>						using void_t					= typename T_void<T...>::type;
+
+template<typename T, typename = void>		struct T_ref					: T_type<T> {};
+template<typename T>						struct T_ref<T, void_t<T&>>		: T_type<T&> {};
+
+template<typename T, typename = void>		struct T_rref					: T_type<T> {};
+template<typename T>						struct T_rref<T, void_t<T&>>	: T_type<T&&> {};
+
+template<typename T>						struct T_reftoptr				: T_type<T> {};
+template<typename T>						struct T_reftoptr<T&>			: T_type<T*> {};
+template<typename T>						struct T_reftoptr<const T&>		: T_type<const T *> {};
+
+template<typename T>						struct T_noconst				: T_type<T> {};
+template<typename T>						struct T_noconst<const T>		: T_type<T> {};
+template<typename T>						using noconst_t		= typename T_noconst<T>::type;
+
+template<typename T>						struct T_nocv					: T_type<T> {};
+template<typename T>						struct T_nocv<const T>			: T_type<T> {};
+template<typename T>						struct T_nocv<volatile T>		: T_type<T> {};
+template<typename T>						struct T_nocv<const volatile T>	: T_type<T> {};
+template<typename T>						using nocv_t		= typename T_nocv<T>::type;
+
+template<typename T>						struct T_noref					: T_type<T> {};
+template<typename T>						struct T_noref<T&>				: T_type<T> {};
+template<typename T>						struct T_noref<T&&>				: T_type<T> {};
+template<typename T>						using noref_t		= typename T_noref<T>::type;
+template<typename T>						using noref_cv_t	= nocv_t<noref_t<T>>;
+template<typename T> noref_t<T>&			declval() noexcept;
+//template<typename T> typename T_rref<T>::type	declval() noexcept;
+
+template<typename T>						struct T_noarray				: T_type<T> {};
+template<typename T, int N>					struct T_noarray<T[N]>			: T_type<T*> {};
+template<typename T>						using noarray_t		= typename T_noarray<T>::type;
+
+template<typename A, typename B>			struct T_copyconst				: T_type<B> {};
+template<typename A, typename B>			struct T_copyconst<const A, B>	: T_type<const B> {};
+template<typename A, typename B>			struct T_copyconst<const A, B&>	: T_type<const B&> {};
+template<typename A, typename B>			struct T_copyconst<const A&, B>	: T_type<const B> {};
+template<typename A, typename B>			struct T_copyconst<const A&, B&>: T_type<const B&> {};
+template<typename A, typename B>			using copy_const_t				= typename T_copyconst<A, B>::type;
+
+template<typename T>						struct T_param					: T_type<const T&> {};
+template<typename T>						struct T_param<T&>				: T_type<T&> {};
+template<typename T>						using param_t		= typename T_param<T>::type;
+#define param(T)							iso::param_t<T>
+
+template<typename T>						struct T_rref_param				: T_type<T&&> {};
+template<typename T>						struct T_rref_param<T&>			: T_type<T&> {};
+
+template<typename T>						struct T_lderef					: T_type<decltype(*declval<T>())> {};
+template<typename T>						using lderef_t		= typename T_lderef<T>::type;
+
+template<typename T>						struct T_deref					: T_type<noref_t<decltype(*declval<T>())>> {};
+template<>									struct T_deref<void*>			: T_type<void> {};
+template<>									struct T_deref<const void*>		: T_type<void> {};
+template<typename C, typename T>			struct T_deref<T C::*>			: T_type<T> {};
+template<typename C, typename T>			struct T_deref<const T C::*>	: T_type<const T> {};
+template<typename T>						using deref_t		= typename T_deref<T>::type;
+
+template<typename A, typename B> using biggest_t	= if_t<(sizeof(A) > sizeof(B)), A, B>;
+template<typename A, typename B> using smallest_t	= if_t<(sizeof(A) < sizeof(B)), A, B>;
+
+template<typename T> using identity_t = typename T_type<T>::type;
 
 namespace meta {
+
 //-----------------------------------------------------------------------------
 //	meta programming templates
 //-----------------------------------------------------------------------------
@@ -409,46 +424,122 @@ template<template<class> class M, typename T, int N>	struct map<M, T[N]>			: M<m
 template<template<class> class M, typename T, int N>	struct map<M, const T[N]>	: M<map_t<M,T>[N]> {};
 template<template<class> class M>						struct map<M, _none>		: T_type<_none> {};
 
-template<typename T, T N>					struct constant { static const T value = N; operator T() const { return N; } };
-template<int i>								using num	= constant<int, i>;
-
-template<bool b, int T, int F>				struct ifnum				: num<F>	{};
-template<int T, int F>						struct ifnum<true, T, F>	: num<T>	{};
-
-template<int A, int B>						static constexpr int max = A > B ? A : B;
-template<int A, int B>						static constexpr int min = A < B ? A : B;
-template<int A>								static constexpr int abs = A < 0 ? -A : A;
-template<int A>								static constexpr bool is_pow2 = (A & (A - 1)) == 0;
-
 //-----------------------------------------------------------------------------
-//	value list	- list of values (of same type)
 //	constant	- constant value
 //-----------------------------------------------------------------------------
 
-template<typename T, T... I>				struct value_list { enum {count = sizeof...(I)}; };
+template<typename T, T N> struct constant {
+	static const T value = N;
+	operator T() const { return N; }
+};
+
+template<typename T, T N> constexpr constant<decltype(-N), -N> 		operator-(constant<T, N>)	{ return {}; }
+template<typename T, T N> constexpr constant<decltype(!N), !N> 		operator!(constant<T, N>)	{ return {}; }
+template<typename T, T N> constexpr constant<T, ~N>					operator~(constant<T, N>) 	{ return {}; }
+template<typename T, T N> constexpr constant<T, N < 0 ? -N : N>		abs(constant<T, N>) 		{ return {}; }
+
+template<typename TA, TA A, typename TB, TB B>	constexpr constant<decltype(A + B), (A +  B)> 	operator+ (constant<TA,A>, constant<TB,B>) 	{ return {}; }
+template<typename TA, TA A, typename TB, TB B>	constexpr constant<decltype(A - B), (A -  B)> 	operator- (constant<TA,A>, constant<TB,B>) 	{ return {}; }
+template<typename TA, TA A, typename TB, TB B>	constexpr constant<decltype(A * B), (A *  B)> 	operator* (constant<TA,A>, constant<TB,B>) 	{ return {}; }
+template<typename TA, TA A, typename TB, TB B>	constexpr constant<decltype(A / B), (A /  B)> 	operator/ (constant<TA,A>, constant<TB,B>) 	{ return {}; }
+template<typename TA, TA A, typename TB, TB B>	constexpr constant<decltype(A % B), (A %  B)> 	operator% (constant<TA,A>, constant<TB,B>) 	{ return {}; }
+template<typename TA, TA A, typename TB, TB B>	constexpr constant<decltype(A & B), (A &  B)> 	operator& (constant<TA,A>, constant<TB,B>) 	{ return {}; }
+template<typename TA, TA A, typename TB, TB B>	constexpr constant<decltype(A | B), (A |  B)> 	operator| (constant<TA,A>, constant<TB,B>) 	{ return {}; }
+template<typename TA, TA A, typename TB, TB B>	constexpr constant<decltype(A ^ B), (A ^  B)> 	operator^ (constant<TA,A>, constant<TB,B>) 	{ return {}; }
+template<typename TA, TA A, typename TB, TB B>	constexpr constant<decltype(A <<B), (A << B)> 	operator<<(constant<TA,A>, constant<TB,B>) 	{ return {}; }
+template<typename TA, TA A, typename TB, TB B>	constexpr constant<decltype(A >>B), (A >> B)> 	operator>>(constant<TA,A>, constant<TB,B>) 	{ return {}; }
+template<typename TA, TA A, typename TB, TB B>	constexpr constant<TA, (A > B ? A : B)>			max(constant<TA,A>, constant<TB, B>) 		{ return {}; }
+template<typename TA, TA A, typename TB, TB B>	constexpr constant<TA, (A < B ? A : B)>			min(constant<TA,A>, constant<TB, B>) 		{ return {}; }
+
+template<int i>			using int_constant	= constant<int, i>;
+template<bool b>		using bool_constant	= constant<bool, b>;
+
+template<int A, int B, int C>	static constexpr int	select_v = A ? B : C;
+template<int A, int B>	static constexpr int	max_v = A > B ? A : B;
+template<int A, int B>	static constexpr int	min_v = A < B ? A : B;
+template<int A>			static constexpr int	abs_v = A < 0 ? -A : A;
+template<int A>			static constexpr bool	is_pow2 = (A & (A - 1)) == 0;
+
+//-----------------------------------------------------------------------------
+//	value list	- list of values (of same type)
+//-----------------------------------------------------------------------------
+
+template<size_t N, typename T, T... I>		struct	index;
+template<size_t N, typename T, T I0, T... I>struct	index<N, T, I0, I...>	: index<N - 1, T, I...> {};
+template<typename T, T I0, T... I>			struct	index<0, T, I0, I...>	: constant<T, I0> {};
+
+template<typename T, T... I> struct value_list {
+	enum {count = sizeof...(I)};
+	typedef T	element_t;
+	typedef T	apply_t(T);
+
+	template<apply_t f>			using apply		= value_list<T, f(I)...>;
+	template<typename F, F f>	using apply2	= value_list<T, f(I)...>;
+	template<size_t N>			using get		= index<N, T, I...>;
+	using head		= index<0, T, I...>;
+
+	template<T...J>		friend constexpr value_list<T, I..., J...> concat(value_list, value_list<T, J...>) { return {}; }
+
+	constexpr value_list<decltype(-declval<T>()), -I...> 	operator-()	{ return {}; }
+	constexpr value_list<decltype(~declval<T>()), ~I...> 	operator~()	{ return {}; }
+	constexpr value_list<decltype(!declval<T>()), !I...> 	operator!()	{ return {}; }
+	friend constexpr value_list<T, (I < 0 ? T(-I) : I)...> 	abs(value_list) { return {}; }
+
+	template<typename U, U...B>	friend constexpr value_list<decltype(declval<T>() +  declval<U>()), (I +  B)...> 	operator+ (value_list, value_list<U, B...>) { return {}; }
+	template<typename U, U...B>	friend constexpr value_list<decltype(declval<T>() -  declval<U>()), (I -  B)...> 	operator- (value_list, value_list<U, B...>) { return {}; }
+	template<typename U, U...B>	friend constexpr value_list<decltype(declval<T>() *  declval<U>()), (I *  B)...> 	operator* (value_list, value_list<U, B...>) { return {}; }
+	template<typename U, U...B>	friend constexpr value_list<decltype(declval<T>() /  declval<U>()), (I /  B)...> 	operator/ (value_list, value_list<U, B...>) { return {}; }
+	template<typename U, U...B>	friend constexpr value_list<decltype(declval<T>() %  declval<U>()), (I %  B)...> 	operator% (value_list, value_list<U, B...>) { return {}; }
+	template<typename U, U...B>	friend constexpr value_list<decltype(declval<T>() &  declval<U>()), (I &  B)...> 	operator& (value_list, value_list<U, B...>) { return {}; }
+	template<typename U, U...B>	friend constexpr value_list<decltype(declval<T>() |  declval<U>()), (I |  B)...> 	operator| (value_list, value_list<U, B...>) { return {}; }
+	template<typename U, U...B>	friend constexpr value_list<decltype(declval<T>() ^  declval<U>()), (I ^  B)...> 	operator^ (value_list, value_list<U, B...>) { return {}; }
+	template<typename U, U...B>	friend constexpr value_list<decltype(declval<T>() << declval<U>()), (I << B)...> 	operator<<(value_list, value_list<U, B...>) { return {}; }
+	template<typename U, U...B>	friend constexpr value_list<decltype(declval<T>() >> declval<U>()), (I >> B)...> 	operator>>(value_list, value_list<U, B...>) { return {}; }
+	template<typename U, U...B>	friend constexpr value_list<T, max_v<I, B>...>										max(value_list, value_list<U, B...>) 		{ return {}; }
+	template<typename U, U...B>	friend constexpr value_list<T, min_v<I, B>...>										min(value_list, value_list<U, B...>) 		{ return {}; }
+	template<typename U, U...B, U...C>	friend constexpr value_list<U, select_v<I, B, C>...>						select(value_list, value_list<U, B...>, value_list<U, C...>) 	{ return {}; }
+
+	template<typename U, U B>	friend constexpr value_list<decltype(declval<T>() +  B), (I +  B)...> 				operator+ (value_list, constant<U, B>)		{ return {}; }
+	template<typename U, U B>	friend constexpr value_list<decltype(declval<T>() -  B), (I -  B)...> 				operator- (value_list, constant<U, B>)		{ return {}; }
+	template<typename U, U B>	friend constexpr value_list<decltype(declval<T>() *  B), (I *  B)...> 				operator* (value_list, constant<U, B>)		{ return {}; }
+	template<typename U, U B>	friend constexpr value_list<decltype(declval<T>() /  B), (I /  B)...> 				operator/ (value_list, constant<U, B>)		{ return {}; }
+	template<typename U, U B>	friend constexpr value_list<decltype(declval<T>() %  B), (I %  B)...> 				operator% (value_list, constant<U, B>)		{ return {}; }
+	template<typename U, U B>	friend constexpr value_list<decltype(declval<T>() &  B), (I &  B)...> 				operator& (value_list, constant<U, B>)		{ return {}; }
+	template<typename U, U B>	friend constexpr value_list<decltype(declval<T>() |  B), (I |  B)...> 				operator| (value_list, constant<U, B>)		{ return {}; }
+	template<typename U, U B>	friend constexpr value_list<decltype(declval<T>() ^  B), (I ^  B)...> 				operator^ (value_list, constant<U, B>)		{ return {}; }
+	template<typename U, U B>	friend constexpr value_list<decltype(declval<T>() << B), (I << B)...> 				operator<<(value_list, constant<U, B>)		{ return {}; }
+	template<typename U, U B>	friend constexpr value_list<decltype(declval<T>() >> B), (I >> B)...> 				operator>>(value_list, constant<U, B>)		{ return {}; }
+	template<typename U, T B>	friend constexpr value_list<T, max_v<I, B>...>										max(value_list, constant<U, B>) 			{ return {}; }
+	template<typename U, T B>	friend constexpr value_list<T, min_v<I, B>...>										min(value_list, constant<U, B>) 			{ return {}; }
+
+	template<typename U, U A>	friend constexpr value_list<decltype(A +  declval<T>()), (A +  I)...> 				operator+ (constant<U, A>, value_list)		{ return {}; }
+	template<typename U, U A>	friend constexpr value_list<decltype(A -  declval<T>()), (A -  I)...> 				operator- (constant<U, A>, value_list)		{ return {}; }
+	template<typename U, U A>	friend constexpr value_list<decltype(A *  declval<T>()), (A *  I)...> 				operator* (constant<U, A>, value_list)		{ return {}; }
+	template<typename U, U A>	friend constexpr value_list<decltype(A /  declval<T>()), (A /  I)...> 				operator/ (constant<U, A>, value_list)		{ return {}; }
+	template<typename U, U A>	friend constexpr value_list<decltype(A %  declval<T>()), (A %  I)...> 				operator% (constant<U, A>, value_list)		{ return {}; }
+	template<typename U, U A>	friend constexpr value_list<decltype(A &  declval<T>()), (A &  I)...> 				operator& (constant<U, A>, value_list)		{ return {}; }
+	template<typename U, U A>	friend constexpr value_list<decltype(A |  declval<T>()), (A |  I)...> 				operator| (constant<U, A>, value_list)		{ return {}; }
+	template<typename U, U A>	friend constexpr value_list<decltype(A ^  declval<T>()), (A ^  I)...> 				operator^ (constant<U, A>, value_list)		{ return {}; }
+	template<typename U, U A>	friend constexpr value_list<decltype(A << declval<T>()), (A << I)...> 				operator<<(constant<U, A>, value_list)		{ return {}; }
+	template<typename U, U A>	friend constexpr value_list<decltype(A >> declval<T>()), (A >> I)...> 				operator>>(constant<U, A>, value_list)		{ return {}; }
+	template<typename U, T A>	friend constexpr value_list<T, max_v<A, I>...>										max(constant<U, A>, value_list) 			{ return {}; }
+	template<typename U, T A>	friend constexpr value_list<T, min_v<A, I>...>										min(constant<U, A>, value_list) 			{ return {}; }
+};
 
 template<typename T, T I0, T... I>			using VL_tail = value_list<T, I...>;
 template<typename T>						static constexpr auto VL_head = 0;
 template<typename T, T I0, T... I>			static constexpr auto VL_head<value_list<T, I0, I...>> = I0;
 
 #if 1
-template<size_t N, typename T = int>		using make_value_sequence	= __make_integer_seq<value_list, T, N>;
+template<size_t N, typename T = int>		using	make_value_sequence	= __make_integer_seq<value_list, T, N>;
 #else
-template<typename T, int N, T... I>			struct make_value_sequence_imp : make_val_list_imp<T, N - 1, N - 1, I...> {};
-template<typename T, T... I>				struct make_value_sequence_imp<T, 0, I...> : T_type<value_list<T, I...>> {};
-template<int N, typename T=int>				using make_value_sequence	= typename make_value_sequence_imp<T, N>::type;
+template<typename T, int N, T... I>			struct	make_value_sequence_imp : make_val_list_imp<T, N - 1, N - 1, I...> {};
+template<typename T, T... I>				struct	make_value_sequence_imp<T, 0, I...> : T_type<value_list<T, I...>> {};
+template<int N, typename T=int>				using	make_value_sequence	= typename make_value_sequence_imp<T, N>::type;
 #endif
 
-template<size_t...II>						using index_list			= value_list<size_t, II...>;
-template<size_t N>							using make_index_list		= make_value_sequence<N, size_t>;
-
-template<typename I>						struct VL_element_imp;
-template<typename T, T... I>				struct VL_element_imp<value_list<T, I...>> : T_type<T> {};
-template<typename I>						using VL_element = typename VL_element_imp<I>::type;
-
-template<size_t N, typename I>				struct VL_index;
-template<size_t N, typename T, T I0, T... I>struct VL_index<N, value_list<T, I0, I...>>		: VL_index<N - 1, value_list<T, I...>> {};
-template<typename T, T I0, T... I>			struct VL_index<0, value_list<T, I0, I...>>		: constant<T, I0> {};
+template<size_t...I>						using	index_list			= value_list<size_t, I...>;
+template<size_t N>							using	make_index_list		= make_value_sequence<N, size_t>;
 
 //	concatenate list of values
 template<typename...X>						struct	VL_concat_imp;
@@ -456,74 +547,9 @@ template<typename...X>						using	VL_concat = typename VL_concat_imp<X...>::type
 template<typename X0, typename...X>			struct	VL_concat_imp<X0, X...> : VL_concat_imp<X0, VL_concat<X...>> {};
 template<typename T, T...I, T ...J>			struct	VL_concat_imp<value_list<T, I...>, value_list<T, J...>> : T_type<value_list<T, I..., J...>> {};
 
-template<typename T, T...I, T ...J>			constexpr value_list<T, I..., J...> concat(value_list<T, I...>, value_list<T, J...>) { return {}; }
-
-template<typename T, T N>					constexpr constant<T, -N> 				operator- (constant<T, N>) 					{ return {}; }
-template<typename T, T N>					constexpr constant<T, ~N> 				operator~ (constant<T, N>) 					{ return {}; }
-template<typename T, T N>					constexpr constant<T, !N> 				operator! (constant<T, N>) 					{ return {}; }
-//template<typename T, T N>					constexpr constant<T, N < 0 ? - N : N>	abs(constant<T, N>) 						{ return {}; }
-
-template<typename T, T A, T B>				constexpr constant<T, (A +  B)> 		operator+ (constant<T, A>, constant<T, B>) 	{ return {}; }
-template<typename T, T A, T B>				constexpr constant<T, (A -  B)> 		operator- (constant<T, A>, constant<T, B>) 	{ return {}; }
-template<typename T, T A, T B>				constexpr constant<T, (A *  B)> 		operator* (constant<T, A>, constant<T, B>) 	{ return {}; }
-template<typename T, T A, T B>				constexpr constant<T, (A /  B)> 		operator/ (constant<T, A>, constant<T, B>) 	{ return {}; }
-template<typename T, T A, T B>				constexpr constant<T, (A %  B)> 		operator% (constant<T, A>, constant<T, B>) 	{ return {}; }
-template<typename T, T A, T B>				constexpr constant<T, (A &  B)> 		operator& (constant<T, A>, constant<T, B>) 	{ return {}; }
-template<typename T, T A, T B>				constexpr constant<T, (A |  B)> 		operator| (constant<T, A>, constant<T, B>) 	{ return {}; }
-template<typename T, T A, T B>				constexpr constant<T, (A ^  B)> 		operator^ (constant<T, A>, constant<T, B>) 	{ return {}; }
-template<typename T, T A, T B>				constexpr constant<T, (A << B)> 		operator<<(constant<T, A>, constant<T, B>) 	{ return {}; }
-template<typename T, T A, T B>				constexpr constant<T, (A >> B)> 		operator>>(constant<T, A>, constant<T, B>) 	{ return {}; }
-//template<typename T, T A, T B>				constexpr constant<T, A > B ? A : B>	max(constant<T, A>, constant<T, B>) 		{ return {}; }
-//template<typename T, T A, T B>				constexpr constant<T, A < B ? A : B>	min(constant<T, A>, constant<T, B>) 		{ return {}; }
-
-template<typename T, T...I>					constexpr value_list<T, -I...> 			operator- (value_list<T, I...>) 			{ return {}; }
-template<typename T, T...I>					constexpr value_list<T, ~I...> 			operator~ (value_list<T, I...>) 			{ return {}; }
-template<typename T, T...I>					constexpr value_list<T, !I...> 			operator! (value_list<T, I...>) 			{ return {}; }
-
-template<typename T, T...A, T...B>			constexpr value_list<T, (A +  B)...> 	operator+ (value_list<T, A...>, value_list<T, B...>) { return {}; }
-template<typename T, T...A, T...B>			constexpr value_list<T, (A -  B)...> 	operator- (value_list<T, A...>, value_list<T, B...>) { return {}; }
-template<typename T, T...A, T...B>			constexpr value_list<T, (A *  B)...> 	operator* (value_list<T, A...>, value_list<T, B...>) { return {}; }
-template<typename T, T...A, T...B>			constexpr value_list<T, (A /  B)...> 	operator/ (value_list<T, A...>, value_list<T, B...>) { return {}; }
-template<typename T, T...A, T...B>			constexpr value_list<T, (A %  B)...> 	operator% (value_list<T, A...>, value_list<T, B...>) { return {}; }
-template<typename T, T...A, T...B>			constexpr value_list<T, (A &  B)...> 	operator& (value_list<T, A...>, value_list<T, B...>) { return {}; }
-template<typename T, T...A, T...B>			constexpr value_list<T, (A |  B)...> 	operator| (value_list<T, A...>, value_list<T, B...>) { return {}; }
-template<typename T, T...A, T...B>			constexpr value_list<T, (A ^  B)...> 	operator^ (value_list<T, A...>, value_list<T, B...>) { return {}; }
-template<typename T, T...A, T...B>			constexpr value_list<T, (A << B)...> 	operator<<(value_list<T, A...>, value_list<T, B...>) { return {}; }
-template<typename T, T...A, T...B>			constexpr value_list<T, (A >> B)...> 	operator>>(value_list<T, A...>, value_list<T, B...>) { return {}; }
-//template<typename T, T...A, T...B>			constexpr value_list<T, (A > B ? A : B)...>	max(value_list<T, A...>, value_list<T, B...>) 	{ return {}; }
-//template<typename T, T...A, T...B>			constexpr value_list<T, (A < B ? A : B)...>	min(value_list<T, A...>, value_list<T, B...>) 	{ return {}; }
-
-template<typename T, T...A, T B>			constexpr value_list<T, (A +  B)...> 	operator+ (value_list<T, A...>, constant<T, B>) { return {}; }
-template<typename T, T...A, T B>			constexpr value_list<T, (A -  B)...> 	operator- (value_list<T, A...>, constant<T, B>) { return {}; }
-template<typename T, T...A, T B>			constexpr value_list<T, (A *  B)...> 	operator* (value_list<T, A...>, constant<T, B>) { return {}; }
-template<typename T, T...A, T B>			constexpr value_list<T, (A /  B)...> 	operator/ (value_list<T, A...>, constant<T, B>) { return {}; }
-template<typename T, T...A, T B>			constexpr value_list<T, (A %  B)...> 	operator% (value_list<T, A...>, constant<T, B>) { return {}; }
-template<typename T, T...A, T B>			constexpr value_list<T, (A &  B)...> 	operator& (value_list<T, A...>, constant<T, B>) { return {}; }
-template<typename T, T...A, T B>			constexpr value_list<T, (A |  B)...> 	operator| (value_list<T, A...>, constant<T, B>) { return {}; }
-template<typename T, T...A, T B>			constexpr value_list<T, (A ^  B)...> 	operator^ (value_list<T, A...>, constant<T, B>) { return {}; }
-template<typename T, T...A, T B>			constexpr value_list<T, (A << B)...> 	operator<<(value_list<T, A...>, constant<T, B>) { return {}; }
-template<typename T, T...A, T B>			constexpr value_list<T, (A >> B)...> 	operator>>(value_list<T, A...>, constant<T, B>) { return {}; }
-//template<typename T, T...A, T B>			constexpr value_list<T, (A > B ? A : B)...>	max(value_list<T, A...>, constant<T, B>) 	{ return {}; }
-//template<typename T, T...A, T B>			constexpr value_list<T, (A < B ? A : B)...>	min(value_list<T, A...>, constant<T, B>) 	{ return {}; }
-
-template<typename T, T...B, T A>			constexpr value_list<T, (A +  B)...> 	operator+ (constant<T, A>, value_list<T, B...>) { return {}; }
-template<typename T, T...B, T A>			constexpr value_list<T, (A -  B)...> 	operator- (constant<T, A>, value_list<T, B...>) { return {}; }
-template<typename T, T...B, T A>			constexpr value_list<T, (A *  B)...> 	operator* (constant<T, A>, value_list<T, B...>) { return {}; }
-template<typename T, T...B, T A>			constexpr value_list<T, (A /  B)...> 	operator/ (constant<T, A>, value_list<T, B...>) { return {}; }
-template<typename T, T...B, T A>			constexpr value_list<T, (A %  B)...> 	operator% (constant<T, A>, value_list<T, B...>) { return {}; }
-template<typename T, T...B, T A>			constexpr value_list<T, (A &  B)...> 	operator& (constant<T, A>, value_list<T, B...>) { return {}; }
-template<typename T, T...B, T A>			constexpr value_list<T, (A |  B)...> 	operator| (constant<T, A>, value_list<T, B...>) { return {}; }
-template<typename T, T...B, T A>			constexpr value_list<T, (A ^  B)...> 	operator^ (constant<T, A>, value_list<T, B...>) { return {}; }
-template<typename T, T...B, T A>			constexpr value_list<T, (A << B)...> 	operator<<(constant<T, A>, value_list<T, B...>) { return {}; }
-template<typename T, T...B, T A>			constexpr value_list<T, (A >> B)...> 	operator>>(constant<T, A>, value_list<T, B...>) { return {}; }
-//template<typename T, T...B, T A>			constexpr value_list<T, (A > B ? A : B)...>	max(constant<T, A>, value_list<T, B...>) 	{ return {}; }
-//template<typename T, T...B, T A>			constexpr value_list<T, (A < B ? A : B)...>	min(constant<T, A>, value_list<T, B...>) 	{ return {}; }
-
-template<typename I, typename F, F f>			struct apply_imp;
-template<typename T, T...I, typename F, F f>	struct apply_imp<value_list<T, I...>, F, f> : T_type<value_list<T, f(I)...>> {};
-template<typename T, VL_element<T> (*f)(VL_element<T>)>		using	apply = typename apply_imp<T, VL_element<T> (*)(VL_element<T>), f>::type;
-template<typename T, typename F, F f>			using	apply_lambda = typename apply_imp<T, F, f>::type;
-#define VL_APPLY(VL, F)							meta::apply_lambda<VL, decltype(F), F>
+template<typename T, typename T::apply_t f>		using	apply	= typename T::template apply<f>;
+template<typename T, typename F, F f>			using	apply2	= typename T::template apply2<F, f>;
+#define VL_APPLY(VL, F)							meta::apply<VL, F>
 
 template<typename T, typename F, F f, T I0, T...I> struct filter_imp {
 	typedef typename filter_imp<T, F, f, I...>::type				type1;
@@ -533,18 +559,19 @@ template<typename T, typename F, F f, T I0>		struct filter_imp<T, F, f, I0> : T_
 template<typename I, typename F, F f>			struct filter_imp2;
 template<typename T, T...I, typename F, F f>	struct filter_imp2<value_list<T, I...>, F, f> : filter_imp<T, F, f, I...> {};
 
-template<typename T, bool (*f)(VL_element<T>)>	using	filter = typename filter_imp2<T, bool(*)(VL_element<T>), f>::type;
+template<typename T, bool (*f)(typename T::element_t)>	using	filter = typename filter_imp2<T, bool(*)(typename T::element_t), f>::type;
 template<typename T, typename F, F f>			using	filter_lambda = typename filter_imp2<T, F, f>::type;
 #define VL_FILTER(VL, F)						meta::filter_lambda<VL, decltype(F), F>
 
+template<int I, bool B = (I & 1)>			static constexpr auto make_bit_list				= make_bit_list<(I >> 1)> + constant<int, 1>();
+template<int I>								static constexpr auto make_bit_list<I, true>	= concat(value_list<int, 0>(), make_bit_list<I, false>);
+template<>									static constexpr auto make_bit_list<0, false>	= value_list<int>();
 
-template<int M, int A, typename I>			struct	muladd_imp;
-template<typename T, int M, int A, T...I>	struct	muladd_imp<M, A, value_list<T, I...>> : T_type<value_list<T, I * M + A...>> {};
-template<int M, int A, typename I>			using	muladd = typename muladd_imp<M, A, I>::type;
+template<int I0, int...I>					static constexpr int make_bit_mask				= (1 << I0) | make_bit_mask<I...>;
+template<int I0>							static constexpr int make_bit_mask<I0>			= 1 << I0;
 
-template<int A, int B, typename I>			struct	clamp_imp;
-template<int A, int B, typename T, T...I>	struct	clamp_imp<A, B, value_list<T, I...>> : T_type<value_list<T, min<max<I, A>, B>...>> {};
-template<int A, int B, typename I>			using	clamp = typename clamp_imp<A, B, I>::type;
+template<int M, int A, typename I>			using	muladd	= decltype(I() * int_constant<M>() + int_constant<A>());
+template<int A, int B, typename I>			using	clamp	= decltype(min(max(I(), int_constant<A>()), int_constant<B>()));
 
 template<int I0, int...I>					constexpr int reduce_add		= I0 + reduce_add<I...>;
 template<int I0>							constexpr int reduce_add<I0>	= I0;
@@ -558,11 +585,12 @@ template<int I0>							constexpr int reduce_or<I0>		= I0;
 template<int I0, int...I>					constexpr int reduce_and		= I0 | reduce_and<I...>;
 template<int I0>							constexpr int reduce_and<I0>	= I0;
 
-template<int I0, int...I>					constexpr int reduce_min		= min<I0, reduce_min<I...>>;
+template<int I0, int...I>					constexpr int reduce_min		= min_v<I0, reduce_min<I...>>;
 template<int I0>							constexpr int reduce_min<I0>	= I0;
 
-template<int I0, int...I>					constexpr int reduce_max		= max<I0, reduce_max<I...>>;
+template<int I0, int...I>					constexpr int reduce_max		= max_v<I0, reduce_max<I...>>;
 template<int I0>							constexpr int reduce_max<I0>	= I0;
+
 
 // permute
 template<typename I, typename J>			struct	perm_imp;
@@ -791,15 +819,7 @@ template<typename T> struct name_test_s { constexpr static auto array{_name<T>()
 using name_location = find_name<explode<char, name_test_s<xyz>>>;
 
 template<class T> constexpr auto name() {
-#if 1
 	return trim_back<name_location::back>(trim_front<name_location::front>(_name<T>()));
-#else
-#ifdef __FUNCSIG__
-	return trim_back<8>(trim_front<29>(__FUNCSIG__));
-#else
-	return trim_back<2>(trim_front<28>(__PRETTY_FUNCTION__));
-#endif
-#endif
 }
 
 template<char... C>		struct fix_name2										: value_list<char, C...> {};
@@ -821,9 +841,9 @@ template<typename T, T t> struct field {
 	constexpr field(const char *name) : name(name) {}
 };
 
-#define MAKE_FIELD(f, name)	meta::field<decltype(f), f>(name)
-#define FIELD(S, f)			meta::field<decltype(&S::f), &S::f>(#f)
-#define FIELDS(S, ...)		VA_APPLYP(FIELD, S, __VA_ARGS__)
+#define META_FIELD(S, f)		meta::field<decltype(&S::f), &S::f>(#f)
+#define _META_FIELD(S, f)		META_FIELD(S, f),
+#define META_FIELDS(S, ...)		VA_APPLYP(_META_FIELD, S, __VA_ARGS__)
 
 } // namespace meta
 
@@ -916,101 +936,9 @@ template<typename T> force_inline T _iso_verify(T &&t, const char *filename, int
 //-----------------------------------------------------------------------------
 //	type traits
 //-----------------------------------------------------------------------------
-template<typename T> constexpr bool is_union						= __is_union(T);
-template<typename T> constexpr bool is_class						= __is_class(T);
-template<typename T> constexpr bool is_enum							= __is_enum(T);
-template<typename T> constexpr bool is_pod							= __is_pod(T);
-template<typename T> constexpr bool is_trivially_copyable_v			= __is_trivially_copyable(T);
-template<typename T> constexpr bool is_trivially_destructible_v		= __is_trivially_destructible(T);
-template<typename T> constexpr bool is_trivially_constructible_v	= __is_trivially_constructible(T);
 
-template<typename T, T>						struct T_checktype;
-template<bool b, typename T = void>			struct T_enable_if				{};
-template<typename T>						struct T_enable_if<true, T>		: T_type<T> {};
-template<bool b, typename T = void>			using enable_if_t				= typename T_enable_if<b, T>::type;
 
-//template<typename A,typename B,typename R=A>struct T_same					: T_false {};
-//template<typename A, typename R>			struct T_same<A,A,R>			: T_true_type<R> {};
-//template<typename A,typename B,typename R=A>using same_t					= typename T_same<A, B, R>::type;
-//template<typename A, typename B, typename...T>	constexpr bool same_v		= T_same<A, B>::value && same_v<A, T...>;
-//template<typename A,typename B>				constexpr bool same_v<A,B>		= T_same<A, B>::value;
-
-template<typename T, typename R=T>			struct T_exists					: T_true_type<R> {};
-template<typename T, typename R=T>			using exists_t					= typename T_exists<T, R>::type;
-template<typename T> 						constexpr bool exists_v			= T_exists<T>::value;
-
-template<typename T>						struct T_is_pointer				: T_false	{};
-template<typename T>						struct T_is_pointer<T*>			: T_true	{};
-template<typename T>						constexpr bool is_pointer_v		= T_is_pointer<T>::value;
-
-template<typename T>						struct T_is_lvalue				: T_false	{};
-template<typename T>						struct T_is_lvalue<const T&>	: T_false	{};
-template<typename T>						struct T_is_lvalue<T&>			: T_true	{};
-template<typename T>						constexpr bool is_lvalue_v		= T_is_lvalue<T>::value;
-
-template<typename...T>						struct T_void					: T_type<void> {};
-template<typename...T>						using void_t					= typename T_void<T...>::type;
-
-template<typename T, typename = void>		struct T_ref					: T_type<T> {};
-template<typename T>						struct T_ref<T, void_t<T&>>		: T_type<T&> {};
-
-template<typename T, typename = void>		struct T_rref					: T_type<T> {};
-template<typename T>						struct T_rref<T, void_t<T&>>	: T_type<T&&> {};
-
-template<typename T>						struct T_reftoptr				: T_type<T> {};
-template<typename T>						struct T_reftoptr<T&>			: T_type<T*> {};
-template<typename T>						struct T_reftoptr<const T&>		: T_type<const T *> {};
-
-template<typename T>						struct T_noconst				: T_type<T> {};
-template<typename T>						struct T_noconst<const T>		: T_type<T> {};
-template<typename T>						using noconst_t		= typename T_noconst<T>::type;
-
-template<typename T>						struct T_nocv					: T_type<T> {};
-template<typename T>						struct T_nocv<const T>			: T_type<T> {};
-template<typename T>						struct T_nocv<volatile T>		: T_type<T> {};
-template<typename T>						struct T_nocv<const volatile T>	: T_type<T> {};
-template<typename T>						using nocv_t		= typename T_nocv<T>::type;
-
-template<typename T>						struct T_noref					: T_type<T> {};
-template<typename T>						struct T_noref<T&>				: T_type<T> {};
-#ifdef USE_RVALUE_REFS
-template<typename T>						struct T_noref<T&&>				: T_type<T> {};
-#endif
-template<typename T>						using noref_t		= typename T_noref<T>::type;
-template<typename T>						using noref_cv_t	= nocv_t<noref_t<T>>;
-
-template<typename T>						struct T_noarray				: T_type<T> {};
-template<typename T, int N>					struct T_noarray<T[N]>			: T_type<T*> {};
-template<typename T>						using noarray_t		= typename T_noarray<T>::type;
-
-template<typename A, typename B>			struct T_copyconst				: T_type<B> {};
-template<typename A, typename B>			struct T_copyconst<const A, B>	: T_type<const B> {};
-template<typename A, typename B>			struct T_copyconst<const A, B&>	: T_type<const B&> {};
-template<typename A, typename B>			struct T_copyconst<const A&, B>	: T_type<const B> {};
-template<typename A, typename B>			struct T_copyconst<const A&, B&>: T_type<const B&> {};
-template<typename A, typename B>			using copy_const_t				= typename T_copyconst<A, B>::type;
-
-template<typename T>						struct T_param					: T_type<const T&> {};
-template<typename T>						struct T_param<T&>				: T_type<T&> {};
-template<typename T>						using param_t		= typename T_param<T>::type;
-
-template<typename T>						struct T_rref_param				: T_type<T&&> {};
-template<typename T>						struct T_rref_param<T&>			: T_type<T&> {};
-template<typename T> noref_t<T>&			declval() noexcept;
-//template<typename T> typename T_rref<T>::type	declval() noexcept;
-
-template<typename T>						struct T_lderef					: T_type<decltype(*declval<T>())> {};
-template<typename T>						using lderef_t		= typename T_lderef<T>::type;
-
-template<typename T>						struct T_deref					: T_type<noref_t<decltype(*declval<T>())>> {};
-template<>									struct T_deref<void*>			: T_type<void> {};
-template<>									struct T_deref<const void*>		: T_type<void> {};
-template<typename C, typename T>			struct T_deref<T C::*>			: T_type<T> {};
-template<typename C, typename T>			struct T_deref<const T C::*>	: T_type<const T> {};
-template<typename T>						using deref_t		= typename T_deref<T>::type;
-
-template<typename A, typename B> using biggest_t	= if_t<(sizeof(A) > sizeof(B)), A, B>;
-template<typename A, typename B> using smallest_t	= if_t<(sizeof(A) < sizeof(B)), A, B>;
+// harder cases:
 
 struct yesno {
 	typedef char yes;
@@ -1019,17 +947,20 @@ struct yesno {
 	template<typename T>	struct type { type(int); };
 };
 
+#if 0	// use is_class
 template<typename T> struct T_isclass : yesno {
 	template<typename C>	static yes	test(int C::*);
 	template<typename C>	static no	test(...);
 	enum { value = sizeof(test<T>(0)) == sizeof(yes) };
 };
+#endif
 
-template<typename T, bool = T_isclass<T>::value> struct T_isempty {
+template<typename T, bool = is_class<T>> struct T_isempty {
 	struct helper : nocv_t<T> { int i; };
 	static const bool value = sizeof(helper) == sizeof(int);
 };
 template<typename T> struct T_isempty<T, false> : T_false {};
+template<typename T> static constexpr bool isempty_v = T_isempty<T>::value;
 
 template<typename T> struct T_isabstract : yesno {
 	// Deduction fails if T is void, function type, reference type or an abstract class type
@@ -1037,7 +968,6 @@ template<typename T> struct T_isabstract : yesno {
 	template<typename C>	static yes	test(...);
 	enum { value = sizeof(test<T>(0)) == sizeof(yes) };
 };
-
 
 template<typename A, typename B> class T_conversion : yesno {
 	static yes	test(B);
@@ -1059,6 +989,7 @@ template<typename B, typename D> class T_is_base_of : yesno {
 public:
 	enum { value = sizeof(test(declval<D*>())) == sizeof(yes) };
 };
+template<typename B, typename D> static constexpr bool is_base_of_v = T_is_base_of<B, D>::value;
 
 template<typename A, typename B> struct T_constructable : yesno {
 	template<typename U>	static yes	&test(U);
@@ -1070,6 +1001,36 @@ template<typename A, typename B> static constexpr bool constructable_v = T_const
 template<typename A, typename B, typename=void> struct T_assignable : T_false {};
 template<typename A, typename B> struct T_assignable<A, B, T_void<decltype(declval<A>() = declval<B>())>> : T_true {};
 template<typename A, typename B> static constexpr bool assignable_v = T_assignable<A, B>::value;
+
+// get base type assuming it's been typedef'ed as B
+template<class T> struct base_type {
+	template<class U> static typename U::B& f(int);
+	template<class U> static void f(...);
+	typedef noref_t<decltype(f<T>(0))> type;
+};
+template<class T> using base_t = typename base_type<T>::type;
+
+// find common base
+template<class T1, class T2> struct T_compare_bases2 {
+	template<class T>	struct helper		: T_compare_bases2<T1, T> {};
+	template<>			struct helper<void> : T_type<void> {};
+	template<>			struct helper<T2>	: T_type<void> {};
+	typedef typename helper<base_t<T2>>::type type;
+};
+template<class T> struct T_compare_bases2<T, T> : T_type<T> {};
+
+template<class T1, class T2> struct T_compare_bases1 {
+	template<class T>	struct helper		: T_compare_bases1<T, T2> {};
+	template<>			struct helper<void> : T_type<void> {};
+	template<>			struct helper<T1>	: T_type<void> {};
+	typedef if_t<same_v<typename T_compare_bases2<T1, T2>::type, void>, typename helper<base_t<T1>>::type, typename T_compare_bases2<T1, T2>::type> type;
+};
+template <class T> struct T_compare_bases1<T, T> : T_type<T> {};
+
+template <class T1, class T2, class... T3>	struct T_common_base : T_common_base<T_compare_bases1<T1, T2>, T3...> {};
+template <class T1, class T2>				struct T_common_base<T1, T2> : T_compare_bases1<T1, T2> {};
+template <class... T> using common_base_t = typename T_common_base<T...>::type;
+
 
 template<bool C, typename T, typename...P> struct T_is_function : yesno {
 	template<typename R> static yes	test(R(*)(P...));
@@ -1083,7 +1044,7 @@ template<typename T, typename...P> struct T_is_function<false, T, P...> : yesno 
 	static no						test(...);
 	static const bool value = sizeof(test(declval<T>())) == sizeof(yes);
 };
-template<typename T, typename...P> static constexpr bool is_function = T_is_function<T_isclass<T>::value, T, P...>::value;
+template<typename T, typename...P> static constexpr bool is_function = T_is_function<is_class<T>, T, P...>::value;
 
 template<typename T> struct is_array_s 				: T_false {};
 template<typename T> struct is_array_s<T[]> 		: T_true, T_type<T> {};
@@ -1113,18 +1074,14 @@ template<typename T, typename V = void> struct T_has_inc	: T_false {};
 template<typename T, typename V = void> struct T_has_dec	: T_false {};
 template<typename T, typename V = void> struct T_has_index	: T_false {};
 template<typename T, typename V = void> struct T_has_arrow	: T_false {};
-//template<typename T, typename I = int, typename V = void> struct T_has_add		: T_false {};
-//template<typename T, typename I = int, typename V = void> struct T_has_addsub	: T_false {};
 
 template<typename T> struct T_has_deref	<T, void_t<decltype(*declval<T>())>>			: T_true {};
 template<typename T> struct T_has_inc	<T, void_t<decltype(++declval<T>())>>			: T_true {};
 template<typename T> struct T_has_dec	<T, void_t<decltype(--declval<T>())>>			: T_true {};
 template<typename T> struct T_has_index	<T, void_t<decltype(declval<T>()[1])>>			: T_true {};
-template<typename T> struct T_has_arrow<T*>												: T_isclass<T>	{};
+template<typename T> struct T_has_arrow<T*>												: meta::bool_constant<is_class<T>>	{};
 template<typename T> struct T_has_arrow<T&>												: T_has_arrow<T> {};
 template<typename T> struct T_has_arrow<T, void_t<decltype(declval<T>().operator->())>>	: T_has_arrow<decltype(declval<T>().operator->())> {};
-//template<typename T, typename I> struct T_has_add<T, I, void_t<decltype(declval<T>()+declval<I>())>> : T_true {};
-//template<typename T, typename I> struct T_has_addsub<T, I, void_t<decltype(declval<T>()+declval<I>()-declval<I>())>> : T_true {};
 
 template<typename A, typename B, typename R> using can_add_t	= exists_t<decltype(declval<A>() + declval<B>()), R>;
 template<typename A, typename B, typename R> using can_addsub_t	= exists_t<decltype(declval<A>() + declval<B>() - declval<B>()), R>;
@@ -1168,6 +1125,7 @@ template<> struct T_builtin_int<ulong>		: T_true {};
 template<> struct T_builtin_int<wchar_t>	: T_true {};
 template<> struct T_builtin_int<char16_t>	: T_true {};
 template<> struct T_builtin_int<char32_t>	: T_true {};
+template<typename T> constexpr bool is_builtin_int		= T_builtin_int<T>::value;
 
 template<typename T> struct T_builtin_num	: T_builtin_int<T> {};
 template<> struct T_builtin_num<float>		: T_true {};
@@ -1184,6 +1142,8 @@ template<typename T, typename V = void> struct num_traits {
 	static const bool	is_signed	= false;
 	static const bool	is_float	= false;
 };
+
+template<typename T>	struct num_traits<T, enable_if_t<is_enum<T>>> : num_traits<__underlying_type(T)> {};
 
 template<int M, int E, bool S> struct float_traits {
 	static const int bits = E + M + int(S), exponent_bits = E, mantissa_bits = M;
@@ -1226,6 +1186,9 @@ template<class T0> struct T_test_overload<T0> {
 	static T0 f(T0);
 };
 
+template<class...T> struct T_test_overload<type_list<T...>> : T_test_overload<T...> {};
+
+
 template<class X, class... T> using best_match_t = decltype(T_test_overload<T...>::f(declval<X>()));
 
 #ifdef __OBJC__
@@ -1263,12 +1226,13 @@ template<typename T> constexpr	T*				unconst(const T *t)			{ return const_cast<T
 template<typename T> constexpr	T&				unconst(const T &t)			{ return const_cast<T&>(t);					}
 template<typename T> constexpr	const T*		make_const(T *t)			{ return const_cast<const T*>(t);			}
 template<typename T> constexpr	const T&		make_const(T &t)			{ return const_cast<const T&>(t);			}
+template<typename T> constexpr	const T&		make_const(T &&t)			{ return const_cast<const T&>(t);			}
 template<typename B, typename A> constexpr B	up_cast(A *a)				{ return (B)((char*)a - (int)(A*)(B)1 + 1); }
 template<typename B, typename A> constexpr B	simple_cast(A &&a)			{ return a; }
 template<typename B, typename A> constexpr B	force_cast(const A &a)		{ return reinterpret_cast<const B&>(a); }
 template<typename B, typename A> constexpr B	force_cast(A &&a)			{ return reinterpret_cast<B&&>(a); }
 
-template<typename B, typename A>				constexpr B* element_cast(A *p)				{ return reinterpret_cast<B*>(p); }
+//template<typename B, typename A>				constexpr B* element_cast(A *p)				{ return reinterpret_cast<B*>(p); }
 template<typename B, typename A, typename C>	constexpr B C::* element_cast(A C::*p)		{ return reinterpret_cast<B C::*>(p); }
 template<typename B, typename A, typename T>	constexpr T B::* container_cast(T A::*p)	{ return static_cast<T B::*>(p); }
 
@@ -1276,7 +1240,8 @@ template<typename B, typename A, typename T>	constexpr T B::* container_cast(T A
 template<typename T> constexpr noref_t<T>&&		move(T &&a)					{ return static_cast<noref_t<T>&&>(a); }
 template<typename T> constexpr T&&				move_nonref(T &a)			{ return static_cast<T&&>(a); }
 template<typename T, int N>	constexpr T			(&move(T (&a)[N]))[N]		{ return a; }
-template<typename T> nodebug_inline constexpr T&& forward(noref_t<T>& a) noexcept	{ return static_cast<T&&>(a); }
+//template<typename T> nodebug_inline constexpr T&& forward(noref_t<T>& a) noexcept	{ return static_cast<T&&>(a); }
+template<typename T> nodebug_inline constexpr T&& forward(T& a) noexcept	{ return static_cast<T&&>(a); }
 template<typename T> constexpr noref_t<T>		prvalue(T &&t)				{ return t; }
 template<typename T> constexpr const noref_t<T>& rvalue(T &&t)				{ return t; }
 template<typename T> constexpr noref_t<T>&		lvalue(T &&t)				{ return t; }
@@ -1285,7 +1250,7 @@ template<typename T> constexpr bool				is_constexpr(T &&t)			{ return noexcept(p
 template<typename T> constexpr const T&			get(const T &t)				{ return t; }
 template<typename T> constexpr	decltype(auto)	put(T &&t)					{ return forward<T>(t); }
 template<typename T> constexpr	T				copy(const T &t)			{ return t; }
-template<typename T> constexpr	T				copy(T &t)					{ return t; }
+template<typename T> constexpr	T				copy(T &t)					{ return copy(const_cast<const T&>(t)); }
 template<typename T> constexpr	T				copy(T &&t)					{ return move(t); }
 #else
 template<typename T> constexpr T&				move(const T &t)			{ return const_cast<T&>(t); }
@@ -1364,18 +1329,21 @@ template<size_t N, typename ...T> auto PP_index(T&&...t) {
 
 #endif
 
-template<typename T> struct return_holder {
-	typedef	T&	type;
-	T			*v;
-	return_holder() : v(0) {}
-	return_holder(T &_v) : v(&_v) {}
+template<typename T> struct ref_holder {
+	T		*v;
+	ref_holder()		: v(nullptr)	{}
+	ref_holder(T &v)	: v(&v)			{}
 	operator T&()	const { return *v; }
 };
 
-template<typename T>		struct T_return_holder						: T_type<T> {};
-template<typename T>		struct T_return_holder<T&>					: T_type<return_holder<T>> {};
-template<typename T>		struct T_return_holder<return_holder<T>&>	: T_type<return_holder<T>> {};
+template<typename T>		struct T_return_holder					: T_type<T> {};
+template<typename T>		struct T_return_holder<T&>				: T_type<ref_holder<T>> {};
+template<typename T>		struct T_return_holder<ref_holder<T>&>	: T_type<ref_holder<T>> {};
 template<typename T>		using return_holder_t = typename T_return_holder<T>::type;
+
+//-----------------------------------------------------------------------------
+//	param_element
+//-----------------------------------------------------------------------------
 
 template<typename T>		struct T_param_holder						: T_type<T> {};
 template<typename T>		struct T_param_holder<T*&>					: T_type<T*> {};
@@ -1386,14 +1354,29 @@ template<typename T>		struct T_param_holder<T&&>					: T_type<T> {};
 template<typename T, int N>	struct T_param_holder<T[N]>					: T_type<T*> {};
 template<typename T>		using param_holder_t = typename T_param_holder<T>::type;
 
-#define param(T)			iso::T_param<T>::type
-#define paramT(T)			typename iso::T_param<T>::type
-
-template<typename T, T N> struct held_constant {
-	T t;
-	constexpr held_constant() : t(N) {}
-	constexpr operator T() const { return t; }
+template<typename T, typename P> struct param_element {
+	T			t;
+	P			p;
+	param_element() {}
+	constexpr param_element(T &&t, const P &p) : t(forward<T>(t)), p(p) {}
+	template<typename T2, typename P2> constexpr param_element(const param_element<T2, P2> &b) : t(b.t), p(b.p) {}
+	operator			decltype(auto)()			{ return t; }
+	auto				operator->()				{ return &t; }
+	constexpr operator	decltype(auto)()	const	{ return t; }
+	constexpr auto		operator->()		const	{ return &t; }
 };
+
+template<typename T, typename P, typename C, typename F> constexpr auto get_field(param_element<T,P> &a, F C::*f)		{ return param_element<copy_const_t<T,F&>, P>(a.t.*f, a.p); }
+template<typename T, typename P, typename C, typename F> constexpr auto get_field(const param_element<T,P> &a, F C::*f) { return param_element<const F&, P>(a.t.*f, a.p); }
+
+template<typename T, typename P> force_inline param_element<T, param_holder_t<P&&>> make_param_element(T &&t, P &&p) {
+	return {forward<T>(t), forward<P>(p)};
+}
+
+//template<typename T, typename P> const T&				get(const param_element<T, P> &a)						{ return a.t; }
+template<typename T, typename P1, typename P2>	auto	get(param_element<param_element<T,P1>, P2> &a)			{ return make_param_element(get(a.t), a.p); }
+template<typename T, typename P1, typename P2>	auto	get(const param_element<param_element<T,P1>, P2> &a)	{ return make_param_element(get(a.t), a.p); }
+
 
 //-----------------------------------------------------------------------------
 //	templated functions
@@ -1401,15 +1384,25 @@ template<typename T, T N> struct held_constant {
 template<typename T> struct T_underlying : T_type<T> {};
 template<typename T> using underlying_t = typename T_underlying<T>::type;
 
-template<typename T> inline			void*	allocate()								{ return aligned_alloc(sizeof(T), alignof(T));}
-template<typename T, typename... A> T&		construct(T& t, A&&... a)				{ return *(new (__builtin_addressof(t)) T(forward<A>(a)...)); }
-template<typename T, int N>			T&		construct(T (&t)[N])					{ return *(new (&t) T); }
+//template<typename T> inline			void*	allocate()								{ return aligned_alloc(sizeof(T), alignof(T));}
+template<typename T, typename... A> T&		construct(T& t, A&&... a)				{ return *(new((void*)__builtin_addressof(t)) T(forward<A>(a)...)); }
+template<typename T, int N>			T&		construct(T (&t)[N])					{ return *(new(&t) T); }
 template<typename T>				void	destruct(T& t)							{ t.~T(); }
+template<typename T> void					construct(void *p)						{ new(p) T(); }
+template<typename T> auto					construct(void *p, T&& t)				{ return new(p) noref_cv_t<T>(forward<T>(t)); }
+//template<typename T, typename...P> T*		create(T *t, P&&...p)					{ return new(t) T(forward<P>(p)...); }
+template<typename T> auto					dup(T&& t)								{ return new noref_cv_t<T>(forward<T>(t)); }
 
-template<typename T> inline			T*		allocate(size_t n)						{ return (T*)aligned_alloc(n * sizeof(T), alignof(T)); }
-template<typename T> inline			void	deallocate(T *p, size_t n)				{ aligned_free((void*)p); }
-template<typename T> inline			T*		reallocate(T *p, size_t n0, size_t n1)	{ return (T*)aligned_realloc((void*)p, n1 * sizeof(T), alignof(T)); }
-template<typename T> inline			T*		resize(T *p, size_t n0, size_t n1)		{ return (T*)aligned_resize((void*)p, n1 * sizeof(T), alignof(T)); }
+template<typename T> inline	enable_if_t<(alignof(T) > 8), T*>	allocate(size_t n)						{ return (T*)aligned_alloc(n * sizeof(T), alignof(T)); }
+template<typename T> inline	enable_if_t<(alignof(T) > 8), void>	deallocate(T *p, size_t n)				{ aligned_free((void*)p); }
+template<typename T> inline	enable_if_t<(alignof(T) > 8), T*>	reallocate(T *p, size_t n0, size_t n1)	{ return (T*)aligned_realloc((void*)p, n1 * sizeof(T), alignof(T)); }
+template<typename T> inline	enable_if_t<(alignof(T) > 8), T*>	resize(T *p, size_t n0, size_t n1)		{ return (T*)aligned_resize((void*)p, n1 * sizeof(T), alignof(T)); }
+
+template<typename T> inline	enable_if_t<(alignof(T) <=8), T*>	allocate(size_t n)						{ return (T*)malloc(n * sizeof(T)); }
+template<typename T> inline	enable_if_t<(alignof(T) <=8), void>	deallocate(T *p, size_t n)				{ free((void*)p); }
+template<typename T> inline	enable_if_t<(alignof(T) <=8), T*>	reallocate(T *p, size_t n0, size_t n1)	{ return (T*)realloc((void*)p, n1 * sizeof(T)); }
+template<typename T> inline	enable_if_t<(alignof(T) <=8), T*>	resize(T *p, size_t n0, size_t n1)		{ return (T*)resize((void*)p, n1 * sizeof(T)); }
+
 
 template<typename I> inline enable_if_t< is_trivially_destructible_v<deref_t<I>>>	destruct(I i, size_t n) {}
 template<typename I> inline enable_if_t<!is_trivially_destructible_v<deref_t<I>>>	destruct(I i, size_t n) {
@@ -1437,6 +1430,7 @@ template<typename A, typename B>	inline		A			exchange(A &a, B &&b)			{ A t(move(
 template<typename T>				inline		void 		clear(T &t)						{ memset(&t, 0, sizeof(T)); }
 template<typename T>				inline		void 		clear(T *t, int n)				{ memset(t, 0, sizeof(T) * n); }
 template<class I>					inline		void		clear(I first, I last)			{ for (; first != last; ++first) clear(*first);}
+template<typename T, typename F>	inline		T			conv(F f);
 
 template<class T>	inline enable_if_t<is_trivially_copyable_v<T>> clear(T* first, T* last) {
 	if (last > first)
@@ -1471,8 +1465,9 @@ template<typename T> constexpr int64	max(int64 a,	T b)	{ return a > int64	(b) ? 
 template<typename T> constexpr uint64	max(uint64 a,	T b)	{ return a > uint64	(b) ? a : uint64(b); }
 #endif
 
-constexpr int		mod(int a,		int b)		{ return a % b; }
-constexpr uint32	mod(uint32 a,	uint32 b)	{ return a % b; }
+template<typename A, typename B>	constexpr enable_if_t<has_int_ops<A>, A> mod(A a, B b)	{ return a % b; }
+//constexpr int		mod(int a,		int b)		{ return a % b; }
+//constexpr uint32	mod(uint32 a,	uint32 b)	{ return a % b; }
 
 template<typename T> constexpr enable_if_t<is_builtin_num<T>, int> 	sign(T a)						{ return a < 0 ? -1 : a == 0 ? 0 : 1; }
 template<typename T> constexpr enable_if_t<is_builtin_num<T>, int> 	sign1(T a)						{ return a < 0 ? -1 : 1; }
@@ -1495,7 +1490,7 @@ template<typename T>							constexpr T*	align_pow2(T *t, uint32 n)			{ return (T
 template<typename T>							constexpr T*	align_down_pow2(T *t, uint32 n)		{ return (T*)align_down_pow2(uintptr_t(t), n); }
 template<typename T>							constexpr bool	is_aligned_pow2(T *t, uint32 n)		{ return is_aligned_pow2(uintptr(t), n); }
 
-template<typename T, typename A, typename B>	constexpr bool	between(const T &v, const A &a, const B &b)	{ return v >= a && v <= b; }
+template<typename T, typename A, typename B>	constexpr auto	between(const T &v, const A &a, const B &b)	{ return v >= a && v <= b; }
 template<typename A, typename B>				constexpr A		wrap_neg(const A &a, const B &b)			{ return a < 0 ? a + b : a; }
 template<typename A, typename B>				constexpr A		wrap(const A &a, const B &b)				{ return wrap_neg(a % b, b); }
 template<typename A, typename B, typename C>	constexpr A		wrap(const A &a, const B &b, const C &c)	{ return wrap(a - b, c - b) + b; }
@@ -1519,6 +1514,53 @@ constexpr bool any(bool b) { return b; }
 
 template<typename X, typename Y> constexpr auto select(bool mask, X x, Y y) { return mask ? x : y; }
 
+//-----------------------------------------------------------------------------
+//	comparisons and assignments mixins
+//-----------------------------------------------------------------------------
+ 
+// with any type
+template<typename T, bool ANY = true> struct comparisons {
+	template<typename U> friend constexpr bool operator==(const T &a, const U &b) { return compare(a, b) == 0; }
+	template<typename U> friend constexpr bool operator!=(const T &a, const U &b) { return compare(a, b) != 0; }
+	template<typename U> friend constexpr bool operator< (const T &a, const U &b) { return compare(a, b) <  0; }
+	template<typename U> friend constexpr bool operator<=(const T &a, const U &b) { return compare(a, b) <= 0; }
+	template<typename U> friend constexpr bool operator> (const T &a, const U &b) { return compare(a, b) >  0; }
+	template<typename U> friend constexpr bool operator>=(const T &a, const U &b) { return compare(a, b) >= 0; }
+};
+
+// with T only
+template<typename T> struct comparisons<T, false> {
+	friend constexpr bool operator==(const T &a, const T &b)		{ return compare(a, b) == 0; }
+	friend constexpr bool operator!=(const T &a, const T &b)		{ return compare(a, b) != 0; }
+	friend constexpr bool operator< (const T &a, const T &b)		{ return compare(a, b) <  0; }
+	friend constexpr bool operator<=(const T &a, const T &b)		{ return compare(a, b) <= 0; }
+	friend constexpr bool operator> (const T &a, const T &b)		{ return compare(a, b) >  0; }
+	friend constexpr bool operator>=(const T &a, const T &b)		{ return compare(a, b) >= 0; }
+};
+
+template<typename T, bool ANY = true> struct assignments {
+	template<typename U> decltype(auto)	operator+=(const U &b)	{ T &t = *static_cast<T*>(this); return t = t + b; }
+	template<typename U> decltype(auto)	operator-=(const U &b)	{ T &t = *static_cast<T*>(this); return t = t - b; }
+	template<typename U> decltype(auto)	operator*=(const U &b)	{ T &t = *static_cast<T*>(this); return t = t * b; }
+	template<typename U> decltype(auto)	operator/=(const U &b)	{ T &t = *static_cast<T*>(this); return t = t / b; }
+	template<typename U> decltype(auto)	operator%=(const U &b)	{ T &t = *static_cast<T*>(this); return t = t % b; }
+	template<typename U> decltype(auto)	operator&=(const U &b)	{ T &t = *static_cast<T*>(this); return t = t & b; }
+	template<typename U> decltype(auto)	operator|=(const U &b)	{ T &t = *static_cast<T*>(this); return t = t | b; }
+	decltype(auto)						operator<<=(int b)		{ T &t = *static_cast<T*>(this); return t = t << b; }
+	decltype(auto)						operator>>=(int b)		{ T &t = *static_cast<T*>(this); return t = t >> b; }
+};
+
+template<typename T> struct assignments<T, false> {
+	decltype(auto)	operator+=(const T &b)	{ T &t = *static_cast<T*>(this); return t = t + b; }
+	decltype(auto)	operator-=(const T &b)	{ T &t = *static_cast<T*>(this); return t = t - b; }
+	decltype(auto)	operator*=(const T &b)	{ T &t = *static_cast<T*>(this); return t = t * b; }
+	decltype(auto)	operator/=(const T &b)	{ T &t = *static_cast<T*>(this); return t = t / b; }
+	decltype(auto)	operator%=(const T &b)	{ T &t = *static_cast<T*>(this); return t = t % b; }
+	decltype(auto)	operator&=(const T &b)	{ T &t = *static_cast<T*>(this); return t = t & b; }
+	decltype(auto)	operator|=(const T &b)	{ T &t = *static_cast<T*>(this); return t = t | b; }
+	decltype(auto)	operator<<=(int b)		{ T &t = *static_cast<T*>(this); return t = t << b; }
+	decltype(auto)	operator>>=(int b)		{ T &t = *static_cast<T*>(this); return t = t >> b; }
+};
 
 //-----------------------------------------------------------------------------
 //	constructable
@@ -1639,30 +1681,6 @@ template<typename T> inline auto	load_packed_inc(const uint8 *&p)	{ const uint8 
 template<typename T> inline void	store_packed(void *p, T t)			{ *(packed<T>*)p = t; }
 template<typename T> inline void	store_packed_inc(uint8 *p, T t)		{ *(packed<T>*)p = t; p += sizeof(T); }
 template<typename T> inline void	copy_packed(void *d, const void *s)	{ *(packed<T>*)d = *(const packed<T>*)s; }
-
-//-----------------------------------------------------------------------------
-//	comparisons
-//-----------------------------------------------------------------------------
-// with any type
-template<typename T, bool ANY = true> struct comparisons {
-	template<typename U> friend constexpr bool operator==(const T &a, const U &b) { return compare(a, b) == 0; }
-	template<typename U> friend constexpr bool operator!=(const T &a, const U &b) { return compare(a, b) != 0; }
-	template<typename U> friend constexpr bool operator< (const T &a, const U &b) { return compare(a, b) <  0; }
-	template<typename U> friend constexpr bool operator<=(const T &a, const U &b) { return compare(a, b) <= 0; }
-	template<typename U> friend constexpr bool operator> (const T &a, const U &b) { return compare(a, b) >  0; }
-	template<typename U> friend constexpr bool operator>=(const T &a, const U &b) { return compare(a, b) >= 0; }
-};
-
-// with T only
-template<typename T> struct comparisons<T, false> {
-	friend constexpr bool operator==(const T &a, const T &b)		{ return compare(a, b) == 0; }
-	friend constexpr bool operator!=(const T &a, const T &b)		{ return compare(a, b) != 0; }
-	friend constexpr bool operator< (const T &a, const T &b)		{ return compare(a, b) <  0; }
-	friend constexpr bool operator<=(const T &a, const T &b)		{ return compare(a, b) <= 0; }
-	friend constexpr bool operator> (const T &a, const T &b)		{ return compare(a, b) >  0; }
-	friend constexpr bool operator>=(const T &a, const T &b)		{ return compare(a, b) >= 0; }
-};
-
 
 //-----------------------------------------------------------------------------
 //	constants

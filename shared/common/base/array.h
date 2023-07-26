@@ -16,7 +16,7 @@ template<typename T, class R> const T*	readp(R &r, size_t n);
 //-----------------------------------------------------------------------------
 
 template<typename T> inline T *reallocate_move(T *p, size_t n0, size_t n1) {
-	if (aligned_resize(p, n1 * sizeof(T), alignof(T)))
+	if (resize(p, n0, n1))
 		return p;
 
 	auto p1 = allocate<T>(n1);
@@ -25,12 +25,12 @@ template<typename T> inline T *reallocate_move(T *p, size_t n0, size_t n1) {
 	return p1;
 }
 
-
 template<typename T> T *new_array(size_t n) {
 	T	*p = allocate<T>(n);
 	fill_new_n(p, n);
 	return p;
 }
+
 template<typename T> void delete_array(T *p, size_t n) {
 	if (p) {
 		destruct(p, n);
@@ -82,32 +82,14 @@ template<typename P> void erase_array(P first, P last, P end) {
 //	array compare
 //-----------------------------------------------------------------------------
 
-template<class I1, class I2> bool equal_array_n(I1 i1, I2 i2, size_t n) {
-	while (n--) {
-		if (*i1 != *i2)
-			return false;
-	}
-	return true;
-}
-
-template<class I1, class I2> int compare_array(I1 i1, I1 end1, I2 i2, I2 end2) {
-	for (; i2 != end2; ++i1, ++i2) {
-		if (i1 == end1)
-			return -1;
-		if (int r = simple_compare(*i1, *i2))
-			return r;
-	}
-	return i1 == end1 ? 0 : 1;
-}
-
 template<class C1, class C2> int compare_array(const C1 &c1, const C2 &c2) {
-	return compare_array(begin(c1), end(c1), begin(c2), end(c2));
+	return compare(begin(c1), end(c1), begin(c2), end(c2));
 }
 
 template<typename T> struct array_comparisons {
 	template<typename U> friend enable_if_t<has_end_v<U>, bool> operator==(const T &a, const U &b) {
 		auto	n = a.size();
-		return n == b.size() && equal_array_n(begin(a), begin(b), n);
+		return n == num_elements(b) && equal_n(begin(a), begin(b), n);
 	}
 	template<typename U> friend enable_if_t<has_end_v<U>, bool> operator!=(const T &a, const U &b) { return !(a == b); }
 	template<typename U> friend enable_if_t<has_end_v<U>, bool> operator< (const T &a, const U &b) { return compare_array(a, b) <  0; }
@@ -118,28 +100,43 @@ template<typename T> struct array_comparisons {
 
 //-----------------------------------------------------------------------------
 //	class array_mixout
-//	needs:	begin(), end(), [maybe size(), index_of(const T&)]
+//	needs:	begin(), end(),
+//	maybe:	size()
 //-----------------------------------------------------------------------------
 
-template<typename C, typename T> class array_mixout : public C {
+template<typename C> class array_mixout : public C {
 public:
 	using C::C;
 	using C::begin; using C::end; using C::size; 
-	typedef	decltype(declval<C>().begin())	I;
+	typedef	decltype(declval<C>().begin())			I;
+	typedef	decltype(*declval<C>().begin())			E;
+	typedef	decltype(declval<const C>().begin())	CI;
+	typedef	decltype(*declval<const C>().begin())	CE;
 
 	template<typename R> bool	read(R &&r)				{ return readn(r, begin(), size()); }
 	
-	constexpr bool				empty()			const	{ return size() == 0; }
-	constexpr uint32			size32()		const	{ return uint32(size()); }
-	constexpr decltype(auto)	front()			const	{ return *begin(); }
-	constexpr decltype(auto)	back()			const	{ return end()[-1]; }
+	constexpr bool		empty()		const	{ return size() == 0; }
+	constexpr uint32	size32()	const	{ return uint32(size()); }
+
+	ISO_NOT_DEBUG(constexpr) decltype(auto)	front()			const	{ ISO_ASSERT(size()); return *begin(); }
+	ISO_NOT_DEBUG(constexpr) decltype(auto)	back()			const	{ ISO_ASSERT(size()); return end()[-1]; }
 	ISO_NOT_DEBUG(constexpr) decltype(auto)	at(size_t i)	const	{ ISO_ASSERT(i < size()); return begin()[i]; }
 	ISO_NOT_DEBUG(constexpr) decltype(auto)	back(size_t i)	const	{ ISO_ASSERT(i < size()); return end()[~intptr_t(i)]; }
 
-	decltype(auto)	front()					{ return *begin(); }
-	decltype(auto)	back()					{ return end()[-1]; }
-	decltype(auto)	at(size_t i)			{ ISO_ASSERT(i < size()); return begin()[i]; }
-	decltype(auto)	back(size_t i)			{ ISO_ASSERT(i < size()); return end()[~intptr_t(i)]; }
+	optional<CE>	try_front()			const	{ if (size()) return *begin(); return none; }
+	optional<CE>	try_back()			const	{ if (size()) return end()[-1]; return none; }
+	optional<CE>	try_at(size_t i)	const	{ if (i < size()) return begin()[i]; return none; }
+	optional<CE>	try_back(size_t i)	const	{ if (i < size()) return end()[~intptr_t(i)]; return none; }
+
+	decltype(auto)	front()						{ ISO_ASSERT(size()); return *begin(); }
+	decltype(auto)	back()						{ ISO_ASSERT(size()); return end()[-1]; }
+	decltype(auto)	at(size_t i)				{ ISO_ASSERT(i < size()); return begin()[i]; }
+	decltype(auto)	back(size_t i)				{ ISO_ASSERT(i < size()); return end()[~intptr_t(i)]; }
+
+	optional<E>		try_front()					{ if (size()) return *begin(); return none; }
+	optional<E>		try_back()					{ if (size()) return end()[-1]; return none; }
+	optional<E>		try_at(size_t i)			{ if (i < size()) return begin()[i]; return none; }
+	optional<E>		try_back(size_t i)			{ if (i < size()) return end()[~intptr_t(i)]; return none; }
 
 	template<typename W> bool	write(W&& w)	const	{ return writen(w, begin(), size()); }
 
@@ -150,6 +147,11 @@ public:
 	template<typename A>				auto	slice(A&& a1)			const	{ return slice_a( begin(), end(), forward<A>(a1)); }
 	template<typename B>				auto	slice_to(B&& b1)		const	{ return slice_b( begin(), end(), forward<B>(b1)); }
 	template<typename A, typename B>	auto	slice(A&& a1, B&& b1)	const	{ return slice_ab(begin(), end(), forward<A>(a1), forward<B>(b1)); }
+
+	//constexpr bool			contains(CI e)	const	{ return e >= begin() && e < end(); }
+	//constexpr bool			contains(CE e)	const	{ return contains(&e); }
+	//constexpr int			index_of(CI e)	const	{ return e ? distance(begin(), e) : -1; }
+	//constexpr int			index_of(CE e)	const	{ return distance(begin(), &e); }
 };
 
 //-----------------------------------------------------------------------------
@@ -157,18 +159,18 @@ public:
 //	needs:	_expand(size_t), _set_size(size_t), begin(), end(), size(), index_of(const T&)
 //-----------------------------------------------------------------------------
 
-template<typename C, typename T> class dynamic_mixout : public array_mixout<C, T> {
+template<typename C, typename T> class dynamic_mixout : public array_mixout<C> {
 public:
-	typedef array_mixout<C, T>	B;
+	typedef array_mixout<C>	B;
 	using typename B::I;
 	using B::B;
-	using C::operator=;
 	using B::begin; using B::end; using B::size; 
+	using C::operator=;
 	using C::_expand; using C::_set_size;
 
 	//resize
 	auto&	resize(size_t i) {
-		auto	n		= size();
+		auto	n	= size();
 		if (i < n)
 			destruct(begin() + i, n - i);
 		else if (i > n)
@@ -230,7 +232,7 @@ public:
 	template<typename A> I insertc(I iter, A &c) {
 		return insert(iter, begin(c), end(c));
 	}
-	template<typename... U> I emplace(I iter, U &&...t)	{
+	template<typename... U> I emplace_insert(I iter, U &&...t)	{
 		ISO_ASSERT(between(iter, begin(), end()));
 		size_t	back	= end() - iter;
 		return new(insert_array(_expand(1), back)) T(forward<U>(t)...);
@@ -294,11 +296,15 @@ public:
 		_set_size(end1 - begin());
 		return first;
 	}
+	I		erase(range<I> r) {
+		return erase(r.begin(), r.end());
+	}
 
 	// push_back
 	T&							push_back()				{ return *new(unconst(_expand(1))) T; }
-	template<typename U>	T&	push_back(U &&t)		{ return *new(unconst(_expand(1))) T(forward<U>(t)); }
-	template<typename... U>	T&	emplace_back(U&&...t)	{ return *new(unconst(_expand(1))) T(forward<U>(t)...); }
+	T&							push_back(const T &u)	{ return *new(unconst(_expand(1))) T(u); }
+	template<typename U>	T&	push_back(U &&u)		{ return *new(unconst(_expand(1))) T(forward<U>(u)); }
+	template<typename... U>	T&	emplace_back(U&&...u)	{ return *new(unconst(_expand(1))) T(forward<U>(u)...); }
 
 	// pop_back
 	void						pop_back() {
@@ -321,6 +327,8 @@ public:
 
 	void						clear()					{ destruct(begin(), size()); _set_size(0); }
 	T&							set(int i)				{ if (i >= size()) resize(i + 1); return begin()[i]; }
+	T&							set(int i, const T &u)	{ if (i >= size()) resize(i + 1); return begin()[i] = T(u); }
+	template<typename...U>	T&	set(int i, U&&...u)		{ if (i >= size()) resize(i + 1); return begin()[i] = T(forward<U>(u)...); }
 	template<typename R> bool	read(R &&r)				{ return readn(r, begin(), size()); }
 	template<typename R> bool	read(R &&r, size_t n)	{ resize(n); return readn(r, begin(), n); }
 
@@ -420,24 +428,15 @@ public:
 //	class array - fixed memory and size
 //-----------------------------------------------------------------------------
 
-template<typename T, typename I> struct auto_iterator {
-	I	i;
-	operator T()		{ return *i++; }
-	auto_iterator(I i) : i(i) {}
-};
-
-template<typename T, typename I> auto_iterator<T, I> make_auto_iterator(I i)	{ return i; }
-template<typename T, typename C> auto make_auto_iteratorc(C&& c)				{ return make_auto_iterator<T>(begin(c)); }
-
 template<typename T, int N> class _fixed_array {
 public:
 	T t[N];
 	constexpr _fixed_array() {}
 	template<typename... U>				constexpr _fixed_array(const U&... u)			: t{T(u)...} {}
 	template<typename U, size_t...I>	constexpr _fixed_array(U &&u, index_list<I...>)	: t{(I, T(forward<U>(u)))...} {}
-	template<typename U>				constexpr _fixed_array(meta::num<0>, U &&u)		: _fixed_array(forward<U>(u), meta::make_index_list<N>()) {}
-	template<typename U>				constexpr _fixed_array(meta::num<1>, U &&u)		: _fixed_array(make_auto_iterator<T>(forward<U>(u)), meta::make_index_list<N>()) {}
-	template<typename U>				constexpr _fixed_array(meta::num<2>, U &&u)		: _fixed_array(make_auto_iteratorc<T>(forward<U>(u)), meta::make_index_list<N>()) {}
+	template<typename U>				constexpr _fixed_array(meta::int_constant<0>, U &&u)		: _fixed_array(forward<U>(u), meta::make_index_list<N>()) {}
+	template<typename U>				constexpr _fixed_array(meta::int_constant<1>, U &&u)		: _fixed_array(make_auto_iterator<T>(forward<U>(u)), meta::make_index_list<N>()) {}
+	template<typename U>				constexpr _fixed_array(meta::int_constant<2>, U &&u)		: _fixed_array(make_auto_iteratorc<T>(forward<U>(u)), meta::make_index_list<N>()) {}
 
 	constexpr size_t	size()					const	{ return N; }
 	constexpr const T*	begin()					const	{ return t; }
@@ -455,12 +454,12 @@ template<typename A, typename B, typename V = void> struct test_array_s2 {};
 template<typename A, typename B> struct test_array_s : test_array_s2<A, B> {};
 template<typename A, typename B> using test_array = typename test_array_s<A, B>::type;
 
-template<typename T, int N> class array : public array_mixout<_fixed_array<T, N>, T> {
-	typedef	array_mixout<_fixed_array<T, N>, T>	B;
+template<typename T, int N> class array : public array_mixout<_fixed_array<T, N>>, public array_comparisons<array<T, N>> {
+	typedef	array_mixout<_fixed_array<T, N>>	B;
 public:
 	using B::t;
 	constexpr array()				{}
-	constexpr array(initializer_list<T> c) 			: B(meta::num<0>(), make_auto_iteratorc<T>(c))			{}
+	constexpr array(initializer_list<T> c) 			: B(meta::int_constant<0>(), make_auto_iteratorc<T>(c))			{}
 	template<typename U, typename V = test_array<array, noref_t<U>>>	constexpr array(U &&u)	: B(V(), forward<U>(u)) {}
 	template<typename U1, typename U2, typename... UU>	constexpr array(const U1& u1, const U2& u2, const UU&... uu) : B(u1, u2, uu...) {}
 //	template<typename R, typename=is_reader_t<R>>	array(R &&r)	{ readn(r, this->p, n); }
@@ -473,14 +472,19 @@ public:
 
 	constexpr memory_block			raw_data()			{ return {t, N * sizeof(T)}; }
 	constexpr const_memory_block	raw_data()	const	{ return {t, N * sizeof(T)}; }
+
+	template<int N2, typename X>	auto extend_left(const array &a, X x = zero)	{ array<T, N2> b; copy(a, b.slice(N2 - N)); fill(b.slice_to(N2 - N), x); return b; }
+	template<int N2, typename X>	auto extend_right(const array &a, X x = zero)	{ array<T, N2> b; copy(a, b); fill(b.slice(N), x); return b; }
+	template<int N2, typename X>	auto extend_left_by(const array &a, X x = zero)	{ array<T, N + N2> b; copy(a, b.slice(N2)); fill(b.slice_to(N2), x); return b; }
+	template<int N2, typename X>	auto extend_right_by(const array &a, X x = zero){ array<T, N + N2> b; copy(a, b); fill(b.slice(N), x); return b; }
 };
 
-template<typename A, typename B>					struct test_array_s2<A, B, enable_if_t<has_end_v<B>>>		: T_type<meta::num<2>> {};
-template<typename A, typename B>					struct test_array_s2<A, B, enable_if_t<is_iterator_v<B>>>	: T_type<meta::num<1>> {};
-template<typename T, int N, typename B>				struct test_array_s2<array<T, N>, B, enable_if_t<!has_end_v<B> && constructable_v<T, B>>>	: T_type<meta::num<0>> {};
+template<typename A, typename B>					struct test_array_s2<A, B, enable_if_t<has_end_v<B>>>		: T_type<meta::int_constant<2>> {};
+template<typename A, typename B>					struct test_array_s2<A, B, enable_if_t<is_iterator_v<B>>>	: T_type<meta::int_constant<1>> {};
+template<typename T, int N, typename B>				struct test_array_s2<array<T, N>, B, enable_if_t<!has_end_v<B> && constructable_v<T, B>>>	: T_type<meta::int_constant<0>> {};
 
 template<typename T1, int N1, typename T2, int N2>	struct test_array_s<array<T1, N1>, array<T2, N2>> {};
-template<typename T1, typename T2, int N>			struct test_array_s<array<T1, N>, array<T2, N>> : T_type<meta::num<2>> {};
+template<typename T1, typename T2, int N>			struct test_array_s<array<T1, N>, array<T2, N>> : T_type<meta::int_constant<2>> {};
 
 template<typename T, typename ...U> constexpr auto make_array(const T &t, U&&... u) {
 	return array<T, sizeof...(U) + 1>(t, forward<U>(u)...);
@@ -492,17 +496,26 @@ template<typename T, int N> struct T_swap_endian_type<array<T, N>> : T_type<arra
 //	class embedded_array
 //-----------------------------------------------------------------------------
 
-template<typename T, typename C> class _embedded_array {
+template<typename T, typename I> class _embedded_array {
 protected:
-	C			count;
+	I			count;
 public:
+	_embedded_array()			: count(0) {}
+	_embedded_array(I count)	: count(count) {}
 	size_t		size()	const	{ return count; }
-	auto		begin()	const	{ return (const T*)get_after(&count); }
+	auto		begin()	const	{ return get_after_aligned<T>(&count); }
 	auto		end()	const	{ return begin() + count; }
+//	void*		operator new(size_t s, uint32 n)	{ return ::operator new(s + n * sizeof(T)); }
 };
 
-template<typename T, typename C> class embedded_array : public array_mixout<_embedded_array<T, C>, T> {
+template<typename T, typename I = uint32> class embedded_array : public array_mixout<_embedded_array<T, I>> {
+	typedef array_mixout<_embedded_array<T, I>>	B;
 public:
+	using B::B;
+	template<typename C, typename=enable_if_t<has_begin_v<C>>>	embedded_array(C &&c) : B(num_elements(c)) {
+		using iso::begin; copy_new_n(begin(c), this->begin(), this->count);
+	}
+
 	operator const T*()	const	{ return this->begin(); }
 
 	template<typename R> bool read(R &r) {
@@ -516,7 +529,10 @@ public:
 	friend void *get_after(const embedded_array *t)	{
 		return (void*)t->end();
 	}
+	friend constexpr size_t calc_size(embedded_array*, I count) { return align(sizeof(I), sizeof(T)) + count * sizeof(T); }
+	template<typename C, typename=enable_if_t<has_begin_v<C>>> friend constexpr size_t calc_size(embedded_array*, C &&c) { return align(sizeof(I), sizeof(T)) + num_elements(c) * sizeof(T); }
 };
+
 
 template<typename T, typename C> class _embedded_next_array : public _embedded_array<T, C> {
 public:
@@ -524,10 +540,8 @@ public:
 	iterator	begin()	const	{ return iterator((T*)_embedded_array<T, C>::begin(), 0); }
 	iterator	end()	const	{ return iterator((T*)_embedded_array<T, C>::begin(), this->count); }
 };
-template<typename T, typename C> class embedded_next_array : public array_mixout<_embedded_next_array<T, C>, T> {
-	friend void *get_after(const embedded_next_array *t)	{
-		return (void*)t->end();
-	}
+template<typename T, typename C> class embedded_next_array : public array_mixout<_embedded_next_array<T, C>> {
+	friend void *get_after(const embedded_next_array *t)	{ return (void*)t->end(); }
 };
 
 //-----------------------------------------------------------------------------
@@ -621,7 +635,7 @@ public:
 };
 
 //-----------------------------------------------------------------------------
-//	class compact_array - held as just a pointer
+//	class compact_array - just a pointer with sizes at head
 //-----------------------------------------------------------------------------
 
 template<typename T> class _compact_array {
@@ -630,27 +644,29 @@ protected:
 		size_t	max_size;
 		size_t	curr_size;
 
-		T	*array()	const { return align((T*)(this + 1), alignof(T)); }
 		P(size_t max_size, size_t curr_size = 0)	: max_size(max_size), curr_size(curr_size) {}
-		void*	operator new(size_t s, size_t n)	{ return aligned_alloc(s + n * sizeof(T), alignof(T)); }
-		void	operator delete(void *p)			{ return aligned_free(p); }
+		T*		array()	const { return align((T*)(this + 1), alignof(T)); }
 	};
-	typedef T*	iterator;
 
 	P		*p;
+
+	P*		_make(size_t max_size, size_t curr_size) {
+		return new(aligned_alloc(sizeof(P) + max_size * sizeof(T), alignof(T))) P(max_size, curr_size);
+	}
 
 	void	_reserve(size_t n)	{
 		if (p) {
 			if (aligned_resize(p, sizeof(P) + n * sizeof(T), alignof(T))) {
 				p->max_size = n;
 			} else {
-				P	*p2 = new(n) P(n, p->curr_size);
+				P	*p2 = _make(n, p->curr_size);
 				move_new_n(p->array(), p2->array(), p->curr_size);
+				destruct(p->array(), p->curr_size);
 				aligned_free(p);
 				p = p2;
 			}
 		} else {
-			p = new(n) P(n);
+			p = _make(n, 0);
 		}
 	}
 
@@ -664,10 +680,9 @@ protected:
 	}
 
 public:
-	constexpr _compact_array()				: p(0)				{}
-	constexpr _compact_array(size_t n)		: p(new(n) P(n, n))	{}
-	constexpr _compact_array(_compact_array &&b) 		: p(exchange(b.p, nullptr)) {}
-	_compact_array(const _compact_array &b) : _compact_array(b.size()) { copy_new_n(b.begin(), begin(), p->curr_size); }
+	constexpr _compact_array()					: p(0)			{}
+	constexpr _compact_array(size_t n)			: p(_make(n, n))	{}
+	constexpr _compact_array(_compact_array &&b) : p(b.detach()) {}
 	~_compact_array() { aligned_free(p); }
 
 	constexpr operator	T*()					const	{ return p ? p->array() : nullptr; }
@@ -680,28 +695,29 @@ public:
 	constexpr bool		contains(const T &e)	const	{ return p && &e >= p && &e < p->array() + p->curr_size; }
 	constexpr int		index_of(const T *e)	const	{ return p && e ? int(e - p->array()) : -1; }
 	constexpr int		index_of(const T &e)	const	{ return p ? &e - p->array() : -1; }
+
+	auto				detach()		{ return exchange(p, nullptr); }
+
 };
 
 template<typename T> class compact_array : array_comparisons<compact_array<T>>, public dynamic_mixout<_compact_array<T>, T> {
 	typedef dynamic_mixout<_compact_array<T>, T>	B;
 public:
-	using B::begin; using B::p;
-	compact_array(const compact_array&) = default;
-	compact_array(compact_array&&)		= default;
-
 	constexpr compact_array()				{}
 	constexpr compact_array(const _none&)	{}
-	compact_array(size_t n)										: B(n)						{}
-	compact_array(initializer_list<T> init)						: B(init.size())			{ copy_new_n(init.begin(), begin(), p->curr_size); }
-	template<typename U> compact_array(size_t n, const U &t)	: B(n)						{ fill_new_n(begin(), n, t); }
-	template<typename I> compact_array(I first, I last)			: B(distance(first, last))	{ copy_new_n(first, begin(), this->size()); }
-	template<typename C> compact_array(const C &c)				: B(num_elements32(c))		{ using iso::begin; copy_new_n(begin(c), begin(), p->curr_size); }
-	template<typename C, typename=enable_if_t<!is_int<C>>> compact_array(const C &c) : B(num_elements(c)) { using iso::begin; copy_new_n(begin(c), begin(), p->curr_size); }
+	constexpr compact_array(compact_array&&)		= default;
+	constexpr compact_array(const compact_array &b) : B(b.size()) { copy_new_n(b.begin(), begin(), b.size()); }
+	compact_array(initializer_list<T> c)							: B(c.size())	{ copy_new_n(c.begin(), B::begin(), c.size()); }
+	template<typename...U> compact_array(size_t n, const U&...u)	: B(n)			{ fill_new_n(B::begin(), n, u...); }
+//	template<typename C, typename=enable_if_t<has_begin_v<C>>> 		compact_array(C &&c)			: B(num_elements(c))		{ using iso::begin; copy_new_n(begin(c), B::begin(), size()); }
+	template<typename I> 	compact_array(range<I> c)				: B(c.size())	{ copy_new_n(c.begin(), B::begin(), size()); }
+	template<typename I, typename=enable_if_t<is_iterator_v<I>>>	compact_array(I first, I last)	: B(distance(first, last))	{ copy_new_n(first, B::begin(), size()); }
+	template<typename R, typename=is_reader_t<R>>					compact_array(R &&r, size_t n)	: B(n)						{ read_new_n(r, B::begin(), n); }
 
 	compact_array&		operator=(const _none&)					{ this->clear(); return *this; }
-	compact_array&		operator=(const compact_array &b)		{ return operator=(compact_array(b)); }
 	compact_array&		operator=(compact_array &&b)			{ swap(B::p, b.p); return *this; }
-	template<typename C> compact_array &operator=(C &&c)		{ return operator=(compact_array(forward<C>(c))); }
+	compact_array&		operator=(const compact_array &b)		{ return operator=(compact_array(b)); }
+	//template<typename C> compact_array &operator=(C &&c)		{ return operator=(compact_array(forward<C>(c))); }
 };
 
 //-----------------------------------------------------------------------------
@@ -710,11 +726,12 @@ public:
 
 template<typename T, int N> class _static_array : array_comparisons<_static_array<T, N>>  {
 protected:
-	space_for<T[N]>		t;
-	uint32				curr_size;
+	space_for<T[N]>			t;
+	uint_bits_t<log2(N)>	curr_size;
 	auto		_expand(size_t n)	{ ISO_ASSERT(curr_size + n <= N); T *r = t + curr_size; curr_size += n; return r; }
 	void		_set_size(size_t n)	{ curr_size = uint32(n); }
 public:
+	_static_array &operator=(const _static_array&) = default;
 	_static_array()			: curr_size(0)	{}
 	_static_array(int n)	: curr_size(n)	{ ISO_ASSERT(curr_size <= N); }
 
@@ -739,6 +756,7 @@ template<typename T, int N> class static_array : public dynamic_mixout<_static_a
 	typedef	dynamic_mixout<_static_array<T, N>, T>	B;
 public:
 	static_array()		{}
+	void	operator=(const static_array &b)			{ _static_array<T, N>::operator=(b); }
 	template<typename U> static_array(int n, const U &t)	: B(n)						{ ISO_ASSERT(B::curr_size <= N); fill_new_n(B::begin(), n, t); }
 	template<typename I> static_array(I first, I last)		: B(distance(first, last))	{ ISO_ASSERT(B::curr_size <= N); copy_new_n(first, B::begin(), B::curr_size); }
 	template<typename C> static_array(const C &c)			: B(num_elements32(c))		{ ISO_ASSERT(B::curr_size <= N); using iso::begin; copy_new_n(begin(c), begin(), B::curr_size); }
@@ -762,13 +780,12 @@ template<typename B, typename M> struct trailing_array {
 
 	const M*		begin()					const	{ return me()->array; }
 	M*				begin()							{ return me()->array; }
-	auto&			operator[](int i)		const	{ return begin()[i]; }
-	auto&			operator[](int i)				{ return begin()[i]; }
-	auto&			front()							{ return *begin(); }
-	auto&			front()					const	{ return *begin()[-1]; }
+	const M&		operator[](int i)		const	{ return begin()[i]; }
+	M&				operator[](int i)				{ return begin()[i]; }
+	M&				front()							{ return *begin(); }
+	const M&		front()					const	{ return *begin(); }
 	constexpr int	index_of(const M *e)	const	{ return e ? int(e - begin()) : -1; }
 	constexpr int	index_of(const M &e)	const	{ return int(&e - begin()); }
-
 
 	constexpr trailing_array()	{}
 	trailing_array(uint32 n)	{ fill_new_n(begin(), n); }
@@ -778,10 +795,8 @@ template<typename B, typename M> struct trailing_array {
 	void						operator delete(void *p, size_t, uint32)	{ B::operator delete(p); }
 	template<typename T> static void*	alloc(size_t s, T &t, uint32 n)		{ return t.alloc(calc_size(s, n), alignof(B)); }
 	template<typename T> void*	operator new(size_t s, uint32 n, T &t)		{ return alloc(s, t, n); }
-};
 
-template<typename B, typename M> struct calc_size_s<trailing_array<B,M>> {
-	template<typename...P> static constexpr size_t f(uint32 n, P&&...) { return trailing_array<B,M>::calc_size(n); }
+	template<typename...P> friend constexpr size_t calc_size(trailing_array*, uint32 n, P&&...) { return calc_size(n); }
 };
 
 //-----------------------------------------------------------------------------
@@ -820,6 +835,7 @@ public:
 	T*						begin()							{ return p; }
 	T*						end()							{ return p + curr_size; }
 	constexpr size_t		size()					const	{ return curr_size; }
+	constexpr uint32		size32()				const	{ return uint32(curr_size); }
 
 	constexpr bool			contains(const T *e)	const	{ return e >= p && e < p + curr_size; }
 	constexpr bool			contains(const T &e)	const	{ return &e >= p && &e < p + curr_size; }
@@ -828,22 +844,27 @@ public:
 
 	memory_block			raw_data()						{ return {p, curr_size * sizeof(T)}; }
 	const_memory_block		raw_data()				const	{ return {p, curr_size * sizeof(T)}; }
+	range<T*>				detach()						{ return make_range_n(p, exchange(curr_size, 0)); }
 };
+
+template<typename T> using ptr_array = array_mixout<_ptr_array<T>>;
 
 template<typename T> class _ptr_max_array : public _ptr_array<T> {
 	typedef _ptr_array<T>	B;
 protected:
 	size_t	max_size;
 	T*		_expand(size_t n) {
-		return B::curr_size + n <= B::max_size ? B::p + exchange(B::curr_size, B::curr_size + n) : nullptr;
+		return B::curr_size + n <= max_size ? B::p + exchange(B::curr_size, B::curr_size + n) : nullptr;
 	}
 public:
 	_ptr_max_array() : max_size(0) {}
 	_ptr_max_array(T *p, size_t curr_size, size_t max_size) : _ptr_array<T>(p, curr_size), max_size(max_size) {}
-	size_t	capacity()	const	{ return max_size; }
+	_ptr_max_array&	operator=(_ptr_max_array&&) = default;
+	constexpr bool		full()		const	{ return curr_size == max_size; }
+	constexpr size_t	capacity()	const	{ return max_size; }
 };
 
-template<typename T> using ptr_array = array_mixout<_ptr_array<T>, T>;
+template<typename T> using ptr_max_array = dynamic_mixout<_ptr_max_array<T>, T>;
 
 //-----------------------------------------------------------------------------
 //	class auto_array:	for use with alloca
@@ -857,7 +878,7 @@ public:
 	template<typename I, typename=enable_if_t<is_iterator_v<I>>>	_auto_array(T *p, size_t n, I i)	: B(p, n)	{ copy_new_n(i, p, n); }
 	template<typename R, typename=is_reader_t<R>>					_auto_array(T *p, size_t n, R &&r)	: B(p, n)	{ read_new_n(r, p, n); }
 };
-template<typename T> using auto_array = array_mixout<_auto_array<T>, T>;
+template<typename T> using auto_array = array_mixout<_auto_array<T>>;
 
 #define new_auto(T,N)			auto_array<T>(alloc_auto(T, N), N)
 #define new_auto_init(T,N,X)	auto_array<T>(alloc_auto(T, N), N, X)
@@ -916,19 +937,30 @@ public:
 		}
 	}
 	range<T*>	detach()	{
-		auto	n = curr_size;
+		auto	n = exchange(curr_size, 0);
+		T		*r;
 		if (is_small()) {
-			T	*r = allocate<T>(n);
+			r = allocate<T>(n);
 			move_new_n((T*)&space, r, n);
-			curr_size	= 0;
-			return {r, r + n};
 		} else {
-			T	*r = exchange(p, (T*)&space);
-			curr_size	= 0;
+			r = exchange(p, (T*)&space);
 			max_size	= N;
-			return {r, r + n};
 		}
+		return {r, r + n};
 	}
+	malloc_block	detach_raw() {
+		auto	n = exchange(curr_size, 0);
+		T		*r;
+		if (is_small()) {
+			r = allocate<T>(n);
+			move_new_n((T*)&space, r, n);
+		} else {
+			r = exchange(p, (T*)&space);
+			max_size	= N;
+		}
+		return malloc_block::own(r, n * sizeof(T));
+	}
+
 	friend void swap(_dynamic_array &a, _dynamic_array &b) {
 		bool	asmall = a.is_small();
 		bool	bsmall = b.is_small();
@@ -989,6 +1021,14 @@ public:
 		max_size	= curr_size = 0;
 		return {r, r + n};
 	}
+
+	malloc_block	detach_raw() {
+		auto	n	= curr_size;
+		T		*r	= exchange(p, nullptr);
+		max_size	= curr_size = 0;
+		return malloc_block::own(r, n * sizeof(T));
+	}
+
 	friend void swap(_dynamic_array &a, _dynamic_array &b) {
 		raw_swap(a, b);
 	}
@@ -1002,14 +1042,15 @@ protected:
 	using	B0::curr_size;
 
 public:
-	constexpr dynamic_array()			{}
-	constexpr dynamic_array(_none&)		{}
-	dynamic_array(dynamic_array&&)		= default;
+	using B::append;
+	constexpr dynamic_array()				{}
+	constexpr dynamic_array(const _none&)	{}
+	dynamic_array(dynamic_array&&)			= default;
 	dynamic_array(const dynamic_array &c)								: B(c.curr_size)	{ copy_new_n(c.begin(), p, curr_size); }
 	dynamic_array(size_t n)												: B(n)				{ fill_new_n(p, curr_size); }
 	dynamic_array(initializer_list<T> c) 								: B(c.size())		{ copy_new_n(c.begin(), p, curr_size); }
 	template<typename U, size_t M>	dynamic_array(U (&&c)[M])			: B(M)				{ copy_new_n(&c[0], p, curr_size); }
-	template<typename...U>		dynamic_array(size_t n, const U&...u)	: B(n)				{ fill_new_n(p, curr_size, u...); }
+	template<typename...U>		dynamic_array(size_t n, const U&...u)	: B(n)				{ fill_new_n(p, n, u...); }
 	template<typename C, typename=enable_if_t<has_begin_v<C>>> 		dynamic_array(C &&c)			: B(num_elements(c))		{ using iso::begin; copy_new_n(begin(c), p, curr_size); }
 	template<typename I, typename=enable_if_t<is_iterator_v<I>>>	dynamic_array(I first, I last)	: B(distance(first, last))	{ copy_new_n(first, p, curr_size); }
 	template<typename R, typename=is_reader_t<R>>					dynamic_array(R &&r, size_t n)	: B(n)						{ read_new_n(r, p, n); }
@@ -1019,8 +1060,9 @@ public:
 	dynamic_array&					operator=(const dynamic_array &b)			{ B::assign(b); return *this; }
 	template<typename C>			dynamic_array&	operator=(C &&c)			{ B::assign(c); return *this; }
 	template<typename U, size_t M>	dynamic_array&	operator=(U (&&c)[M])		{ B::assign(make_move_iterator(&c[0]), make_move_iterator(&c[M])); return *this; }
-
-	operator			sized_placement()	{ return {this->_expand(1), sizeof(T)}; }
+	
+	auto&				append(initializer_list<T> c)	{ return B::append(c); }
+	operator			sized_placement()				{ return {this->_expand(1), sizeof(T)}; }
 
 	dynamic_array&		reserve(size_t n) {
 		if (n > B::capacity())
@@ -1031,9 +1073,11 @@ public:
 	//const T&	operator[](intptr_t i) const	{ return B::at(i); }
 	T&			operator[](intptr_t i)		{ return B::at(i); }
 
-
 	friend void 		swap(dynamic_array &a, dynamic_array &b) { swap(static_cast<B0&>(a), static_cast<B0&>(b)); }
 };
+
+template<typename C> dynamic_array<noconst_t<element_t<C>>> make_dynamic_array(C &&c) { return forward<C>(c); }
+
 
 //-----------------------------------------------------------------------------
 //	pair of dynamic_arrays (share memory from each end)
@@ -1114,7 +1158,7 @@ template<typename A, typename B> struct pair<dynamic_array<A>, dynamic_array<B>>
 };
 
 //-----------------------------------------------------------------------------
-//	class dynamic_array_de (double ended)
+//	class dynamic_array_de (double ended) iterators wrap
 //-----------------------------------------------------------------------------
 
 template<typename T> class _dynamic_array_de : public _ptr_max_array<T> {
@@ -1165,7 +1209,7 @@ protected:
 		curr_size = n;
 	}
 	void	_move_front(size_t n) {
-		offset		+= n; 
+		offset		= wrap(n); 
 		curr_size	-= n;
 	}
 public:
@@ -1279,6 +1323,7 @@ template<typename T, int MIN_ORDER, int MAX_ORDER> struct _order_array {
 	typedef uint_bits_t<MAX_ORDER>	I;
 	typedef	indexed_iterator<_order_array&, int_iterator<I>>		iterator;
 	typedef	indexed_iterator<const _order_array&, int_iterator<I>>	const_iterator;
+	typedef	T		element;
 
 	I				curr_size;
 	space_for<T>	order0[1 << MIN_ORDER];
@@ -1344,8 +1389,17 @@ public:
 
 	T		&operator[](I i)				{ return *_get(i); }
 	const T	&operator[](I i)		const	{ return *_get(i); }
+	int		index_of(const iterator &i)			const	{ return i.index(); }
+	int		index_of(const const_iterator &i)	const	{ return i.index(); }
 	int		index_of(const T *e)	const	{ return e ? _index_of(e) : -1; }
 	int		index_of(const T &e)	const	{ return _index_of(&e); }
+	bool	contains(const T *e)	const	{ return e && _index_of(e) >= 0; }
+	bool	contains(const T &e)	const	{ return _index_of(&e) >= 0; }
+
+	const_iterator	get_iterator(const T *e)	const	{ return {*this, index_of(e)}; }
+	iterator		get_iterator(T *e)					{ return {*this, index_of(e)}; }
+
+	explicit operator bool()		const	{ return size() != 0; }
 };
 
 template<typename T, int MIN_ORDER = 2, int MAX_ORDER = 32> using order_array = dynamic_mixout<_order_array<T, MIN_ORDER, MAX_ORDER>, T>;
@@ -1404,7 +1458,7 @@ template<typename C> struct hierarchy_traverser {
 	}
 };
 
-template<typename C> hierarchy_traverser<typename T_noref<C>::type> make_hierarchy_traverser(C &&c) { return forward<C>(c); }
+template<typename C> hierarchy_traverser<noref_t<C>> make_hierarchy_traverser(C &&c) { return forward<C>(c); }
 
 }//namespace iso
 

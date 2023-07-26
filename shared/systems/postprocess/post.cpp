@@ -1,5 +1,5 @@
 #include "post.h"
-#include "utilities.h"
+#include "events.h"
 #include "base/algorithm.h"
 #include "maths/geometry.h"
 
@@ -28,36 +28,24 @@ public:
 
 template<typename T> struct VE;
 
-template<> VertexElements GetVE<PostEffects::vertex>() {
-	static VertexElement ve[] = {
-		VertexElement(&PostEffects::vertex::pos, "position"_usage)
-	};
-	return ve;
+template<> static const VertexElements ve<PostEffects::vertex> = (const VertexElement[]) {
+	{&PostEffects::vertex::pos, "position"_usage}
 };
 
-template<> VertexElements GetVE<PostEffects::vertex_col>() {
-	static VertexElement ve[] = {
-		VertexElement(&PostEffects::vertex_col::pos, "position"_usage),
-		VertexElement(&PostEffects::vertex_col::col, "colour"_usage)
-	};
-	return ve;
+template<> static const VertexElements ve<PostEffects::vertex_col> = (const VertexElement[]) {
+	{&PostEffects::vertex_col::pos, "position"_usage},
+	{&PostEffects::vertex_col::col, "colour"_usage}
 };
 
-template<> VertexElements GetVE<PostEffects::vertex_tex>() {
-	static VertexElement ve[] = {
-		VertexElement(&PostEffects::vertex_tex::pos, "position"_usage),
-		VertexElement(&PostEffects::vertex_tex::uv, "texcoord"_usage)
-	};
-	return ve;
+template<> static const VertexElements ve<PostEffects::vertex_tex> = (const VertexElement[]) {
+	{&PostEffects::vertex_tex::pos, "position"_usage},
+	{&PostEffects::vertex_tex::uv, "texcoord"_usage}
 };
 
-template<> VertexElements GetVE<PostEffects::vertex_tex_col>() {
-	static VertexElement ve[] = {
-		VertexElement(&PostEffects::vertex_tex_col::pos, "position"_usage),
-		VertexElement(&PostEffects::vertex_tex_col::col, "colour"_usage),
-		VertexElement(&PostEffects::vertex_tex_col::uv, "texcoord"_usage)
-	};
-	return ve;
+template<> static const VertexElements ve<PostEffects::vertex_tex_col> = (const VertexElement[]) {
+	{&PostEffects::vertex_tex_col::pos, "position"_usage},
+	{&PostEffects::vertex_tex_col::col, "colour"_usage},
+	{&PostEffects::vertex_tex_col::uv, "texcoord"_usage}
 };
 
 void PostEffects::SetSourceSize(int w, int h) {
@@ -87,63 +75,63 @@ void PostEffects::RestoreFromZOnly() {
 	ctx.SetMask(CM_ALL);
 }
 
-template<template<class> class T, typename P> inline void _PutPos(T<P> p, param(float2) p0, param(float2) p1) {
+template<template<class> class T, typename P> inline void _PutPos(T<P*> p, param(float2) p0, param(float2) p1) {
 	p[0].pos = p0;
 	p[1].pos = float2{p1.x, p0.y};
 	p[2].pos = float2{p0.x, p1.y};
 	p[3].pos = p1;
 }
-template<template<class> class T, typename P> inline void _PutPos(T<P> p, param(float2) p0, param(float2) p1, param(float2) p2, param(float2) p3) {
+template<template<class> class T, typename P> inline void _PutPos(T<P*> p, param(float2) p0, param(float2) p1, param(float2) p2, param(float2) p3) {
 	p[0].pos = p0;
 	p[1].pos = p1;
 	p[2].pos = p2;
 	p[3].pos = p3;
 }
-template<template<class> class T, typename P> inline void _PutCol(T<P> p, param(colour) col) {
+template<template<class> class T, typename P> inline void _PutCol(T<P*> p, param(colour) col) {
 	p[0].col = p[1].col = p[2].col = p[3].col = col.rgba;
 }
-template<template<class> class T, typename P> inline void _PutTex(T<P> p, param(float2) uv0, param(float2) uv1) {
+template<template<class> class T, typename P> inline void _PutTex(T<P*> p, param(float2) uv0, param(float2) uv1) {
 	p[0].uv = uv0;
 	p[1].uv = float2{uv1.x, uv0.y};
 	p[2].uv = float2{uv0.x, uv1.y};
 	p[3].uv = uv1;
 }
 
-template<template<class> class T, typename P> inline P *_Put(T<P> p, param(float2) p0, param(float2) p1) {
+template<template<class> class T, typename P> inline P *_Put(T<P*> p, param(float2) p0, param(float2) p1) {
 	_PutPos(p, p0, p1);
 	return p.next();
 }
-template<template<class> class T, typename P> inline P *_Put4(T<P> p, param(float2) p0, param(float2) p1, param(float2) p2, param(float2) p3) {
+template<template<class> class T, typename P> inline P *_Put4(T<P*> p, param(float2) p0, param(float2) p1, param(float2) p2, param(float2) p3) {
 	_PutPos(p, p0, p1, p2, p3);
 	return p.next();
 }
-template<template<class> class T, typename P> inline P *_Put(T<P> p, param(float2) p0, param(float2) p1, param(colour) col) {
+template<template<class> class T, typename P> inline P *_Put(T<P*> p, param(float2) p0, param(float2) p1, param(colour) col) {
 	_PutPos(p, p0, p1);
 	_PutCol(p, col);
 	return p.next();
 }
-template<template<class> class T, typename P> inline P *_Put4(T<P> p, param(float2) p0, param(float2) p1, param(float2) p2, param(float2) p3, param(colour) col) {
+template<template<class> class T, typename P> inline P *_Put4(T<P*> p, param(float2) p0, param(float2) p1, param(float2) p2, param(float2) p3, param(colour) col) {
 	_PutPos(p, p0, p1, p2, p3);
 	_PutCol(p, col);
 	return p.next();
 }
-template<template<class> class T, typename P> inline P *_Put(T<P> p, param(float2) p0, param(float2) p1, param(float2) uv0, param(float2) uv1) {
+template<template<class> class T, typename P> inline P *_Put(T<P*> p, param(float2) p0, param(float2) p1, param(float2) uv0, param(float2) uv1) {
 	_PutPos(p, p0, p1);
 	_PutTex(p, uv0, uv1);
 	return p.next();
 }
-template<template<class> class T, typename P> inline P *_Put4(T<P> p, param(float2) p0, param(float2) p1, param(float2) p2, param(float2) p3, param(float2) uv0, param(float2) uv1) {
+template<template<class> class T, typename P> inline P *_Put4(T<P*> p, param(float2) p0, param(float2) p1, param(float2) p2, param(float2) p3, param(float2) uv0, param(float2) uv1) {
 	_PutPos(p, p0, p1, p2, p3);
 	_PutTex(p, uv0, uv1);
 	return p.next();
 }
-template<template<class> class T, typename P> inline P *_Put(T<P> p, param(float2) p0, param(float2) p1, param(float2) uv0, param(float2) uv1, param(colour) col) {
+template<template<class> class T, typename P> inline P *_Put(T<P*> p, param(float2) p0, param(float2) p1, param(float2) uv0, param(float2) uv1, param(colour) col) {
 	_PutPos(p, p0, p1);
 	_PutTex(p, uv0, uv1);
 	_PutCol(p, col);
 	return p.next();
 }
-template<template<class> class T, typename P> inline P *_Put4(T<P> p, param(float2) p0, param(float2) p1, param(float2) p2, param(float2) p3, param(float2) uv0, param(float2) uv1, param(colour) col) {
+template<template<class> class T, typename P> inline P *_Put4(T<P*> p, param(float2) p0, param(float2) p1, param(float2) p2, param(float2) p3, param(float2) uv0, param(float2) uv1, param(colour) col) {
 	_PutPos(p, p0, p1, p2, p3);
 	_PutTex(p, uv0, uv1);
 	_PutCol(p, col);

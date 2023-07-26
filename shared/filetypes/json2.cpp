@@ -56,7 +56,7 @@ ISO_ptr<void> JSONFileHandler::Read(tag id, JSONreader &json) {
 						break;
 				}
 				json.put_back(c);
-				p->Append(Read(0, json));
+				p->Append(Read(none, json));
 				c = skip_whitespace(json);
 			}
 			return p;
@@ -196,7 +196,7 @@ class BSONFileHandler : public FileHandler {
 		streamptr			end	= file.length();
 
 		while (file.tell() < end)
-			a->Append(ReadDocument(0, file));
+			a->Append(ReadDocument(none, file));
 		return a;
 	}
 } bson;

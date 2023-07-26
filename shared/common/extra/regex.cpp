@@ -294,7 +294,7 @@ void Prog::Flatten() {
 			reachable.clear();
 
 			for (int id = root;;) {
-				if (!reachable.check_insert(id) || id == root || !rootmap.check(id)) {
+				if (!reachable.check_insert(id) || id == root || !rootmap.count(id)) {
 					// reached another "tree" via epsilon transition
 					Inst	&ip = inst[id];
 					switch (ip.op) {
@@ -324,7 +324,7 @@ void Prog::Flatten() {
 				if (auto *p = predmap.check(id)) {
 					for (int pred : *p) {
 						// if id has a predecessor that cannot be reached from root, id must be a "root" too
-						if (!reachable.check(pred))
+						if (!reachable.count(pred))
 							rootmap.insert(id);
 					}
 				}
@@ -344,7 +344,7 @@ void Prog::Flatten() {
 
 		for (int root = i, id = root;;) {
 			if (!reachable.check_insert(id)) {
-				if (id != root && rootmap.check(id)) {
+				if (id != root && rootmap.count(id)) {
 					// reached another "tree" via epsilon transition, so emit a Nop so we don't become quadratically larger
 					flat.emplace_back(kInstEmptyWidth, rootmap.get_index(id)).empty	= kEmptyNone;
 
@@ -1977,6 +1977,14 @@ public:
 
 class CharClassBuilder : public set<CharRange> {
 	int		nchars;
+	auto	find(const CharRange& r) {
+		using iso::find;
+		return find(*(set<CharRange>*)this, r);
+	}
+	auto	find(const CharRange& r) const {
+		using iso::find;
+		return find(*(const set<CharRange>*)this, r);
+	}
 
 public:
 	CharClassBuilder() : nchars(0) {}
@@ -1991,40 +1999,40 @@ public:
 			return false;
 
 		{	// Check whether lo, hi is already in the class
-			iterator it = find(CharRange(lo, lo));
+			auto it = find(CharRange(lo, lo));
 			if (it != end() && it->lo <= lo && hi <= it->hi)
 				return false;
 		}
 
 		// Look for a range abutting lo on the left - if it exists, take it out and increase our range
 		if (lo > 0) {
-			iterator it = find(CharRange(lo - 1, lo - 1));
+			auto it = find(CharRange(lo - 1, lo - 1));
 			if (it != end()) {
 				lo = it->lo;
 				if (it->hi > hi)
 					hi = it->hi;
 				nchars -= it->hi - it->lo + 1;
-				remove(it);
+				remove(move(it));
 			}
 		}
 
 		// Look for a range abutting hi on the right - if it exists, take it out and increase our range
 		if (hi < unicode::Runemax) {
-			iterator it = find(CharRange(hi + 1, hi + 1));
+			auto it = find(CharRange(hi + 1, hi + 1));
 			if (it != end()) {
 				hi = it->hi;
 				nchars -= it->hi - it->lo + 1;
-				remove(it);
+				remove(move(it));
 			}
 		}
 
 		// Look for ranges between lo and hi, and take them out
 		for (;;) {
-			iterator it = find(CharRange(lo, hi));
+			auto it = find(CharRange(lo, hi));
 			if (it == end())
 				break;
 			nchars -= it->hi - it->lo + 1;
-			remove(it);
+			remove(move(it));
 		}
 
 		// Finally, add [lo, hi]
@@ -2076,11 +2084,11 @@ public:
 			return;
 
 		for (;;) {
-			iterator it = find(CharRange(r + 1, unicode::Runemax));
+			auto it = find(CharRange(r + 1, unicode::Runemax));
 			if (it == end())
 				break;
 			CharRange rr = *it;
-			remove(it);
+			remove(move(it));
 			nchars -= rr.hi - rr.lo + 1;
 			if (rr.lo <= r) {
 				rr.hi = r;
@@ -2123,12 +2131,13 @@ void AddFoldedRange(CharClassBuilder *cc, char32 lo, char32 hi, int depth) {
 				hi1 += f->delta;
 				break;
 			case unicode::EvenOdd:
-				lo1 &= ~1;
-				hi1 |= 1;
-				break;
-			case unicode::OddEven:
-				lo1 = (lo1 - 1) | 1;
-				hi1 = (hi1 + 1) & ~1;
+				if (lo & 1) {
+					lo1 = (lo1 - 1) | 1;
+					hi1 = (hi1 + 1) & ~1;
+				} else {
+					lo1 &= ~1;
+					hi1 |= 1;
+				}
 				break;
 		}
 		AddFoldedRange(cc, lo1, hi1, depth + 1);

@@ -40,7 +40,7 @@ struct JointMapping {
 		num2	= pose->Count();
 		parents = _parents;
 		for (int i = 0; i < num; i++)
-			mapping[i]	= pose->Find(names[i]);
+			mapping[i]	= pose->Find(crc32(names[i]));
 	}
 	void	Init(const Pose0 *pose, const Pose0 *target) {
 		num		= target->Count();

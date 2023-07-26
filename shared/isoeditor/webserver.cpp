@@ -82,7 +82,7 @@ struct RedirectedProcess {
 #endif
 
 template<typename T> string EnvVar(const char *name, const T &value) {
-	return (const char*)(buffer_accum<256>(name) << '=' << value);
+	return (buffer_accum<256>(name) << '=' << value).term();
 }
 
 void CGI(ostream_ref file, const HTTP &h, const char *base, IP4::addr ip, PORT port) {

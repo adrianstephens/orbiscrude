@@ -102,8 +102,10 @@ template<typename N, typename F> float octree_shoot_ray(N *root, param(float3) p
 		// find next sibling
 		float3	t2		= select(child, t1, tm);
 		int		next	= 1 << min_component_index(t2);
-		if (!(child & next))
+		if (!(child & next)) {
+			ISO_ASSERT(sp < end(stack));
 			*sp++ = entry(t0, t1, n, child | next);
+		}
 
 		t0	= select(child, tm, t0);
 		t1	= t2;
@@ -135,7 +137,7 @@ template<typename N, typename F> float octree_shoot_ray(N *root, param(float3) p
 		N		*n;
 		entry() {}
 		entry(param(float3) t0, param(float3) t1, N *n) : t0(t0), t1(t1), n(n) {}
-	} stack[32], *sp = stack;
+	} stack[64], *sp = stack;
 
 	for (N *n = root;;) {
 		process(n, t);
@@ -150,8 +152,10 @@ template<typename N, typename F> float octree_shoot_ray(N *root, param(float3) p
 
 		for (uint8 c = 0; c < 8; c++) {
 			if (N *child = n->child[c ^ a]) {
-				if (reduce_max(select(c, tm0, t0x)) < reduce_min(select(c, t1x, tm1)))
+				if (reduce_max(select(c, tm0, t0x)) < reduce_min(select(c, t1x, tm1))) {
+					ISO_ASSERT(sp < end(stack));
 					*sp++ = entry(select(c, tm, t0), select(c, t1, tm), child);
+				}
 			}
 		}
 
@@ -229,6 +233,9 @@ bool check_octree(octree::node *n, param(position3) centre, param(float3) scale,
 }
 
 void octree::init(cuboid *exts, int num) {
+	if (num == 0)
+		return;
+
 	max_depth	= (log2_ceil(num) + 1) / 2;
 	indices		= int_range(num);
 
@@ -247,7 +254,7 @@ void octree::init(cuboid *exts, int num) {
 	sort(make_indexed_container(recs.begin(), indices));
 
 	nodes.resize(num * 2);
-	node	*free_node	= &nodes[1];
+	node	*free_node	= nodes.begin() + 1;
 	for (int i = 0; i < num;) {
 		int			i0		= i++;
 		rec			r		= recs[indices[i0]];
@@ -265,12 +272,13 @@ void octree::init(cuboid *exts, int num) {
 	}
 	nodes.resize(free_node - nodes.begin());
 
-	check_octree(&nodes[0], centre, scale, 1.f, exts);
+	ISO_ASSERT(check_octree(nodes.begin(), centre, scale, 1.f, exts));
+	root = nodes.begin();
 }
 
 int octree::find(param(position3) p, const cb_check_dist &check_dist, float maxd) {
 	int		besti	= -1;
-	octree_find_point(&nodes[0], p - centre, scale, maxd, [&](const node *n, float &d) {
+	octree_find_point(root, p - centre, scale, maxd, [&](const node *n, float &d) {
 		for (auto &i : n->indices) {
 			if (check_dist(i, p, d))
 				besti = i;
@@ -283,7 +291,7 @@ int octree::find(param(position3) p, const cb_check_dist &check_dist, float maxd
 
 int	octree::shoot_ray(param(ray3) ray, const cb_calc_dist &calc_dist) const {
 	int		besti	= -1;
-	octree_shoot_ray(&nodes[0], ray.p - centre, ray.d, scale,
+	octree_shoot_ray(root, ray.p - centre, ray.d, scale,
 		[&](node *n, float &t) {
 		for (auto &i : n->indices) {
 			if (calc_dist(i, ray, t))
@@ -301,7 +309,7 @@ int	octree::shoot_ray(param(float4x4) mat, const cb_calc_dist &calc_dist) const 
 
 int	octree::shoot_ray(param(ray3) ray, float slack, const cb_calc_dist &calc_dist) const {
 	int		besti	= -1;
-	octree_shoot_ray(&nodes[0], ray.p - centre, ray.d, scale, slack,
+	octree_shoot_ray(root, ray.p - centre, ray.d, scale, slack,
 		[&](node *n, float &t) {
 		for (auto &i : n->indices) {
 			if (calc_dist(i, ray, t))

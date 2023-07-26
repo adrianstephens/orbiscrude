@@ -21,7 +21,8 @@ struct DX11Texture  {
 };
 
 struct DX11Buffer  {
-	uint32		size:24, format:8;
+	uint32		width;
+	uint32		format_or_stride;
 	uint32		offset;
 };
 
@@ -67,12 +68,14 @@ struct DX11CompactSampler {
 };
 
 enum ShaderStage {
-	SS_PIXEL,
+	SS_PIXEL,	// slot for compute
 	SS_VERTEX,
 	SS_GEOMETRY,
-	SS_HULL,
-	SS_LOCAL,
+	SS_HULL,	//amplification
+	SS_LOCAL,	//=domain, mesh
 	SS_COMPUTE,
+	SS_MESH		= SS_LOCAL,
+	SS_AMPLIFY	= SS_HULL,
 	SS_COUNT = 5
 };
 
@@ -82,8 +85,9 @@ public:
 	SubShader	sub[SS_COUNT];
 
 	void		Bind(D3D11_INPUT_ELEMENT_DESC *ve, uint32 n, uint32 *strides) const {}
-	bool		Has(int s)			const	{ return sub[s].exists(); }
+	bool		Has(ShaderStage s)	const	{ return sub[s].exists(); }
 	bool		StreamoutEnabled()	const	{ return false; }
+	ShaderStage	FirstStage()		const	{ return Has(SS_VERTEX) ? SS_PIXEL : SS_COMPUTE; }
 };
 
 } //namespace iso

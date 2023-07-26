@@ -125,7 +125,25 @@ enum TAG {
 	TAG_type_unit				= 0x41,
 	TAG_rvalue_reference_type	= 0x42,
 	TAG_template_alias			= 0x43,
+	TAG_coarray_type			= 0x44,
+	TAG_generic_subrange		= 0x45,
+	TAG_dynamic_type			= 0x46,
+	
 	_TAG_table_size,
+
+	TAG_auto_variable				= 0x0100,
+	TAG_arg_variable				= 0x0101,
+
+	TAG_MIPS_loop					= 0x4081,
+
+	TAG_format_label				= 0x4101,
+	TAG_function_template			= 0x4102,
+	TAG_class_template				= 0x4103,
+	TAG_GNU_template_template_param	= 0x4106,
+	TAG_GNU_template_parameter_pack	= 0x4107,
+	TAG_GNU_formal_parameter_pack	= 0x4108,
+	TAG_APPLE_property				= 0x4200,
+
 	TAG_lo_user					= 0x4080,
 	TAG_hi_user					= 0xffff,
 };
@@ -255,6 +273,7 @@ enum FORM {
 };
 
 enum OP {
+	OP_none						= 0x00,
 	OP_addr						= 0x03,		//args=1	constant address (size target specific)
 	OP_deref					= 0x06,		//args=0
 	OP_const1u					= 0x08,		//args=1	1-byte constant
@@ -316,11 +335,50 @@ enum OP {
 	OP_bit_piece				= 0x9d,		//args=2
 	OP_implicit_value			= 0x9e,		//args=2	ULEB128 size followed by block of that size
 	OP_stack_value				= 0x9f,		//args=0
+
+	OP_GNU_push_tls_address		= 0xe0,
+	OP_GNU_addr_index			= 0xfb,
+	OP_GNU_const_index			= 0xfc,
+
 	OP_lo_user					= 0xe0,
 	OP_hi_user					= 0xff,
+
+	// Only used in LLVM metadata.
+	OP_LLVM_fragment			= 0x1000,
+	OP_LLVM_convert				= 0x1001,
+	OP_LLVM_tag_offset			= 0x1002,
+	OP_LLVM_entry_value			= 0x1003,
+	OP_LLVM_implicit_pointer	= 0x1004,
+	OP_LLVM_arg					= 0x1005,
 };
 
+static inline int num_args(OP op) {
+	if (between(op, OP_breg0, OP_breg0 + 31))
+		return 2;
+
+	switch (op) {
+		case OP_LLVM_convert:
+		case OP_LLVM_fragment:
+		case OP_bregx:
+		case OP_bit_piece:
+			return 2;
+		case OP_constu:
+		case OP_consts:
+		case OP_deref_size:
+		case OP_plus:
+		case OP_plus_uconst:
+		case OP_LLVM_tag_offset:
+		case OP_LLVM_entry_value:
+		case OP_LLVM_arg:
+		case OP_regx:
+			return 1;
+		default:
+			return 0;
+	}
+}
+
 enum ATE {
+	ATE_unknown					= 0x00,
 	ATE_address					= 0x01,
 	ATE_boolean					= 0x02,
 	ATE_complex_float			= 0x03,
@@ -376,6 +434,7 @@ enum VIRTUALITY {
 };
 
 enum LANG {
+	LANG_Unknown				= 0x0000,
 	LANG_C89					= 0x0001,
 	LANG_C						= 0x0002,
 	LANG_Ada83					= 0x0003,

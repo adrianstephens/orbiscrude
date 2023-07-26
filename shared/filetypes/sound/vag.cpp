@@ -317,7 +317,7 @@ bool VAGFileHandler::operator()(const ISO_WAVEFORMATEX *fmt, RIFF_chunk	&chunk, 
 	if (fmt->wFormatTag != ISO_WAVE_FORMAT_VAG)
 		return false;
 
-	if (ISO_ptr<sample> p = Read(0, chunk)) {
+	if (ISO_ptr<sample> p = Read(none, chunk)) {
 		return true;
 	}
 	return false;
@@ -404,7 +404,7 @@ inline void	endian(XVAG_CPan &t, bool bigendian) {
 class XVAGFileHandler : public FileHandler {
 	enum { ISO_WAVE_FORMAT_VAG = 0xFFFB };
 	const char*			GetExt() override { return "xvag";	}
-	int					Check(istream_ref file) override { return file.get<XVAG_chunk>().id == "XVAG"_u32 ? CHECK_PROBABLE : CHECK_DEFINITE_NO; }
+	int					Check(istream_ref file) override { file.seek(0); return file.get<XVAG_chunk>().id == "XVAG"_u32 ? CHECK_PROBABLE : CHECK_DEFINITE_NO; }
 	ISO_ptr<void>		Read(tag id, istream_ref file) override;
 //	bool				Write(ISO_ptr<void> p, ostream_ref file) override;
 public:

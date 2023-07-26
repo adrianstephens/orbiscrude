@@ -190,7 +190,7 @@ int64 CPP::EvaluateExpression() {
 
 			if (is_alpha(c) || c == '_') {
 				char	identifier[256];
-				read_token(*this, identifier, char_set::identifier, c);
+				read_token(*this, identifier, char_set::wordchar, c);
 
 				if (strcmp(identifier, "defined") == 0) {
 					c = skip_chars(*this, char_set(" \t"));
@@ -198,7 +198,7 @@ int64 CPP::EvaluateExpression() {
 					if (par)
 						c = skip_chars(*this, char_set(" \t"));
 
-					read_token(*this, identifier, char_set::identifier, c);
+					read_token(*this, identifier, char_set::wordchar, c);
 
 					if (par) {
 						c = skip_chars(*this, char_set(" \t"));

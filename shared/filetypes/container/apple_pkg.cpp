@@ -361,7 +361,8 @@ class BOMFileHandler : public FileHandler {
 
 	int				Check(istream_ref file) override {
 		file.seek(0);
-		return str(file.get<BOM::Header>().magic) == "BOMStore" ? CHECK_PROBABLE : CHECK_DEFINITE_NO;
+		BOM::Header	h;
+		return file.read(h) && str(h.magic) == "BOMStore" ? CHECK_PROBABLE : CHECK_DEFINITE_NO;
 	}
 
 	ISO_ptr<void>	Read(tag id, istream_ref file) override {
@@ -685,15 +686,15 @@ namespace CAR {
 			case 'DATA': {
 				const RawDataRendition<be> *data = rendition();
 				if (data->tag == 'RAWD')
-					return ISO::MakePtr(0, malloc_block(data->data()));
+					return ISO::MakePtr(none, malloc_block(data->data()));
 				break;
 			}
 			case 'JPEG': {
 				const RawDataRendition<be> *data = rendition();
 				if (data->tag == 'RAWD') {
 					if (FileHandler	*fh = FileHandler::Get("jpg"))
-						return fh->Read(0, lvalue(memory_reader(data->data())));
-					return ISO::MakePtr(0, malloc_block(data->data()));
+						return fh->Read(none, lvalue(memory_reader(data->data())));
+					return ISO::MakePtr(none, malloc_block(data->data()));
 				}
 				break;
 			}
@@ -701,8 +702,8 @@ namespace CAR {
 				const RawDataRendition<be> *data = rendition();
 				if (data->tag == 'RAWD') {
 					if (FileHandler	*fh = FileHandler::Get("heif"))
-						return fh->Read(0, lvalue(memory_reader(data->data())));
-					return ISO::MakePtr(0, malloc_block(data->data()));
+						return fh->Read(none, lvalue(memory_reader(data->data())));
+					return ISO::MakePtr(none, malloc_block(data->data()));
 				}
 			}
 			case 'ARGB':
@@ -718,12 +719,12 @@ namespace CAR {
 			case 'PDF ': {
 				const RawDataRendition<be> *data = rendition();
 				if (data->tag == 'RAWD')
-					return ISO::MakePtr(0, malloc_block(data->data()));
+					return ISO::MakePtr(none, malloc_block(data->data()));
 			}
 			default:
 				break;
 		}
-		return ISO::MakePtr(0, malloc_block(rendition()));
+		return ISO::MakePtr(none, malloc_block(rendition()));
 
 	}
 
@@ -744,7 +745,8 @@ class CARFileHandler : public FileHandler {
 
 	int				Check(istream_ref file) override {
 		file.seek(0);
-		return str(file.get<BOM::Header>().magic) == "BOMStore" ? CHECK_PROBABLE : CHECK_DEFINITE_NO;
+		BOM::Header	h;
+		return file.read(h) && str(h.magic) == "BOMStore" ? CHECK_PROBABLE : CHECK_DEFINITE_NO;
 	}
 	ISO_ptr<void>	Read(tag id, istream_ref file) override {
 		BOM		bom(file);

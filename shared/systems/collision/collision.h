@@ -1,13 +1,9 @@
 #ifndef COLLISION_H
 #define COLLISION_H
 
-#include "object.h"
 #include "maths/geometry.h"
 #include "maths/bezier.h"
-
-namespace iso {
-	inline void test(position3 *p) { sphere::small(p, 16); }
-}
+#include "object.h"
 
 class CollisionContainer;
 

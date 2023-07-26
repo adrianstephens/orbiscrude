@@ -60,6 +60,8 @@ enum Memory {
 	MEM_TARGET				= D3D11_BIND_RENDER_TARGET,
 	MEM_DEPTH				= D3D11_BIND_DEPTH_STENCIL,
 	MEM_WRITABLE			= D3D11_BIND_UNORDERED_ACCESS,
+	MEM_VERTEXBUFFER		= D3D11_BIND_VERTEX_BUFFER,
+	MEM_INDEXBUFFER			= D3D11_BIND_INDEX_BUFFER,
 
 	MEM_CPU_WRITE			= D3D11_CPU_ACCESS_WRITE,
     MEM_CPU_READ			= D3D11_CPU_ACCESS_READ,
@@ -75,6 +77,7 @@ enum Memory {
 	MEM_FORCE2D				= 0xc00,
 
 	MEM_CASTABLE			= 0x1000,
+	MEM_INDIRECTARG			= 0x2000,
 };
 constexpr Memory operator|(Memory a, Memory b)		{
 	return Memory(int(a) | b);
@@ -145,6 +148,7 @@ enum PrimType {
 	PRIM_TRILIST			= D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
 	PRIM_TRISTRIP			= D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
 
+	PRIM_QUADSTRIP			= PRIM_TRISTRIP,
 	//emulated
 	PRIM_EMULATED			= 0x1000,
 	PRIM_QUADLIST			= PRIM_EMULATED,
@@ -321,6 +325,27 @@ enum FillMode {
 	FILL_WIREFRAME			= D3D11_FILL_WIREFRAME,
 };
 
+struct DrawVerticesArgs : D3D11_DRAW_INSTANCED_INDIRECT_ARGS {
+	DrawVerticesArgs()	{}
+	DrawVerticesArgs(uint32 start_vert, uint32 num_verts, uint32 start_instance, uint32 num_instances) {
+		VertexCountPerInstance	= num_verts;
+		InstanceCount			= num_instances;
+		StartVertexLocation		= start_vert;
+		StartInstanceLocation	= start_instance;
+	}
+};
+
+struct DrawIndexedVerticesArgs : D3D11_DRAW_INDEXED_INSTANCED_INDIRECT_ARGS {
+	DrawIndexedVerticesArgs()	{}
+	DrawIndexedVerticesArgs(uint32 min_index, uint32 num_verts, uint32 start_index, uint32 num_indices, uint32 start_instance, uint32 num_instances) {
+		IndexCountPerInstance	= 0;
+		InstanceCount			= num_instances;
+		StartIndexLocation		= start_index;
+		BaseVertexLocation		= min_index;
+		StartInstanceLocation	= start_instance;
+	}
+};
+
 //-----------------------------------------------------------------------------
 //	component types
 //-----------------------------------------------------------------------------
@@ -330,6 +355,7 @@ template<typename T> constexpr ComponentType	GetComponentType(const T&)	{ return
 template<typename T> constexpr ComponentType	GetComponentType()			{ return (ComponentType)_ComponentType<T>::value; }
 template<typename T> constexpr TexFormat		GetTexFormat()				{ return TexFormat(_ComponentType<T>::value); }
 template<typename T> constexpr ComponentType	GetBufferFormat()			{ return ComponentType(_BufferFormat<_ComponentType<T>::value, sizeof(T)>::value); }
+template<typename T> constexpr bool				ValidTexFormat()			{ return _ComponentType<T>::value != DXGI_FORMAT_UNKNOWN; }
 
 //-----------------------------------------------------------------------------
 //	Texture/Surface
@@ -361,6 +387,7 @@ struct ResourceData {
 	~ResourceData() {
 		ctx->Unmap(res, 0);
 	}
+	template<typename T> operator T*()	const { return (T*)map.pData; }
 };
 
 class Surface : public com_ptr2<ID3D11Resource>	{
@@ -373,8 +400,8 @@ class Surface : public com_ptr2<ID3D11Resource>	{
 	void	Init(TexFormat _fmt, int width, int height, Memory loc);
 	uint32	CalcSubresource() const	{ return slice == 0 ? mip : GetMipLevels(get()) * slice + mip; }
 
-	template<typename T> struct Temp : ResourceData, block<T,2> {
-		Temp(ID3D11Resource *res, uint32 sub, const point &size, ID3D11DeviceContext *ctx) : ResourceData(res, sub, D3D11_MAP_READ, ctx), block<T,2>(make_block((T*)map.pData, size.x), map.RowPitch, size.y) {}
+	template<typename T> struct TypedData : ResourceData, block<T,2> {
+		TypedData(ID3D11Resource *res, uint32 sub, const point &size, ID3D11DeviceContext *ctx) : ResourceData(res, sub, D3D11_MAP_READ, ctx), block<T,2>(make_block((T*)map.pData, size.x), map.RowPitch, size.y) {}
 	};
 public:
 	Surface() {}
@@ -415,7 +442,7 @@ public:
 	rect		GetRect()	const { return rect(zero, Size()); }
 	vol			GetVol()	const { return vol(point3(zero), Size3D()); }
 
-	template<typename T> Temp<T> Data(ID3D11DeviceContext *ctx = ImmediateContext()) const {
+	template<typename T> TypedData<T> Data(ID3D11DeviceContext *ctx = ImmediateContext()) const {
 		return {get(), CalcSubresource(), Size(), ctx};
 	}
 
@@ -451,8 +478,8 @@ public:
 class Texture : DXwrapper<_Texture, 64> {
 	friend void Init(Texture *x, void *physram);
 
-	template<typename T> struct Temp : ResourceData, block<T,2> {
-		Temp(ID3D11View *view, D3D11_MAP type, const point &size, ID3D11DeviceContext *ctx) : ResourceData(view, 0, type, ctx), block<T,2>(make_block((T*)map.pData, size.x), map.RowPitch, size.y) {}
+	template<typename T> struct TypedData : ResourceData, block<T,2> {
+		TypedData(ID3D11View *view, D3D11_MAP type, const point &size, ID3D11DeviceContext *ctx) : ResourceData(view, 0, type, ctx), block<T,2>(make_block((T*)map.pData, size.x), map.RowPitch, size.y) {}
 	};
 	struct Info {
 		TexFormat format;
@@ -489,8 +516,8 @@ public:
 	_Texture*	operator->()				const	{ return safe(); }
 	operator	_Texture*()					const	{ return safe(); }
 	operator	Surface()					const	{ return GetSurface(0);	 }
-	template<typename T> Temp<const T>	Data(ID3D11DeviceContext *ctx = ImmediateContext())			const	{ return {safe(), D3D11_MAP_READ, Size(), ctx}; }
-	template<typename T> Temp<T>		WriteData(ID3D11DeviceContext *ctx = ImmediateContext())	const	{ return {safe(), D3D11_MAP_WRITE_DISCARD, Size(), ctx}; }
+	template<typename T> TypedData<const T>	Data(ID3D11DeviceContext *ctx = ImmediateContext())			const	{ return {safe(), D3D11_MAP_READ, Size(), ctx}; }
+	template<typename T> TypedData<T>		WriteData(ID3D11DeviceContext *ctx = ImmediateContext())	const	{ return {safe(), D3D11_MAP_WRITE_DISCARD, Size(), ctx}; }
 };
 
 //-----------------------------------------------------------------------------
@@ -500,6 +527,10 @@ public:
 class _Buffer {
 public:
 //protected:
+	template<typename T> struct TypedData : ResourceData, block<T,1> {
+		TypedData(ID3D11Buffer *b, D3D11_MAP type, uint32 size, ID3D11DeviceContext *ctx)	: ResourceData(b, 0, type, ctx), block<T,1>((T*)map.pData, size) {}
+		TypedData(ID3D11View *v, D3D11_MAP type, uint32 size, ID3D11DeviceContext *ctx)		: ResourceData(v, 0, type, ctx), block<T,1>((T*)map.pData, size) {}
+	};
 	com_ptr<ID3D11Buffer>	b;
 
 	D3D11_BUFFER_DESC GetDesc() const {
@@ -513,17 +544,18 @@ public:
 	bool		_Bind(DXGI_FORMAT format, uint32 n, ID3D11ShaderResourceView **srv);
 
 	bool		Init(uint32 size, Memory loc);
-	bool		Init(const void *data, uint32 size, Memory loc = MEM_DEFAULT);
-	bool		InitStructured(uint32 n, uint32 stride, Memory loc = MEM_DEFAULT);
-	bool		InitStructured(const void *data, uint32 n, uint32 stride, Memory loc = MEM_DEFAULT);
+	bool		Init(const void *data, uint32 size, Memory loc);
+	bool		Init(uint32 n, uint32 stride, Memory loc);
+	bool		Init(const void *data, uint32 n, uint32 stride, Memory loc);
 
-	void*		Begin()						const;
-	void		End()						const;
+//	void*		Begin()						const;
+//	void		End()						const;
 	uint32		Size()						const		{ return b ? GetDesc().ByteWidth : 0; }
+
 	operator	ID3D11Buffer*()				const		{ return b;	}
 	bool		Transfer(const void *data, uint32 size) {
-		memcpy(Begin(), data, size);
-		End();
+		ResourceData	rd(b, 0, D3D11_MAP_WRITE_NO_OVERWRITE, ImmediateContext());
+		memcpy(rd.map.pData, data, size);
 		return true;
 	}
 };
@@ -532,27 +564,25 @@ template<D3D11_BIND_FLAG BIND> class _BufferBind : public _Buffer {
 public:
 	bool	Init(const void *data, uint32 size, Memory loc = MEM_DEFAULT)	{ return data && _Buffer::Init(data, size, Bind(BIND) | loc);	}
 	bool	Init(uint32 size, Memory loc = MEM_DEFAULT)						{ return _Buffer::Init(size, Bind(BIND) | loc);	}
-};
-
-template<D3D11_BIND_FLAG BIND, typename T> class _BufferTyped : public _BufferBind<BIND> {
-	typedef _BufferBind<BIND>	B;
-	template<typename T> struct Temp : ResourceData {
-		Temp(ID3D11Buffer *b, D3D11_MAP type, ID3D11DeviceContext *ctx) : ResourceData(b, 0, type, ctx) {}
-		operator const T*()	const { return (const T*)map.pData; }
-		const T	*begin()	const { return (T*)map.pData; }
-	};
-public:
-	bool					Init(const T *t, uint32 n, Memory loc = MEM_DEFAULT)	{ return B::Init(t, n * sizeof(T), loc); }
-	template<int N> bool	Init(const T (&t)[N], Memory loc = MEM_DEFAULT)			{ return B::Init(&t, sizeof(t), loc); }
-	bool	Init(uint32 n, Memory loc = MEM_DEFAULT)	{ return B::Init(n * sizeof(T), loc);	}
-	T*		Begin(uint32 n, Memory loc = MEM_DEFAULT)	{ return Init(n, loc | MEM_CPU_WRITE) ? Begin() : NULL;	}
-	T*		Begin()							const		{ return (T*)B::Begin();	}
-	uint32	Size()							const		{ return B::Size() / sizeof(T); }
-	Temp<T>	Data(ID3D11DeviceContext *ctx = ImmediateContext())		const	{ return {B::MakeStaging(ctx), D3D11_MAP_READ_WRITE, ctx};	}
+	ResourceData	Data(ID3D11DeviceContext *ctx = ImmediateContext())			const { return {MakeStaging(ctx), 0, D3D11_MAP_READ, ctx}; }
+	ResourceData	WriteData(ID3D11DeviceContext *ctx = ImmediateContext())	const {	return {b, 0, D3D11_MAP_WRITE_NO_OVERWRITE, ctx}; }
 };
 
 typedef _BufferBind<D3D11_BIND_VERTEX_BUFFER>	_VertexBuffer;
 typedef _BufferBind<D3D11_BIND_INDEX_BUFFER>	_IndexBuffer;
+
+template<D3D11_BIND_FLAG BIND, typename T> class _BufferTyped : public _BufferBind<BIND> {
+	typedef _BufferBind<BIND>	B;
+public:
+	bool					Init(const T *t, uint32 n, Memory loc = MEM_DEFAULT)	{ return B::Init(t, n * sizeof(T), loc); }
+	template<int N> bool	Init(const T (&t)[N], Memory loc = MEM_DEFAULT)			{ return B::Init(&t, sizeof(t), loc); }
+	bool	Init(uint32 n, Memory loc = MEM_DEFAULT)	{ return B::Init(n * sizeof(T), loc);	}
+	auto	Begin(uint32 n, Memory loc = MEM_DEFAULT)	{ Init(n, loc | MEM_CPU_WRITE); return WriteData(); }
+//	T*		Begin()							const		{ return (T*)B::Begin();	}
+	uint32	Size()							const		{ return B::Size() / sizeof(T); }
+	_Buffer::TypedData<const T>	Data(ID3D11DeviceContext *ctx = ImmediateContext())			const { return {B::MakeStaging(ctx), D3D11_MAP_READ, Size(), ctx}; }
+	_Buffer::TypedData<T>		WriteData(ID3D11DeviceContext *ctx = ImmediateContext())	const {	return {b, D3D11_MAP_WRITE_NO_OVERWRITE, Size(), ctx}; }
+};
 
 template<typename T> class VertexBuffer : public _BufferTyped<D3D11_BIND_VERTEX_BUFFER, T> {
 public:
@@ -571,14 +601,12 @@ public:
 //-----------------------------------------------------------------------------
 //	DataBuffer
 //-----------------------------------------------------------------------------
-
+#if 0
 template<typename T> class Buffer {
 	com_ptr<ID3D11ShaderResourceView>	p;
-	struct Temp : ResourceData, block<T,1> {
-		Temp(ID3D11View *view, D3D11_MAP type, uint32 size, ID3D11DeviceContext *ctx) : ResourceData(view, 0, type, ctx), block<T,1>((T*)map.pData, size) {}
-	};
 public:
 	Buffer()					{}
+	Buffer(uint32 n, Memory loc = MEM_DEFAULT)							{ Init(n, loc);	}
 	Buffer(const T *t, uint32 n, Memory loc = MEM_DEFAULT)				{ Init(t, n, loc);	}
 	template<int N> Buffer(const T (&t)[N], Memory loc = MEM_DEFAULT)	{ Init(t, loc);		}
 
@@ -594,20 +622,15 @@ public:
 	}
 	bool	Init(uint32 n, Memory loc = MEM_DEFAULT) {
 		_Buffer	b;
-		return (GetBufferFormat<T>()
+		return (GetBufferFormat<T>()	
 			? b.Init(n * sizeof(T), Bind(D3D11_BIND_SHADER_RESOURCE) | loc)
 			: b.InitStructured(n, sizeof(T), Bind(D3D11_BIND_SHADER_RESOURCE) | loc)
 		) && b._Bind(GetBufferFormat<T>(), n, &p);
 	}
-	Temp	Data(ID3D11DeviceContext *ctx = ImmediateContext())	const {
-		return {p.get(), D3D11_MAP_READ, Size(), ctx};
-	}
-	Temp	WriteData(ID3D11DeviceContext *ctx = ImmediateContext()) const {
-		return {p.get(), D3D11_MAP_WRITE_DISCARD, Size(), ctx};
-	}
-	operator ID3D11ShaderResourceView*() const {
-		return p;
-	}
+	_Buffer::TypedData<T>	Data(ID3D11DeviceContext *ctx = ImmediateContext())			const { return {p.get(), D3D11_MAP_READ, Size(), ctx}; }
+	_Buffer::TypedData<T>	WriteData(ID3D11DeviceContext *ctx = ImmediateContext())	const { return {p.get(), D3D11_MAP_WRITE_DISCARD, Size(), ctx}; }
+	operator ID3D11ShaderResourceView*() const { return p; }
+#if 1
 	T*		Begin(ID3D11DeviceContext *ctx) const {
 		com_ptr<ID3D11Resource>		res;
 		p->GetResource(&res);
@@ -619,6 +642,7 @@ public:
 		p->GetResource(&res);
 		ctx->Unmap(res, 0);
 	}
+#endif
 	uint32	Size() const {
 		com_ptr<ID3D11Resource>		res;
 		D3D11_BUFFER_DESC			desc;
@@ -627,27 +651,44 @@ public:
 		return desc.ByteWidth / sizeof(T);
 	}
 };
-
+#endif
 class DataBuffer : DXwrapper<ID3D11ShaderResourceView, 64> {
-	template<typename T> struct Temp : ResourceData, block<T,1> {
-		Temp(ID3D11View *view, D3D11_MAP type, uint32 size, ID3D11DeviceContext *ctx) : ResourceData(view, 0, type, ctx), block<T,1>((T*)map.pData, size) {}
-	};
-
 public:
 	DataBuffer()									{}
 	DataBuffer(ID3D11ShaderResourceView *p)			{ if (*write() = p) p->AddRef(); }
+	~DataBuffer();
 	operator	ID3D11ShaderResourceView*()	const	{ return safe();	}
-	template<typename T> operator Buffer<T>&()		{ return *(Buffer<T>*)write(); }
+	auto		operator->()				const	{ return safe(); }
 
 	bool	Init(TexFormat format, int width, Memory flags = MEM_DEFAULT) {
 		_Buffer	b;
 		return b.Init(width * DXGI_COMPONENTS((DXGI_FORMAT)format).Bytes(), Bind(D3D11_BIND_SHADER_RESOURCE) | flags)
 			&& b._Bind((DXGI_FORMAT)format, width, write());
 	}
-	bool	Init(TexFormat format, int width, Memory flags, void *data) {
+	bool	Init(const void *data, TexFormat format, int width, Memory flags) {
 		_Buffer	b;
 		return b.Init(data, width * DXGI_COMPONENTS((DXGI_FORMAT)format).Bytes(), Bind(D3D11_BIND_SHADER_RESOURCE) | flags)
 			&& b._Bind((DXGI_FORMAT)format, width, write());
+	}
+	bool	Init(stride_t stride, uint32 width, Memory flags = MEM_DEFAULT) {
+		_Buffer	b;
+		if (flags & MEM_INDIRECTARG) {
+			return b.Init(width * stride, flags)
+				&& b._Bind(DXGI_FORMAT_R32_UINT, width, write());
+		} else {
+			return b.Init(width, stride, Bind(D3D11_BIND_SHADER_RESOURCE) | flags)
+				&& b._Bind(DXGI_FORMAT_UNKNOWN, width, write());
+		}
+	}
+	bool	Init(const void *data, stride_t stride, uint32 width, Memory flags = MEM_DEFAULT) {
+		_Buffer	b;
+		if (flags & MEM_INDIRECTARG) {
+			return b.Init(data, width * stride, flags)
+				&& b._Bind(DXGI_FORMAT_R32_UINT, width, write());
+		} else {
+			return b.Init(data, width, stride, Bind(D3D11_BIND_SHADER_RESOURCE) | flags)
+				&& b._Bind(DXGI_FORMAT_UNKNOWN, width, write());
+		}
 	}
 
 	uint32	Size()	const	{
@@ -655,8 +696,14 @@ public:
 		safe()->GetDesc(&desc);
 		return desc.Buffer.NumElements;
 	}
+	auto	Resource() const {
+		com_ptr<ID3D11Resource>		res;
+		safe()->GetResource(&res);
+		return res;
+	}
 
-	template<typename T> Temp<T>	Data(ID3D11DeviceContext *ctx = ImmediateContext())	const	{ return {safe(), D3D11_MAP_READ, Size(), ctx}; }
+	template<typename T> _Buffer::TypedData<T>	Data(ID3D11DeviceContext *ctx = ImmediateContext())			const	{ return {safe(), D3D11_MAP_READ, Size(), ctx}; }
+	template<typename T> _Buffer::TypedData<T>	WriteData(ID3D11DeviceContext *ctx = ImmediateContext())	const	{ return {safe(), D3D11_MAP_WRITE_DISCARD, Size(), ctx}; }
 };
 
 struct ConstBuffer : _Buffer {
@@ -677,18 +724,8 @@ struct ConstBuffer : _Buffer {
 		memcpy((uint8*)data + offset, _data, _size);
 		return true;
 	}
-	bool	FixBuffer() {
-		if (data) {
-			End();
-			data	= 0;
-		}
-		return true;
-	}
-	void	*Data() {
-		if (!data)
-			data = Begin();
-		return data;
-	}
+	bool	FixBuffer();
+	void*	Data();
 };
 
 //-----------------------------------------------------------------------------
@@ -727,11 +764,11 @@ template<typename T> ID3D11InputLayout	*GetVD(const void *vs)	{ static VertexDes
 //-----------------------------------------------------------------------------
 
 enum ShaderParamType {
-	SPT_VAL			= 0,
-	SPT_TEXTURE		= 1,
-	SPT_SAMPLER		= 2,
-	SPT_BUFFER		= 3,
-	SPT_COUNT		= 4,
+	SPT_VAL				= 0,
+	SPT_SAMPLER			= 1,
+	SPT_RESOURCE		= 2,
+	SPT_WRITE_RESOURCE	= 3,
+	SPT_COUNT			= 4,
 };
 
 struct ShaderReg {
@@ -748,12 +785,13 @@ struct ShaderReg {
 };
 
 class ShaderParameterIterator {
+	typedef dx::DXBC::BlobT<dx::DXBC::ResourceDef>	RDEF;
 	const DX11Shader	&shader;
 	int					stage;
 	int					cbuff_index;
-	dx::RD11			*rdef;
-	range<stride_iterator<dx::RDEF::Variable> >	vars;
-	range<stride_iterator<dx::RDEF::Binding> >	bindings;
+	const dx::RD11		*rdef;
+	range<stride_iterator<RDEF::Variable> >	vars;
+	range<stride_iterator<RDEF::Binding> >	bindings;
 	const char			*name;
 	const void			*val;
 	D3D11_SAMPLER_DESC	sampler;
@@ -778,11 +816,6 @@ public:
 //-----------------------------------------------------------------------------
 //	Graphics
 //-----------------------------------------------------------------------------
-
-struct Fence : com_ptr<ID3D11Query>	{
-	Fence() {}
-	Fence(ID3D11Query *p)  : com_ptr<ID3D11Query>(p) {}
-};
 
 struct FrameAllocator : atomic<circular_allocator> {
 	void		*ends[2];
@@ -878,6 +911,7 @@ struct RenderWindow;
 class Graphics {
 	friend GraphicsContext;
 	friend ComputeContext;
+	friend class Fence;
 
 	struct CBKey {
 		union {
@@ -893,6 +927,7 @@ class Graphics {
 	com_ptr<ID3D11Device>			device;
 	com_ptr<ID3D11DeviceContext>	context;
 	hash_map<CBKey, ConstBuffer*>	cb;
+	hash_map<ID3D11ShaderResourceView*, com_ptr<ID3D11UnorderedAccessView>, false, 4>	uav_map;
 	FrameAllocator					fa;
 	int								frame;
 public:
@@ -948,10 +983,49 @@ public:
 		void Clear()									{ clear(buffers); dirty = 0; raw = 0; }
 	};
 
+	struct UAVS : dynamic_array<com_ptr2<ID3D11UnorderedAccessView>> {
+		inline	ID3D11UnorderedAccessView**	Get(int i) {
+			if (size() <= i)
+				resize(i + 1);
+			else
+				(*this)[i].clear();
+			return &(*this)[i];
+		}
+
+		inline	void	Set(ID3D11UnorderedAccessView *uav, int i) {
+			*Get(i) = uav;
+		}
+		inline	bool	Set(ID3D11Resource *res, TexFormat format, int i);
+		inline	bool	Set(ID3D11ShaderResourceView *srv, int i);
+
+		void	FlushCS(ID3D11DeviceContext *ctx) {
+			if (uint32 n = size32()) {
+				auto	counts = alloc_auto(uint32, n);
+				memset(counts, 0, sizeof(uint32*) * n);
+				ctx->CSSetUnorderedAccessViews(0, n, (ID3D11UnorderedAccessView**)begin(), counts);
+				while (n-- && !back())
+					pop_back();
+			}
+		}
+		void	ClearCS(ID3D11DeviceContext *ctx) {
+			for (auto &i : *this)
+				i.clear();
+		}
+
+	};
+
 	flags<FEATURE>		features;
 
-	bool				MakeUAV(ID3D11Buffer *b, ID3D11UnorderedAccessView **uav);
-	bool				MakeUAV(ID3D11Resource *res, ID3D11UnorderedAccessView **uav);
+	bool				Remove(ID3D11ShaderResourceView *srv) {
+		if (auto *p = uav_map.remove(srv)) {
+			p->clear();
+			return true;
+		}
+		return false;
+	}
+	ID3D11UnorderedAccessView*	GetUAV(ID3D11ShaderResourceView *srv)	{ return get(uav_map[srv].get()); }
+	bool				MakeUAV(ID3D11Buffer *b, TexFormat format, ID3D11UnorderedAccessView **uav);
+	bool				MakeUAV(ID3D11Resource *res, TexFormat format, ID3D11UnorderedAccessView **uav);
 	bool				MakeUAV(ID3D11ShaderResourceView *srv, ID3D11UnorderedAccessView **uav);
 
 	static void*		alloc(size_t size, size_t align)				{ return aligned_alloc(size, align); }
@@ -1003,11 +1077,39 @@ public:
 	ID3D11Resource*				MakeTextureResource(TexFormat format, int width, int height, int depth, int mips, Memory loc, const D3D11_SUBRESOURCE_DATA *init_data = 0);
 	ID3D11ShaderResourceView*	MakeTextureView(ID3D11Resource *tex, TexFormat format, int width, int height, int depth, int mips, Memory loc);
 	ID3D11ShaderResourceView*	MakeTexture(TexFormat format, int width, int height, int depth, int mips, Memory loc, const D3D11_SUBRESOURCE_DATA *init_data = 0);
-	ID3D11ShaderResourceView*	MakeDataBuffer(TexFormat format, int stride, void *data, uint32 count);
+	ID3D11ShaderResourceView*	MakeDataBuffer(TexFormat format, uint32 count, stride_t stride, void *data);
 	ID3D11ShaderResourceView*	MakeTextureView(ID3D11Resource *tex, TexFormat format);
 };
 
 extern Graphics graphics;
+
+inline bool Graphics::UAVS::Set(ID3D11Resource *res, TexFormat format, int i) {
+	return res && graphics.MakeUAV(res, format, Get(i));
+}
+inline bool Graphics::UAVS::Set(ID3D11ShaderResourceView *srv, int i) {
+	return srv && graphics.MakeUAV(srv, Get(i));
+}
+
+class Fence : com_ptr<ID3D11Query> {
+public:
+	Fence() {}
+	Fence(ID3D11Query *p)  : com_ptr<ID3D11Query>(p) {}
+
+	void	Wait() const {
+		if (get()) {
+			BOOL	data;
+		#if 0
+			int		wait	= 0;
+			timer	t;
+			while (graphics.context->GetData(f, &data, sizeof(BOOL), 0) != S_OK)
+				++wait;
+			ISO_TRACEF("waited ") << t << " s\n";
+		#else
+			while (graphics.context->GetData(get(), &data, sizeof(BOOL), 0) != S_OK) {}
+		#endif
+		}
+	}
+};
 
 //-----------------------------------------------------------------------------
 //	ComputeContext
@@ -1018,28 +1120,7 @@ class ComputeContext {
 
 	ID3D11DeviceContext		*context;
 	Graphics::StageState	cs_state;
-	dynamic_array<com_ptr2<ID3D11UnorderedAccessView> >	uavs;
-	uint8					uav_min, uav_max;
-
-	inline	void	SetUAV(ID3D11Resource *res, int i) {
-		if (uavs.size() <= i)
-			uavs.resize(i + 1);
-		uavs[i].clear();
-
-		if (res && graphics.MakeUAV(res, &uavs[i])) {
-			uav_min = min(uav_min, i);
-			uav_max = max(uav_max, i + 1);
-		}
-	}
-	inline	void	SetUAV(ID3D11ShaderResourceView *srv, int i) {
-		if (uavs.size() <= i)
-			uavs.resize(i + 1);
-		uavs[i].clear();
-
-		if (srv && graphics.MakeUAV(srv, &uavs[i])) {
-			uav_max = max(uav_max, i + 1);
-		}
-	}
+	Graphics::UAVS			uavs;
 
 public:
 	ComputeContext() : context(0) {}
@@ -1057,7 +1138,7 @@ public:
 	bool				Begin();
 	void				End();
 	void				DingDong();
-	void				Reset();
+//	void				Reset();
 
 	void				PushMarker(const char *s)	{}
 	void				PopMarker()					{}
@@ -1069,10 +1150,7 @@ public:
 		graphics.context->End(query);
 		return query;
 	}
-	void	Wait(const Fence &f) const {
-		BOOL	data;
-		while (graphics.context->GetData(f, &data, sizeof(BOOL), 0) != S_OK) {}
-	}
+
 	void	Blit(const Surface &dest, const Surface &srce, const point &dest_pos, const rect &srce_rect) {
 		D3D11_BOX	box = {
 			(uint32)srce_rect.a.x,	(uint32)srce_rect.a.y,	0,
@@ -1089,12 +1167,15 @@ public:
 	void	Blit(const Surface &dest, const Surface &srce)	{
 		context->CopyResource(dest, srce);
 	}
+	void	PutCount(ID3D11UnorderedAccessView *src, ID3D11Buffer *dst, uint32 offset) {
+		context->CopyStructureCount(dst, offset, src);
+	}
 
 	force_inline	void	SetBuffer	(ID3D11ShaderResourceView *srv, int i = 0)	{ context->CSSetShaderResources(i, 1, &srv); }
 	force_inline	void	SetTexture	(ID3D11ShaderResourceView *srv, int i = 0)	{ context->CSSetShaderResources(i, 1, &srv); }
-	force_inline	void	SetRWBuffer	(ID3D11Buffer *res, int i = 0)				{ SetUAV(res, i); }
-	force_inline	void	SetRWBuffer	(ID3D11ShaderResourceView *srv, int i = 0)	{ SetUAV(srv, i); }
-	force_inline	void	SetRWTexture(ID3D11ShaderResourceView *srv, int i = 0)	{ SetUAV(srv, i); }
+	force_inline	void	SetRWBuffer	(ID3D11Buffer *res, TexFormat format, int i = 0)	{ uavs.Set(res, format, i); }
+	force_inline	void	SetRWBuffer	(ID3D11ShaderResourceView *srv, int i = 0)	{ uavs.Set(srv, i); }
+	force_inline	void	SetRWTexture(ID3D11ShaderResourceView *srv, int i = 0)	{ uavs.Set(srv, i); }
 
 	force_inline	void	SetConstBuffer(ConstBuffer &buffer, int i = 0) {
 		buffer.FixBuffer();
@@ -1110,16 +1191,10 @@ public:
 			ID3D11Buffer *buffs[16];
 			context->CSSetConstantBuffers(0, cs_state.Flush(context, buffs), buffs);
 		}
-		if (uav_max > uav_min)
-			context->CSSetUnorderedAccessViews(uav_min, uav_max - uav_min, (ID3D11UnorderedAccessView**)(uavs + uav_min), 0);
-
+		uavs.FlushCS(context);
 		context->Dispatch(dimx, dimy, dimz);
-		if (uav_max > uav_min) {
-			for (int i = uav_min; i < uav_max; i++)
-				uavs[i].clear();
-			context->CSSetUnorderedAccessViews(uav_min, uav_max - uav_min, (ID3D11UnorderedAccessView**)(uavs + uav_min), 0);
-			uav_min = uav_max = 0;
-		}
+		uavs.ClearCS(context);
+		uavs.FlushCS(context);
 	}
 };
 
@@ -1145,8 +1220,6 @@ class GraphicsContext {
 	com_ptr<ID3D11DepthStencilView>		depth_buffer;
 	int									num_render_buffers;
 
-	dynamic_array<com_ptr2<ID3D11UnorderedAccessView> >	uavs;
-
 	D3D11_RASTERIZER_DESC				raster;
 	com_ptr2<ID3D11RasterizerState>		rasterstate;
 
@@ -1160,7 +1233,11 @@ class GraphicsContext {
 
 	D3D11_SAMPLER_DESC					samplers[MAX_SAMPLERS];
 	com_ptr2<ID3D11SamplerState>		samplerstates[MAX_SAMPLERS];
-	Graphics::StageState				stage_states[SS_COUNT + 1];
+	Graphics::StageState				stage_states[SS_COUNT];
+	Graphics::UAVS						uavs;
+
+	PrimType	prev_prim	= PRIM_UNKNOWN;
+	bool		is_compute	= false;
 
 	template<typename T> struct AllocBuffer {
 		T		buffer;
@@ -1179,7 +1256,6 @@ class GraphicsContext {
 			index = r + count;
 			return r;
 		}
-
 	};
 
 	AllocBuffer<_VertexBuffer>			immediate_vb;
@@ -1200,7 +1276,7 @@ class GraphicsContext {
 		UPD_CBS_GEOMETRY	= UPD_CBS << SS_GEOMETRY,
 		UPD_CBS_HULL		= UPD_CBS << SS_HULL,
 		UPD_CBS_LOCAL		= UPD_CBS << SS_LOCAL,
-		UPD_CBS_COMPUTE		= UPD_CBS << SS_COMPUTE,
+		//UPD_CBS_COMPUTE		= UPD_CBS << SS_COMPUTE,
 	};
 	flags<UPDATE>		update;
 
@@ -1239,31 +1315,26 @@ class GraphicsContext {
 	}
 
 	inline void	SetUAV(ShaderStage stage, ID3D11UnorderedAccessView *uav, int i) {
-		if (stage == SS_COMPUTE) {
-			context->CSSetUnorderedAccessViews(i, 1, &uav, 0);
-		} else {
-			if (uavs.size() <= i)
-				uavs.resize(i + 1);
-			uavs[i] = uav;
+		uavs.Set(uav, i);
+		if (!is_compute)
 			update.set(UPD_TARGETS);
-		}
 	}
-	inline	void	SetUAV(ShaderStage stage, ID3D11Resource *res, int i) {
-		if (stage == SS_COMPUTE) {
-			com_ptr<ID3D11UnorderedAccessView> uav[1];
-			if (graphics.MakeUAV(res, &uav[0]))
-				context->CSSetUnorderedAccessViews(i, 1, (ID3D11UnorderedAccessView**)uav, 0);
-		} else {
-			if (uavs.size() <= i)
-				uavs.resize(i + 1);
-			if (graphics.MakeUAV(res, &uavs[i]))
-				update.set(UPD_TARGETS);
-		}
+	inline void	SetUAV(ShaderStage stage, ID3D11Resource *res, TexFormat format, int i) {
+		uavs.Set(res, format, i);
+		if (!is_compute)
+			update.set(UPD_TARGETS);
 	}
-	inline	void	SetUAV(ShaderStage stage, ID3D11ShaderResourceView *srv, int i) {
-		com_ptr<ID3D11Resource>		res;
-		srv->GetResource(&res);
-		SetUAV(stage, res.get(), i);
+	inline void	SetUAV(ShaderStage stage, ID3D11ShaderResourceView *srv, int i) {
+		uavs.Set(srv, i);
+		if (!is_compute)
+			update.set(UPD_TARGETS);
+	}
+	
+	inline void	SetPrim(PrimType prim) {
+		if (prim != prev_prim) {
+			context->IASetPrimitiveTopology((D3D11_PRIMITIVE_TOPOLOGY)prim);
+			prev_prim = prim;
+		}
 	}
 
 	void				_Begin();
@@ -1293,16 +1364,6 @@ public:
 		graphics.context->End(query);
 		return query;
 	}
-	void	Wait(const Fence &f) const {
-		if (f) {
-			BOOL	data;
-			int		wait	= 0;
-			timer	t;
-			while (graphics.context->GetData(f, &data, sizeof(BOOL), 0) != S_OK)
-				++wait;
-			ISO_TRACEF("waited ") << t << " s\n";
-		}
-	}
 
 	void	Blit(const Surface &dest, const Surface &srce, const point &dest_pos, const rect &srce_rect) {
 		D3D11_BOX	box = {
@@ -1328,6 +1389,15 @@ public:
 		else
 			context->CopySubresourceRegion(dest, dest.CalcSubresource(), 0, 0, 0, srce, srce.CalcSubresource(), NULL);
 	}
+	void	PutCount(const DataBuffer &src, const DataBuffer &dst, uint32 offset) {
+		com_ptr<ID3D11Resource>				dst_res;
+		dst->GetResource(&dst_res);
+		context->CopyStructureCount(static_cast<ID3D11Buffer*>(dst_res.get()), offset, graphics.GetUAV(src));
+	}
+
+	bool				Enabled(ShaderStage stage) const {
+		return !!stage_states[stage].raw;
+	}
 
 	// render targets
 	void				SetRenderTarget(const Surface& s, RenderTarget i = RT_COLOUR0);
@@ -1344,10 +1414,36 @@ public:
 	}
 
 	force_inline	void	SetBuffer(ShaderStage stage, ID3D11ShaderResourceView *srv, int i = 0)		{ SetSRV(stage, srv, i); }
-	force_inline	void	SetRWBuffer(ShaderStage stage, ID3D11Buffer *res, int i = 0)				{ SetUAV(stage, res, i); }
+	force_inline	void	SetRWBuffer(ShaderStage stage, ID3D11Buffer *res, TexFormat format, int i = 0)	{ SetUAV(stage, res, format, i); }
 	force_inline	void	SetRWBuffer(ShaderStage stage, ID3D11ShaderResourceView *srv, int i = 0)	{ SetUAV(stage, srv, i); }
 	force_inline	void	SetTexture(ShaderStage stage, ID3D11ShaderResourceView *srv, int i = 0)		{ SetSRV(stage, srv, i); }
 	force_inline	void	SetRWTexture(ShaderStage stage, ID3D11ShaderResourceView *srv, int i = 0)	{ SetUAV(stage, srv, i); }
+
+	void SetBuffer(ShaderStage stage, const _Buffer &b, int i) {
+		auto	desc	= b.GetDesc();
+		ISO_ASSERT(desc.StructureByteStride);
+		D3D11_SHADER_RESOURCE_VIEW_DESC view;
+		view.Format					= DXGI_FORMAT_UNKNOWN;
+		view.ViewDimension			= D3D11_SRV_DIMENSION_BUFFER;
+		view.Buffer.FirstElement	= 0;
+		view.Buffer.NumElements		= desc.ByteWidth / desc.StructureByteStride;
+		com_ptr<ID3D11ShaderResourceView>	srv;
+		graphics.Device()->CreateShaderResourceView(b, &view, &srv);
+		SetBuffer(stage, srv, i);
+	}
+	
+	void SetBuffer(ShaderStage stage, const _Buffer &b, TexFormat format, int i) {
+		auto	desc	= b.GetDesc();
+		ISO_ASSERT(desc.StructureByteStride == 0);
+		D3D11_SHADER_RESOURCE_VIEW_DESC view;
+		view.Format					= (DXGI_FORMAT)format;
+		view.ViewDimension			= D3D11_SRV_DIMENSION_BUFFER;
+		view.Buffer.FirstElement	= 0;
+		view.Buffer.NumElements		= desc.ByteWidth / DXGI_COMPONENTS((DXGI_FORMAT)format).Bytes();
+		com_ptr<ID3D11ShaderResourceView>	srv;
+		graphics.Device()->CreateShaderResourceView(b, &view, &srv);
+		SetBuffer(stage, srv, i);
+	}
 
 	force_inline	void	SetBuffer(ShaderStage stage, const DataBuffer &buf, int i = 0)				{ SetSRV(stage, buf, i); }
 	force_inline	void	SetRWBuffer(ShaderStage stage, const DataBuffer &buf, int i = 0)			{ SetUAV(stage, buf, i); }
@@ -1388,6 +1484,9 @@ public:
 	void SetIndices(const IndexBuffer<uint32> &ib) {
 		context->IASetIndexBuffer(ib, DXGI_FORMAT_R32_UINT, 0);
 	}
+	void SetIndices(const DataBuffer &ib) {
+		context->IASetIndexBuffer(static_cast<ID3D11Buffer*>(ib.Resource().get()), DXGI_FORMAT_R16_UINT, 0);
+	}
 	template<typename T>void SetVertices(const VertexBuffer<T> &vb, uint32 offset = 0) {
 		offset	*= sizeof(T);
 		uint32	stride = sizeof(T);
@@ -1403,29 +1502,65 @@ public:
 	void SetVertices(uint32 stream, const _Buffer &vb, uint32 stride, uint32 offset = 0) {
 		context->IASetVertexBuffers(stream, 1, (ID3D11Buffer**)&vb, &stride, &offset);
 	}
-	force_inline	void	DrawPrimitive(PrimType prim, uint32 start, uint32 count) {
-		DrawVertices(prim, start, Prim2Verts(prim, count));
+	force_inline void	DrawPrimitive(PrimType prim, uint32 start_vert, uint32 num_prims) {
+		DrawVertices(prim, start_vert, Prim2Verts(prim, num_prims));
 	}
-	force_inline	void	DrawIndexedPrimitive(PrimType prim, uint32 min_index, uint32 num_verts, uint32 start, uint32 count) {
-		DrawIndexedVertices(prim, min_index, num_verts, start, Prim2Verts(prim, count));
+	force_inline void	DrawIndexedPrimitive(PrimType prim, uint32 min_index, uint32 num_verts, uint32 start_index, uint32 num_indices) {
+		DrawIndexedVertices(prim, min_index, num_verts, start_index, Prim2Verts(prim, num_indices));
 	}
-	force_inline void	DrawVertices(PrimType prim, uint32 start, uint32 count) {
+	force_inline void	DrawVertices(PrimType prim, uint32 start_vert, uint32 num_verts) {
 		FlushDeferred();
-		context->IASetPrimitiveTopology((D3D11_PRIMITIVE_TOPOLOGY)prim);
-		context->Draw(count, start);
+		SetPrim(prim);
+		context->Draw(num_verts, start_vert);
 	}
-	force_inline void	DrawIndexedVertices(PrimType prim, uint32 min_index, uint32 num_verts, uint32 start, uint32 count) {
+	force_inline void	DrawIndexedVertices(PrimType prim, uint32 min_index, uint32 num_verts, uint32 start_index, uint32 num_indices) {
 		FlushDeferred();
-		context->IASetPrimitiveTopology((D3D11_PRIMITIVE_TOPOLOGY)prim);
-		context->DrawIndexed(count, start, min_index);
+		SetPrim(prim);
+		context->DrawIndexed(num_indices, start_index, min_index);
+	}
+	force_inline void	DrawVertices(PrimType prim, uint32 start, uint32 num_verts, uint32 start_instance, uint32 num_instances) {
+		FlushDeferred();
+		SetPrim(prim);
+		context->DrawInstanced(num_verts, num_instances, start, start_instance);
+	}
+	force_inline void	DrawIndexedVertices(PrimType prim, uint32 min_index, uint32 num_verts, uint32 start_index, uint32 num_indices, uint32 start_instance, uint32 num_instances) {
+		FlushDeferred();
+		SetPrim(prim);
+		context->DrawIndexedInstanced(num_indices, num_instances, start_index, min_index, start_instance);
+	}
+	force_inline void	DrawVertices(PrimType prim, const DataBuffer &args, uint32 offset = 0) {
+		FlushDeferred();
+		SetPrim(prim);
+		context->DrawInstancedIndirect(static_cast<ID3D11Buffer*>(args.Resource().get()), offset);
+	}
+	force_inline void	DrawIndexedVertices(PrimType prim, const DataBuffer &args, uint32 offset = 0) {
+		FlushDeferred();
+		SetPrim(prim);
+		context->DrawIndexedInstancedIndirect(static_cast<ID3D11Buffer*>(args.Resource().get()), offset);
 	}
 
 	force_inline void	Dispatch(uint32 dimx, uint32 dimy = 1, uint32 dimz = 1) {
-		if (update.test(UPD_CBS_COMPUTE)) {
+		ISO_ASSERT(is_compute);
+		if (update.test(UPD_CBS_PIXEL)) {
 			ID3D11Buffer *buffs[16];
-			context->CSSetConstantBuffers(0, stage_states[SS_COMPUTE	].Flush(context, buffs), buffs);
+			context->CSSetConstantBuffers(0, stage_states[0].Flush(context, buffs), buffs);
 		}
+		uavs.FlushCS(context);
 		context->Dispatch(dimx, dimy, dimz);
+		uavs.ClearCS(context);
+		uavs.FlushCS(context);
+	}
+
+	void	Dispatch(const DataBuffer &args, uint32 offset = 0) {
+		ISO_ASSERT(is_compute);
+		if (update.test(UPD_CBS_PIXEL)) {
+			ID3D11Buffer *buffs[16];
+			context->CSSetConstantBuffers(0, stage_states[0].Flush(context, buffs), buffs);
+		}
+		uavs.FlushCS(context);
+		context->DispatchIndirect(static_cast<ID3D11Buffer*>(args.Resource().get()), offset);
+		uavs.ClearCS(context);
+		uavs.FlushCS(context);
 	}
 
 	// shaders

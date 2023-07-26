@@ -119,19 +119,6 @@ uint32 GetMipLevels(ID3D11Resource *res) {
 //	Buffers
 //-----------------------------------------------------------------------------
 
-ID3D11ShaderResourceView *Graphics::MakeDataBuffer(TexFormat format, int stride, void *data, uint32 count) {
-	_Buffer		b;
-
-	if (format)
-		b.Init(data, count * stride, Bind(D3D11_BIND_SHADER_RESOURCE));
-	else
-		b.InitStructured(data, count, stride, Bind(D3D11_BIND_SHADER_RESOURCE));
-
-	ID3D11ShaderResourceView	*r;
-	b._Bind((DXGI_FORMAT)format, count, &r);
-	return r;
-}
-
 bool _Buffer::_Bind(DXGI_FORMAT format, uint32 n, ID3D11ShaderResourceView **srv) {
 	D3D11_SHADER_RESOURCE_VIEW_DESC desc;
 	desc.Format					= format;
@@ -148,7 +135,7 @@ bool _Buffer::Init(uint32 size, Memory loc) {
 	desc.Usage				= GetUsage(loc, true);
 	desc.BindFlags			= desc.Usage == D3D11_USAGE_STAGING ? 0 : GetBind(loc);
 	desc.CPUAccessFlags		= GetCPUAccess(loc);
-	desc.MiscFlags			= 0;
+	desc.MiscFlags			= loc & MEM_INDIRECTARG ? D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS : 0;
 
 	return CheckResult(graphics.Device()->CreateBuffer(&desc, NULL, &b));
 }
@@ -157,9 +144,9 @@ bool _Buffer::Init(const void *data, uint32 size, Memory loc) {
 	D3D11_BUFFER_DESC		desc;
 	desc.ByteWidth			= size;
 	desc.Usage				= GetUsage(loc);
-	desc.BindFlags			= desc.Usage == D3D11_USAGE_STAGING ? 0 : (GetBind(loc) | D3D11_BIND_SHADER_RESOURCE);
+	desc.BindFlags			= desc.Usage == D3D11_USAGE_STAGING ? 0 : GetBind(loc);
 	desc.CPUAccessFlags		= GetCPUAccess(loc);
-	desc.MiscFlags			= 0;
+	desc.MiscFlags			= loc & MEM_INDIRECTARG ? D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS : 0;
 
 	D3D11_SUBRESOURCE_DATA	init;
 	init.pSysMem			= data;
@@ -168,26 +155,26 @@ bool _Buffer::Init(const void *data, uint32 size, Memory loc) {
 	return CheckResult(graphics.Device()->CreateBuffer(&desc, &init, &b));
 }
 
-bool _Buffer::InitStructured(uint32 n, uint32 stride, Memory loc) {
+bool _Buffer::Init(uint32 n, uint32 stride, Memory loc) {
 	b.clear();
 	D3D11_BUFFER_DESC		desc;
 	desc.ByteWidth			= n * stride;
 	desc.Usage				= GetUsage(loc, true);
 	desc.BindFlags			= desc.Usage == D3D11_USAGE_STAGING ? 0 : GetBind(loc);
 	desc.CPUAccessFlags		= GetCPUAccess(loc);
-	desc.MiscFlags			= D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+	desc.MiscFlags			= D3D11_RESOURCE_MISC_BUFFER_STRUCTURED | (loc & MEM_INDIRECTARG ? D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS : 0);
 	desc.StructureByteStride = stride;
 
 	return CheckResult(graphics.Device()->CreateBuffer(&desc, NULL, &b));
 }
 
-bool _Buffer::InitStructured(const void *data, uint32 n, uint32 stride, Memory loc) {
+bool _Buffer::Init(const void *data, uint32 n, uint32 stride, Memory loc) {
 	D3D11_BUFFER_DESC		desc;
 	desc.ByteWidth			= n * stride;
 	desc.Usage				= GetUsage(loc);
 	desc.BindFlags			= desc.Usage == D3D11_USAGE_STAGING ? 0 : GetBind(loc);
 	desc.CPUAccessFlags		= GetCPUAccess(loc);
-	desc.MiscFlags			= D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+	desc.MiscFlags			= D3D11_RESOURCE_MISC_BUFFER_STRUCTURED | (loc & MEM_INDIRECTARG ? D3D11_RESOURCE_MISC_DRAWINDIRECT_ARGS : 0);
 	desc.StructureByteStride = stride;
 
 	D3D11_SUBRESOURCE_DATA	init;
@@ -210,13 +197,21 @@ _Buffer _Buffer::MakeStaging(ID3D11DeviceContext *ctx) const {
 	return b2;
 }
 
-void *_Buffer::Begin() const {
-	D3D11_MAPPED_SUBRESOURCE map;
-	return CheckResult(graphics.Context()->Map(b, 0, D3D11_MAP_WRITE_NO_OVERWRITE, 0, &map)) ? map.pData : 0;
+ID3D11ShaderResourceView *Graphics::MakeDataBuffer(TexFormat format, uint32 count, stride_t stride, void *data) {
+	_Buffer		b;
+
+	if (format)
+		b.Init(data, count * stride, Bind(D3D11_BIND_SHADER_RESOURCE));
+	else
+		b.Init(data, count, stride, Bind(D3D11_BIND_SHADER_RESOURCE));
+
+	ID3D11ShaderResourceView	*r;
+	b._Bind((DXGI_FORMAT)format, count, &r);
+	return r;
 }
 
-void _Buffer::End() const {
-	graphics.Context()->Unmap(b, 0);
+DataBuffer::~DataBuffer() {
+	graphics.Remove(safe());
 }
 
 //-----------------------------------------------------------------------------
@@ -224,7 +219,7 @@ void _Buffer::End() const {
 //-----------------------------------------------------------------------------
 
 bool VertexDescription::Init(D3D11_INPUT_ELEMENT_DESC *ve, uint32 n, const void *vs) {
-	return CheckResult(graphics.Device()->CreateInputLayout(ve,n, vs, sized_data(vs).length(), &input));
+	return vs && CheckResult(graphics.Device()->CreateInputLayout(ve,n, vs, sized_data(vs).length(), &input));
 }
 
 bool VertexDescription::Init(const VertexElement *ve, uint32 n, const void *vs) {
@@ -417,7 +412,7 @@ ID3D11ShaderResourceView *_MakeTexture(bitmap *bm) {
 	if (bm->IsVolume()) {
 		for (int m = 0; m < mips; m++, p++) {
 			auto	b			= bm->Mip3D(m);
-			p->pSysMem			= b[0][0];
+			p->pSysMem			= b[0][0].begin();
 			p->SysMemPitch		= b[0].pitch();
 			p->SysMemSlicePitch	= b.pitch();
 		}
@@ -425,7 +420,7 @@ ID3D11ShaderResourceView *_MakeTexture(bitmap *bm) {
 		for (int a = 0; a < depth; a++) {
 			for (int m = 0; m < mips; m++, p++) {
 				auto	b			= bm->MipArray(m)[a];
-				p->pSysMem			= b[0];
+				p->pSysMem			= b[0].begin();
 				p->SysMemPitch		= b.pitch();
 				p->SysMemSlicePitch	= 0;
 			}
@@ -448,7 +443,7 @@ ID3D11ShaderResourceView *_MakeTexture(HDRbitmap *bm) {
 	if (bm->IsVolume()) {
 		for (int m = 0; m < mips; m++, p++) {
 			auto	b			= bm->Mip3D(m);
-			p->pSysMem			= b[0][0];
+			p->pSysMem			= b[0][0].begin();
 			p->SysMemPitch		= b[0].pitch();
 			p->SysMemSlicePitch	= b.pitch();
 		}
@@ -456,7 +451,7 @@ ID3D11ShaderResourceView *_MakeTexture(HDRbitmap *bm) {
 		for (int a = 0; a < depth; a++) {
 			for (int m = 0; m < mips; m++, p++) {
 				auto	b			= bm->MipArray(m)[a];
-				p->pSysMem			= b[0];
+				p->pSysMem			= b[0].begin();
 				p->SysMemPitch		= b.pitch();
 				p->SysMemSlicePitch	= 0;
 			}
@@ -596,7 +591,8 @@ template<
 void Init(DX11Shader *x, void *physram) {
 	if (ID3D11Device *device = graphics.GetDevice()) {
 		if (!x->Has(SS_VERTEX)) {
-			InitShaderStage<ID3D11ComputeShader,	&ID3D11Device::CreateComputeShader>	(device, x->sub[SS_PIXEL]);
+			if (!x->Has(SS_LOCAL))
+				InitShaderStage<ID3D11ComputeShader,	&ID3D11Device::CreateComputeShader>	(device, x->sub[SS_PIXEL]);
 		} else {
 			InitShaderStage<ID3D11PixelShader,		&ID3D11Device::CreatePixelShader>	(device, x->sub[SS_PIXEL]);
 			InitShaderStage<ID3D11VertexShader,		&ID3D11Device::CreateVertexShader>	(device, x->sub[SS_VERTEX]);
@@ -640,8 +636,8 @@ void ShaderParameterIterator::Next() {
 
 				if (dx::DXBC *dxbc = (dx::DXBC*)shader.sub[stage].raw()) {
 					//rdef		= dxbc->GetBlob<dx::RDEF>();
-					rdef		= dxbc->GetBlob<dx::RD11>();
-					bindings	= rdef->Bindings();
+					if (rdef = dxbc->GetBlob<dx::RD11>())
+						bindings = rdef->Bindings();
 				}
 			}
 
@@ -649,7 +645,7 @@ void ShaderParameterIterator::Next() {
 			name = bind.name.get(rdef);
 
 			switch (bind.type) {
-				case dx::RDEF::Binding::CBUFFER: {
+				case RDEF::Binding::CBUFFER: {
 					cbuff_index	= bind.bind;
 					auto	&b	= rdef->buffers.get(rdef)[cbuff_index];
 					vars		= rdef->Variables(b);
@@ -658,10 +654,25 @@ void ShaderParameterIterator::Next() {
 					break;
 				}
 
-				case dx::RDEF::Binding::TEXTURE:
+				case RDEF::Binding::SAMPLER: {
+					const char	*end	= str(name).end();
+					int			count	= bind.bind_count;
+					if (end[-1] == ']')
+						count = ArrayCount(name, end);
+					//					if (end[-2] == '_' && end[-1] == 's')
+					//						name = temp_name = str(name, end - 2);
+					if (*end)
+						name = temp_name = str(name, end);
+
+					reg		= ShaderReg(bind.bind, count, 0, ShaderStage(stage), SPT_SAMPLER);
+					val		= bind.samples ? (void*)((uint8*)&bind.samples + bind.samples) : (void*)&default_sampler;
+					return;
+				}
+
+				case RDEF::Binding::TEXTURE:
 					val	= 0;
 					if (is_buffer(bind.dim)) {
-						reg		= ShaderReg(bind.bind, bind.bind_count, 0, ShaderStage(stage), SPT_BUFFER);
+						reg		= ShaderReg(bind.bind, bind.bind_count, 0, ShaderStage(stage), SPT_RESOURCE);
 					} else {
 						const char	*end	= str(name).end();
 						int			count	= bind.bind_count;
@@ -671,27 +682,25 @@ void ShaderParameterIterator::Next() {
 							end -= 2;
 						if (*end)
 							name = temp_name = str(name, end);
-						reg		= ShaderReg(bind.bind, count, 0, ShaderStage(stage), SPT_TEXTURE);
+						reg		= ShaderReg(bind.bind, count, 0, ShaderStage(stage), SPT_RESOURCE);
 					}
 					return;
 
-				case dx::RDEF::Binding::SAMPLER: {
-					const char	*end	= str(name).end();
-					int			count	= bind.bind_count;
-					if (end[-1] == ']')
-						count = ArrayCount(name, end);
-//					if (end[-2] == '_' && end[-1] == 's')
-//						name = temp_name = str(name, end - 2);
-					if (*end)
-						name = temp_name = str(name, end);
 
-					reg		= ShaderReg(bind.bind, count, 0, ShaderStage(stage), SPT_SAMPLER);
-					val		= bind.samples ? (void*)((uint8*)&bind.samples + bind.samples) : (void*)&default_sampler;
+
+				case RDEF::Binding::UAV_RWTYPED:
+				case RDEF::Binding::UAV_RWSTRUCTURED:
+				case RDEF::Binding::UAV_RWBYTEADDRESS:
+				case RDEF::Binding::UAV_APPEND_STRUCTURED:
+				case RDEF::Binding::UAV_CONSUME_STRUCTURED:
+				case RDEF::Binding::UAV_RWSTRUCTURED_WITH_COUNTER:
+				case RDEF::Binding::UAV_FEEDBACKTEXTURE:
+					reg		= ShaderReg(bind.bind, bind.bind_count, 0, ShaderStage(stage), SPT_WRITE_RESOURCE);
+					val		= 0;
 					return;
-				}
 
 				default:
-					reg		= ShaderReg(bind.bind, bind.bind_count, 0, ShaderStage(stage), SPT_BUFFER);
+					reg		= ShaderReg(bind.bind, bind.bind_count, 0, ShaderStage(stage), SPT_RESOURCE);
 					val		= 0;
 					return;
 			}
@@ -717,10 +726,10 @@ ShaderParameterIterator &ShaderParameterIterator::Reset() {
 int	ShaderParameterIterator::Total() const {
 	int							total = 0;
 	for (int i = 0; i < SS_COUNT; i++) {
-		if (dx::DXBC *dxbc = (dx::DXBC*)shader.sub[i].raw()) {
-			dx::RD11	*rdef	= dxbc->GetBlob<dx::RD11>();
+		if (auto dxbc = (dx::DXBC*)shader.sub[i].raw()) {
+			auto rdef	= dxbc->GetBlob<dx::RD11>();
 			for (auto &i : rdef->Bindings())
-				total += int(i.type != dx::RDEF::Binding::CBUFFER);
+				total += int(i.type != RDEF::Binding::CBUFFER);
 			for (auto b : rdef->Buffers()) {
 				for (auto &v : rdef->Variables(b)) {
 					if (v.flags & v.USED)
@@ -736,7 +745,7 @@ int	ShaderParameterIterator::Total() const {
 //	Graphics
 //-----------------------------------------------------------------------------
 #ifdef _DEBUG
-//#define GRAPHICS_DEBUG
+#define GRAPHICS_DEBUG
 #endif
 
 Graphics::Graphics() : fa(malloc_block(0x10000).detach()), frame(-1) {
@@ -835,13 +844,28 @@ bool Graphics::StageState::Init(const void *_raw) {
 	if (raw == _raw)
 		return false;
 	if (raw = _raw) {
-		if (dx::RDEF *rdef = ((dx::DXBC*)_raw)->GetBlob<dx::RDEF>()) {
+		if (auto rdef = ((dx::DXBC*)_raw)->GetBlob<dx::DXBC::ResourceDef>()) {
 			int	x = 0;
 			for (auto &i : rdef->Buffers())
-				Set(graphics.FindConstBuffer(i.name.get(rdef), i.size, i.num_variables), x++);
+				Set(graphics.FindConstBuffer(crc32(i.name.get(rdef)), i.size, i.num_variables), x++);
 		}
 	}
 	return true;
+}
+
+bool	ConstBuffer::FixBuffer() {
+	if (data) {
+		graphics.Context()->Unmap(b, 0);
+		data	= 0;
+	}
+	return true;
+}
+void*	ConstBuffer::Data() {
+	if (!data) {
+		D3D11_MAPPED_SUBRESOURCE map;
+		data = CheckResult(graphics.Context()->Map(b, 0, D3D11_MAP_WRITE_NO_OVERWRITE, 0, &map)) ? map.pData : 0;
+	}
+	return data;
 }
 
 ConstBuffer *Graphics::FindConstBuffer(crc32 id, uint32 size, uint32 num) {
@@ -1049,7 +1073,7 @@ ID3D11ShaderResourceView *Graphics::MakeTexture(TexFormat format, int width, int
 	return MakeTextureView(tex, format, width, height, depth, mips, loc);
 }
 
-bool Graphics::MakeUAV(ID3D11Buffer *b, ID3D11UnorderedAccessView **uav) {
+bool Graphics::MakeUAV(ID3D11Buffer *b, TexFormat format, ID3D11UnorderedAccessView **uav) {
 	D3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc;
 	clear(uav_desc);
 	uav_desc.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
@@ -1065,14 +1089,16 @@ bool Graphics::MakeUAV(ID3D11Buffer *b, ID3D11UnorderedAccessView **uav) {
 		uav_desc.Format				= DXGI_FORMAT_UNKNOWN;      // Format must be must be DXGI_FORMAT_UNKNOWN, when creating a View of a Structured Buffer
 		uav_desc.Buffer.NumElements	= bd.ByteWidth / bd.StructureByteStride;
 	} else {
-		return false;
+		uav_desc.Format				= (DXGI_FORMAT)format;
+		uav_desc.Buffer.NumElements	= bd.ByteWidth / DXGI_COMPONENTS((DXGI_FORMAT)format).Bytes();
 	}
 	return CheckResult(device->CreateUnorderedAccessView(b, &uav_desc, uav));
 }
 
-bool Graphics::MakeUAV(ID3D11Resource *res, ID3D11UnorderedAccessView **uav) {
+bool Graphics::MakeUAV(ID3D11Resource *res, TexFormat format, ID3D11UnorderedAccessView **uav) {
 	D3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc;
 	clear(uav_desc);
+	uav_desc.Format	= (DXGI_FORMAT)format;
 
 	D3D11_RESOURCE_DIMENSION	dim;
     res->GetType(&dim);
@@ -1091,36 +1117,36 @@ bool Graphics::MakeUAV(ID3D11Resource *res, ID3D11UnorderedAccessView **uav) {
 				uav_desc.Format				= DXGI_FORMAT_UNKNOWN;      // Format must be must be DXGI_FORMAT_UNKNOWN, when creating a View of a Structured Buffer
 				uav_desc.Buffer.NumElements	= bd.ByteWidth / bd.StructureByteStride;
 			} else {
-				return false;
+				uav_desc.Buffer.NumElements	= bd.ByteWidth / DXGI_COMPONENTS((DXGI_FORMAT)format).Bytes();;
 			}
 			break;
 		}
 
 		case D3D11_RESOURCE_DIMENSION_TEXTURE1D: {
-			D3D11_TEXTURE1D_DESC	td;
-			((ID3D11Texture1D*)res)->GetDesc(&td);
+			//D3D11_TEXTURE1D_DESC	td;
+			//((ID3D11Texture1D*)res)->GetDesc(&td);
 			//if (td.ArraySize > 1) {
 			uav_desc.ViewDimension		= D3D11_UAV_DIMENSION_TEXTURE1D;	//D3D11_UAV_DIMENSION_TEXTURE1DARRAY
-			uav_desc.Format				= td.Format;
+			//uav_desc.Format				= td.Format;
 			uav_desc.Texture1D.MipSlice	= 0;
 			break;
 		}
 
 		case D3D11_RESOURCE_DIMENSION_TEXTURE2D: {
-			D3D11_TEXTURE2D_DESC	td;
-			((ID3D11Texture2D*)res)->GetDesc(&td);
+			//D3D11_TEXTURE2D_DESC	td;
+			//((ID3D11Texture2D*)res)->GetDesc(&td);
 			uav_desc.ViewDimension		= D3D11_UAV_DIMENSION_TEXTURE2D;	//D3D11_UAV_DIMENSION_TEXTURE2DARRAY
-			uav_desc.Format				= td.Format;
+			//uav_desc.Format				= td.Format;
 			uav_desc.Texture2D.MipSlice	= 0;
 			break;
 		}
 		case D3D11_RESOURCE_DIMENSION_TEXTURE3D: {
-			D3D11_TEXTURE3D_DESC	td;
-			((ID3D11Texture3D*)res)->GetDesc(&td);
+			//D3D11_TEXTURE3D_DESC	td;
+			//((ID3D11Texture3D*)res)->GetDesc(&td);
 			uav_desc.ViewDimension		= D3D11_UAV_DIMENSION_TEXTURE3D;
-			uav_desc.Format				= td.Format;
-			uav_desc.Texture3D.MipSlice	= 0;
-			uav_desc.Texture3D.FirstWSlice= 0;
+			//uav_desc.Format				= td.Format;
+			uav_desc.Texture3D.MipSlice		= 0;
+			uav_desc.Texture3D.FirstWSlice	= 0;
 			uav_desc.Texture3D.WSize		= 1;
 			break;
 		}
@@ -1130,6 +1156,13 @@ bool Graphics::MakeUAV(ID3D11Resource *res, ID3D11UnorderedAccessView **uav) {
 }
 
 bool Graphics::MakeUAV(ID3D11ShaderResourceView *srv, ID3D11UnorderedAccessView **uav) {
+	auto	x = uav_map[srv];
+	if (x.exists()) {
+		*uav = get(x.get());
+		(*uav)->AddRef();
+		return true;
+	}
+
 	D3D11_SHADER_RESOURCE_VIEW_DESC		srv_desc;
 	D3D11_UNORDERED_ACCESS_VIEW_DESC	uav_desc;
 	clear(uav_desc);
@@ -1141,6 +1174,7 @@ bool Graphics::MakeUAV(ID3D11ShaderResourceView *srv, ID3D11UnorderedAccessView 
 	switch (srv_desc.ViewDimension) {
 		case D3D11_SRV_DIMENSION_BUFFER:
 			uav_desc.Buffer.NumElements	= srv_desc.Buffer.NumElements;
+			uav_desc.Buffer.Flags		= D3D11_BUFFER_UAV_FLAG_APPEND;	//TEMP!
 			break;
 
 		case D3D11_SRV_DIMENSION_TEXTURE1DARRAY:
@@ -1158,7 +1192,12 @@ bool Graphics::MakeUAV(ID3D11ShaderResourceView *srv, ID3D11UnorderedAccessView 
 
 	com_ptr<ID3D11Resource>		res;
 	srv->GetResource(&res);
-	return CheckResult(device->CreateUnorderedAccessView(res, &uav_desc, uav));
+	if (CheckResult(device->CreateUnorderedAccessView(res, &uav_desc, uav))) {
+		x = *uav;
+		(*uav)->AddRef();
+		return true;
+	}
+	return false;
 }
 
 ID3D11DeviceContext *ImmediateContext() {
@@ -1177,7 +1216,7 @@ void Graphics::Trim() {
 //-----------------------------------------------------------------------------
 
 bool ComputeContext::Begin() {
-	uav_min = uav_max = 0;
+//	uav_min = uav_max = 0;
 	if (context)
 		return true;
 
@@ -1189,13 +1228,14 @@ bool ComputeContext::Begin() {
 	}
 	return CheckResult(device->CreateDeferredContext(0, &context));
 }
+/*
 void ComputeContext::Reset() {
 	auto	nulls = alloc_auto(void*, 16);
 	memset(nulls, 0, sizeof(void*) * 16);
 //	context->CSSetShaderResources(0, 16, (ID3D11ShaderResourceView*const*)nulls);
 	context->CSSetUnorderedAccessViews(0, 16, (ID3D11UnorderedAccessView*const*)nulls, 0);
 }
-
+*/
 void ComputeContext::End() {
 	if (context->GetType() == D3D11_DEVICE_CONTEXT_DEFERRED) {
 		DingDong();
@@ -1230,7 +1270,7 @@ void ComputeContext::SetShaderConstants(ShaderReg reg, const void *values) {
 			if (cs_state.Get(reg.buffer)->SetConstant(reg.offset, values, n))
 				cs_state.dirty |= 1 << reg.buffer;
 			break;
-		case SPT_TEXTURE: {
+		case SPT_RESOURCE: {
 			ID3D11ShaderResourceView	**view	= alloc_auto(ID3D11ShaderResourceView*, n);
 			for (int i = 0; i < n; i++)
 				view[i] = ((Texture*)values)[i];
@@ -1262,17 +1302,10 @@ void ComputeContext::SetShaderConstants(ShaderReg reg, const void *values) {
 				samp[i]->Release();
 			break;
 		}
-		case SPT_BUFFER: {
-#if 1
-			ID3D11ShaderResourceView	**view	= alloc_auto(ID3D11ShaderResourceView*, n);
+		case SPT_WRITE_RESOURCE:
 			for (int i = 0; i < n; i++)
-				view[i] = ((DataBuffer*)values)[i];
-#else
-			ID3D11ShaderResourceView	*const *view	= (ID3D11ShaderResourceView* const*)values;
-#endif
-			context->CSSetShaderResources(reg.offset, n, view);
+				uavs.Set(((DataBuffer*)values)[i], reg.offset + i);
 			break;
-		}
 	}
 }
 
@@ -1293,8 +1326,8 @@ void GraphicsContext::_Begin() {
 	clear(samplers);
 	clear(blendfactor);
 
-	for (int i = 0; i < num_elements(stage_states); i++)
-		stage_states[i].Clear();
+	for (auto &i : stage_states)
+		i.Clear();
 
 	static const D3D11_RENDER_TARGET_BLEND_DESC defaultRenderTargetBlendDesc = {
 		FALSE,
@@ -1337,6 +1370,7 @@ void GraphicsContext::End() {
 		context->FinishCommandList(FALSE, &commandlist);
 		graphics.Context()->ExecuteCommandList(commandlist, FALSE);
 	}
+	prev_prim = PRIM_UNKNOWN;
 }
 
 void GraphicsContext::FlushDeferred2() {
@@ -1359,7 +1393,12 @@ void GraphicsContext::FlushDeferred2() {
 
 	if (update & (UPD_CBS * bits(SS_COUNT))) {
 		ID3D11Buffer *buffs[16];
-		if (update.test(UPD_CBS_PIXEL))		context->PSSetConstantBuffers(0, stage_states[SS_PIXEL	].Flush(context, buffs), buffs);
+		if (update.test(UPD_CBS_PIXEL))	{
+			if (is_compute)
+				context->CSSetConstantBuffers(0, stage_states[SS_PIXEL	].Flush(context, buffs), buffs);
+			else
+				context->PSSetConstantBuffers(0, stage_states[SS_PIXEL	].Flush(context, buffs), buffs);
+		}
 		if (update.test(UPD_CBS_VERTEX))	context->VSSetConstantBuffers(0, stage_states[SS_VERTEX	].Flush(context, buffs), buffs);
 		if (update.test(UPD_CBS_GEOMETRY))	context->GSSetConstantBuffers(0, stage_states[SS_GEOMETRY].Flush(context, buffs), buffs);
 		if (update.test(UPD_CBS_HULL))		context->HSSetConstantBuffers(0, stage_states[SS_HULL	].Flush(context, buffs), buffs);
@@ -1436,8 +1475,9 @@ void GraphicsContext::SetShader(const DX11Shader &s) {
 	if (update.test_clear(UPD_TARGETS))
 		FlushTargets();
 
-	if (!s.Has(SS_VERTEX)) {
-		if (stage_states[SS_COMPUTE].Init(s.sub[SS_PIXEL].raw()))
+	is_compute = !s.Has(SS_VERTEX);
+	if (is_compute) {
+		if (stage_states[0].Init(s.sub[SS_PIXEL].raw()))
 			context->CSSetShader(s.sub[SS_PIXEL].get<ID3D11ComputeShader>(), NULL, 0);
 
 	} else {
@@ -1470,21 +1510,7 @@ void GraphicsContext::SetShaderConstants(ShaderReg reg, const void *values) {
 				stage_states[reg.stage].dirty |= 1 << reg.buffer;
 			}
 			break;
-		case SPT_TEXTURE: {
-			ID3D11ShaderResourceView	**view	= alloc_auto(ID3D11ShaderResourceView*, n);
-			for (int i = 0; i < n; i++)
-				view[i] = ((Texture*)values)[i];
-			switch (reg.stage) {
-				case SS_PIXEL:		context->PSSetShaderResources(reg.offset, n, view); break;
-				case SS_VERTEX:		context->VSSetShaderResources(reg.offset, n, view); break;
-				case SS_GEOMETRY:	context->GSSetShaderResources(reg.offset, n, view); break;
-				case SS_HULL:		context->HSSetShaderResources(reg.offset, n, view); break;
-				case SS_LOCAL:		context->DSSetShaderResources(reg.offset, n, view); break;
-				case SS_COMPUTE:	context->CSSetShaderResources(reg.offset, n, view); break;
-				break;
-			}
-			break;
-		}
+
 		case SPT_SAMPLER: {
 		#if 0
 			D3D11_SAMPLER_DESC	desc;
@@ -1511,13 +1537,17 @@ void GraphicsContext::SetShaderConstants(ShaderReg reg, const void *values) {
 				graphics.device->CreateSamplerState(((D3D11_SAMPLER_DESC*)values) + i, &samp[i]);
 		#endif
 			switch (reg.stage) {
-				case SS_PIXEL:		context->PSSetSamplers(reg.offset, n, samp); break;
+				case SS_PIXEL:
+					if (is_compute)
+						context->CSSetSamplers(reg.offset, n, samp);
+					else
+						context->PSSetSamplers(reg.offset, n, samp);
+					break;
 				case SS_VERTEX:		context->VSSetSamplers(reg.offset, n, samp); break;
 				case SS_GEOMETRY:	context->GSSetSamplers(reg.offset, n, samp); break;
 				case SS_HULL:		context->HSSetSamplers(reg.offset, n, samp); break;
 				case SS_LOCAL:		context->DSSetSamplers(reg.offset, n, samp); break;
-				case SS_COMPUTE:	context->CSSetSamplers(reg.offset, n, samp); break;
-				break;
+					break;
 			}
 			for (int i = 0; i < n; i++) {
 				if (samp[i])
@@ -1525,25 +1555,31 @@ void GraphicsContext::SetShaderConstants(ShaderReg reg, const void *values) {
 			}
 			break;
 		}
-		case SPT_BUFFER: {
-#if 1
+
+		case SPT_RESOURCE: {
 			ID3D11ShaderResourceView	**view	= alloc_auto(ID3D11ShaderResourceView*, n);
 			for (int i = 0; i < n; i++)
-				view[i] = ((DataBuffer*)values)[i];
-#else
-			ID3D11ShaderResourceView	*const *view	= (ID3D11ShaderResourceView* const*)values;
-#endif
+				view[i] = ((Texture*)values)[i];
 			switch (reg.stage) {
-				case SS_PIXEL:		context->PSSetShaderResources(reg.offset, n, view); break;
+				case SS_PIXEL:
+					if (is_compute)
+						context->CSSetShaderResources(reg.offset, n, view);
+					else
+						context->PSSetShaderResources(reg.offset, n, view);
+					break;
 				case SS_VERTEX:		context->VSSetShaderResources(reg.offset, n, view); break;
 				case SS_GEOMETRY:	context->GSSetShaderResources(reg.offset, n, view); break;
 				case SS_HULL:		context->HSSetShaderResources(reg.offset, n, view); break;
 				case SS_LOCAL:		context->DSSetShaderResources(reg.offset, n, view); break;
-				case SS_COMPUTE:	context->CSSetShaderResources(reg.offset, n, view); break;
 				break;
 			}
 			break;
 		}
+
+		case SPT_WRITE_RESOURCE:
+			for (int i = 0; i < n; i++)
+				SetUAV((ShaderStage)reg.stage, ((DataBuffer*)values)[i], reg.offset + i);
+			break;
 	}
 }
 

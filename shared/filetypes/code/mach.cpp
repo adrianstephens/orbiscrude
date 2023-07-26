@@ -468,7 +468,7 @@ template<bool be, int bits> bool MACH<be, bits>::Write(ISO::Browser b, ostream_r
 
 struct ISO_MACH : mapped_anything {
 	ISO_MACH(const filename &fn)	: mapped_anything(fn) {}
-	ISO_MACH(const istream_ref file)	: mapped_anything(file) {}
+	ISO_MACH(istream_ref file)		: mapped_anything(file) {}
 };
 ISO_DEFUSERX(ISO_MACH, mapped_anything, "MACH");
 
@@ -573,7 +573,7 @@ class MACHFileHandler : public FileHandler {
 				ISO_ptr<anything>	p(id);
 				for (int i = 0; i < n; i++) {
 					file.seek(archs[i].offset);
-					p->Append(Read(0, istream_offset(file, archs[i].size)));
+					p->Append(Read(none, make_reader_offset(file, archs[i].size)));
 				}
 				return p;
 			}
@@ -591,7 +591,7 @@ class MACHFileHandler : public FileHandler {
 					if (*p2 == 0)
 						++p2;
 					file.seek((char*)p2 - fn);
-					return Read(str(fn), istream_offset(file));
+					return Read(str(fn), make_reader_offset(file));
 				}
 				return ISO_NULL;
 			}
@@ -648,7 +648,7 @@ class FATArchHandler : FileHandler {
 		ISO_ptr<anything>	p(id);
 		for (int i = 0; i < n; i++) {
 			file.seek(archs[i].offset);
-			if (ISO_ptr<void> a = fh->Read(0, istream_offset(file, archs[i].size))) {
+			if (ISO_ptr<void> a = fh->Read(none, make_reader_offset(file, archs[i].size))) {
 				p->Append(a);
 			} else {
 				file.seek(archs[i].offset);

@@ -44,6 +44,7 @@ template<typename E> union enum_dword {
 	operator E()	const	{ return e; }
 	enum_dword()			{}
 	enum_dword(E _e) : e(_e){}
+	friend E	get(enum_dword x)	{ return x; }
 };
 
 template<typename E> enum_dword<E> get_enum(E e) { return e; }
@@ -225,11 +226,11 @@ using ISO::MakePtr;
 
 ISO_ptr<void> MakePtr(tag id, com_variant v) {
 	switch (v.type()) {
-		case VT_BOOL:	return ISO::MakePtr(id, V_BOOL	(&v) == VARIANT_TRUE);
-		case VT_I1:		return ISO::MakePtr(id, V_I1	(&v));
-		case VT_UI1:	return ISO::MakePtr(id, V_UI1	(&v));
-		case VT_I2:		return ISO::MakePtr(id, V_I2	(&v));
-		case VT_UI2:	return ISO::MakePtr(id, V_UI2	(&v));
+		case VT_BOOL:	return ISO::MakePtr(id, v.boolVal == VARIANT_TRUE);
+		case VT_I1:		return ISO::MakePtr(id, v.cVal);
+		case VT_UI1:	return ISO::MakePtr(id, v.bVal);
+		case VT_I2:		return ISO::MakePtr(id, v.iVal);
+		case VT_UI2:	return ISO::MakePtr(id, v.uiVal);
 		case VT_I4:		return ISO::MakePtr(id, (int32)	v);
 		case VT_UI4:	return ISO::MakePtr(id, (uint32)v);
 		case VT_I8:		return ISO::MakePtr(id, (int64)	v);
@@ -549,7 +550,7 @@ const ISO::Type *ISODiaSession::GetType(IDiaSymbol *type) {
 					uint64	size;
 					base->get_offset(&offset);
 					type->get_length(&size);
-					comp->Add(ISO::Element(0, GetType(type), offset, size));
+					comp->Add(ISO::Element(none, GetType(type), offset, size));
 				}
 				base.clear();
 			}
@@ -581,7 +582,7 @@ const ISO::Type *ISODiaSession::GetType(IDiaSymbol *type) {
 								(*i)->get_length(&size);
 								bits->Add(GetType(type), name, bit, size);
 							}
-							comp->Add(ISO::Element(0, bits, offset, 0));
+							comp->Add(ISO::Element(none, bits, offset, 0));
 						} else {
 							com_string			name;
 							com_ptr<IDiaSymbol>	type;
@@ -801,7 +802,7 @@ template<> ISO_ptr<void> ISODiaSession::GetItem(IDiaSymbol *sym) {
 				break;
 
 			default:
-				ISO_TRACEF("Unhandled ") << tag << "\n";
+				ISO_TRACEF("Unhandled ") << (uint32)tag << "\n";
 				break;
 		}
 	}

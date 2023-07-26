@@ -58,13 +58,13 @@ template<typename T> struct Envelope {
 			? lerp(init, peak, time / decay)
 			: lerp(peak, end, (time - decay) / (duration - decay));
 	}
-	void set(paramT(T) _init, paramT(T) _peak, paramT(T) _end, float _decay) {
+	void set(param(T) _init, param(T) _peak, param(T) _end, float _decay) {
 		init	= _init;
 		peak	= _peak;
 		end		= _end;
 		decay	= _decay;
 	}
-	void set(paramT(T) _init) {
+	void set(param(T) _init) {
 		init	= _init;
 	}
 };

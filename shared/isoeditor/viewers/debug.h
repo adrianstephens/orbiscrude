@@ -21,14 +21,16 @@ namespace app {
 using namespace iso;
 using namespace win;
 
-void			SetSourceWindow(win::RichEditControl &text, const SyntaxColourer &colourer, const memory_block &s, int *active, size_t num_active);
-EditControl		MakeSourceWindow(const WindowPos &wpos, const char *title, const SyntaxColourer &colourer, const memory_block &s, int *active, size_t num_active, Control::Style style, Control::StyleEx styleEx = Control::NOEX);
+void			SetSourceWindow(RichEditControl &text, const Disassembler::File *file, const SyntaxColourer &colourer, range<int*> active);
+EditControl		MakeSourceWindow(const WindowPos &wpos, const Disassembler::File *file, const SyntaxColourer &colourer, range<int*> active, Control::Style style, Control::StyleEx styleEx = Control::NOEX, ID id = {});
 
 void			ShowSourceLine(EditControl edit, uint32 line);
 void			ShowSourceTabLine(TabControl2 tabs, uint32 file, uint32 line);
 void			ShowSourceTabLine(TabControl2 tabs, const Disassembler::Location *loc);
 
 void			DumpDisassemble(win::RichEditControl &text, Disassembler::State *state, int flags, Disassembler::SymbolFinder sym_finder);
+
+void			DrawBreakpoints(RichEditControl edit, void *target, int pc_line, const dynamic_array<uint32> &bp_lines, bool line_nos = false);
 
 //-----------------------------------------------------------------------------
 //	CodeHelper
@@ -38,9 +40,9 @@ class CodeHelper {
 protected:
 	const SyntaxColourerRE&			colourer;
 	Disassembler::AsyncSymbolFinder	sym_finder;
-	int								mode;
-	dynamic_array<int>	loc_indices;
-	dynamic_array<int>	loc_indices_combine;
+	Disassembler::MODE				mode;
+	dynamic_array<int>				loc_indices;
+	dynamic_array<int>				loc_indices_combine;
 
 	auto	GetLocations() const {
 		return make_indexed_container(locations, make_const(loc_indices_combine));
@@ -50,12 +52,25 @@ public:
 	unique_ptr<Disassembler::State>	state;
 	Disassembler::Locations			locations;
 
-	CodeHelper(const SyntaxColourerRE &colourer, Disassembler::AsyncSymbolFinder &&sym_finder, int mode)
+	CodeHelper(const SyntaxColourerRE &colourer, Disassembler::AsyncSymbolFinder &&sym_finder, Disassembler::MODE mode)
 		: colourer(colourer), sym_finder(move(sym_finder)), mode(mode), base(0) {}
 
 	void	FixLocations(uint64 base);
-	void	SetDisassembly(RichEditControl c, Disassembler::State *_state);
-	void	SetDisassembly(RichEditControl c, Disassembler::State *_state, const Disassembler::Files &files);
+	void	UpdateDisassembly(RichEditControl c);
+	void	UpdateDisassembly(RichEditControl c, const Disassembler::Files &files);
+
+	void	SetDisassembly(RichEditControl c, Disassembler::State* _state) {
+		state		= _state;
+		UpdateDisassembly(c);
+
+	}
+	void	SetDisassembly(RichEditControl c, Disassembler::State* _state, const Disassembler::Files& files) {
+		state		= _state;
+		UpdateDisassembly(c, files);
+	}
+
+	void	RemapFromHashLine(Disassembler::Files &files, const char *search_path, Disassembler::SharedFiles &shared_files);
+	uint64	OffsetToAddress(uint32 offset)	const { return offset ? offset + base : 0; }
 
 	void	ShowCode(EditControl c, const Disassembler::Location *loc) const {
 		if (loc) {
@@ -63,43 +78,78 @@ public:
 			c.EnsureVisible();
 		}
 	}
-	void	ShowCode(EditControl c, int file, int line)	const { ShowCode(c, locations.find(file, line)); }
-	uint64	LineToAddress(int line)						const {
-		if (mode & Disassembler::SHOW_SOURCE)
-			state->MixedLineToSource(GetLocations(), line, base);
-		return state->LineToAddress(line);
+	void	ShowCode(EditControl c, int file, int line)	const {
+		ShowCode(c, locations.find(file, line));
 	}
-
-	auto	LineToSource(int line)						const { return mode & Disassembler::SHOW_SOURCE ? &*state->MixedLineToSource(GetLocations(), line, base) : locations.find(state->LineToAddress(line) - base); }
-	uint32	AddressToLine(uint64 addr)					const { return mode & Disassembler::SHOW_SOURCE ? state->AddressToMixedLine(GetLocations(), addr, base) : state->AddressToLine(addr); }
 	void	GetDisassembly(string_accum &sa, int line)	const {
 		if (mode & Disassembler::SHOW_SOURCE)
 			state->MixedLineToSource(GetLocations(), line, base);
 		state->GetLine(sa, line, mode, sym_finder);
 	}
 
-	uint32	LineToOffset(int line)						const { return LineToAddress(line) - base;	}
-	uint32	OffsetToLine(uint32 offset)					const { return AddressToLine(base + offset); }
+	auto	LineToSource(int line)						const {
+		return (mode & Disassembler::SHOW_SOURCE) && locations
+			? &*state->MixedLineToSource(GetLocations(), line, base)
+			: locations.find(state->LineToAddress(line) - base);
+	}
+
+	uint64	LineToAddress(int line)						const {
+		if (mode & Disassembler::SHOW_SOURCE)
+			state->MixedLineToSource(GetLocations(), line, base);
+		return state->LineToAddress(line);
+	}
+	uint32	LineToOffset(int line)						const {
+		return LineToAddress(line) - base;
+	}
+
+	uint32	AddressToLine(uint64 addr)					const {
+		return mode & Disassembler::SHOW_SOURCE
+			? state->AddressToMixedLine(GetLocations(), addr, base)
+			: state->AddressToLine(addr);
+	}
+	int		OffsetToLine(uint32 offset)					const {
+		return AddressToLine(base + offset);
+	}
+
+	uint64	LegalAddress(uint64 addr)					const {
+		return state->GetAddress(state->AddressToLine(addr));
+	}
+	uint64	NextAddress(uint64 addr)					const {
+		return state->GetAddress(state->AddressToLine(addr) + 1);
+	}
+	uint32	NextOffset(uint32 addr)						const {
+		return NextAddress(addr + base) - base;
+	}
+
+	const Disassembler::Location *OffsetToSource(uint32 offset) const {
+		auto	locs	= GetLocations();
+		auto	loc		= lower_boundc(locs, offset);
+		return loc != locs.end() ? &*loc : nullptr;
+	}
+	const Disassembler::Location *AddressToSource(uint64 addr) const {
+		return OffsetToSource(addr - base);
+	}
+	uint32	NextSourceOffset(uint32 offset, uint32 funcid = 0)	const;
+	uint64	NextSourceAddress(uint64 addr, uint32 funcid = 0)	const {
+		return OffsetToAddress(NextSourceOffset(addr - base, funcid));
+	}
 
 	void	Select(EditControl click, EditControl dis, TabControl2 *tabs);
 	void	SourceTabs(TabControl2 &tabs, const Disassembler::Files &files);
 };
 
 //-----------------------------------------------------------------------------
-//	DebugWindow
+//	CodeWindow
 //-----------------------------------------------------------------------------
 
-class DebugWindow : public D2DTextWindow, public CodeHelper {
-protected:
-	ImageList			images;
-	uint32				pc_line;
-	int					orig_mode;
-
+class CodeWindow : public D2DTextWindow {
 public:
 	enum {
 		ID_DEBUG_BREAKPOINT	= 1000,
+		ID_DEBUG_SWITCHSOURCE,
 		ID_DEBUG_SHOWSOURCE,
 		ID_DEBUG_COMBINESOURCE,
+		ID_DEBUG_SHOWLINENOS,
 		ID_DEBUG_STEPOVER,
 		ID_DEBUG_STEPBACK,
 		ID_DEBUG_RUN,
@@ -108,28 +158,43 @@ public:
 		ID_DEBUG_STEPOUT,
 		ID_DEBUG_RUNTO,
 	};
-
-	Disassembler::Files		files;
-	dynamic_array<int>		bp;
-
 	static Accelerator GetAccelerator();
+
+	uint32	margin = 24;
+	LRESULT Proc(MSG_ID message, WPARAM wParam, LPARAM lParam);
+
+	HWND	Create(const WindowPos &pos, const char *_title, Style style, StyleEx styleEx = NOEX, ID id = ID()) {
+		D2DTextWindow::Create(pos, _title, style, styleEx, id);
+		Rebind(this);
+		SendMessage(EM_EXLIMITTEXT, 0, ~0);
+		return *this;
+	}
+
+	Rect	Margin()			const { return GetClientRect().Subbox(0,0,margin,0); }
+	void	InvalidateMargin()	const { Invalidate(Margin()); }
+	CodeWindow()	{}
+	CodeWindow(const WindowPos& pos, const char* _title, Style style = NOSTYLE, StyleEx styleEx = NOEX, ID id = ID()) {
+		Create(pos, _title, style, styleEx, id);
+	}
+};
+
+
+//-----------------------------------------------------------------------------
+//	DebugWindow
+//-----------------------------------------------------------------------------
+
+class DebugWindow : public CodeWindow, public CodeHelper {
+protected:
+	Disassembler::MODE	orig_mode;
+
+public:
+	Disassembler::Files		files;
 
 	LRESULT Proc(MSG_ID message, WPARAM wParam, LPARAM lParam);
 
-	DebugWindow(const SyntaxColourerRE &colourer, Disassembler::AsyncSymbolFinder &&sym_finder, int mode);
+	DebugWindow(const SyntaxColourerRE &colourer, Disassembler::AsyncSymbolFinder &&sym_finder, Disassembler::MODE mode);
 
-	bool	ToggleBreakpoint(int y) {
-		auto	i = lower_boundc(bp, y);
-		bool	r = i == bp.end() || *i != y;
-		if (r)
-			bp.insert(i, y);
-		else
-			bp.erase(i);
-		Invalidate(Margin());
-		return r;
-	}
-
-	void	SetMode(int mode);
+	void	SetMode(Disassembler::MODE mode);
 
 	HWND	Create(const WindowPos &pos, const char *_title, Style style, StyleEx styleEx = NOEX) {
 		D2DTextWindow::Create(pos, _title, style, styleEx);
@@ -139,7 +204,7 @@ public:
 	}
 
 	void	SetDisassembly(Disassembler::State *state, bool show_source) {
-		mode	= show_source ? orig_mode : 0;
+		mode	= show_source ? orig_mode : Disassembler::MODE(0);
 		CodeHelper::SetDisassembly(*this, state, files);
 	}
 	void	SourceTabs(TabControl2 &tabs) {
@@ -151,14 +216,13 @@ public:
 	bool	HasFiles()									const { return !files.empty(); }
 	void	ShowCode(const Disassembler::Location *loc) const { CodeHelper::ShowCode(*this, loc); }
 	void	ShowCode(int file, int line)				const { CodeHelper::ShowCode(*this, file, line); }
-	Rect	Margin()									const { return GetClientRect().Subbox(0,0,16,0); }
 
 	void	SetPC(uint32 pc) {
-		pc_line = pc;
 		SetSelection(GetLineStart(pc));
 		EnsureVisible();
 		Invalidate(Margin());
 	}
+	
 };
 
 //-----------------------------------------------------------------------------
@@ -193,7 +257,7 @@ public:
 		const char		*type;
 		const field		*fields;
 		uint32			flags;
-		Entry(uint32 offset, const char *name, const field *fields = nullptr, uint32 flags = 0) : offset(offset), name(name), type(0), fields(fields), flags(flags) {}
+		Entry(uint32 offset, text name, const field *fields = nullptr, uint32 flags = 0) : offset(offset), name(name), type(0), fields(fields), flags(flags) {}
 
 		const char*		Name() const { return name; }
 		const char*		Type() const { return type; }
@@ -207,7 +271,7 @@ public:
 		return c.FindAncestorByProc<RegisterWindow>();
 	}
 
-	LRESULT Proc(UINT message, WPARAM wParam, LPARAM lParam);
+	LRESULT Proc(MSG_ID message, WPARAM wParam, LPARAM lParam);
 	void	Init(ListViewControl lv);
 	void*	Reg(const Entry &e) { return (void*)(prev_regs + e.offset); }
 
@@ -228,22 +292,22 @@ protected:
 		uint32	offset, size:31, remote:1;
 		block(uint64 addr, uint32 offset, uint32 size, bool remote) : addr(addr), offset(offset), size(size), remote(remote) {}
 		uint32		end()		const	{ return offset + size; }
-		operator	uint32()	const	{ return offset; }
+		operator	uint32()	const	{ return end() - 1; }
 	};
 	uint32					total;
 	dynamic_array<block>	blocks;
 
-	void	_add_block(uint32 offset, uint64 addr, uint32 size, bool remote);
+	void	_add_block(uint32 offset, uint64 addr, uint32 size, bool remote, bool replace);
 
 public:
-	void	clear()														{ blocks.clear(); total = 0; }
-	uint32	add_chunk(uint32 size)										{ return exchange(total, total + size); }
-	void	add_block(uint32 offset, uint64 remote, uint32 size)		{ _add_block(offset, remote, size, true); }
-	void	add_block(uint32 offset, const void *local, uint32 size)	{ _add_block(offset, (uint64)local, size, false); }
+	void	clear()																	{ blocks.clear(); total = 0; }
+	uint32	add_chunk(uint32 size)													{ return exchange(total, total + size); }
+	void	add_block(uint32 offset, uint64 remote, uint32 size, bool replace = true)		{ _add_block(offset, remote, size, true, replace); }
+	void	add_block(uint32 offset, const void *local, uint32 size, bool replace = true)	{ _add_block(offset, (uint64)local, size, false, replace); }
 
 	uint64	remote_address(uint32 offset) const {
-		auto	b	= upper_boundc(blocks, offset);
-		return b != blocks.begin() && b[-1].remote ? b[-1].addr + offset - b[-1].offset : 0;
+		auto	b	= lower_boundc(blocks, offset);
+		return b != blocks.end() && b->remote ? b->addr + offset - b->offset : 0;
 	}
 
 	uint32	frame_address(uint64 addr) const {
@@ -255,17 +319,24 @@ public:
 	}
 
 	bool	exists(uint32 offset, uint32 size) const {
-		auto	b	= upper_boundc(blocks, offset);
-		return b != blocks.begin() && b[-1].end() >= offset + size;
+		auto	b	= lower_boundc(blocks, offset);
+		return b != blocks.end() && b->end() >= offset + size;
 	}
 
 	bool	read(void *buffer, size_t size, uint32 offset, memory_interface *mem) const;
+	uint32	next(uint32 offset, size_t &size, bool dir) const;
 
 	FrameData() : total(0) {}
 };
 
 struct FrameMemoryInterface0 : FrameData, memory_interface {
-	virtual bool _get(void *buffer, size_t size, uint64 addr)	{ return FrameData::read(buffer, size, addr, 0); }
+	bool _get(void *buffer, uint64 size, uint64 addr)			override{
+		return FrameData::read(buffer, size, addr, 0);
+	}
+	virtual uint64	_next(uint64 addr, uint64 &size, bool dir)	override {
+		return FrameData::next(addr, size, dir);
+	};
+
 };
 
 struct FrameMemoryInterface : FrameData, memory_interface {
@@ -279,10 +350,6 @@ struct FrameMemoryInterface : FrameData, memory_interface {
 	FrameMemoryInterface(memory_interface *mem, uint64 base = bit64(63)) : mem(mem), base(base) {}
 };
 
-//-----------------------------------------------------------------------------
-//	LocalsWindow
-//-----------------------------------------------------------------------------
-
 string Description(ast::node *node);
 
 class LocalsWindow : public Window<LocalsWindow> {
@@ -294,12 +361,13 @@ protected:
 	ast::get_variable_t	get_var;
 	NATVIS*				natvis;
 
-	void		AppendEntry(string_param &&id, const C_type *type, uint64 addr, bool local = false);
-	ast::node*	GetEntry(HTREEITEM h)						const	{ return tc.GetItemParam(h); }
-	uint64		GetAddress(ast::node *node, uint64 *size)	const;
+	uint64			GetAddress(ast::node *node, uint64 *size)	const;
 
 public:
-	LRESULT Proc(MSG_ID message, WPARAM wParam, LPARAM lParam);
+	LRESULT			Proc(MSG_ID message, WPARAM wParam, LPARAM lParam);
+	HTREEITEM		AppendEntry(string_param &&id, const C_type *type, uint64 addr, bool local = false);
+	ast::lit_node*	GetEntry(HTREEITEM h)						const	{ return tc.GetItemParam(h); }
+	void			Update()									const	{ tc.Invalidate(); }
 
 	LocalsWindow(const WindowPos &wpos, const char *title, const C_types &types, memory_interface *mem = 0) : mem(mem), types(types), natvis(0) {
 		Create(wpos, title, CHILD | CLIPCHILDREN | CLIPSIBLINGS | VISIBLE);
@@ -328,6 +396,9 @@ protected:
 	uint64		GetAddress(ast::node *node, uint64 *size)	const;
 
 public:
+	using DropTarget<WatchWindow>::Drop;
+	using DropTarget<WatchWindow>::DragEnter;
+	using DropTarget<WatchWindow>::DragOver;
 	bool	Drop(const Point &pt, uint32 effect, IDataObject* data);
 	void	DragEnter(const Point &pt)		{ ImageList::DragEnter(*this, pt - GetRect().TopLeft()); }
 	void	DragOver(const Point &pt)		{ ImageList::DragMove(pt - GetRect().TopLeft()); }
@@ -359,46 +430,22 @@ protected:
 	dynamic_array<row_data>	rows;
 	int						selected;
 	int						cols_per_entry;
-	/*
+
 	struct RegAdder : buffer_accum<256>, ListViewControl::Item {
 		ListViewControl			c;
 		row_data				&row;
-		uint8					types[2];
 		bool					source;
 
-		void	SetAddress(uint64 addr) {
-			format("%010I64x", addr);
-			*getp() = 0;
-			Insert(c);
-		}
-		void	SetDis(const char *dis) {
-			reset() << dis;
-			*getp() = 0;
-			Column(1).Set(c);
+		void	SetColumn(int col) {
+			term();
+			Column(col).Set(c);
 		}
 
-		void	AddValue(int i, int reg, int mask, float *f) {
-			row.fields[i].reg	= reg;
-			row.fields[i].write	= !source;
-			row.fields[i].mask	= mask;
-
-			for (int j = 0; j < 4; j++) {
-				reset() << f[j] << '\0';
-				Column(i * 4 + j + 2).Set(c);
-			}
-		}
-
-		RegAdder(ListViewControl _c, row_data &_row) : ListViewControl::Item(getp()), c(_c), row(_row) {}
+		RegAdder(ListViewControl c, row_data &row) : ListViewControl::Item(getp()), c(c), row(row) {}
 	};
-	int InsertRegColumns(int nc, const char *name) {
-		for (int i = 0; i < 4; i++)
-			ListViewControl::Column(buffer_accum<64>(name) << '.' << "xyzw"[i]).Width(120).Insert(c, nc++);
-		return nc;
-	}
-	*/
-
+	
 public:
-	LRESULT Proc(UINT message, WPARAM wParam, LPARAM lParam);
+	LRESULT Proc(MSG_ID message, WPARAM wParam, LPARAM lParam);
 	TraceWindow(const WindowPos &wpos, int cols_per_entry);
 };
 

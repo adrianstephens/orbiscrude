@@ -1499,7 +1499,7 @@ template<> struct SignerT<sig_dsa> : Signer, DSA {
 
 		dynamic_memory_writer	mo;
 		ASN1::Write(mo, sig2);
-		return SSL::signature(sig_dsa, hash, mo);
+		return SSL::signature(sig_dsa, hash, move(mo));
 	}
 	virtual	bool		verify(const SSL::signature &sig, const const_memory_block &digest) {
 		X509::DSASignature	sig2;
@@ -1544,7 +1544,7 @@ template<> struct SignerT<sig_ecdsa> : Signer {
 
 		dynamic_memory_writer	mo;
 		ASN1::Write(mo, sig2);
-		return signature(sig_ecdsa, hash, mo);
+		return signature(sig_ecdsa, hash, move(mo));
 	}
 	virtual	bool		verify(const signature &sig, const const_memory_block &digest) {
 		X509::DSASignature	sig2;

@@ -583,20 +583,20 @@ class ViewDirectories : public Window<ViewDirectories> {
 	}
 
 public:
-	LRESULT Proc(UINT message, WPARAM wParam, LPARAM lParam);
-	ViewDirectories(const WindowPos &pos, dirs::Dir *root) : root(root), pos(0,0), zoom(1), selected_dir(0), selected_entry(0) {
-		Create(pos, NULL, CHILD | VISIBLE);
+	LRESULT Proc(MSG_ID message, WPARAM wParam, LPARAM lParam);
+	ViewDirectories(const WindowPos &pos, const char *title, dirs::Dir *root) : root(root), pos(0,0), zoom(1), selected_dir(0), selected_entry(0) {
+		Create(pos, title, CHILD | VISIBLE);
 	}
 };
 
-LRESULT ViewDirectories::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+LRESULT ViewDirectories::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 		case WM_CREATE:
 			break;
 
 		case WM_SIZE: {
 			Point	size(lParam);
-			if (target.Resize(size))
+			if (!target.Resize(size))
 				DiscardDeviceResources();
 
 			if (zoom == 1 && pos == Point(0,0))
@@ -740,7 +740,7 @@ class EditorDirs : public Editor {
 	}
 	virtual Control	Create(MainWindow &main, const WindowPos &pos, const ISO_VirtualTarget &b) {
 		if (b.Is<iso::Folder>()) {
-			return *new ViewDirectories(pos, MakeDir(b));
+			return *new ViewDirectories(pos, b.GetName().get_tag(), MakeDir(b));
 
 		}
 
@@ -751,7 +751,7 @@ class EditorDirs : public Editor {
 			dirs::FATFiles *p = b;
 			return *new ViewDirectories(pos, p->root);
 		} else */{
-			return *new ViewDirectories(pos, b);
+			return *new ViewDirectories(pos, b.GetName().get_tag(), b);
 		}
 	}
 public:

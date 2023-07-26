@@ -351,7 +351,7 @@ class SHPFileHandler : public FileHandler {
 				if (dbf.exists()) {
 					ISO_ptr<ISO_zipper>	p2(id);
 					p2->a = p;
-					p2->b = FileHandler::Read(0, dbf);
+					p2->b = FileHandler::Read(none, dbf);
 					return p2;
 				}
 				return p;

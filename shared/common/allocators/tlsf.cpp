@@ -161,6 +161,7 @@ struct heap : TLSF<block_header, 31, 5> {
 	block_header*	alloc(size_t size);
 	block_header*	alloc(size_t size, uint32 align);
 	block_header*	realloc(block_header* block, size_t size);
+	block_header*	realloc_retry(block_header* block, size_t size);
 	void			free(block_header* p);
 
 	void			walk_heap(walker *w, void* user);
@@ -274,6 +275,24 @@ block_header* heap::realloc(block_header* block, size_t size) {
 	return newblock;
 }
 
+block_header* heap::realloc_retry(block_header* block, size_t size) {
+	const size_t cursize	= block->size();
+	const void		*p		= block->to_ptr();
+
+	// Try combining with prev
+	if (block->is_prev_free())
+		block = block->prev();
+
+	// Allocate new block (but old block only needs inserting now)
+	block_header *newblock = alloc(size);
+	if (newblock) {
+		memcpy(newblock->to_ptr(), p, cursize);
+		block->mark_as_free();
+		insert(block);
+	}
+	return newblock;
+}
+
 void heap::free(block_header* block) {
 //	check_heap(this);
 
@@ -376,6 +395,12 @@ void* realloc(heap *tlsf, void* p, size_t size) {
 
 	CHECK_HEAP;
 
+	return m ? m->to_ptr() : 0;
+}
+
+void* realloc_retry(heap *tlsf, void* p, size_t size) {
+	block_header*	m = p ? tlsf->realloc_retry(block_header::from_ptr(p), size) : tlsf->alloc(size);
+	CHECK_HEAP;
 	return m ? m->to_ptr() : 0;
 }
 

@@ -3,20 +3,12 @@
 
 #include "base/defs.h"
 #include "base/array.h"
-#include "extra/random.h"
 #include "allocators/allocator.h"
-#include "events.h"
+//#include "events.h"
 #include "stream.h"
 
 namespace iso {
-
-//-----------------------------------------------------------------------------
-//	Random
-//-----------------------------------------------------------------------------
-
-extern rng<simple_random>				random;
-extern rng<mersenne_twister32_19937>	random2;
-
+#if 0
 //-----------------------------------------------------------------------------
 //	Callbacks
 //-----------------------------------------------------------------------------
@@ -26,6 +18,7 @@ struct AppEvent : Message<AppEvent> {
 	STATE	state;
 	AppEvent(STATE _state) : state(_state) {}
 };
+#endif
 
 //-----------------------------------------------------------------------------
 //	deferred_delete
@@ -89,14 +82,15 @@ struct temp_block : memory_block {
 template<typename T> class _temp_array : public _ptr_array<T> {
 protected:
 	constexpr _temp_array(size_t curr_size)	: _ptr_array<T>(thread_temp_allocator.alloc<T>(curr_size), curr_size)	{}
-	_temp_array(_temp_array&& b) : _ptr_array<T>(exchange(b.p, nullptr), b.curr_size) {}
+	_temp_array(_temp_array&& b)		: _ptr_array<T>(exchange(b.p, nullptr), b.curr_size) {}
 	~_temp_array() { thread_temp_allocator._free_last(this->p); }
 };
-template<typename T> class temp_array : public array_mixout<_temp_array<T>, T> {
-	typedef array_mixout<_temp_array<T>, T>	B;
+template<typename T> class temp_array : public array_mixout<_temp_array<T>> {
+	typedef array_mixout<_temp_array<T>>	B;
 	using B::p; using B::curr_size;
 public:
 	temp_array(temp_array&&) = default;
+	temp_array(const temp_array &b)																: temp_array(b.curr_size)	{ copy_n(b.p, this->p, b.curr_size); }
 	temp_array(size_t n)																		: B(n)						{ fill_new_n(p, n); }
 	template<typename U> temp_array(size_t n, U&& u)											: B(n)						{ fill_new_n(p, n, forward<U>(u)); }
 	temp_array(initializer_list<T> init) 														: B(init.size())			{ copy_new_n(init.begin(), p, curr_size); }
@@ -106,6 +100,9 @@ public:
 	//temp_array& operator=(temp_array&& c) { swap(*(_ptr_array<T>*)this, static_cast<_ptr_array<T>&>(c)); return *this;	}
 	template<typename C> auto& operator=(const C& c) { copy_n(begin(c), p, min(num_elements(c), curr_size)); return *this; }
 };
+
+template<typename C> temp_array<noconst_t<element_t<C>>> make_temp_array(C &&c) { return forward<C>(c); }
+
 
 template<typename T> class _temp_dynamic_array : public _ptr_max_array<T> {
 protected:

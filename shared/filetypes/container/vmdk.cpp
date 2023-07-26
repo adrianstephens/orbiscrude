@@ -74,7 +74,7 @@ VMDK::VMDK(const filename &fn) : file(fn) {
 		malloc_block	desc(size);
 		file.seek(offset * SECTOR_SIZE);
 		file.readbuff(desc, size);
-		string_scan	ss(desc);
+		string_scan	ss(desc.begin(), desc.size());
 	}
 
 	capacity		= h.capacity;

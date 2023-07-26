@@ -31,6 +31,17 @@ public:
 	operator Texture&() const		{ return *(Texture*)this; }
 };
 
+class ISODataBuffer {
+	ISO::ptr_machine<void>	p;
+public:
+	typedef	ISO::ptr_machine<void> P;
+	ISODataBuffer()					{}
+	ISODataBuffer(const P &p) : p(p){}
+
+	void operator=(const P &_p)		{ p = _p; }
+	operator DataBuffer&() const	{ return *(DataBuffer*)this; }
+};
+
 struct Node {
 	float3x4p		matrix;
 	anything		children;
@@ -195,14 +206,19 @@ struct QualityToggle {
 
 //-----------------------------------------------------------------------------
 
+//#define _ISO_DEF(a, b)		struct ISO::def<a> : ISO::def<b> {}
+//#define ISO_DEF(a, b)		template<> _ISO_DEF(a, b)
+
 namespace ISO {
 
 ISO_DEFCALLBACK(SampleBuffer,	ISO_ptr<void>);
 
 ISO_DEFCALLBACK(Texture,	ISOTexture::P);
-ISO_DEFSAME(ISOTexture,		ISOTexture::P);
+ISO_DEFSAME(ISOTexture,		Texture);
 
-ISO_DEFCALLBACK(DataBuffer,	ISO_ptr<void>);
+ISO_DEFCALLBACK(DataBuffer,	ISODataBuffer::P);
+ISO_DEFSAME(ISODataBuffer,	DataBuffer);
+
 ISO_DEFUSERCOMPV(Node,		matrix, children);
 ISO_DEFUSER(Children,		anything);
 ISO_DEFUSERCOMPV(Scene,		root);

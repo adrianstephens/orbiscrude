@@ -763,7 +763,7 @@ class ViewDirectShow : public Window<ViewDirectShow> {
 
 public:
 
-	LRESULT Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+	LRESULT Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 		switch (message) {
 			case WM_SIZE: {
 				Point	size(lParam);

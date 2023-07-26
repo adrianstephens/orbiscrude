@@ -45,7 +45,7 @@ struct RenderJunction : public RenderItem {
 };
 
 struct RenderRoadProfile {
-	Buffer<float4>	xsect;
+	DataBufferT<float4>	xsect;
 	RenderRoadProfile(ent::RoadProfile *p) {
 		xsect.Init((float4*)p->xsect.sections.begin(), p->xsect.sections.Count());
 	}
@@ -142,7 +142,7 @@ struct RenderGroundPatch : public RenderItem {
 	void operator()(RenderEvent *re, uint32 extra) {
 		pass *shader;
 
-		if (auto tex = road_assets["bricks"].put()) {
+		if (auto tex = road_assets["bricks"_crc32].put()) {
 			static pass *shader1 = *ISO::root("data")["default"]["norm_specular"][0];
 			shader	= shader1;
 			AddShaderParameter("normal_samp", tex);

@@ -2,7 +2,7 @@
 #include "comms/zip.h"
 #include "container/plist.h"
 #include "codec/lzo.h"
-#include "utilities.h"
+#include "extra/random.h"
 
 //-----------------------------------------------------------------------------
 //	Procreate bitmaps
@@ -617,7 +617,7 @@ bool ProcreateFileHandler::Write(ISO_ptr<void> p, ostream_ref file) {
 			bp.set_root(bp.add((ISO_ptr_machine<void>)d));
 		#endif
 		}
-		zip.Write("Document.archive", mo);
+		zip.Write("Document.archive", mo.data());
 
 		if (FileHandler	*png = FileHandler::Get("png")) {
 			int	thwidth, thheight;
@@ -633,7 +633,7 @@ bool ProcreateFileHandler::Write(ISO_ptr<void> p, ostream_ref file) {
 			resample_via<HDRpixel>(thumbnail->All(), bm->All());
 			mo.seek(0);
 			png->Write(thumbnail, mo);
-			zip.Write("QuickLook/Thumbnail.png", mo);
+			zip.Write("QuickLook/Thumbnail.png", mo.data());
 		}
 	}
 

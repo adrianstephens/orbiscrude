@@ -6,45 +6,44 @@
 
 namespace iso {
 
-
-template<typename T, typename I> T&	tree_assign(T &tree, I a, I b) {
-	tree.clear();
-	while (a != b) {
-		tree.insert(*a);
-		++a;
-	}
-	return tree;
-}
+template<typename N, typename P, bool PARENT>	struct treenode_base;
+template<typename N, bool PARENT>				struct _tree_traverser;
+template<typename N, bool PARENT = N::PARENT>	using tree_traverser = typename _tree_traverser<N, PARENT>::type;
 
 //-----------------------------------------------------------------------------
 // treenode_base/tree_base (no parent)
 //-----------------------------------------------------------------------------
 
-template<typename N, typename P = N*, bool PARENT = false>	struct treenode_base;
-template<typename N, typename C, bool PARENT = N::PARENT>	class tree_base;
-
 template<typename N, typename P> struct treenode_base<N, P, false> {
 	static const bool PARENT = false;
-	P		child[2];
+	P		child[2]	= { nullptr, nullptr };
 
-	treenode_base()						{ child[0] = child[1] = 0; }
-	void	attach(N *n, int side)		{ child[side] = n; }
+	template<typename N2> void	attach(N2 n, bool right) { child[right] = n; }
+	N*		make_root()					{ return static_cast<N*>(this); }
 	N*		other(const N *n)	const	{ return child[child[0] == n]; }
-	int		side(const N *n)	const	{ return child[1] == n; }
+	bool	side(const N *n)	const	{ return child[1] == n; }
 
-	N*		last(int side) {
-		N	*p = static_cast<N*>(this);
-		while (N *q = p->child[side])
-			p = q;
+	N*		last(bool right) const {
+		auto	n = unconst(static_cast<const N*>(this));
+		while (N *c = n->child[right])
+			n = c;
+		return n;
+	}
+
+	N*		rotate(bool right) {
+		N	*n	= static_cast<N*>(this);
+		N	*p	= child[!right];
+		n->attach(p->child[right], !right);
+		p->attach(n, right);
 		return p;
 	}
-	//N*		rotate(int side) {
-	//	N	*n	= static_cast<N*>(this);
-	//	N	*p	= child[!side];
-	//	n->attach(p->child[side], !side);
-	//	p->attach(n, side);
-	//	return p;
-	//}
+
+	N*		rotate2(bool right) {
+		N	*n	= static_cast<N*>(this);
+		n->attach(child[!right]->rotate(!right), !right);
+		return n->rotate(right);
+	}
+
 	N*		remove() {
 		N	*n0 = child[0], *n1 = child[1];
 		if (!n1)
@@ -52,40 +51,77 @@ template<typename N, typename P> struct treenode_base<N, P, false> {
 		if (!n0)
 			return n1;
 
-		N	*n = n1, *prev = 0;
-		while (N *next = n->child[0]) {
-			prev	= n;
-			n		= next;
+		N	*n = n1, *p = nullptr;
+		while (N *c = n->child[false]) {
+			p	= n;
+			n	= c;
 		}
-		if (prev) {
-			prev->attach(n->child[1], 0);
-			n->attach(n1, 1);
+		if (p) {
+			p->attach(n->child[true], false);
+			n->attach(n1, true);
 		}
-		n->attach(n0, 0);
+		n->attach(n0, false);
 		return n;
 	}
 
 	size_t	subtree_size() const {
 		size_t	size = 1;
-		if (N *n = child[0])
+		if (N *n = child[false])
 			size += n->subtree_size();
-		if (N *n = child[1])
+		if (N *n = child[true])
 			size += n->subtree_size();
 		return size;
 	}
 
-	N		*clone() const {
-		N	*n		= new N(*static_cast<const N*>(this));
-		if (N *c = child[0])
-			n->child[0] = c->clone();
-		if (N *c = child[1])
-			n->child[1] = c->clone();
+	N*		subtree_clone() const {
+		N	*n	= new N(*static_cast<const N*>(this));
+		if (N *c = child[false])
+			n->attach(c->subtree_clone(), false);
+		if (N *c = child[true])
+			n->attach(c->subtree_clone(), true);
 		return n;
 	}
 
+	void	subtree_delete() {
+		for (N *i = static_cast<N*>(this), *n; i; i = n) {
+			if (n = i->child[0]) {
+				i->child[0] = n->child[1];
+				n->child[1] = i;
+			} else {
+				n = i->child[1];
+				delete i;
+			}
+		}
+	}
 
-	constexpr bool	valid() const {
-		return true;
+	void	swap_contents(N *r) {
+		swap(*r, *static_cast<N*>(this));				//swap everything
+		swap(*static_cast<treenode_base*>(r), *this);	//swap back pointers, etc
+	}
+
+	template<typename I> static N* remove(I &i) {
+		N	*n = i.node();
+		if (n) {
+			if (N *p = i.parent_node())
+				p->attach(n->remove(), p->side(n));
+			else 
+				return n->remove();
+		}
+		return (N*)1;
+	}
+
+	friend bool validate(const treenode_base *n, int depth) {
+		return !n || (n->valid() && depth && validate(n->child[0], depth - 1) && validate(n->child[1], depth - 1));
+	}
+	template<typename C> friend bool validate(const treenode_base *n, const C &comp, int depth) {
+		return !n || (n->valid() && n->valid_order(comp) && depth && validate(n->child[0], comp, depth - 1) && validate(n->child[1], comp, depth - 1));
+	}
+
+	constexpr bool	valid()			const {	return true; }
+	constexpr bool	valid_root()	const {	return true; }
+	template<typename C> constexpr bool	valid_order(const C &comp)	const {
+		return	!(child[0] && comp(static_cast<const N*>(this)->key(), child[0]->key()))
+			&&	!(child[1] && comp(child[1]->key(), static_cast<const N*>(this)->key()));
 	}
 };
 
@@ -93,86 +129,55 @@ template<typename N> class tree_stackptr {
 protected:
 	N		**sp;
 
-	void	next(N **stack, int side) {
-		if (N *p = sp > stack ? (N*)sp[-1]->child[side] : 0) {
-			last(p, !side);
-		} else {
-			do
-				--sp;
-			while (sp > stack && sp[0] == sp[-1]->child[side]);
-			//while (sp >= stack && sp[1] == sp[0]->child[side]);
-		}
-	}
 	tree_stackptr(N **stack) : sp(stack)	{}
 
-	N*		pop()						{ return *--sp; }
-	N*		node()				const	{ return sp[-1]; }
-//	int		side()				const	{ return sp[-2]->side(sp[-1]); }
-	int		side(const N *n)	const	{ return sp[-1]->side(n); }
+	template<typename K, typename C> void scan_lower_bound(const K &k, const C &comp) {
+		N		**best	= --sp;
+		bool	right;
+		for (N *n = *sp; n; n = n->child[right]) {
+			push(n);
+			if (!(right = comp(n->key(), k)))
+				best = sp;
+		}
+		sp = best;
+	}
+	template<typename K, typename C> void scan_upper_bound(const K &k, const C &comp) {
+		N		**best	= --sp;
+		bool	right;
+		for (N *n = *sp; n; n = n->child[right]) {
+			push(n);
+			if (!(right = !comp(k, n->key())))
+				best = sp;
+		}
+		sp = best;
+	}
+	template<typename K, typename C> int scan_insertion(const K &k, const C &comp) {
+		N		**best	= nullptr;
+		bool	right	= false;
+		for (N *n = *--sp; n; n = n->child[right]) {
+			push(n);
+			if (right = !comp(k, n->key()))
+				best = sp;
+		}
+		if (best && !comp(best[-1]->key(), k)) {
+			sp = best;
+			return 0;
+		}
+		return right ? 1 : -1;
+	}
 
-	int	next_leaf(int side) {
-		N	*p = sp[-1]->child[side];
-		if (!p)
-			return side;
-		last(p, !side);
-		return !side;
-	}
-	template<typename K, typename C> N **scan_lower_bound(const K &k, const C &comp) {
-		N	*n		= pop();
-		N	**best	= sp;
-		while (n) {
-			push(n);
-			int	dir = comp(n->get(), k);
-			if (!dir)
-				best = sp;
-			n = n->child[dir];
+	void	last(N *p, bool right) {
+		while (p) {
+			push(p);
+			p = p->child[right];
 		}
-		return best;
-	}
-	template<typename K, typename C> N **scan_upper_bound(const K &k, const C &comp) {
-		N	*n		= pop();
-		N	**best	= sp;
-		while (n) {
-			push(n);
-			int	dir = !comp(k, n->get());
-			if (!dir)
-				best = sp;
-			n = n->child[dir];
-		}
-		return best;
 	}
 
 public:
 	typedef N	node_type;
 
-	void move_to_leaf(N *n, int side) {
-		N	*r = n->child[side]->last(!side);
-		N	*p = node();
-		p->attach(r, p->side(n));
-
-		push(r);
-		for (N *t = n->child[side]; t != r; t = t->child[!side])
-			push(t);
-
-		swap(*n, *r);
-
-		p = node();
-		if (p == r)
-			r->attach(n, side);
-		else
-			p->attach(n, !side);
-	}
-
-
-
 	void	push(N *n) {
 		*sp++ = n;
-	}
-	void	last(N *p, int side) {
-		while (p) {
-			push(p);
-			p = p->child[side];
-		}
 	}
 };
 
@@ -182,109 +187,118 @@ template<typename N, int D=32> class tree_stack : public tree_stackptr<N> {
 public:
 	using	B::sp;
 
-	tree_stack(N *p = nullptr)	: B(stack) { if (p) B::push(p); }
-	tree_stack(N *p, int side)	: B(stack) { B::last(p, side); }
-	tree_stack(const tree_stack &b)	: B(stack) {
+	tree_stack(N *p = nullptr)		noexcept : B(stack) { *sp = p; sp += !!p; }
+	tree_stack(const tree_stack &b)	noexcept : B(stack) {
 		for (N *const *i = b.stack, **e = b.sp; i != e; ++i)
 			B::push(*i);
 	}
-	tree_stack& operator=(const tree_stack &b) {
+	tree_stack& operator=(const tree_stack &b)	noexcept {
 		sp = stack;
 		for (N *const *i = b.stack, **e = b.sp; i != e; ++i)
 			B::push(*i);
 		return *this;
 	}
 
-	void	next(int side)							{ return B::next(stack, side); }
-	N*		pop()									{ return sp > stack ? B::pop() : 0; }
-	int		depth()							const	{ return sp - stack; }
-	int		depth(N **p)					const	{ return p - stack; }
-	N*		node()							const	{ return sp > stack ? B::node() : 0; }
-//	int		side()							const	{ return sp < stack + 2 || B::side(); }
-	int		side(const N *n)				const	{ return sp < stack + 1 || B::side(n); }
-	N*		operator[](int i)				const	{ return stack[i]; }
-	N*&		operator[](int i)						{ return stack[i]; }
+	void	clear()		noexcept		{ sp = stack; }
 
-	template<typename K, typename C> void scan_lower_bound(const K &k, const C &comp) {
+	bool	operator==(const tree_stack &b) const	{ return node() == b.node(); }
+	bool	operator!=(const tree_stack &b) const	{ return node() != b.node(); }
+
+	N*		node()				const	{ return sp > stack ? sp[-1] : nullptr; }
+	bool	side(const N *n)	const	{ return sp < stack + 1 || sp[-1]->side(n); }
+	N*		pop()						{ return sp > stack ? *--sp : nullptr; }
+
+	N*		parent_node()		const	{ return sp > stack + 1 ? sp[-2] : nullptr; }
+	N*		parent_pop()				{ --sp; return node(); }	//equiv to p = p->parent
+
+	int		depth()				const	{ return sp - stack; }
+	int		depth(N **p)		const	{ return p - stack; }
+
+	N*		operator[](int i)	const	{ return stack[i]; }
+	N*&		operator[](int i)			{ return stack[i]; }
+
+	void	last(bool right) {
 		if (sp > stack)
-			sp = B::scan_lower_bound(k, comp);
+			for (auto p = sp[-1]; p = p->child[right];)
+				push(p);
 	}
-	template<typename K, typename C> void scan_upper_bound(const K &k, const C &comp) {
-		if (sp > stack)
-			sp = B::scan_upper_bound(k, comp);
-	}
-	template<typename K, typename C> bool scan(const K &k, const C &comp) {
-		if (sp > stack) {
-			N	**s = B::scan_lower_bound(k, comp);
-			if (s > stack && !comp(k, s[-1]->get())) {
-				sp = s;
-				return true;
-			}
-		}
-		return false;
-	}
-	int	next_leaf(int side) {
-		return sp > stack ? B::next_leaf(side) : !side;
-	}
-};
+	void	next(bool right) {
+		if (N *p = node()) {
+			if (N *n = p->child[right]) {
+				B::last(n, !right);
 
-template<typename N, typename C> class tree_base<N, C, false> : pair<C, N*> {
-	typedef pair<C, N*>	B;
-protected:
-	void		assign(const tree_base &b) { B::operator=(b); if (root()) root() = root()->clone(); }
-#ifdef USE_RVALUE_REFS
-	void		assign(tree_base &&b)		{ B::operator=(b); b.root() = nullptr; }
-#else
-	void		assign(tree_base &b)		{ B::operator=(b); b.root() = nullptr; }
-#endif
-
-	const C&	comp()	const		{ return B::a; }
-	void		set_root(N *n)		{ B::b = n; }
-	template<typename X, typename Y> inline bool compare(const X &x, const Y &y) const { return B::a(x, y); }
-public:
-	typedef tree_stack<N>	iterator;
-	typedef N				node_type;
-
-	tree_base(const C &comp = C())	: B(comp, nullptr) {}
-	tree_base(const tree_base &b)	{ assign(b); }
-#ifdef USE_RVALUE_REFS
-	tree_base(tree_base &&b)		{ assign(move(b)); }
-#endif
-
-	N*		root()		const		{ return B::b; }
-	N*&		root()					{ return B::b; }
-	void	clear()					{ root() = nullptr; }
-	bool	empty()		const		{ return !root(); }
-	N		*head()		const		{ return root() ? root()->last(0) : 0;	}
-	N		*tail()		const		{ return root() ? root()->last(1) : 0;	}
-	size_t	size()		const		{ return root() ? root()->subtree_size() : 0; }
-
-	void	insert(N *n) {
-		int		side	= 0;
-		N		*last	= 0;
-		for (N *node = root(); node; node = node->child[side]) {
-			last = node;
-			side = compare(node->get(), n->get());
-		}
-		if (last)
-			last->attach(n, side);
-		else
-			root() = n;
-	}
-
-	void	deleteall() {
-		for (N *i = root(), *n; i; i = n) {
-			if (n = i->child[0]) {
-				i->child[0] = n->child[1];
-				n->child[1] = i;
 			} else {
-				n = i->child[1];
-				delete i;
+				N	*c;
+				do {
+					c = p;
+					p = parent_pop();
+				} while (p && c == p->child[right]);
 			}
 		}
-		clear();
+	}
+
+
+	N*		move_to_leaf(bool right) {
+	#if 1
+		typedef noref_t<decltype(sp[0]->child[0])>	N2;
+		auto	p = node();
+		if (auto n = p->child[right]) {
+			auto	s	= exchange(p->child[!right], N2(nullptr));
+			N		*r	= n;
+			N		*pp = parent_node();
+
+			if (!n->child[!right]) {
+				p->attach(r->child[right], right);
+				r->attach(s, !right);
+				r->child[right] = n;	//copy colour
+				r->attach(p, right);
+				sp[-1]	= r;
+				push(p);
+
+			} else {
+				auto	sp0 = sp;
+				push(n);
+				last(!right);
+				r	= node();
+				p->attach(r->child[right], right);
+				r->attach(n, right);
+				r->attach(s, !right);
+				N		*rp = parent_node();
+				rp->attach(p, rp->side(r));
+
+				sp0[-1]	= r;
+				sp[-1]	= p;
+			}
+
+			if (!pp)
+				return r;	// new root
+
+			pp->attach(r, pp->side(p));
+		}
+	#else
+		N	*p	= node();
+		if (auto n = p->child[right]) {
+			B::last(n, !right);
+			p->swap_contents(node());
+		}
+	#endif
+		return nullptr;	// no new root
+	}
+
+	template<typename K, typename C> void scan_lower_bound(const K &k, const C &comp) noexcept {
+		if (sp > stack)
+			B::scan_lower_bound(k, comp);
+	}
+	template<typename K, typename C> void scan_upper_bound(const K &k, const C &comp) noexcept {
+		if (sp > stack)
+			B::scan_upper_bound(k, comp);
+	}
+	template<typename K, typename C> int scan_insertion(const K &k, const C &comp) noexcept {
+		return sp > stack ? B::scan_insertion(k, comp) : -1;
 	}
 };
+
+template<typename N> struct _tree_traverser<N, false> : T_type<tree_stack<N>> {};
 
 //-----------------------------------------------------------------------------
 // treenode_base/tree_base (with parent)
@@ -293,137 +307,25 @@ public:
 template<typename N, typename P> struct treenode_base<N, P, true> : treenode_base<N, P, false> {
 	static const bool PARENT = true;
 	typedef	treenode_base<N, P, false>	B;
-	using			B::child;
-	P				parent;
+	using	B::child;
+	P		parent	= nullptr;
 
-	treenode_base() : parent(0) {}
-	void	attach(N *n, int side) {
-		if (child[side] = n)
+	N*		make_root() {
+		parent = nullptr;
+		return static_cast<N*>(this);
+	}
+	template<typename N2>	void attach(N2 n, bool right) {
+		if (child[right] = n)
 			n->parent = static_cast<N*>(this);
 	}
-	N*		sibling() {
-		return parent->other(static_cast<N*>(this));
+	N*		sibling() const {
+		return parent->other(static_cast<const N*>(this));
 	}
-	N*		next(int side) {
-		if (N *p = child[side])
-			return p->last(!side);
-		N *p = static_cast<N*>(this), *q;
-		do {
-			q = p;
-			p = p->parent;
-		} while (p && q == p->child[side]);
-		return p;
-	}
-
-	N		*clone() const {
-		N	*n		= new N(*static_cast<const N*>(this));
-		if (N *c = child[0]) {
-			n->child[1] = c->clone();
-			n->child[1]->parent = n;
-		}
-		if (N *c = child[1]) {
-			n->child[1] = c->clone();
-			n->child[1]->parent = n;
-		}
-		return n;
-	}
-
-	constexpr bool	valid() const { 
-		return (!child[0] || child[0]->parent == this) && (!child[1] || child[1]->parent == this);
-	}
-};
-
-template<typename N> class treepointer {
-protected:
-	N		*p;
-
-	template<typename K, typename C> static N *_scan_lower_bound(N *n, const K &k, const C &comp) {
-		N	*best	= nullptr;
-		for (int dir; n; n = n->child[dir]) {
-			if (!(dir = comp(n->get(), k)))
-				best = n;
-		}
-		return best;
-	}
-	template<typename K, typename C> static N *_scan_upper_bound(N *n, const K &k, const C &comp) {
-		N	*best	= nullptr;
-		for (int dir; n; n = n->child[dir]) {
-			if (!(dir = !comp(k, n->get())))
-				best = n;
-		}
-		return best;
-	}
-	void	next(int side) {
-		p = p->next(side);
-	}
-	void	last(N *n, int side) {
-		p = n->last(side);
-	}
-
-public:
-	typedef N	node_type;
-	treepointer(N *p) : p(p)						{}
-	treepointer(N *p, int side) : p(p ? p->last(side) : p)	{}
-	N*		node()				const	{ return p; }
-	void	push(N *n)					{ p = n; }
-	N*		pop()						{ return p ? exchange(p, p->parent) : p; }
-	int		side(const N *n)	const	{ return !p || !p->parent || p->parent->side(n); }
-
-	template<typename K, typename C> void scan_lower_bound(const K &k, const C &comp) {
-		auto r = _scan_lower_bound(p, k, comp);
-		p = r ? r : p ? p->last(1) : p;
-	}
-	template<typename K, typename C> void scan_upper_bound(const K &k, const C &comp) {
-		auto r = _scan_upper_bound(p, k, comp);
-		p = r ? r : p ? p->last(1) : p;
-	}
-	template<typename K, typename C> bool scan(const K &k, const C &comp) {
-		auto r = _scan_lower_bound(p, k, comp);
-		p = r ? r : p ? p->last(1) : p;
-		return r && !comp(k, r->get());
-	}
-	void move_to_leaf(N *n, int side) {
-		N	*r = n->child[side]->last(!side);
-		p->attach(r, p->side(n));
-
-		push(r);
-		for (N *t = n->child[side]; t != r; t = t->child[!side])
-			push(t);
-
-		swap(*n, *r);
-
-		if (p == r)
-			r->attach(n, side);
-		else
-			p->attach(n, !side);
-	}
-};
-
-template<typename N, typename C> class tree_base<N, C, true> : public tree_base<N, C, false> {
-	typedef tree_base<N, C, false> B;
-
-protected:
-	void		set_root(N *n)	{
-		if (n)
-			n->parent = nullptr;
-		B::set_root(n);
-	}
-public:
-	typedef treepointer<N>		iterator;
-
-	tree_base(const C &comp) : B(comp) {}
-	void remove(N *n) {
-		if (N *p = n->parent)
-			p->attach(n->remove(), p->side(n));
-		else if (B::root() = n->remove())
-			B::root()->parent = 0;
-	}
-
-	void deleteall() {
-		N	*n = B::root(), *c;
+	void	subtree_delete() {
+		N	*n = static_cast<N*>(this), *c;
 		while (n) {
 			while (c = n->child[1])
-				n = c->last(0);
+				n = c->last(false);
 
 			do {
 				c = n;
@@ -431,619 +333,881 @@ public:
 				delete c;
 			} while (n && n->child[1] == c);
 		}
-		B::clear();
+	}
+
+	void	swap_contents(N *r) {
+		swap(*r, *static_cast<N*>(this));				//swap everything
+		swap(*static_cast<treenode_base*>(r), *this);	//swap back pointers, etc
+	}
+
+	constexpr bool	valid()			const { return (!child[0] || child[0]->parent == this) && (!child[1] || child[1]->parent == this); }
+	constexpr bool	valid_root()	const { return !parent; }
+};
+
+template<typename N> class tree_pointer {
+	N		*p;
+public:
+	typedef N	node_type;
+
+	tree_pointer(N *p) : p(p)			{}
+	void	clear()						{ p = nullptr; }
+	bool	operator==(const tree_pointer &b) const	{ return p == b.p; }
+	bool	operator!=(const tree_pointer &b) const	{ return p != b.p; }
+
+	N*		node()				const	{ return p; }
+	int		side(const N *n)	const	{ return !p || p->side(n); }
+	N*		pop()						{ return p ? exchange(p, p->parent) : p; }
+
+	N*		parent_node()		const	{ return p->parent; }
+	N*		parent_pop()				{ return p = p->parent; }
+	
+	void	push(N *n)					{ p = n; }
+
+	void	last(bool right) {
+		if (p)
+			p = p->last(right);
+	}
+
+	void	next(bool right) {
+		if (N *n = p->child[right]) {
+			p = n->last(!right);
+
+		} else {
+			N	*c;
+			n	= p;
+			do {
+				c = n;
+				n = n->parent;
+			} while (n && c == n->child[right]);
+			p = n;
+		}
+	}
+
+	N*	move_to_leaf(bool right) {
+	#if 1
+		typedef noref_t<decltype(p->child[0])>	N2;
+		if (auto n = p->child[right]) {
+			auto	s	= exchange(p->child[!right], N2(nullptr));
+			N		*r	= n;
+			N		*pp = p->parent;
+
+			if (!n->child[!right]) {
+				p->attach(r->child[right], right);
+				r->attach(s, !right);
+				r->child[right] = n;	//get colour
+				r->attach(p, right);
+
+			} else {
+				r	= n->last(!right);
+				p->attach(r->child[right], right);
+				r->attach(n, right);
+				r->attach(s, !right);
+				N	*rp = r->parent;
+				rp->attach(p, rp->side(r));
+			}
+
+			if (!pp) {
+				r->parent = nullptr;
+				return r;	// new root
+			}
+			pp->attach(r, pp->side(p));
+		}
+	#else
+		N	*r	= p;
+		if (auto n = r->child[right]) {
+			p = n->last(!right);
+			r->swap_contents(p);
+		}
+	#endif
+		return nullptr;	// no new root
+	}
+
+	template<typename K, typename C> void scan_lower_bound(const K &k, const C &comp) {
+		N		*best	= nullptr;
+		bool	right;
+		for (N *n = p; n; n = n->child[right]) {
+			if (!(right = comp(n->key(), k)))
+				best = n;
+		}
+		p = best;
+	}
+	template<typename K, typename C> void scan_upper_bound(const K &k, const C &comp) {
+		N		*best	= nullptr;
+		bool	right;
+		for (N *n = p; n; n = n->child[right]) {
+			if (!(right = !comp(k, n->key())))
+				best = n;
+		}
+		p = best;
+	}
+	template<typename K, typename C> int scan_insertion(const K &k, const C &comp) {
+		N		*best	= nullptr;
+		N		*last	= nullptr;
+		bool	right;
+		for (N *n = p; n; n = n->child[right]) {
+			last = n;
+			if (right = !comp(k, n->key()))
+				best = n;
+		}
+		if (best && !comp(best->key(), k)) {
+			p = best;
+			return 0;
+		}
+		p = last;
+		return right ? 1 : -1;;
 	}
 };
+
+template<typename N> struct _tree_traverser<N, true> : T_type<tree_pointer<N>> {};
 
 //-----------------------------------------------------------------------------
-// treeiterator
+// tree_base
 //-----------------------------------------------------------------------------
 
-template<typename P> class treeiterator0 : public P {
+template<typename N> class tree_iterator : public tree_traverser<N> {
+	typedef tree_traverser<N>	I;
 public:
-	using typename P::node_type;
-	using P::node;
+	tree_iterator(N *p) : I(p)				{}
+	explicit operator bool()		const	{ return !!I::node(); }
+	auto&			operator*()		const	{ return *I::node(); }
+	auto			operator->()	const	{ return I::node(); }
+	auto&			operator++()			{ I::next(true); return *this;	}
+	auto			operator++(int)			{ auto i = *this; I::next(true); return i; }
+	auto&			operator--()			{ I::next(false); return *this;	}
+	auto			operator--(int)			{ auto i = *this; I::next(false); return i; }
+};
 
-	treeiterator0(node_type *p) : P(p) {}
-	treeiterator0(node_type *p, int side) : P(p, side) {}
-	operator				node_type*()		const	{ return node();	}
-	node_type*				operator->()		const	{ return node();	}
-	treeiterator0&			operator++()				{ P::next(1); return *this;	}
-	treeiterator0			operator++(int)				{ treeiterator0 i = *this; P::next(1); return i; }
-	treeiterator0&			operator--()				{ P::next(0); return *this;	}
-	treeiterator0			operator--(int)				{ treeiterator0 i = *this; P::next(0); return i; }
-	bool	operator==(const treeiterator0 &i)	const	{ return node() == i.node(); }
-	bool	operator!=(const treeiterator0 &i)	const	{ return node() != i.node(); }
+template<typename N, bool PARENT = N::PARENT> class tree_base {
+protected:
+	N*		_root	= nullptr;
+	
+	void	set_root(N* n)				{ _root = n ? n->make_root() : n; }
 
-	template<typename K, typename C> treeiterator0& scan_lower_bound(const K &k, const C &comp) {
-		P::scan_lower_bound(k, comp);
-		return *this;
+	void	assign(const tree_base &b)	{ if (b._root) _root = b._root->subtree_clone(); }
+	void	assign(tree_base &&b)		{ _root = exchange(b._root, nullptr); }
+
+public:
+	typedef N	node_type;
+	typedef tree_iterator<N>		iterator;
+	typedef tree_iterator<const N>	const_iterator;
+
+	tree_base()						{}
+	tree_base(const tree_base &b)	{ assign(b); }
+	tree_base(tree_base &&b)		{ assign(move(b)); }
+
+	bool			empty()	const	{ return !_root; }
+	size_t			size()	const	{ return _root ? _root->subtree_size() : 0; }
+	void			deleteall()		{ if (_root) _root->subtree_delete(); _root = nullptr; }
+	explicit operator bool() const	{ return !empty(); }
+
+	const_iterator	root()	const	{ return _root; }
+	const_iterator	begin()	const	{ auto i = root(); i.last(false); return i; }
+	const_iterator	end()	const	{ return nullptr; }
+
+	iterator		root()			{ return _root; }
+	iterator		begin()			{ auto i = root(); i.last(false); return i; }
+	iterator		end()			{ return nullptr; }
+
+	// unbalanced remove
+#if 0
+	N*		remove(const tree_traverser<N, PARENT> &i) {
+		N	*n = i.node();
+		if (n) {
+			if (N *p = i.parent_node())
+				p->attach(n->remove(), p->side(n));
+			else 
+				set_root(n->remove());
+		}
+		return n;
 	}
-	template<typename K, typename C> treeiterator0& scan_upper_bound(const K &k, const C &comp) {
-		P::scan_upper_bound(k, comp);
-		return *this;
+#else
+	N*	remove(tree_traverser<N, PARENT> &i) {
+		N	*n	= i.node();
+		N	*r	= N::remove(i);
+		if (r != (N*)1)
+			set_root(r);
+		return n;
+	}
+	N*	remove(tree_traverser<N, PARENT> &&i) {
+		return remove(i);
+	}
+#endif
+
+	// unbalanced insert n before i
+	void	insert(N *i, N *n) {
+		if (!i)
+			set_root(n);
+		else if (N *p = i->child[false])
+			p->last(true)->attach(n, true);
+		else
+			i->attach(n, false);
+	}
+
+	// unbalanced insert (after any equal values)
+	template<typename C> void	insert(N *n, const C &comp) {
+		bool	right	= false;
+		N		*last	= nullptr;
+		auto&&	k		= n->key();
+		for (N *p = _root; p; p = p->child[right]) {
+			last	= p;
+			right	= !comp(k, p->key());
+		}
+		if (last)
+			last->attach(n, right);
+		else
+			set_root(n);
+	}
+
+	friend bool validate(const tree_base &t, int depth = 64) {
+		return !t._root || (t._root->valid_root() && validate(t._root, depth));
+	}
+	template<typename C> friend bool validate(const tree_base &t, const C &comp, int depth = 64) {
+		return !t._root || (t._root->valid_root() && validate(t._root, comp, depth));
 	}
 };
 
-template<typename P, typename T> class treeiterator : public P {
+
+template<typename N> class tree_iterator2 : public tree_traverser<N> {
+	typedef tree_traverser<N>	I;
 public:
-	typedef bidirectional_iterator_t iterator_category;
-	typedef T		element, &reference;
-	using typename P::node_type;
-	using P::node;
-
-	treeiterator(node_type *p) : P(p) {}
-	treeiterator(node_type *p, int side) : P(p, side) {}
-	operator				element*()			const	{ return &node()->get();	}
-	element*				operator->()		const	{ return &node()->get();	}
-	treeiterator&			operator++()				{ P::next(1); return *this;	}
-	treeiterator			operator++(int)				{ treeiterator i = *this; P::next(1); return i; }
-	treeiterator&			operator--()				{ P::next(0); return *this;	}
-	treeiterator			operator--(int)				{ treeiterator i = *this; P::next(0); return i; }
-	bool	operator==(const treeiterator &i)	const	{ return node() == i.node(); }
-	bool	operator!=(const treeiterator &i)	const	{ return node() != i.node(); }
-
-	template<typename K, typename C> treeiterator& scan_lower_bound(const K &k, const C &comp) {
-		P::scan_lower_bound(k, comp);
-		return *this;
-	}
-	template<typename K, typename C> treeiterator& scan_upper_bound(const K &k, const C &comp) {
-		P::scan_upper_bound(k, comp);
-		return *this;
-	}
+	tree_iterator2(N *p)	: I(p)			{}
+	explicit operator bool()		const	{ return !!I::node(); }
+	auto&			operator*()		const	{ return I::node()->value(); }
+	auto			operator->()	const	{ return &I::node()->value(); }
+	auto&			operator++()			{ I::next(true); return *this;	}
+	auto			operator++(int)			{ auto i = *this; I::next(true); return i; }
+	auto&			operator--()			{ I::next(false); return *this;	}
+	auto			operator--(int)			{ auto i = *this; I::next(false); return i; }
+	decltype(auto)	key()			const	{ return I::node()->key(); }
 };
+
+template<typename N, bool PARENT = N::PARENT> class tree_base2 : public tree_base<N, PARENT> {
+public:
+	typedef tree_iterator2<N>		iterator;
+	typedef tree_iterator2<const N>	const_iterator;
+
+	const_iterator	root()	const	{ return _root; }
+	const_iterator	begin()	const	{ auto i = root(); i.last(false); return i; }
+	const_iterator	end()	const	{ return nullptr; }
+
+	iterator		root()			{ return _root; }
+	iterator		begin()			{ auto i = root(); i.last(false); return i; }
+	iterator		end()			{ return nullptr; }
+
+	const tree_base<N, PARENT>&	with_keys()	const	{ return *this; }
+	tree_base<N, PARENT>&		with_keys()			{ return *this; }
+};
+
 
 //-----------------------------------------------------------------------------
 // unbalanced tree
 //-----------------------------------------------------------------------------
 
-template<typename T, bool PARENT> struct e_treenode : public treenode_base<e_treenode<T, PARENT>, e_treenode<T, PARENT>*, PARENT> {
-	T&			get()			{ return *static_cast<T*>(this);	}
-	const T&	get()	const	{ return *static_cast<const T*>(this);	}
+template<typename T, bool PARENT = T::PARENT> struct e_treenode : public treenode_base<e_treenode<T, PARENT>, e_treenode<T, PARENT>*, PARENT> {
+	T&			key()			{ return *static_cast<T*>(this);	}
+	const T&	key()	const	{ return *static_cast<const T*>(this);	}
+	T&			value()			{ return *static_cast<T*>(this);	}
+	const T&	value()	const	{ return *static_cast<const T*>(this);	}
 };
 
-template<typename T, typename C = less> class e_tree : public tree_base<e_treenode<T, T::PARENT>, C> {
-	typedef e_treenode<T, T::PARENT>	N;
-	typedef tree_base<N, C> B;
+template<typename T, typename C = less> class e_tree : public tree_base2<e_treenode<T, T::PARENT>>, inheritable<C> {
+	typedef	e_treenode<T, T::PARENT>	N;
+	typedef	tree_base2<N>				B;
+	decltype(auto)	comp()	const	{ return this->get_inherited(); }
+
 public:
-	typedef T	element, &reference;
-	typedef treeiterator<typename B::iterator, T>			iterator;
-	typedef treeiterator<typename B::iterator, const T>		const_iterator;
+	e_tree(const C &c = C()) : inheritable<C>(c)	{}
 
-	e_tree(const C &comp = C()) : B(comp)	{}
-	const_iterator	begin()		const	{ return const_iterator(B::root, 0); }
-	const_iterator	end()		const	{ return 0; }
-	iterator		begin()				{ return iterator(B::root, 0); }
-	iterator		end()				{ return 0; }
+	void			insert(N *n)	{ B::insert(n, comp()); }
 
-	void			remove(N *n)		{ B::remove(n); n->child[0] = n->child[1] = n->parent = 0; }
-	T*				pop_root()			{ T *t = B::root; if (t) B::root = t->remove(); return t; }
-	T*				pop_head()			{ T *t = (T*)B::head(); if (t) remove(t); return t;	}
-	T*				pop_tail()			{ T *t = (T*)B::tail(); if (t) remove(t); return t;	}
+	// using auto prevents NVO on clang
+	template<typename K> const_iterator	lower_bound(const K &k)	const	{ auto i = root(); i.scan_lower_bound(k, comp()); return i; }
+	template<typename K> const_iterator	upper_bound(const K &k)	const	{ auto i = root(); i.scan_upper_bound(k, comp()); return i; }
+	template<typename K> const_iterator	find(const K &k)		const	{ auto i = lower_bound(k); return i && !comp()(k, *i) ? i : nullptr; }
+	template<typename K> iterator		lower_bound(const K &k)			{ auto i = root(); i.scan_lower_bound(k, comp()); return i; }
+	template<typename K> iterator		upper_bound(const K &k)			{ auto i = root(); i.scan_upper_bound(k, comp()); return i; }
+	template<typename K> iterator		find(const K &k)				{ auto i = lower_bound(k); return i && !comp()(k, *i) ? i : nullptr; }
 
-	template<typename K> iterator		lower_bound(const K &k)			{ return iterator(B::root()).scan_lower_bound(k, B::comp()); }
-	template<typename K> const_iterator	lower_bound(const K &k)	const	{ return const_iterator(B::root()).scan_lower_bound(k, B::comp()); }
-	template<typename K> iterator		upper_bound(const K &k)			{ return iterator(B::root()).scan_upper_bound(k, B::comp()); }
-	template<typename K> const_iterator	upper_bound(const K &k)	const	{ return const_iterator(B::root()).scan_upper_bound(k, B::comp()); }
-	template<typename K> iterator		find(const K &k)				{ auto i = lower_bound(k); return i && !B::compare(k, *i) ? i : 0; }
-	template<typename K> const_iterator	find(const K &k)		const	{ auto i = lower_bound(k); return i && !B::compare(k, *i) ? i : 0; }
+	//friends
+	template<typename K> friend const_iterator	lower_boundc(const e_tree &t, K &&k)	{ return t.lower_bound(k); }
+	template<typename K> friend const_iterator	upper_boundc(const e_tree &t, K &&k)	{ return t.upper_bound(k); }
+	template<typename K> friend const_iterator	find(const e_tree &t, K &&k)			{ return t.find(k); }
+	template<typename K> friend iterator		lower_boundc(e_tree &t, K &&k)			{ return t.lower_bound(k); }
+	template<typename K> friend iterator		upper_boundc(e_tree &t, K &&k)			{ return t.upper_bound(k); }
+	template<typename K> friend iterator		find(e_tree &t, K &&k)					{ return t.find(k); }
 
-//friends
-	template<typename K> friend iterator		lower_boundc(e_tree &t, const K &k)			{ return t.lower_bound(k); }
-	template<typename K> friend const_iterator	lower_boundc(const e_tree &t, const K &k)	{ return t.lower_bound(k); }
-	template<typename K> friend iterator		upper_boundc(e_tree &t, const K &k)			{ return t.upper_bound(k); }
-	template<typename K> friend const_iterator	upper_boundc(const e_tree &t, const K &k)	{ return t.upper_bound(k); }
-	template<typename K> friend iterator		find(e_tree &t, const K &k)					{ return t.find(k); }
-	template<typename K> friend const_iterator	find(const e_tree &t, const K &k)			{ return t.find(k); }
+	friend bool validate(const e_tree &t, int depth = 64) {
+		return validate(t, t.comp(), depth);
+	}
+
 };
 
 //-----------------------------------------------------------------------------
-// red black tree (parentless)
+// red black tree
 //-----------------------------------------------------------------------------
 
 enum rbcol { BLACK, RED };
+template<typename N> using rbptr = pointer_pair<N, rbcol, 2, 2>;
 
-template<typename N, bool PARENT> struct rbnode_base : treenode_base<N, pointer_pair<N,rbcol,2,2>, PARENT> {
-	typedef treenode_base<N, pointer_pair<N,rbcol,2,2>, PARENT>	B;
+#if 0
+template<typename N, bool PARENT> struct rbnode_base_old : treenode_base<N, rbptr<N>, PARENT> {
+	typedef treenode_base<N, rbptr<N>, PARENT>	B;
 	using	B::child;
 
-	rbcol	col()		const	{ return child[0].b; }
-	void	set(rbcol c)		{ child[0].b = c; }
+	void			set(rbcol c)				{ child[0].b = c; }
+	rbcol			col()	const				{ return child[0].b; }
+	static rbcol	col(const rbnode_base_old *n)	{ return n ? n->col() : BLACK; }
+	friend rbcol	col(const rbnode_base_old *n)	{ return n ? n->col() : BLACK; }
 
-	N	*rotate(int side) {
-		N	*n	= static_cast<N*>(this);
-		N	*p	= child[!side];
-		n->attach(p->child[side], !side);
-		p->attach(n, side);
+	N	*rotate(bool right) {
+		N	*p	= B::rotate(right);
 		set(RED);
 		p->set(BLACK);
 		return p;
 	}
 
-	N	*rotate2(int side) {
-		N	*n	= static_cast<N*>(this);
-		n->attach(child[!side]->rotate(!side), !side);
-		return rotate(side);
+	N	*insert(tree_traverser<N, PARENT> &i, bool right) {
+		N	*n = static_cast<N*>(this);
+		n->set(RED);
+
+		while (N *p = i.pop()) {
+			p->attach(n, right);
+			bool	next	= i.side(p);
+
+			if (col(n) == RED) {
+				if (col(p->child[!right]) == RED) {
+					p->set(RED);
+					p->child[0]->set(BLACK);
+					p->child[1]->set(BLACK);
+
+				} else if (col(n->child[right]) == RED) {
+					p = p->rotate(!right);
+
+				} else if (col(n->child[!right]) == RED) {
+					p = p->rotate2(!right);
+				}
+			}
+			right	= next;
+			n		= p;
+		}
+
+		n->set(BLACK);
+		return n;
 	}
 
-	friend rbcol col(const rbnode_base *n) { return n ? n->col() : BLACK; }
-};
+	N	*remove_child_balance(bool right, bool *done) {
+		if (N *s = child[!right]) {
+			auto	my_col	= col();
+			if (col(s->child[0]) == BLACK && col(s->child[1]) == BLACK) {
+				if (my_col == RED)
+					*done = true;
 
-template<typename N, typename C, bool PARENT = N::PARENT> class rbtree_base : public tree_base<N, C, PARENT> {
-protected:
-	typedef tree_base<N, C, PARENT>		B;
-	typedef	typename B::iterator		BI;
-	static N*	_remove_balance(N *p, int dir, bool *done);
-	static N*	_insert(BI s, N *n, int dir);
-	static N*	_remove(BI &s);
-public:
-
-	typedef treeiterator0<BI>	iterator;
-
-	rbtree_base(const C &comp) : B(comp) {}
-	void	insert(BI &s, N *n, int dir)	{
-		B::set_root(_insert(s, n, dir));
-	}
-	void	insert(BI &s, N *n)	{
-		insert(s, n, s.node() && B::compare(s.node()->get(), n->get()));
-	}
-	void	remove(BI &s) {
-		N *n = _remove(s);
-		if (!s.node())
-			B::set_root(n);
-	}
-	iterator	begin()	const	{ return iterator(B::root(), 0); }
-	iterator	end()	const	{ return 0;	}
-};
-
-template<typename N, typename C, bool PARENT> N* rbtree_base<N, C, PARENT>::_insert(BI s, N *n, int dir) {
-	n->set(RED);
-
-	while (N *p = s.pop()) {
-		p->attach(n, dir);
-		int	next	= s.side(p);
-
-		if (col(n) == RED) {
-			if (col(p->child[!dir]) == RED) {
-				p->set(RED);
+				set(BLACK);
+				s->set(RED);
+			} else {
+				auto	p	= col(s->child[!right]) == RED ? rotate(right) : rotate2(right);
+				p->set(my_col);
 				p->child[0]->set(BLACK);
 				p->child[1]->set(BLACK);
-			} else {
-				if (col(n->child[dir]) == RED)
-					p = p->rotate(!dir);
-				else if (col(n->child[!dir]) == RED)
-					p = p->rotate2(!dir);
+				*done = true;
+				return p;
 			}
 		}
-		dir	= next;
-		n	= p;
+		return static_cast<N*>(this);
 	}
-	n->set(BLACK);
-	return n;
-}
 
-template<typename N, typename C, bool PARENT> N *rbtree_base<N, C, PARENT>::_remove_balance(N *p, int dir, bool *done) {
-	if (N *s = p->child[!dir]) {
-		if (col(s->child[0]) == BLACK && col(s->child[1]) == BLACK) {
-			if (col(p) == RED)
+	static N* remove(tree_traverser<N, PARENT> &i) {
+		N		*p		= i.pop();
+		if (!p)
+			return (N*)1;
+
+		if (p->child[0] && p->child[1]) {
+			//	move_to_leaf
+			i.push(p);
+			i.push(p->child[false]);
+			i.last(true);
+
+			N	*r	= i.pop();
+			swap(*r, *p);														//swap everything
+			swap(*static_cast<rbnode_base_old*>(r), *static_cast<rbnode_base_old*>(p));	//swap back pointers, etc
+			p = r;
+		}
+
+		bool	right	= i.side(p);
+		bool	done	= col(p) == RED;
+		N		*n		= p->child[!p->child[0]];
+
+		if (!done && col(n) == RED) {
+			n->set(BLACK);
+			done = true;
+		}
+
+		while (N *p = i.pop()) {
+			p->attach(n, right);
+			if (done)
+				return (N*)1;
+
+			bool	prev	= right;
+			right			= i.side(p);
+
+			if (col(p->child[!prev]) == RED) {
+				n = p->rotate(prev);
+				//n->child[prev] = p->remove_child_balance(prev, &done);
+				n->attach(p->remove_child_balance(prev, &done), prev);
+			} else {
+				n = p->remove_child_balance(prev, &done);
+			}
+		}
+
+		// new root
+		if (n)
+			n->set(BLACK);
+		return n;
+	}
+
+	constexpr bool	valid()	const {
+		return B::valid() && (col() == BLACK || (col(child[0]) == BLACK && col(child[1]) == BLACK));
+	}
+	friend int validate(const rbnode_base_old *n, int depth = 0) {
+		if (!n)
+			return 0;
+		if (depth > 64 || !n->valid())
+			return -1;
+		int	len0	= validate((N*)n->child[0], depth + 1);
+		int	len1	= validate((N*)n->child[1], depth + 1);
+		return len0 < 0 || len0 != len1 ? -1 : len0 + int(n->col() == BLACK);
+	}
+	template<typename C> friend int validate(const rbnode_base_old *n, const C &comp, int depth = 0) {
+		if (!n)
+			return 0;
+		if (depth > 64 || !n->valid() || !n->valid_order(comp))
+			return -1;
+		int	len0	= validate((N*)n->child[0], comp, depth + 1);
+		int	len1	= validate((N*)n->child[1], comp, depth + 1);
+		return len0 < 0 || len0 != len1 ? -1 : len0 + int(n->col() == BLACK);
+	}
+};
+#endif
+
+//-----------------------------------------------------------------------------
+// red black tree 2 - colours in pointers
+//-----------------------------------------------------------------------------
+
+template<typename N, bool PARENT> struct rbnode_base : treenode_base<N, rbptr<N>, PARENT> {
+	typedef treenode_base<N, rbptr<N>, PARENT>	B;
+	using	B::child;
+
+	N*	rotate(bool right) {
+		N	*n	= static_cast<N*>(this);
+		auto p	= child[!right];
+		n->attach(p->child[right], !right);
+		p->attach(rbptr<N>{n, RED}, right);
+		return p;
+	}
+
+	N*	insert(tree_traverser<N, PARENT> &i, bool right) {
+		rbptr<N>	n	= {static_cast<N*>(this), RED};
+
+		while (N *p = i.pop()) {
+			p->attach(n, right);
+			bool	prev	= right;
+			right			= i.side(p);
+
+			if (n.b == RED) {
+				if (p->child[!prev].b == RED) {
+					p->child[0].b = BLACK;
+					p->child[1].b = BLACK;
+					n	= {p, RED};
+
+				} else if (n->child[prev].b == RED) {
+					n	= {p->rotate(!prev), BLACK};
+
+				} else if (n->child[!prev].b == RED) {
+					n	= {p->rotate2(!prev), BLACK};
+
+				} else {
+					n	= {p, i.node() ? i.node()->child[right].b : BLACK};
+				}
+			} else {
+				n	= {p, i.node() ? i.node()->child[right].b : BLACK};
+			}
+		}
+		return n;
+	}
+
+	rbptr<N> remove_child_balance(bool right, rbcol c, bool *done) {
+		if (N *s = child[!right]) {
+			if (s->child[0].b == BLACK && s->child[1].b == BLACK) {
+				child[!right].b = RED;
+				if (c == RED) {
+					c		= BLACK;
+					*done	= true;
+				}
+
+			} else {
+				auto	p	= s->child[!right].b == RED ? rotate(right) : rotate2(right);
+				p->child[0].b = BLACK;
+				p->child[1].b = BLACK;
 				*done = true;
-
-			p->set(BLACK);
-			s->set(RED);
-		} else {
-			auto	pcol	= p->col();
-			p = col(s->child[!dir]) == RED ? p->rotate(dir) : p->rotate2(dir);
-			p->set(pcol);
-			p->child[0]->set(BLACK);
-			p->child[1]->set(BLACK);
-
-			*done = true;
+				return {p, c};
+			}
 		}
-	}
-	return p;
-}
-
-template<typename N, typename C, bool PARENT> N* rbtree_base<N, C, PARENT>::_remove(BI &s) {
-	N		*p		= s.pop();
-
-	if (p->child[0] && p->child[1])
-		s.move_to_leaf(p, 0);
-
-	int		dir		= s.side(p);
-	bool	done	= false;
-	N		*n		= p->child[p->child[0].a == NULL];
-
-	if (col(p) == RED) {
-		done = true;
-	} else if (col(n) == RED) {
-		n->set(BLACK);
-		done = true;
+		return {static_cast<N*>(this), c};
 	}
 
-	while (N *p = s.pop()) {
-		p->attach(n, dir);
-		if (done)
-			return nullptr;
+	static N* remove(tree_traverser<N, PARENT> &i) {
+		N		*p		= i.node();
+		N		*root	= (N*)1;
+		if (!p)
+			return root;
 
-		if (col(p->child[!dir]) == RED) {
-			n = p->rotate(dir);
-			n->child[dir] = _remove_balance(p, dir, &done);
-		} else {
-			n = _remove_balance(p, dir, &done);
+		if (p->child[0] && p->child[1]) {
+			if (p = i.move_to_leaf(false))
+				root = p;
 		}
 
-		dir	= s.side(p);
+		p	= i.pop();
+
+		auto	n		= p->child[!p->child[0]];
+		N		*g		= i.node();
+		bool	right	= g && g->side(p);
+		bool	done	= g && g->child[right].b == RED;
+
+		if (!done && n.b == RED) {
+			n.b		= BLACK;
+			done	= true;
+		}
+
+		while (N *p = i.pop()) {
+			p->attach(n, right);
+			if (done)
+				return root;
+
+			bool	prev	= right;
+			right			= i.side(p);
+
+			if (p->child[!prev].b == RED) {
+				n	= {p->rotate(prev), BLACK};
+				n->attach(p->remove_child_balance(prev, RED, &done), prev);
+
+			} else {
+				rbcol	pcol	= i.node() ? i.node()->child[right].b : BLACK;	//get p's colour
+				n	= p->remove_child_balance(prev, pcol, &done);
+			}
+		}
+		return n;
 	}
 
-	// new root
-	if (n)
-		n->set(BLACK);
-	return n;
-}
-
-template<typename N, bool PARENT> int validate(rbnode_base<N, PARENT> *n) {
-	if (!n)
-		return 0;
-	if (!n->valid() || (n->col() == RED && (col(n->child[0]) == RED || col(n->child[1]) == RED)))
-		return -1;
-	int	len0	= validate((N*)n->child[0]);
-	int	len1	= validate((N*)n->child[1]);
-	return len0 < 0 || len0 != len1 ? -1 : len0 + int(!n->col() == RED);
-}
-
-template<typename N, typename C> bool validate(rbtree_base<N, C> &t) {
-	if (auto r = t.root()) {
-		if (!r->valid())
+	constexpr bool	valid(rbcol c)	const {
+		return B::valid() && (c == BLACK || (child[0].b == BLACK && child[1].b == BLACK));
+	}
+	friend int validate(const rbptr<N> &n, int depth) {
+		if (!n)
+			return 0;
+		if (!depth || !n->valid(n.b))
+			return -1;
+		int	len0	= validate(n->child[0], depth - 1);
+		int	len1	= validate(n->child[1], depth - 1);
+		return len0 < 0 || len0 != len1 ? -1 : len0 + int(n.b == BLACK);
+	}
+	template<typename C> friend bool validate(const rbnode_base *n, const C &comp, int depth) {
+		if (!n->B::valid() || !n->valid_order(comp))
 			return false;
-		int	len0	= validate((N*)r->child[0]);
-		int	len1	= validate((N*)r->child[1]);
-		return len0 >= 0 && len0 == len1;
+		int	len0	= validate(n->child[0], comp, depth - 1);
+		int	len1	= validate(n->child[1], comp, depth - 1);
+		return len0 == len1;
 	}
-	return true;
-}
+	template<typename C> friend int validate(const rbptr<N> &n, const C &comp, int depth) {
+		if (!n)
+			return n.b == RED ? -1 : 0;
+		if (!depth || !n->valid(n.b) || !n->valid_order(comp))
+			return -1;
+		int	len0	= validate(n->child[0], comp, depth - 1);
+		int	len1	= validate(n->child[1], comp, depth - 1);
+		return len0 < 0 || len0 != len1 ? -1 : len0 + int(n.b == BLACK);
+	}
+};
+
+//-----------------------------------------------------------------------------
+// rbtree_base0
+//-----------------------------------------------------------------------------
+
+template<typename N, bool PARENT = N::PARENT> class rbtree_base0 : public tree_base2<N, PARENT> {
+protected:
+	typedef tree_base<N, PARENT>		B;
+	typedef tree_traverser<N, PARENT>	I;
+
+	//requires i has no 'right' child
+	void	insert_side(I &&i, N *n, bool right) {
+		B::set_root(n->insert(i, right));
+	}
+
+	// insert n before i
+	void	insert(I &&i, N *n) {
+		N	*p	= i.node();
+		p		= p ? (N*)p->child[false] : B::_root;
+		if (p) {
+			i.push(p);
+			i.last(true);
+			B::set_root(n->insert(i, true));
+		} else {
+			B::set_root(n->insert(i, false));
+		}
+	}
+};
+
+
+template<typename N, typename C = less, bool PARENT = N::PARENT> class rbtree_base : public rbtree_base0<N, PARENT>, inheritable<C> {
+	typedef rbtree_base0<N, PARENT>	B;
+protected:
+	decltype(auto)	comp()	const		{ return this->get_inherited(); }
+	rbtree_base(const C &comp = C()) : inheritable<C>(comp)	{}
+
+	friend bool validate(rbtree_base &t, int depth = 64) { return validate(t, t.comp(), depth); }
+public:
+	// using auto prevents NVO on clang
+	template<typename K> const_iterator	lower_bound(const K &k)	const	{ auto i = B::root(); i.scan_lower_bound(k, comp()); return i; }
+	template<typename K> const_iterator	upper_bound(const K &k)	const	{ auto i = B::root(); i.scan_upper_bound(k, comp()); return i; }
+	template<typename K> const_iterator	find(const K &k)		const	{ auto i = lower_bound(k); return i && !comp()(k, i.key()) ? i : nullptr; }
+	template<typename K> iterator		lower_bound(const K &k)			{ auto i = B::root(); i.scan_lower_bound(k, comp()); return i; }
+	template<typename K> iterator		upper_bound(const K &k)			{ auto i = B::root(); i.scan_upper_bound(k, comp()); return i; }
+	template<typename K> iterator		find(const K &k)				{ auto i = lower_bound(k); return i && !comp()(k, i.key()) ? i : nullptr; }
+};
+
+//-----------------------------------------------------------------------------
+// e_rbtree
+//-----------------------------------------------------------------------------
+
+#if 0
+template<typename T, bool PARENT> struct e_rbnode_old : rbnode_base_old<T, PARENT> {
+	T&			key()			{ return *static_cast<T*>(this);	}
+	const T&	key()	const	{ return *static_cast<const T*>(this);	}
+	T&			value()			{ return *static_cast<T*>(this);	}
+	const T&	value()	const	{ return *static_cast<const T*>(this);	}
+};
+
+#endif
 
 template<typename T, bool PARENT> struct e_rbnode : rbnode_base<T, PARENT> {
-	T&			get()			{ return *static_cast<T*>(this);	}
-	const T&	get()	const	{ return *static_cast<const T*>(this);	}
+	T&			key()			{ return *static_cast<T*>(this);	}
+	const T&	key()	const	{ return *static_cast<const T*>(this);	}
+	T&			value()			{ return *static_cast<T*>(this);	}
+	const T&	value()	const	{ return *static_cast<const T*>(this);	}
 };
 
 template<typename T, typename C = less> class e_rbtree : public rbtree_base<T, C> {
 	typedef rbtree_base<T, C>	B;
-	using typename B::BI;
+	typedef tree_traverser<T>	I;
 
 public:
-	typedef T							element, &reference;
-	typedef treeiterator<BI, T>			iterator;
-	typedef treeiterator<BI, const T>	const_iterator;
+	using B::insert;
 
 	e_rbtree(const C &comp = C()) : B(comp)	{}
 
-	const_iterator	begin()		const	{ return const_iterator(B::root, 0); }
-	const_iterator	end()		const	{ return 0;	}
-	iterator		begin()				{ return iterator(B::root(), 0); }
-	iterator		end()				{ return 0;	}
-
-	template<typename K> iterator		lower_bound(const K &k)			{ return iterator(B::root()).scan_lower_bound(k, B::comp()); }
-	template<typename K> const_iterator	lower_bound(const K &k)	const	{ return const_iterator(B::root()).scan_lower_bound(k, B::comp()); }
-	template<typename K> iterator		upper_bound(const K &k)			{ return iterator(B::root()).scan_upper_bound(k, B::comp()); }
-	template<typename K> const_iterator	upper_bound(const K &k)	const	{ return const_iterator(B::root()).scan_upper_bound(k, B::comp()); }
-	template<typename K> iterator		find(const K &k)				{ auto i = lower_bound(k); return i && !B::compare(k, *i) ? i : 0; }
-	template<typename K> const_iterator	find(const K &k)		const	{ auto i = lower_bound(k); return i && !B::compare(k, *i) ? i : 0; }
-
-	//friends
-	template<typename K> friend iterator		lower_boundc(e_rbtree &t, const K &k)		{ return t.lower_bound(k); }
-	template<typename K> friend const_iterator	lower_boundc(const e_rbtree &t, const K &k)	{ return t.lower_bound(k); }
-	template<typename K> friend iterator		upper_boundc(e_rbtree &t, const K &k)		{ return t.upper_bound(k); }
-	template<typename K> friend const_iterator	upper_boundc(const e_rbtree &t, const K &k)	{ return t.upper_bound(k); }
-	template<typename K> friend iterator		find(e_rbtree &t, const K &k)				{ return t.find(k); }
-	template<typename K> friend const_iterator	find(const e_rbtree &t, const K &k)			{ return t.find(k); }
-};
-/*
-template<typename T, bool PARENT> struct rbnode : rbnode_base<rbnode<T, PARENT>, PARENT> {
-	T				t;
-	rbnode(const T &_t) : t(_t)	{}
-	T&			get()			{ return t;	}
-	const T&	get()	const	{ return t;	}
-};
-
-template<typename T, typename C, bool PARENT> class rbtree : public rbtree_base<rbnode<T, PARENT>, C> {
-	typedef rbnode<T, PARENT>	N;
-	typedef rbtree_base<N, C>	B;
-	using typename B::BI;
-public:
-	typedef T										element, &reference;
-	typedef treeiterator<BI, T>			iterator;
-	typedef treeiterator<BI, const T>	const_iterator;
-
-	rbtree(const C &comp = C())	: B(comp) {}
-	~rbtree()							{ B::deleteall(); }
-	void			insert(const T &t)	{
-		tree_stack<N>	s(B::root);
-		if (!s.scan(t))
-			B::insert(s, new N(t));
+	void	insert(T *n) {
+		auto	i = root();
+		i.scan_upper_bound(n->key(), comp());
+		return insert(move(i), n);
 	}
-	void			remove(iterator &i)	{
-		auto *n = i.node();
-		i.sp	= B::remove(i);
-		i.scan_lower_bound(n->k, B::comp());
-		delete n;
-	}
-	void			clear()				{ B::deleteall(); }
 
-	const_iterator	begin()		const	{ return const_iterator(B::root, 0); }
-	const_iterator	end()		const	{ return 0;	}
-	iterator		begin()				{ return iterator(B::root, 0); }
-	iterator		end()				{ return 0;	}
-
-	template<typename K> iterator			lower_bound(const K &k)			{ return iterator(B::root).scan_lower_bound(k, B::comp()); }
-	template<typename K> const_iterator		lower_bound(const K &k)	const	{ return const_iterator(B::root).scan_lower_bound(k, B::comp()); }
-	template<typename K> iterator			upper_bound(const K &k)			{ return iterator(B::root).scan_upper_bound(k, B::comp()); }
-	template<typename K> const_iterator		upper_bound(const K &k)	const	{ return const_iterator(B::root).scan_upper_bound(k, B::comp()); }
-	template<typename K> iterator			find(const K &k)				{ auto i = lower_bound(k); return i && !B::compare(k, *i) ? i : 0; }
-	template<typename K> const_iterator		find(const K &k)		const	{ auto i = lower_bound(k); return i && !B::compare(k, *i) ? i : 0; }
-
-	//friends
-	template<typename K2> friend iterator		lower_boundc(rbtree &m, const K2 &k)		{ return m.lower_bound(k); }
-	template<typename K2> friend const_iterator	lower_boundc(const rbtree &m, const K2 &k)	{ return m.lower_bound(k); }
-	template<typename K2> friend iterator		upper_boundc(rbtree &m, const K2 &k)		{ return m.upper_bound(k); }
-	template<typename K2> friend const_iterator	upper_boundc(const rbtree &m, const K2 &k)	{ return m.upper_bound(k); }
-	template<typename K2> friend iterator		find(rbtree &m, const K2 &k)				{ return m.find(k); }
-	template<typename K2> friend const_iterator	find(const rbtree &m, const K2 &k)			{ return m.find(k); }
+	//friends (using auto prevents NVO on clang)
+	template<typename K> friend const_iterator	lower_boundc(const e_rbtree &t, K &&k)	{ return t.lower_bound(k); }
+	template<typename K> friend const_iterator	upper_boundc(const e_rbtree &t, K &&k)	{ return t.upper_bound(k); }
+	template<typename K> friend const_iterator	find(const e_rbtree &t, K &&k)			{ return t.find(k); }
+	template<typename K> friend iterator		lower_boundc(e_rbtree &t, K &&k)		{ return t.lower_bound(k); }
+	template<typename K> friend iterator		upper_boundc(e_rbtree &t, K &&k)		{ return t.upper_bound(k); }
+	template<typename K> friend iterator		find(e_rbtree &t, K &&k)				{ return t.find(k); }
 };
-*/
+
 //-----------------------------------------------------------------------------
 // tree selector
 //-----------------------------------------------------------------------------
 
 template<typename T> class tree :
-	if_t<T_is_base_of<e_treenode<T,false>,	T>::value,	e_tree<T, less>,
-	if_t<T_is_base_of<e_treenode<T, true>,	T>::value,	e_tree<T, less>,
+	if_t<T_is_base_of<e_treenode<T>,		T>::value,	e_tree<T, less>,
 	if_t<T_is_base_of<e_rbnode<T, false>,	T>::value,	e_rbtree<T, less>,
 	if_t<T_is_base_of<e_rbnode<T, true>,	T>::value,	e_rbtree<T, less>,
-//	if_t<T_is_base_of<rbnode<T, false>,		T>::value,	rbtree<T, less, false>,
-//	if_t<T_is_base_of<rbnode<T, true>,		T>::value,	rbtree<T, less, true>,
-	void>>>> {};
+	void>>> {};
 
 //-----------------------------------------------------------------------------
 // map
 //-----------------------------------------------------------------------------
 
-template<typename K, typename V> struct map_node : public rbnode_base<map_node<K, V>, false> {
-	K	k;
-	V	v;
+template<typename K, typename V, bool PARENT> struct map_node : public rbnode_base<map_node<K, V, PARENT>, PARENT>, pair<K, V> {
+	typedef pair<K, V>	B;
 
-	template<typename...P>	map_node(const K &k, P&&...p)	: k(k), v(forward<P>(p)...)	{}
-	explicit map_node(const K &k) : k(k), v()	{}
-	K&			get()			{ return k;	}
-	const K&	get()	const	{ return k;	}
-	V&			value()			{ return v;	}
-	const V&	value()	const	{ return v;	}
-	const K&	key()	const	{ return k;	}
+	template<typename...P>	map_node(const K &k, P&&...p)	: B(k, V(forward<P>(p)...))	{}
+	explicit map_node(const K &k) : B(k)	{}
+	K&			key()				{ return B::a; }
+	const K&	key()		const	{ return B::a; }
+	V&			value()				{ return B::b; }
+	const V&	value()		const	{ return B::b; }
+	B&			key_value()			{ return *this; }
+	const B&	key_value()	const	{ return *this; }
 };
 
-template<typename K, typename V, typename C = less> class map : public rbtree_base<map_node<K, V>, C, false> {
-	typedef map_node<K, V> 				N;
-	typedef rbtree_base<N, C, false>	B;
-	typedef typename B::BI				BI;
-public:
-	class iterator : public BI {
-	public:
-		typedef bidirectional_iterator_t iterator_category;
-		typedef V		element, &reference;
-		iterator(N *p)				: BI(p)			{}
-		iterator(N *p, int side)	: BI(p, side)	{}
-		explicit operator bool()			const	{ return !!BI::node(); }
-		V&				operator*()			const	{ return BI::node()->value(); }
-		V*				operator->()		const	{ return &BI::node()->value(); }
-		bool operator==(const iterator& b)	const	{ return BI::node() == b.node(); }
-		bool operator!=(const iterator& b)	const	{ return !operator==(b); }
-		iterator&		operator++()				{ BI::next(1); return *this;	}
-		iterator		operator++(int)				{ iterator i = *this; BI::next(1); return i; }
-		iterator&		operator--()				{ BI::next(0); return *this;	}
-		iterator		operator--(int)				{ iterator i = *this; BI::next(0); return i; }
-		const K&		key()				const	{ return BI::node()->get(); }
-		template<typename K2> iterator& scan_lower_bound(const K2 &k, const C &comp) { BI::scan_lower_bound(k, comp); return *this; }
-		template<typename K2> iterator& scan_upper_bound(const K2 &k, const C &comp) { BI::scan_upper_bound(k, comp); return *this; }
-	};
-	typedef iterator	const_iterator;
-	typedef V			element, &reference;
+template<typename K, typename V, typename C = less, bool PARENT = false> class map : public rbtree_base<map_node<K, V, PARENT>, C, PARENT> {
+	typedef map_node<K, V, PARENT> 		N;
+	typedef rbtree_base<N, C, PARENT>	B;
 
-	map(const C &comp = C()) : B(comp) {}
-	map(const map &b) : B(b)		{}
+public:
+	map(const _none&, const C &comp = C())	: B(comp) {}
+	map(const C &comp = C())				: B(comp) {}
+	map(const map &b)	= default;
+	map(map &&b)		= default;
 	~map()							{ B::deleteall(); }
 
 	void	clear()					{ B::deleteall(); }
 	map&	operator=(const map &b)	{ clear(); B::assign(b); return *this; }
-	template<typename T> map&	operator=(const T &t)	{ using iso::begin; using iso::end; return tree_assign(*this, begin(t), end(t)); }
-
-#ifdef USE_RVALUE_REFS
-	map(map &&b) = default;
 	map&	operator=(map &&b)		{ clear(); B::assign(move(b)); return *this; }
 
-	template<typename T> V&		put(const K &k, T &&v) {
-		tree_stack<N>	s(B::root());
-		if (s.scan(k, B::comp()))
-			return s.node()->value() = forward<T>(v);
-		N	*n = new N(k, forward<T>(v));
-		B::insert(s, n);
-		return n->value();
+	void	remove(iterator &&i) {
+		delete B::remove(i);
+	}
+
+	map&	operator+=(map &t2) {
+		for (auto i = t2.begin(), e = t2.end(); i != e; ++i)
+			put(i.key(), *i);
+		return *this;
+	}
+
+	V&		put(const K &k, const V &v) {
+		auto	i		= root();
+		if (auto side = i.scan_insertion(k, B::comp())) {
+			N	*n = new N(k, v);
+			B::insert_side(move(i), n, side > 0);
+			return n->value();
+		}
+		return *i = v;
 	}
 	template<typename...P> V&	emplace(const K &k, P&&... p) {
-		tree_stack<N>	s(B::root());
-		if (s.scan(k, B::comp()))
-			return s.node()->value() = V(forward<P>(p)...);
-		N	*n = new N(k, forward<P>(p)...);
-		B::insert(s, n);
-		return n->value();
+		auto	i		= root();
+		if (auto side = i.scan_insertion(k, B::comp())) {
+			N	*n = new N(k, forward<P>(p)...);
+			B::insert_side(move(i), n, side > 0);
+			return n->value();
+		}
+		return *i = V(forward<P>(p)...);
 	}
-#endif
 
-#if 0
-	V&		get(const K &k);
-	V&		put(const K &k) {
-		tree_stack<N>	s(B::root());
-		if (s.scan(k, B::comp()))
-			return s.node()->value();
-		N	*n = new N(k);
-		B::insert(s, n);
-		return n->value();
-	}
-	auto	operator[](const K &k) { return putter<map,K>(*this, k); }
-
-#else
 	V&		operator[](const K &k) {
-		tree_stack<N>	s(B::root());
-		if (s.scan(k, B::comp()))
-			return s.node()->value();
-		N	*n = new N(k);
-		B::insert(s, n);
-		return n->value();
+		auto	i = root();
+		if (auto side = i.scan_insertion(k, B::comp())) {
+			N	*n = new N(k);
+			B::insert_side(move(i), n, side > 0);
+			return n->value();
+		}
+		return i.node()->value();
 	}
-#endif
-	optional<V&>	operator[](const K &k) const {
-		tree_stack<N>	s(B::root());
-		if (s.scan(k, B::comp()))
-			return s.node()->value();
-		return none;
+	optional<const V&>	operator[](const K &k) const {
+		auto	i = root();
+		if (auto side = i.scan_insertion(k, B::comp()))
+			return none;
+		return i.node()->value();
 	}
 
-	iterator		begin()				{ return iterator(B::root(), 0); }
-	iterator		end()				{ return 0; }
-	const_iterator	begin()		const	{ return const_iterator(B::root(), 0); }
-	const_iterator	end()		const	{ return 0; }
+	bool			count(const K &k)		const	{ auto i = root(); i.scan_lower_bound(k, B::comp()); return i && !B::comp()(k, i.key()); }
 
-	B&				with_keys()			{ return *this; }
-	const B&		with_keys()	const	{ return *this; }
+	//friends (using auto prevents NVO on clang)
+	template<typename K2> friend const_iterator	lower_boundc(const map &m, K2 &&k)	{ return m.lower_bound(k); }
+	template<typename K2> friend const_iterator	upper_boundc(const map &m, K2 &&k)	{ return m.upper_bound(k); }
+	template<typename K2> friend const_iterator	find(const map &m, K2 &&k)			{ return m.find(k); }
+	template<typename K2> friend iterator		lower_boundc(map &m, K2 &&k)		{ return m.lower_bound(k); }
+	template<typename K2> friend iterator		upper_boundc(map &m, K2 &&k)		{ return m.upper_bound(k); }
+	template<typename K2> friend iterator		find(map &m, K2 &&k)				{ return m.find(k); }
 
-	template<typename K2> iterator			lower_bound(const K2 &k)			{ return iterator(B::root()).scan_lower_bound(k, B::comp()); }
-	template<typename K2> const_iterator	lower_bound(const K2 &k)	const	{ return const_iterator(B::root()).scan_lower_bound(k, B::comp()); }
-	template<typename K2> iterator			upper_bound(const K2 &k)			{ return iterator(B::root()).scan_upper_bound(k, B::comp()); }
-	template<typename K2> const_iterator	upper_bound(const K2 &k)	const	{ return const_iterator(B::root()).scan_upper_bound(k, B::comp()); }
-	template<typename K2> iterator			find(const K2 &k)					{ auto i = lower_bound(k); return i && !B::compare(k, i.key()) ? i : 0; }
-	template<typename K2> const_iterator	find(const K2 &k)			const	{ auto i = lower_bound(k); return i && !B::compare(k, i.key()) ? i : 0; }
-	template<typename K2> bool				count(const K2 &k)			const	{ auto i = lower_bound(k); return i && !B::compare(k, i.key()); }
-//friends
-	template<typename K2> friend iterator		lower_boundc(map &m, const K2 &k)		{ return m.lower_bound(k); }
-	template<typename K2> friend const_iterator	lower_boundc(const map &m, const K2 &k)	{ return m.lower_bound(k); }
-	template<typename K2> friend iterator		upper_boundc(map &m, const K2 &k)		{ return m.upper_bound(k); }
-	template<typename K2> friend const_iterator	upper_boundc(const map &m, const K2 &k)	{ return m.upper_bound(k); }
-	template<typename K2> friend iterator		find(map &m, const K2 &k)				{ return m.find(k); }
-	template<typename K2> friend const_iterator	find(const map &m, const K2 &k)			{ return m.find(k); }
-	template<typename K2> friend bool			count(const map &m, const K2 &k)		{ return m.count(k); }
+	friend map	operator+(const map &a, const map &b)	{ return map(a) += b; }
 };
 
 //-----------------------------------------------------------------------------
 // multimap
 //-----------------------------------------------------------------------------
 
-template<typename K, typename V, typename C = less> class multimap : public rbtree_base<map_node<K, V>, C> {
-	typedef map_node<K, V> 		N;
-	typedef rbtree_base<N, C>	B;
-	using typename B::BI;
+template<typename K, typename V, typename C = less, bool PARENT = false> class multimap : public rbtree_base<map_node<K, V, PARENT>, C, PARENT> {
+	typedef map_node<K, V, PARENT> 		N;
+	typedef rbtree_base<N, C, PARENT>	B;
 public:
-	class iterator : public BI {
-	public:
-		typedef bidirectional_iterator_t iterator_category;
-		typedef V		element, &reference;
-		iterator(N *p)				: BI(p)			{}
-		iterator(N *p, int side)	: BI(p, side)	{}
-		operator		V*()				const	{ N *p = BI::node(); return p ? &p->value() : 0;	}
-		V*				operator->()		const	{ N *p = BI::node(); return p ? &p->value() : 0;	}
-		iterator&		operator++()				{ BI::next(1); return *this;	}
-		iterator		operator++(int)				{ iterator i = *this; BI::next(1); return i; }
-		iterator&		operator--()				{ BI::next(0); return *this;	}
-		iterator		operator--(int)				{ iterator i = *this; BI::next(0); return i; }
-		K&				key()				const	{ return BI::node()->get(); }
-		template<typename K2> iterator& scan_lower_bound(const K2 &k, const C &comp) { BI::scan_lower_bound(k, comp); return *this; }
-		template<typename K2> iterator& scan_upper_bound(const K2 &k, const C &comp) { BI::scan_upper_bound(k, comp); return *this; }
-	};
-	typedef iterator	const_iterator;
-	typedef V			element, &reference;
 
-	multimap(const C &comp = C())	: B(comp)	{}
-	multimap(const multimap &b)		: B(b)		{}
+	multimap(const _none&, const C &comp = C())	: B(comp) {}
+	multimap(const C &comp = C())				: B(comp) {}
+	multimap(const multimap &b)		= default;
+	multimap(multimap &&b)			= default;
 	~multimap()									{ B::deleteall(); }
-	void	clear()								{ B::deleteall(); }
-	multimap&	operator=(const multimap &b)	{ clear(); B::assign(b); return *this; }
-	template<typename T> multimap&	operator=(const T &t)	{ using iso::begin; using iso::end; return tree_assign(*this, begin(t), end(t)); }
 
-#ifdef USE_RVALUE_REFS
-	multimap(multimap &&b) = default;
-	multimap&	operator=(multimap &&b)			{ clear(); B::assign(move(b)); return *this; }
-#endif
+	void	clear()								{ B::deleteall(); }
+	auto&	operator=(const multimap &b)		{ clear(); B::assign(b); return *this; }
+	auto&	operator=(multimap &&b)				{ clear(); B::assign(move(b)); return *this; }
+
+	void	remove(iterator &&i) {
+		delete B::remove(i);
+	}
 
 	multimap&	operator+=(multimap &t2) {
 		for (auto i = t2.begin(), e = t2.end(); i != e; ++i)
-			insert(*i);
+			put(i.key(), *i);
 		return *this;
 	}
 
-	V&		operator[](const K &k) {
-		tree_stack<N>	s(B::root());
-		s.scan_upper_bound(k, B::comp());
-		int	dir;
-		if (!s.node()) {
-			s.last(B::root(), 1);
-			dir = 1;
-		} else {
-			dir = s.next_leaf(0);
-		}
-		N	*n = new N(k);
-		B::insert(s, n, dir);
+	V&		put(const K &k, const V &v) {
+		auto	i	= root();
+		i.scan_upper_bound(k, B::comp());
+		N	*n = new N(k, v);
+		B::insert(move(i), n);
+		return n->value();
+	}
+	template<typename...P> V&	emplace(const K &k, P&&... p) {
+		auto	i	= root();
+		i.scan_upper_bound(k, B::comp());
+		N	*n = new N(k, forward<P>(p)...);
+		B::insert(move(i), n);
 		return n->value();
 	}
 
-	iterator		begin()				{ return iterator(B::root(), 0); }
-	iterator		end()				{ return 0; }
-	const_iterator	begin()		const	{ return const_iterator(B::root(), 0); }
-	const_iterator	end()		const	{ return 0; }
-
-	B&				with_keys()			{ return *this; }
-	const B&		with_keys()	const	{ return *this; }
-
-	template<typename K2> iterator			lower_bound(const K2 &k)			{ return iterator(B::root()).scan_lower_bound(k, B::comp()); }
-	template<typename K2> const_iterator	lower_bound(const K2 &k)	const	{ return const_iterator(B::root()).scan_lower_bound(k, B::comp()); }
-	template<typename K2> iterator			upper_bound(const K2 &k)			{ return iterator(B::root()).scan_upper_bound(k, B::comp()); }
-	template<typename K2> const_iterator	upper_bound(const K2 &k)	const	{ return const_iterator(B::root()).scan_upper_bound(k, B::comp()); }
-	template<typename K2> iterator			find(const K2 &k)					{ auto i = lower_bound(k); return i && !B::compare(k, i.key()) ? i : 0; }
-	template<typename K2> const_iterator	find(const K2 &k)			const	{ auto i = lower_bound(k); return i && !B::compare(k, i.key()) ? i : 0; }
-	template<typename K2> uint32			count(const K2 &k)			const	{
+	auto			count(const K &k) const {
+		auto	i	= root();
+		i.scan_lower_bound(k, B::comp());
 		uint32	n = 0;
-		for (auto i = const_iterator(B::root()).scan_lower_bound(k); i && !B::compare(k, i.key()); ++i)
+		while (i && !B::compare(k, i.key())) {
 			++n;
+			++i;
+		}
 		return n;
 	}
-	template<typename K2> range<const_iterator>	bounds(const K2 &k)		const	{
-		auto i = const_iterator(B::root()).scan_lower_bound(k, B::comp());
-		auto j = const_iterator(i).scan_upper_bound(k, B::comp());
-		return range<const_iterator>(i, j);
+	auto			bounds(const K &k) const {
+		auto	i = root();
+		i.scan_lower_bound(k, B::comp());
+		auto	j = copy(i);
+		j.scan_upper_bound(k, B::comp());
+		return make_range(i, j);
 	}
 
-//friends
-	template<typename K2> friend iterator		lower_boundc(multimap &m, const K2 &k)			{ return m.lower_bound(k); }
-	template<typename K2> friend const_iterator	lower_boundc(const multimap &m, const K2 &k)	{ return m.lower_bound(k); }
-	template<typename K2> friend iterator		upper_boundc(multimap &m, const K2 &k)			{ return m.upper_bound(k); }
-	template<typename K2> friend const_iterator	upper_boundc(const multimap &m, const K2 &k)	{ return m.upper_bound(k); }
-	template<typename K2> friend iterator		find(multimap &m, const K2 &k)					{ return m.find(k); }
-	template<typename K2> friend const_iterator	find(const multimap &m, const K2 &k)			{ return m.find(k); }
-	template<typename K2> friend uint32			count(const multimap &m, const K2 &k)			{ return m.count(k); }
+	//friends (using auto prevents NVO on clang)
+	template<typename K2> friend const_iterator	lower_boundc(const multimap &m, K2 &&k)	{ return m.lower_bound(k); }
+	template<typename K2> friend const_iterator	upper_boundc(const multimap &m, K2 &&k)	{ return m.upper_bound(k); }
+	template<typename K2> friend const_iterator	find(const multimap &m, K2 &&k)			{ return m.find(k); }
+	template<typename K2> friend iterator		lower_boundc(multimap &m, K2 &&k)		{ return m.lower_bound(k); }
+	template<typename K2> friend iterator		upper_boundc(multimap &m, K2 &&k)		{ return m.upper_bound(k); }
+	template<typename K2> friend iterator		find(multimap &m, K2 &&k)				{ return m.find(k); }
+
+	friend multimap	operator+(const multimap &a, const multimap &b)	{ return multimap(a) += b; }
 };
 
 //-----------------------------------------------------------------------------
 // set
 //-----------------------------------------------------------------------------
 
-template<typename K> struct set_node : public rbnode_base<set_node<K>, false> {
+template<typename K, bool PARENT> struct set_node : public rbnode_base<set_node<K, PARENT>, PARENT> {
 	K	k;
-	set_node(const K &_k) : k(_k)	{}
-	K&			get()				{ return k;	}
-	const K&	get()	const		{ return k;	}
+	set_node(const K &k) : k(k)	{}
+	K&			key()				{ return k;	}
+	const K&	key()	const		{ return k;	}
+	K&			value()				{ return k;	}
+	const K&	value()	const		{ return k;	}
 };
 
-template<typename K, typename C = less> class set : public rbtree_base<set_node<K>, C> {
-	typedef set_node<K> 		N;
-	typedef rbtree_base<N, C>	B;
-	using typename B::BI;
+template<typename K, typename C = less, bool PARENT = false> class set : public rbtree_base<set_node<K, PARENT>, C, PARENT> {
+	typedef set_node<K, PARENT>			N;
+	typedef rbtree_base<N, C, PARENT>	B;
 
 	bool check_all(const set &b) const	{
 		for (auto i = begin(), e = end(); i != e; ++i) {
@@ -1053,69 +1217,38 @@ template<typename K, typename C = less> class set : public rbtree_base<set_node<
 		return true;
 	}
 public:
-	class iterator : public BI {
-	public:
-		typedef bidirectional_iterator_t iterator_category;
-		typedef K		element, &reference;
-		iterator(N *p = nullptr)	: BI(p)			{}
-		iterator(N *p, int side)	: BI(p, side)	{}
-		operator		K*()				const	{ N *p = BI::node(); return p ? &p->get() : 0;	}
-		K*				operator->()		const	{ N *p = BI::node(); return p ? &p->get() : 0;	}
-		iterator&		operator++()				{ BI::next(1); return *this;	}
-		iterator		operator++(int)				{ iterator i = *this; BI::next(1); return i; }
-		iterator&		operator--()				{ BI::next(0); return *this;	}
-		iterator		operator--(int)				{ iterator i = *this; BI::next(0); return i; }
-		template<typename K2> iterator& scan_lower_bound(const K2 &k, const C &comp) { BI::scan_lower_bound(k, comp); return *this; }
-	};
-	typedef iterator	const_iterator;
-	typedef K			element, &reference;
-
-	set(const C &comp = C()) : B(comp)	{}
-	set(const set &b) : B(b)			{}
+	set(const _none&, const C &comp = C())	: B(comp)	{}
+	set(const C &comp = C())				: B(comp)	{}
+	set(const set &b)	= default;
+	set(set &&b)		= default;
 	~set()								{ B::deleteall(); }
+
 	void	clear()						{ B::deleteall(); }
 	set&	operator=(const set &b)		{ clear(); B::assign(b); return *this; }
-	template<typename T> set&	operator=(const T &t)	{ using iso::begin; using iso::end; return tree_assign(*this, begin(t), end(t)); }
-#ifdef USE_RVALUE_REFS
-	set(set &&b) = default;
 	set&	operator=(set &&b)			{ clear(); B::assign(move(b)); return *this; }
-#endif
+	template<typename C> set&	operator=(C &&c)	{ clear(); for (auto &&i : c) insert(i); return *this; }
 
-	bool			insert(const K &k) {
-		auto	i	= begin();
-		//tree_stack<N>	s(B::root());
-		if (i.scan(k, B::comp()))
-			return false;
-		B::insert(i, new N(k));
-		return true;
-	}
-	iterator		insert_it(const K &k) {
-		auto	i	= begin();
-		if (i.scan(k, B::comp()))
-			return i;
-		B::insert(i, new N(k));
-		return lower_bound(k);
+	bool	insert(const K &k) {
+		auto	i	= root();
+		if (auto side = i.scan_insertion(k, B::comp())) {
+			B::insert_side(move(i), new N(k), side > 0);
+			return true;
+		}
+		return false;
 	}
 
-	iterator		begin()				{ return iterator(B::root(), 0); }
-	iterator		end()				{ return 0; }
-	const_iterator	begin()		const	{ return const_iterator(B::root(), 0); }
-	const_iterator	end()		const	{ return 0; }
-
-	_not<set> operator~()	const {
-		return *this;
+	void	remove(iterator &&i) {
+		delete B::remove(i);
 	}
+
+	_not<set> operator~()		const	{ return *this; }
+
+	bool	count(const K &k)	const	{ auto i = root(); i.scan_lower_bound(k, B::comp()); return i && !B::comp()(k, *i); }
+
 	set& operator&=(const set &b) {
 		for (auto i = begin(), e = end(); i != e; ++i) {
 			if (!b.find(*i))
-				remove(i);
-		}
-		return *this;
-	}
-	set& operator&=(const _not<set> &b) {
-		for (auto i = begin(), e = end(); i != e; ++i) {
-			if (b.t.find(*i))
-				remove(i);
+				remove(move(i));	//dodgy!!
 		}
 		return *this;
 	}
@@ -1127,162 +1260,147 @@ public:
 	set& operator^=(const set &b) {
 		for (auto &i : b) {
 			if (auto j = find(i))
-				remove(j);
+				remove(move(j));
 			else
 				insert(i);
+		}
+		return *this;
+	}
+	set& operator-=(const set &b) {
+		for (auto &i : b) {
+			if (auto j = find(i))
+				remove(move(j));
 		}
 		return *this;
 	}
 
 	set& operator*=(const set &b)			{ return operator&=(b); }
 	set& operator+=(const set &b)			{ return operator|=(b); }
-	set& operator-=(const set &b)			{ return operator&=(~b); }
 
-	bool operator< (const set &b)	const	{ return B::size() <  b.size() && check_all(b); }
+	bool operator==(const set &b)	const	{ return B::size() == b.size() && check_all(b); }
 	bool operator<=(const set &b)	const	{ return B::size() <= b.size() && check_all(b); }
-	bool operator> (const set &b)	const	{ return b <  *this; }
+	bool operator!=(const set &b)	const	{ return !(*this == b); }
+	bool operator> (const set &b)	const	{ return !(*this <= b); }
 	bool operator>=(const set &b)	const	{ return b <= *this; }
+	bool operator< (const set &b)	const	{ return b >  *this; }
 
-	template<typename K2> iterator			lower_bound(const K2 &k)			{ return iterator(B::root()).scan_lower_bound(k, B::comp()); }
-	template<typename K2> const_iterator	lower_bound(const K2 &k)	const	{ return const_iterator(B::root()).scan_lower_bound(k, B::comp()); }
-	template<typename K2> iterator			find(const K2 &k)					{ auto i = lower_bound(k); return i && !B::compare(k, *i) ? i : 0; }
-	template<typename K2> const_iterator	find(const K2 &k)			const	{ auto i = lower_bound(k); return i && !B::compare(k, *i) ? i : 0; }
-	template<typename K2> bool				count(const K2 &k)			const	{ auto i = lower_bound(k); return i && !B::compare(k, *i); }
+	//friends (using auto prevents NVO on clang)
+	template<typename K2> friend const_iterator	lower_boundc(const set &m, K2 &&k)	{ return m.lower_bound(k); }
+	template<typename K2> friend const_iterator	find(const set &m, K2 &&k)			{ return m.find(k); }
+	template<typename K2> friend iterator		lower_boundc(set &m, K2 &&k)		{ return m.lower_bound(k); }
+	template<typename K2> friend iterator		find(set &m, K2 &&k)				{ return m.find(k); }
 
-//friends
 	friend set operator&(const set &a, const set &b)		{ set t(a); t &= b; return t; }
-	friend set operator&(const set &a, const _not<set> &b)	{ set t(a); t &= b; return t; }
-	friend set operator|(const set &a, const set &b)		{ set t(a); t &= b; return t; }
+	friend set operator|(const set &a, const set &b)		{ set t(a); t |= b; return t; }
 	friend set operator^(const set &a, const set &b)		{ set t(a); t ^= b; return t; }
-
-	template<typename K2> friend iterator		lower_boundc(set &m, const K2 &k)		{ return m.lower_bound(k); }
-	template<typename K2> friend const_iterator	lower_boundc(const set &m, const K2 &k)	{ return m.lower_bound(k); }
-	template<typename K2> friend iterator		upper_boundc(set &m, const K2 &k)		{ return m.upper_bound(k); }
-	template<typename K2> friend const_iterator	upper_boundc(const set &m, const K2 &k)	{ return m.upper_bound(k); }
-	template<typename K2> friend iterator		find(set &m, const K2 &k)				{ return m.find(k); }
-	template<typename K2> friend const_iterator	find(const set &m, const K2 &k)			{ return m.find(k); }
-	template<typename K2> friend bool			count(const set &m, const K2 &k)		{ return m.count(k); }
+	friend set operator-(const set &a, const set &b)		{ set t(a); t -= b; return t; }
 };
 
 //-----------------------------------------------------------------------------
 // multiset
 //-----------------------------------------------------------------------------
 
-template<typename K> struct multiset_node : public rbnode_base<multiset_node<K>, false> {
-	K		k;
-	uint32	count;
-	multiset_node(const K &k) : k(k), count(1) {}
-	K&			get()				{ return k;	}
-	const K&	get()	const		{ return k;	}
+template<typename K, bool PARENT> struct multiset_node : public rbnode_base<multiset_node<K, PARENT>, PARENT>, pair<K, uint32> {
+	typedef pair<K, uint32>	B;
+
+	multiset_node(const K &k) : B(k, 1) {}
+	K&			key()				{ return B::a;	}
+	const K&	key()	const		{ return B::a;	}
+	B&			value()				{ return *this; }
+	const B&	value()	const		{ return *this; }
 };
 
-template<typename K, typename C = less> class multiset : public rbtree_base<multiset_node<K>, C> {
-	typedef multiset_node<K>	N;
-	typedef rbtree_base<N, C>	B;
-	using typename B::BI;
+template<typename K, typename C = less, bool PARENT = false> class multiset : public rbtree_base<multiset_node<K, PARENT>, C, PARENT> {
+	typedef multiset_node<K, PARENT>	N;
+	typedef rbtree_base<N, C, PARENT>	B;
 
-	bool check_all(const multiset &b) const	{
-		for (auto i = begin(), e = end(); i != e; ++i) {
-			if (b.count(*i) < i.count())
-				return false;
+	int check_all(const multiset &b) const	{
+		bool	more = false;
+		for (auto &i : *this) {
+			int	n = b.count(i.a);
+			if (n < i.b)
+				return 0;
+			more = more || n > i.b;
 		}
-		return true;
+		return int(more) + 1;
 	}
 public:
-	class iterator : public BI {
-	public:
-		typedef bidirectional_iterator_t iterator_category;
-		typedef K		element, &reference;
-		iterator(N *p)				: BI(p)			{}
-		iterator(N *p, int side)	: BI(p, side)	{}
-		operator		K*()				const	{ N *p = BI::node(); return p ? &p->get() : 0;	}
-		K*				operator->()		const	{ N *p = BI::node(); return p ? &p->get() : 0;	}
-		iterator&		operator++()				{ BI::next(1); return *this;	}
-		iterator		operator++(int)				{ iterator i = *this; BI::next(1); return i; }
-		iterator&		operator--()				{ BI::next(0); return *this;	}
-		iterator		operator--(int)				{ iterator i = *this; BI::next(0); return i; }
-		uint32			count()				const	{ return B::node()->count; }
-		template<typename K2> iterator& scan_lower_bound(const K2 &k) { BI::scan_lower_bound(k); return *this; }
-	};
-	typedef iterator	const_iterator;
-	typedef K			element, &reference;
-
-	multiset(const C &comp = C()) : B(comp)		{}
-	multiset(const multiset &b)	: B(b)			{}
+	multiset(const _none&, const C &comp = C())	: B(comp) {}
+	multiset(const C &comp = C())				: B(comp) {}
+	multiset(const multiset &b)		= default;
+	multiset(multiset &&b)			= default;
 	~multiset()									{ B::deleteall(); }
+
 	void	clear()								{ B::deleteall(); }
 	multiset&	operator=(const multiset &b)	{ clear(); B::assign(b); return *this; }
-	template<typename T> multiset&	operator=(const T &t)	{ using iso::begin; using iso::end; return tree_assign(*this, begin(t), end(t)); }
-#ifdef USE_RVALUE_REFS
-	multiset(multiset &&b) = default;
 	multiset&	operator=(multiset &&b)			{ clear(); B::assign(move(b)); return *this; }
-#endif
+	template<typename C> multiset&	operator=(C &&c)	{ clear(); for (auto &&i : c) insert(i); return *this; }
 
-	void			insert(const K &k) {
-		tree_stack<N>	s(B::root());
-		if (s.scan(k)) {
-			++s.node()->count;
+	void	insert(const K &k) {
+		auto	i = root();
+		if (auto side = i.scan_insertion(k, B::comp())) {
+			B::insert_side(move(i), new N(k), side > 0);
 		} else {
-			B::insert(s, new N(k));
+			++i.node()->b;
 		}
 	}
+	void	remove(iterator &&i) {
+		delete B::remove(i);
+	}
 
-	iterator		begin()				{ return iterator(B::root(), 0); }
-	iterator		end()				{ return 0; }
-	const_iterator	begin()		const	{ return const_iterator(B::root(), 0); }
-	const_iterator	end()		const	{ return 0; }
+	uint32	count(const K &k)	const	{ auto i = lower_boundc(*this, k); return !B::comp()(k, i.key()) ? i->b : 0; }
 
 	multiset& operator+=(const multiset &b) {
 		for (auto i = begin(), e = end(); i != e; ++i) {
-			if (auto j = b.find(*i))
-				i.node()->count += j.count();
+			if (auto j = b.find(i->a))
+				i->b += j->b;
 		}
 		return *this;
 	}
 	multiset& operator-=(const multiset &b) {
-		for (auto i = begin(), e = end(); i != e; ++i) {
-			if (auto j = b.s.find(*i)) {
-				if (i.node()->count < j.count())
-					remove(i);
+		for (auto &i : b) {
+			if (auto j = find(i.a)) {
+				if (i.b >= j->b)
+					remove(move(j));
 				else
-					i.node()->count -= j.count();
+					j->b -= i.b;
 			}
 		}
 		return *this;
 	}
 	multiset& operator*=(const multiset &b) {
 		for (auto i = begin(), e = end(); i != e; ++i) {
-			if (auto j = b.s.find(*i))
-				i.node()->count = min(i.node()->count, j.count());
+			if (auto j = b.find(i->a))
+				i->b = min(i->b, j->b);
 			else
-				remove(i);
+				remove(move(i));	//dodgy!!
 		}
 		return *this;
 	}
-
-	bool operator< (const multiset &b)	const	{ return B::size() <  b.size() && check_all(b); }
-	bool operator<=(const multiset &b)	const	{ return B::size() <= b.size() && check_all(b); }
-	bool operator> (const multiset &b)	const	{ return b <  *this; }
+	multiset& operator|=(const multiset &b) {
+		for (auto i = begin(), e = end(); i != e; ++i) {
+			if (auto j = b.find(i->a))
+				i->b = max(i->b, j->b);
+		}
+		return *this;
+	}
+	bool operator==(const multiset &b)	const	{ return B::size() == b.size() && check_all(b) == 1; }
+	bool operator<=(const multiset &b)	const	{ return B::size() <= b.size() && check_all(b) > 0; }
+	bool operator!=(const multiset &b)	const	{ return !(*this == b); }
+	bool operator> (const multiset &b)	const	{ return !(*this <= b); }
 	bool operator>=(const multiset &b)	const	{ return b <= *this; }
+	bool operator< (const multiset &b)	const	{ return b > *this; }
 
-	template<typename K2> iterator				lower_bound(const K2 &k)			{ return iterator(B::root()).scan_lower_bound(k); }
-	template<typename K2> const_iterator		lower_bound(const K2 &k)	const	{ return const_iterator(B::root()).scan_lower_bound(k); }
-	template<typename K2> iterator				find(const K2 &k)					{ auto i = lower_bound(k); return !B::compare(k, *i) ? i : 0; }
-	template<typename K2> const_iterator		find(const K2 &k)			const	{ auto i = lower_bound(k); return !B::compare(k, *i) ? i : 0; }
-	template<typename K2> uint32				count(const K2 &k)			const	{ auto i = lower_bound(k); return !B::compare(k, *i) ? i.count() : 0; }
+	//friends (using auto prevents NVO on clang)
+	template<typename K2> friend const_iterator	lower_boundc(const multiset &m, K2 &&k)	{ return m.lower_bound(k); }
+	template<typename K2> friend const_iterator	find(const multiset &m, K2 &&k)			{ return m.find(k); }
+	template<typename K2> friend iterator		lower_boundc(multiset &m, K2 &&k)		{ return m.lower_bound(k); }
+	template<typename K2> friend iterator		find(multiset &m, K2 &&k)				{ return m.find(k); }
 
-//friends
 	friend multiset operator+(const multiset &a, const multiset &b)	{ multiset t(a); t += b; return t; }
 	friend multiset operator-(const multiset &a, const multiset &b)	{ multiset t(a); t -= b; return t; }
 	friend multiset operator*(const multiset &a, const multiset &b)	{ multiset t(a); t *= b; return t; }
-
-	template<typename K2> friend iterator		lower_boundc(multiset &m, const K2 &k)			{ return m.lower_bound(k); }
-	template<typename K2> friend const_iterator	lower_boundc(const multiset &m, const K2 &k)	{ return m.lower_bound(k); }
-	template<typename K2> friend iterator		upper_boundc(multiset &m, const K2 &k)			{ return m.upper_bound(k); }
-	template<typename K2> friend const_iterator	upper_boundc(const multiset &m, const K2 &k)	{ return m.upper_bound(k); }
-	template<typename K2> friend iterator		find(multiset &m, const K2 &k)					{ return m.find(k); }
-	template<typename K2> friend const_iterator	find(const multiset &m, const K2 &k)			{ return m.find(k); }
-	template<typename K2> friend uint32			count(const multiset &m, const K2 &k)			{ return m.count(k); }
+	friend multiset operator|(const multiset &a, const multiset &b)	{ multiset t(a); t |= b; return t; }
 };
 
 //-----------------------------------------------------------------------------
@@ -1292,27 +1410,27 @@ public:
 template<template<typename> class B, typename N, typename K> struct interval_node_base : B<N>, interval<K> {
 	K		max;
 	interval_node_base(const interval<K> &i) : interval<K>(i), max(i.b) {}
-	void	attach(N *n, int side) {
+	template<typename N2> void	attach(N2 n, bool right) {
 		K	m = this->b;
-		if (N *s = this->child[!side]) {
+		if (N *s = this->child[!right]) {
 			if (s->max > m)
 				m = s->max;
 		}
 		if (n && n->max > m)
 			m = n->max;
 		max			= m;
-		this->child[side] = n;
+		B<N>::attach(n, right);
 	}
-	interval<K>			tree_interval()	const	{ return interval<K>(this->a, max);	}
-	const interval<K>&	get()			const	{ return *this;	}
+	interval<K>			tree_interval()	const	{ return {this->a, max}; }
+	const interval<K>&	key()			const	{ return *this;	}
 };
 
-template<typename N, typename I, typename K> class interval_iterator : public I {
+template<typename I, typename K> class interval_iterator : public I {
 	using I::sp;
-
+	using N = typename I::node_type;
 	interval<K>	i;
 
-	void	fix(int side) {
+	void	fix(bool right) {
 		if (N *n = this->node()) {
 			K	m	= n->b;
 			if (m > n->max) {
@@ -1320,55 +1438,61 @@ template<typename N, typename I, typename K> class interval_iterator : public I 
 					j[0]->max = m;
 			} else {
 				for (N **j = sp; depth(j--) > 0 && m < j[0]->max;) {
-					if ((n = j[0]->child[side]) && n->max > m)
+					if ((n = j[0]->child[right]) && n->max > m)
 						m = n->max;
 				}
 			}
 		}
 	}
-	int	last(N *p, int side) {
-		N	**sp0 = sp;
-		if (side == 0) {
+	int	last(N *p, bool right) {
+		int		pushes = 0;
+		if (!right) {
 			while (p && !(p->max < i.a)) {
 				push(p);
-				p = p->child[side];
+				++pushes;
+				p = p->child[right];
 			}
 		} else {
 			while (p && p->a < i.b) {
 				push(p);
-				p = p->child[side];
+				++pushes;
+				p = p->child[right];
 			}
 		}
-		return sp - sp0;
+		return pushes;
 	}
-	void	next(int side) {
-		fix(side);
+	void	next(bool right) {
+		fix(right);
+		N*	n = this->node();
 		do {
-			if (this->depth() > 0 && last(sp[-1]->child[side], !side) == 0) {
-				do
-					--sp;
-				while (this->depth() > 0 && sp[0] == sp[-1]->child[side]);
+			if (last(n->child[right], !right) == 0) {
+				N	*c;
+				do {
+					c	= n;
+					n	= this->parent_pop();
+				} while (n && c == n->child[right]);
 			}
-		} while (this->depth() > 0 && !overlap(i, *this->node()));
+			n = this->node();
+		} while (n && !overlap(i, *n));
 	}
 public:
-	interval_iterator(N *p, const interval<K> &_i, int side) : I(0), i(_i) {
-		if (last(p, side) && !overlap(i, *this->node()))
-			next(1);
+	interval_iterator(N *p, const interval<K> &i, bool right) : I(0), i(i) {
+		if (last(p, right) && !overlap(i, *this->node()))
+			next(!right);
 	}
-	interval_iterator(N *p, const interval<K> &_i) : I(p), i(_i) {}
-	interval_iterator&	operator++()			{ next(1); return *this;	}
-	interval_iterator	operator++(int)			{ I i = *this; next(1); return i; }
-	interval_iterator&	operator--()			{ next(0); return *this;	}
-	interval_iterator	operator--(int)			{ I i = *this; next(0); return i; }
-	interval<K>&		key()					{ return unconst(I::node()->get()); }
+	interval_iterator(N *p, const interval<K> &i) : I(p), i(i) {}
+	interval_iterator&	operator++()	{ next(true); return *this;	}
+	interval_iterator	operator++(int)	{ I i = *this; next(true); return i; }
+	interval_iterator&	operator--()	{ next(false); return *this;	}
+	interval_iterator	operator--(int)	{ I i = *this; next(false); return i; }
+	interval<K>&		key()			{ return unconst(I::node()->key()); }
 };
 
-template<typename T, typename K> interval_iterator<typename T::node_type, typename T::iterator, K>	interval_begin(T &tree, const interval<K> &x)	{
-	return interval_iterator<typename T::node_type, typename T::iterator, K>(tree.root(), x, 0);
+template<typename T, typename K> auto	interval_begin(T &tree, const interval<K> &x)	{
+	return interval_iterator<typename T::iterator, K>(tree.root().node(), x, false);
 }
 
-template<typename T, typename K> interval_iterator<typename T::node_type, typename T::iterator, K>	interval_begin(T &tree, const K &a, const K &b)	{
+template<typename T, typename K> auto	interval_begin(T &tree, const K &a, const K &b)	{
 	return interval_begin(tree, interval<K>(a, b));
 }
 
@@ -1378,80 +1502,39 @@ template<typename K, typename V> struct interval_node : interval_node_base<rbnod
 	V		v;
 	interval_node(const interval<K> &i)				: B(i)			{}
 	interval_node(const interval<K> &i, const V &v) : B(i), v(v)	{}
+	V&			value()			{ return v;	}
+	const V&	value()	const	{ return v;	}
 };
 
 template<typename K, typename V> class interval_tree : public rbtree_base<interval_node<K, V>, less> {
 	typedef interval_node<K, V> 	N;
 	typedef rbtree_base<N, less>	B;
 public:
-	class iterator : public tree_stack<N> {
-		typedef tree_stack<N> B;
-	public:
-		iterator(N *p)				: B(p)			{}
-		iterator(N *p, int side)	: B(p, side)	{}
-		operator		V*()				const	{ N *p = B::node(); return p ? &p->v : 0;	}
-		V*				operator->()		const	{ N *p = B::node(); return p ? &p->v : 0;	}
-		iterator&		operator++()				{ B::next(1); return *this;	}
-		iterator		operator++(int)				{ iterator i = *this; B::next(1); return i; }
-		iterator&		operator--()				{ B::next(0); return *this;	}
-		iterator		operator--(int)				{ iterator i = *this; B::next(0); return i; }
-		const interval<K> &key()			const	{ return B::node()->get(); }
-//		template<typename K2> iterator& scan_lower_bound(const interval<K2> &k) { B::scan_lower_bound(k); return *this; }
-//		template<typename K2> iterator& scan_lower_bound(const K2 &k)			{ return scan_lower_bound(interval<K>(k, k)); }
-		template<typename K2> iterator& scan_lower_bound(const K2 &k)			{ B::scan_lower_bound(k, less()); return *this; }
-	};
-
-	typedef iterator	const_iterator;
-	typedef V			element, &reference;
-	typedef	interval_iterator<N, iterator, K>	iterator2;
-
+	using B::remove;
 	interval_tree()				: B(less()) {}
+	interval_tree(const _none&)	: B(less()) {}
 	~interval_tree()			{ B::deleteall(); }
 	void	clear()				{ B::deleteall(); }
 
 	void	insert(const interval<K> &i, const V &v) {
-		tree_stack<N>	s(B::root());
-		s.scan_upper_bound(i, B::comp());
-		int	dir;
-		if (!s.node()) {
-			s.last(B::root(), 1);
-			dir = 1;
-		} else {
-			dir = s.next_leaf(0);
-		}
-		B::insert(s, new N(i, v), dir);
+		auto	p = root();
+		p.scan_upper_bound(i, B::comp());
+		B::insert(move(p), new N(i, v));
 	}
-
-	bool	remove(const interval<K> &i) {
-		tree_stack<N>	s(B::root());
-		if (!s.scan(i, B::comp()))
-			return false;
-		B::remove(s);
-		return true;
+	void	remove(iterator &&i) {
+		delete B::remove(i);
 	}
-
-	void	insert(const K &a, const K &b, const V &v)	{ return insert(interval<K>(a, b), v); }
-	bool	remove(const K &a, const K &b)				{ return remove(interval<K>(a, b)); }
-	void	remove(iterator &i)							{
-		auto *n = i.node();
-		B::remove(i);
-		i.scan_lower_bound(n->a);
+	void	remove(iterator &i) {
+		auto *n = B::remove(i);
+		i.scan_lower_bound(n->a, less());
 		delete n;
 	}
 
-	iterator			begin()							{ return iterator(B::root(), 0); }
-	iterator			end()							{ return 0; }
-	const_iterator		begin()		const				{ return const_iterator(B::root(), 0); }
-	const_iterator		end()		const				{ return 0; }
+	interval_iterator<iterator, K>	begin(const interval<K> &x) { return {B::root, x, false}; }
 
-	iterator2			begin(const interval<K> &x)		{ return iterator2(B::root(), x, 0); }
-	iterator2			begin(const K &a, const K &b)	{ return begin(interval<K>(a, b)); }
-
-	template<typename K2> iterator			lower_bound(const K2 &k)			{ return iterator(B::root()).scan_lower_bound(k); }
-	template<typename K2> const_iterator	lower_bound(const K2 &k)	const	{ return iterator(B::root()).scan_lower_bound(k); }
-
-	template<typename K2> friend iterator		lower_boundc(interval_tree &t, const K2 &k)			{ return t.lower_bound(k); }
-	template<typename K2> friend const_iterator	lower_boundc(const interval_tree &t, const K2 &k)	{ return t.lower_bound(k); }
+//friends
+	template<typename K2> friend const_iterator	lower_boundc(const interval_tree &t, K2 &&k)	{ return t.lower_bound(k); }
+	template<typename K2> friend iterator		lower_boundc(interval_tree &t, K2 &&k)			{ return t.lower_bound(k); }
 
 	template<typename F> friend void intersect(interval_tree &t0, interval_tree &t1, F f) {
 		for (auto i0 = t0.begin(t1.root()->tree_interval()); i0; ++i0) {
@@ -1463,15 +1546,20 @@ public:
 
 //interval map just needs this:
 
-template<typename K, typename V> struct map_node<interval<K>, V> : public interval_node_base<rbnode_base0, map_node<interval<K>, V>, K> {
-	typedef interval_node_base<rbnode_base0, map_node<interval<K>, V>, K> B;
+template<typename K, typename V, bool PARENT> struct map_node<interval<K>, V, PARENT> : public interval_node_base<rbnode_base0, map_node<interval<K>, V, PARENT>, K> {
+	typedef interval_node_base<rbnode_base0, map_node<interval<K>, V, PARENT>, K> B;
 	V		v;
-	template<typename T> map_node(const interval<K> &i, T &&v)	: B(i), v(forward<T>(v))	{}
+	template<typename...P>	map_node(const  interval<K> &i, P&&...p)	: B(i), v(forward<P>(p)...)	{}
+
 	explicit map_node(const interval<K> &i)		: B(i)			{}
-	const V&			value()		const	{ return v;	}
-	V&					value()				{ return v;	}
+	const V&	value()		const	{ return v;	}
+	V&			value()				{ return v;	}
 };
 
 }//namespace iso
+
+//-----------------------------------------------------------------------------
+//	TESTS in test_tree.cpp
+//-----------------------------------------------------------------------------
 
 #endif	// TREE_H

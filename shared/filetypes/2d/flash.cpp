@@ -733,7 +733,7 @@ void FlashState::ProcessTags(flash::Movie &frames, istream_ref file) {
 					malloc_block	alphas(size);
 					try {
 						file.seek(col + alpha);
-						zlib_reader(istream_offset(file, tag_end - file.tell()), size).readbuff(alphas, size);
+						zlib_reader(make_reader_offset(file, tag_end - file.tell()), size).readbuff(alphas, size);
 					} catch_all() {
 						ISO_TRACE("Bad JPEG alpha\n");
 					}
@@ -751,7 +751,7 @@ void FlashState::ProcessTags(flash::Movie &frames, istream_ref file) {
 				UI16	height	= file.get();
 				ISO_ptr<bitmap>	bm(MakeID(id));
 				bm->Create(width, height);
-				istream_offset	chunk(file, tag_end - file.tell());
+				istream_offset	chunk(copy(file), tag_end - file.tell());
 				switch (format) {
 					case 3: {
 						RGB		table[256];
@@ -793,7 +793,7 @@ void FlashState::ProcessTags(flash::Movie &frames, istream_ref file) {
 				UI16	height	= file.get();
 				ISO_ptr<bitmap>	bm(MakeID(id));
 				bm->Create(width, height);
-				istream_offset	chunk(file, tag_end - file.tell());
+				istream_offset	chunk(copy(file), tag_end - file.tell());
 				switch (format) {
 					case 3: {
 						RGBA	table[256];
@@ -849,7 +849,7 @@ void FlashState::ProcessTags(flash::Movie &frames, istream_ref file) {
 				uint8	flags	= file.get();
 				STRING	name	= file;
 				if (FileHandler *fh = FileHandler::Get("ttf"))
-					AddCharacter(id, fh->Read(0, istream_offset(file, tag_end - file.tell())));
+					AddCharacter(id, fh->Read(none, make_reader_offset(file, tag_end - file.tell())));
 //				ISO_ptr<ISO_openarray<uint8> >	p(0);
 //				file.readbuff(p->Create(len), len);
 //				AddCharacter(id, p);
@@ -906,7 +906,7 @@ void FlashState::ProcessTags(flash::Movie &frames, istream_ref file) {
 				uint32		t = m.get<uint32le>() & 0xffffff;
 				if (t == 'SWF' || t == 'SWC') {
 					m.seek(0);
-					AddCharacter(id, FileHandler::Get("swf")->Read(0, m));
+					AddCharacter(id, FileHandler::Get("swf")->Read(none, m));
 				} else {
 					AddCharacter(id, p);
 				}

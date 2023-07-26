@@ -17,6 +17,8 @@
 
 #include <d3d11shader.h>
 #include <d3dcompiler.h>
+#include <d3d12shader.h>
+#include "dxcapi.h"
 
 #undef min
 #undef max
@@ -444,18 +446,18 @@ ISO_ptr<DX11Buffer> MakeDX11Buffer(ISO_ptr<void> p) {
 		ISO_ptr<DX11Buffer>	p2(p.ID());
 
 		ISO_openarray<void>	*a = p;
-		p2->size	= a->Count();
+		p2->width	= a->Count();
 		p2->offset	= vram_offset();
 
 		const ISO::Type *type	= p.GetType()->SubType();
-		uint32			size	= type->GetSize();
+		uint32			stride	= type->GetSize();
 		if (DXGI_FORMAT dxgi = GetDXGI(type)) {
-			p2->format	= dxgi;
+			p2->format_or_stride	= dxgi;
 		} else {
-			p2->format	= size | 0x80000000;
+			p2->format_or_stride	= stride | 0x80000000;
 		}
 
-		size_t	total	= size * p2->size;
+		size_t	total	= fullmul(p2->width, stride);
 		memcpy(ISO::iso_bin_allocator().alloc(total), *a, total);
 		return p2;
 	}
@@ -514,7 +516,7 @@ void ConvertComponent(
 			break;
 		case DXGI_FORMAT_R8G8B8A8_UNORM:
 			copy_n(	strided((array_vec<float,4>*)		srce_data, srce_stride),
-					strided((array_vec<unorm8,4>*)	dest_data, dest_stride),
+					strided((array_vec<unorm8,4>*)		dest_data, dest_stride),
 					count);
 			break;
 		case DXGI_FORMAT_R16G16_FLOAT:
@@ -534,11 +536,11 @@ void ConvertComponent(
 			break;
 		case DXGI_FORMAT_R16G16B16A16_SNORM:
 			if (srce_type == DXGI_FORMAT_R32_FLOAT) {
-				copy_n(	strided((array_vec<float,4>*)		srce_data, srce_stride),
+				copy_n(	strided((array_vec<float,4>*)	srce_data, srce_stride),
 						strided((array_vec<norm16,4>*)	dest_data, dest_stride),
 						count);
 			} else {
-				copy_n(	strided((array_vec<float,3>*)		srce_data, srce_stride),
+				copy_n(	strided((array_vec<float,3>*)	srce_data, srce_stride),
 						strided((array_vec<norm16,3>*)	dest_data, dest_stride),
 						count);
 				copy_n(	scalar<norm16>(0),
@@ -548,11 +550,11 @@ void ConvertComponent(
 			break;
 		case DXGI_FORMAT_R16G16B16A16_UNORM:
 			copy_n(	strided((array_vec<float,4>*)		srce_data, srce_stride),
-					strided((array_vec<unorm16,4>*)	dest_data, dest_stride),
+					strided((array_vec<unorm16,4>*)		dest_data, dest_stride),
 					count);
 			break;
 		case DXGI_FORMAT_R8G8B8A8_UINT:
-			copy_n(	strided((array_vec<uint16,4>*)	srce_data, srce_stride),
+			copy_n(	strided((array_vec<uint16,4>*)		srce_data, srce_stride),
 					strided((array_vec<uint8,4>*)		dest_data, dest_stride),
 					count);
 			break;
@@ -566,21 +568,22 @@ void ConvertComponent(
 	}
 }
 
-ISO_ptr<DX11SubMesh> SubMesh2DX11SubMesh(ISO_ptr<SubMesh> p) {
+ISO_ptr<DX11SubMesh> SubMesh2DX11SubMesh(ISO_ptr<SubMeshBase> _p) {
 	ISO_ptr<DX11SubMesh>	p2(0);
 
+	SubMesh	*p	= _p;
 	p2->minext		= p->minext;
 	p2->maxext		= p->maxext;
 	p2->flags		= p->flags;
 	p2->technique	= p->technique;
 	p2->parameters	= p->parameters;
 
-	ISO::Browser			b(p->verts);
-	uint32	num_verts	= b.Count();
+	ISO::Browser	b(p->verts);
+	uint32			num_verts	= b.Count();
 
 	struct {
-		const char	*usage;
-		int			usage_index,	mult;
+		USAGE2		usage;
+		int			mult;
 		DXGI_FORMAT	srce_type,		dest_type;
 		int			srce_offset,	dest_offset;
 		int			srce_size,		dest_size;
@@ -595,82 +598,120 @@ ISO_ptr<DX11SubMesh> SubMesh2DX11SubMesh(ISO_ptr<SubMesh> p) {
 	int							tex_index		= 0;
 
 	for (int i = 0; i < ncomp; i++) {
-		const ISO::Element	&e			= (*comp)[i];
-		const ISO::Type		*type		= e.type;
-		int					dims		= type->GetType() == ISO::ARRAY ? ((ISO::TypeArray*)type)->Count() : 1;
-		tag2				id0			= comp->GetID(i);
-		crc32				id			= comp->GetID(i);
-		tag					name		= id0.get_tag();
+		const ISO::Element	&e		= (*comp)[i];
+		const ISO::Type		*type	= e.type;
+		int					dims	= type->GetType() == ISO::ARRAY ? ((ISO::TypeArray*)type)->Count() : 1;
+		int					mult	= 1;
+		USAGE2				usage(comp->GetID(i));
 
-		int	mult = 1;
 		if (type->GetType() == ISO::ARRAY && ((ISO::TypeArray*)type)->subtype->GetType() == ISO::ARRAY) {
 			mult = ((ISO::TypeArray*)type)->Count();
 			type = ((ISO::TypeArray*)type)->subtype;
 		}
 
-		DXGI_FORMAT	srce_type	= GetDXGI(type);
-		DXGI_FORMAT	dest_type	= srce_type;
-		int			srce_size	= type->GetSize();
-		int			usage_index	= 0;
+		DXGI_FORMAT		srce_type	= GetDXGI(type);
+		DXGI_FORMAT		dest_type	= srce_type;
+		int				srce_size	= type->GetSize();
 
-		if (name && is_digit(name.end()[-1])) {
-			const char *e = name.end();
-			while (is_digit(e[-1]))
-				--e;
-			from_string(e, usage_index);
-			name	= str(name.begin(), e);
-			id		= name;
-		}
+		if (!(p->flags & SubMeshBase::RAWVERTS)) {
 
-		ChannelUse	cu;
-		if (type->GetType() == ISO::ARRAY && ((ISO::TypeArray*)type)->subtype == ISO::getdef<float>())
-			cu.Scan((const float*)(srce_data + e.offset), ((ISO::TypeArray*)type)->Count(), num_verts, srce_stride);
+			ChannelUse	cu;
+			if (type->GetType() == ISO::ARRAY && ((ISO::TypeArray*)type)->subtype == ISO::getdef<float>())
+				cu.Scan((const float*)(srce_data + e.offset), ((ISO::TypeArray*)type)->Count(), num_verts, srce_stride);
 
-		if (id == "position") {
-			dest_type = DXGI_FORMAT_R32G32B32_FLOAT;
-		} else if (id == "normal") {
-			dest_type = DXGI_FORMAT_R16G16B16A16_SNORM;
-		} else if (id == "smooth_normal") {
-			name		= "normal";
-			usage_index	= 1;
-			dest_type	= DXGI_FORMAT_R16G16B16A16_SNORM;
-		} else if (id == "colour") {
-			dest_type = DXGI_FORMAT_R8G8B8A8_UNORM;
-			name		= "color";
-		} else if (id == "centre") {
-			name		= "position";
-			usage_index = 1;
-			dest_type	= DXGI_FORMAT_R32G32B32_FLOAT;
-		} else if (id == "texcoord") {
-			if (mult == 1) {
-				dest_type	= DXGI_FORMAT_R16G16_FLOAT;
-			} else {
-				dest_type = DXGI_FORMAT_R16G16B16A16_FLOAT;
-				mult		/= 2;
-				usage_index	*= mult;
+		#if 1
+			switch (usage.usage) {
+				case USAGE_POSITION:
+					dest_type = DXGI_FORMAT_R32G32B32_FLOAT;
+					break;
+				case USAGE_NORMAL:
+					dest_type = DXGI_FORMAT_R16G16B16A16_SNORM;
+					break;
+				case USAGE_COLOR:
+					dest_type = DXGI_FORMAT_R8G8B8A8_UNORM;
+					break;
+				case USAGE_TEXCOORD:
+					if (mult == 1) {
+						dest_type	= DXGI_FORMAT_R16G16_FLOAT;
+					} else {
+						dest_type	= DXGI_FORMAT_R16G16B16A16_FLOAT;
+						mult		/= 2;
+						usage.index	*= mult;
+					}
+					tex_index	= usage.index + mult;
+					break;
+				case USAGE_TANGENT:
+					dest_type	= DXGI_FORMAT_R8G8B8A8_UNORM;
+					break;
+				case USAGE_BLENDWEIGHT:
+					dest_type	= DXGI_FORMAT_R16G16B16A16_UNORM;
+					break;
+				case USAGE_BLENDINDICES:
+					dest_type	= DXGI_FORMAT_R8G8B8A8_UINT;
+					break;
+				default:
+					usage.usage	= USAGE_TEXCOORD;
+					usage.index	= tex_index++;
+					break;
 			}
-			tex_index	= usage_index + mult;
-		} else if (id == "tangent") {
-			dest_type	= DXGI_FORMAT_R8G8B8A8_UNORM;
-		} else if (id == "weights") {
-			dest_type	= DXGI_FORMAT_R16G16B16A16_UNORM;
-		} else if (id == "bones") {
-			dest_type	= DXGI_FORMAT_R8G8B8A8_UINT;
-		} else {
-			name		= "texcoord";
-			usage_index	= tex_index++;
+		#else
+			tag		name	= comp->GetID(i).get_tag();
+			crc32	id		= comp->GetID(i);
+
+			if (name && is_digit(name.end()[-1])) {
+				const char *e = name.end();
+				while (is_digit(e[-1]))
+					--e;
+				from_string(e, usage.index);
+				name	= str(name.begin(), e);
+				id		= crc32(name);
+			}
+
+			if (id == "position") {
+				dest_type = DXGI_FORMAT_R32G32B32_FLOAT;
+			} else if (id == "normal") {
+				dest_type = DXGI_FORMAT_R16G16B16A16_SNORM;
+			} else if (id == "smooth_normal") {
+				usage.usage	= USAGE_NORMAL;
+				usage.index	= 1;
+				dest_type	= DXGI_FORMAT_R16G16B16A16_SNORM;
+			} else if (id == "colour") {
+				dest_type = DXGI_FORMAT_R8G8B8A8_UNORM;
+				usage.usage	= USAGE_COLOR;
+			} else if (id == "centre") {
+				usage.usage	= USAGE_POSITION;
+				usage.index = 1;
+				dest_type	= DXGI_FORMAT_R32G32B32_FLOAT;
+			} else if (id == "texcoord") {
+				if (mult == 1) {
+					dest_type	= DXGI_FORMAT_R16G16_FLOAT;
+				} else {
+					dest_type = DXGI_FORMAT_R16G16B16A16_FLOAT;
+					mult		/= 2;
+					usage.index	*= mult;
+				}
+				tex_index	= usage.index + mult;
+			} else if (id == "tangent") {
+				dest_type	= DXGI_FORMAT_R8G8B8A8_UNORM;
+			} else if (id == "weights") {
+				dest_type	= DXGI_FORMAT_R16G16B16A16_UNORM;
+			} else if (id == "bones") {
+				dest_type	= DXGI_FORMAT_R8G8B8A8_UINT;
+			} else {
+				usage.usage	= USAGE_TEXCOORD;
+				usage.index	= tex_index++;
+			}
+		#endif
 		}
 
-
+		vert_data[i].usage			= usage;
+		vert_data[i].mult			= mult;
 		vert_data[i].srce_type		= srce_type;
 		vert_data[i].srce_offset	= e.offset;
 		vert_data[i].srce_size		= srce_size;
 		vert_data[i].dest_type		= dest_type;
 		vert_data[i].dest_offset	= total;
 		vert_data[i].dest_size		= DXGI_COMPONENTS(dest_type).Bytes();;
-		vert_data[i].usage			= name;
-		vert_data[i].usage_index	= usage_index;
-		vert_data[i].mult			= mult;
 
 		total		+= vert_data[i].dest_size * mult;
 		ncomp2		+= mult;
@@ -689,8 +730,8 @@ ISO_ptr<DX11SubMesh> SubMesh2DX11SubMesh(ISO_ptr<SubMesh> p) {
 			uint32	srce_offset = vert_data[i].srce_offset + vert_data[i].srce_size * j;
 
 			clear(*pve);
-			pve->SemanticName		= vert_data[i].usage;
-			pve->SemanticIndex		= vert_data[i].usage_index;
+			pve->SemanticName		= get_name(vert_data[i].usage.usage);
+			pve->SemanticIndex		= vert_data[i].usage.index;
 			pve->Format				= vert_data[i].dest_type;
 			pve->InputSlot			= 0;
 			pve->AlignedByteOffset	= dest_offset;
@@ -703,10 +744,30 @@ ISO_ptr<DX11SubMesh> SubMesh2DX11SubMesh(ISO_ptr<SubMesh> p) {
 		}
 	}
 
-	p2->ib_offset	= vram_align(16);
-	p2->ib_size		= p->indices.Count() * p->GetVertsPerPrim();
+	auto	indices		= ISO::Browser(_p)["indices"];
+	auto	index0		= indices[0];
+	auto	num_indices	= indices.Count();
+	auto	size_index	= index0.Count();
 
-	copy_n(&p->indices[0][0], (uint16*)ISO::iso_bin_allocator().alloc(p2->ib_size * sizeof(uint16)), p2->ib_size);
+	p2->ib_offset	= vram_align(16);
+	p2->ib_size		= num_indices * size_index;
+
+	switch (index0[0].GetSize()) {
+		case 2:
+			copy_n((uint16*)index0, (uint16*)ISO::iso_bin_allocator().alloc(p2->ib_size * sizeof(uint16)), p2->ib_size);
+			break;
+		case 4:
+			if (num_verts <= 0x10000) {
+				copy_n((uint32*)index0, (uint16*)ISO::iso_bin_allocator().alloc(p2->ib_size * sizeof(uint16)), p2->ib_size);
+			} else {
+				copy_n((uint32*)index0, (uint32*)ISO::iso_bin_allocator().alloc(p2->ib_size * sizeof(uint32)), p2->ib_size);
+				p2->flags |= SubMeshBase::INDEX32;
+			}
+			break;
+	}
+
+	//p2->ib_size		= p->indices.Count() * p->GetVertsPerPrim2();
+	//copy_n(&p->indices[0][0], (uint16*)ISO::iso_bin_allocator().alloc(p2->ib_size * sizeof(uint16)), p2->ib_size);
 	return p2;
 }
 #if 0
@@ -751,29 +812,18 @@ ISO_ptr<DX11SoundBuffer> Sample2DX11SoundBuffer(sample &s) {
 typedef ISO_ptr<ISO_openarray<xint8> >	DX11ShaderCreate[SS_COUNT];
 static ISO::TypeUser	def_DX11Shader("DX11Shader", ISO::getdef<DX11ShaderCreate>(), ISO::TypeUser::WRITETOBIN);
 
-struct D3D_SHADER_MACRO2 : D3D_SHADER_MACRO {
-	D3D_SHADER_MACRO2()				{ Name = Definition = 0; }
-	~D3D_SHADER_MACRO2()			{ iso::free((char*)Name); iso::free((char*)Definition); }
-
-
-	void Set(const string &name, const string &def) {
-		(string&)Name		= name;
-		(string&)Definition	= def;
-	}
-};
-
 //#define D3DCOMPILE_FORCE_VS_SOFTWARE_NO_OPT	(1 << 6)
 //#define D3DCOMPILE_FORCE_PS_SOFTWARE_NO_OPT	(1 << 7)
 
-namespace iso {
-inline size_t from_string(const char *s, D3D_SHADER_MACRO2 &x) {
-	if (const char *e = strchr(s, '=')) {
-		x.Set(str(s, e), e + 1);
-	} else {
-		x.Set(s, "");
+int get_model(const char* profile) {
+	int	model = 0;
+	string_scan	ss(profile);
+	if (ss.scan_skip('_')) {
+		model = ss.get<int>() << 8;
+		if (ss.check('_'))
+			model += ss.get<int>();
 	}
-	return strlen(s);
-}
+	return model;
 }
 
 class DX11IncludeHandler : public ID3DInclude, protected IncludeHandler {
@@ -790,6 +840,26 @@ class DX11IncludeHandler : public ID3DInclude, protected IncludeHandler {
 	}
 public:
 	DX11IncludeHandler(const filename *fn, const char *incs) : IncludeHandler(fn, incs)	{}
+};
+
+class DX12IncludeHandler : public com<IDxcIncludeHandler>, protected IncludeHandler {
+	struct Blob : com<IDxcBlob> {
+		malloc_block	b;
+	public:
+		LPVOID STDMETHODCALLTYPE GetBufferPointer()	{ return unconst(b.begin()); }
+		SIZE_T STDMETHODCALLTYPE GetBufferSize()	{ return b.size(); }
+		Blob(malloc_block &&b) : b(b) {}
+	};
+
+	HRESULT STDMETHODCALLTYPE LoadSource(const char16 *filename, IDxcBlob **blob) {
+		if (auto m = open(str8(filename))) {
+			*blob	= new Blob(move(m));
+			return S_OK;
+		}
+		return E_FAIL;
+	}
+public:
+	DX12IncludeHandler(const filename *fn, const char *incs) : IncludeHandler(fn, incs)	{}
 };
 
 struct _DX11ShaderCompiler {
@@ -821,20 +891,118 @@ struct _DX11ShaderCompiler {
 	}
 } DX11ShaderCompiler;
 
+
 struct DX11Options {
+	struct Define {
+		string name, definition;
+		Define() {}
+		Define(string_ref name, string_ref definition = nullptr) : name(name), definition(definition) {}
+
+		operator D3D_SHADER_MACRO() const { return {name, definition}; }
+
+		friend size_t from_string(const char *s, Define &x) {
+			if (const char *e = strchr(s, '=')) {
+				x.name = str(s, e);
+				x.definition = e + 1;
+			} else {
+				x.name = s;
+				x.definition = nullptr;
+			}
+			return strlen(s);
+		}
+	};
+
 	static Option option_list[];
 
-	dynamic_array<D3D_SHADER_MACRO2>defines;
-	const char						*incdirs;
-	const char*						privatefn;
-	uint8							optimisation;
-	uint32							flags1;
-	uint32							flags2;
-	bool							compress;
+	dynamic_array<Define>	defines;
+	const char				*incdirs;
+	const char*				privatefn;
+	uint8					optimisation;
+	uint32					flags1;
+	uint32					flags2;
+	bool					compress;
+
+	struct DxcBloc : com<IDxcBlob> {
+		const_memory_block	b;
+	public:
+		LPVOID STDMETHODCALLTYPE GetBufferPointer()	{ return unconst(b.begin()); }
+		SIZE_T STDMETHODCALLTYPE GetBufferSize()	{ return b.size(); }
+
+		DxcBloc(const_memory_block b) : b(b) {}
+		operator IDxcBlob*() { return this; }
+	};
+
 
 	DX11Options(const char *_incdirs, const char *args);
+	HRESULT	Compile(const memory_block &srce, const filename *fn, const char *profile, const char *entry, com_ptr<ID3DBlob> &shader, com_ptr<ID3DBlob> &errors, bool dxc) noexcept;
+	HRESULT	Preprocess(const memory_block &srce, const filename *fn, com_ptr<ID3DBlob> &text, com_ptr<ID3DBlob> &errors);
+};
 
-	HRESULT	Compile(const memory_block &srce, const filename *fn, const char *profile, const char *entry, ID3DBlob **shader, ID3DBlob **errors) noexcept {
+HRESULT	DX11Options::Compile(const memory_block &srce, const filename *fn, const char *profile, const char *entry, com_ptr<ID3DBlob> &shader, com_ptr<ID3DBlob> &errors, bool dxc) noexcept {
+	HRESULT	hr;
+
+	if (dxc) {
+		com_ptr<IDxcCompiler3> compiler;
+		DxcCreateInstance(CLSID_DxcCompiler, COM_CREATE(&compiler));
+
+		dynamic_array<string16>		args;
+		args.push_back(L"-E");
+		args.push_back(entry);
+
+		args.push_back(L"-T");
+		args.push_back(profile);
+
+		//args.push_back(L"-Qstrip_debug");
+		//args.push_back(L"-Qstrip_reflect");
+
+		//args.push_back(DXC_ARG_WARNINGS_ARE_ERRORS); //-WX
+		args.push_back("-Zi"); //DXC_ARG_DEBUG
+		//args.push_back(DXC_ARG_PACK_MATRIX_ROW_MAJOR); //-Zp
+
+		switch (optimisation) {
+			case 0:		args.push_back(L"-O0"); break;
+			case 1:		args.push_back(L"-O1"); break;
+			case 2:		args.push_back(L"-O2"); break;
+			default:	args.push_back(L"-O3"); break;
+		}
+
+		args.push_back(L"-Wno-effects-syntax");
+		args.push_back(L"-D");
+		args.push_back(format_string("SHADER_MODEL=%i", get_model(profile)));
+
+		for (auto &i : defines) {
+			if (i.name) {
+				args.push_back(L"-D");
+				if (i.definition)
+					args.push_back(format_stringi("%0=%1", i.name, i.definition));
+				else
+					args.push_back(i.name);
+			}
+		}
+
+		DX12IncludeHandler	include(fn, incdirs);
+
+		com_ptr<IDxcResult>	result;
+		DxcBuffer	buffer = {
+			srce, srce.size(), 0
+		};
+		hr = compiler->Compile(
+			&buffer,
+			(const char16**)args.begin(), args.size32(),
+			&include,
+			COM_CREATE(&result)
+		);
+		if (SUCCEEDED(hr)) {
+			DXC_OUT_KIND kind = result->PrimaryOutput();
+			com_ptr<IDxcBlobUtf16>	name;
+			if (SUCCEEDED(result->GetOutput(DXC_OUT_OBJECT, COM_CREATE(&shader), &name)) && shader->GetBufferSize() == 0)
+				shader.clear();
+			if (SUCCEEDED(result->GetOutput(DXC_OUT_ERRORS, COM_CREATE(&errors), &name)) && errors->GetBufferSize() == 0)
+				errors.clear();
+		}
+
+	} else {
+
 		uint32	flags = flags1;
 		switch (optimisation) {
 			case 0:		flags |= D3DCOMPILE_OPTIMIZATION_LEVEL0; break;
@@ -842,41 +1010,46 @@ struct DX11Options {
 			case 2:		flags |= D3DCOMPILE_OPTIMIZATION_LEVEL2; break;
 			default:	flags |= D3DCOMPILE_OPTIMIZATION_LEVEL3; break;
 		}
-		if (defines.back().Name)
-			defines.push_back();
+
+		dynamic_array<D3D_SHADER_MACRO>		defs = defines;/*transformc(defines, [](const Define& d)->D3D_SHADER_MACRO {
+			return {d.name, d.definition};
+		});*/
+		Define	def_sm("SHADER_MODEL", to_string(get_model(profile)));
+		defs.push_back(def_sm);
+		defs.push_back({0, 0});
 
 		DX11IncludeHandler	ih(fn, incdirs);
-		HRESULT hr = DX11ShaderCompiler.Compile(srce, srce.length(), *fn,
-			defines, &ih,
+		hr = DX11ShaderCompiler.Compile(srce, srce.length(), *fn,
+			defs, &ih,
 			entry,
 			profile, flags, flags2,
-			shader, errors
+			&shader, &errors
 		);
 
 		if (SUCCEEDED(hr)) {
 			if (compress) {
-				D3D_SHADER_DATA		data2 = {(*shader)->GetBufferPointer(), (*shader)->GetBufferSize()};
-				ID3DBlob			*comp;
-				if (SUCCEEDED(DX11ShaderCompiler.CompressShaders(1, &data2, D3D_COMPRESS_SHADER_KEEP_ALL_PARTS, &comp))) {
-					(*shader)->Release();
-					*shader = comp;
-				}
+				D3D_SHADER_DATA		data2 = {shader->GetBufferPointer(), shader->GetBufferSize()};
+				com_ptr<ID3DBlob>	comp;
+				if (SUCCEEDED(DX11ShaderCompiler.CompressShaders(1, &data2, D3D_COMPRESS_SHADER_KEEP_ALL_PARTS, &comp)))
+					shader = move(comp);
 			}
 		}
-		return hr;
 	}
+	return hr;
+}
 
-	HRESULT	Preprocess(const memory_block &srce, const filename *fn, ID3DBlob **text, ID3DBlob **errors) {
-		if (defines.back().Name)
-			defines.push_back();
+HRESULT	DX11Options::Preprocess(const memory_block &srce, const filename *fn, com_ptr<ID3DBlob> &text, com_ptr<ID3DBlob> &errors) {
+	dynamic_array<D3D_SHADER_MACRO>		defs = transformc(defines, [](const Define &d)->D3D_SHADER_MACRO {
+		return {d.name, d.definition};
+	});
+	defs.push_back({0, 0});
 
-		DX11IncludeHandler	ih(fn, incdirs);
-		return DX11ShaderCompiler.Preprocess(srce, srce.length(), *fn,
-			defines, &ih,
-			text, errors
-		);
-	}
-};
+	DX11IncludeHandler	ih(fn, incdirs);
+	return DX11ShaderCompiler.Preprocess(srce, srce.length(), *fn,
+		defs, &ih,
+		&text, &errors
+	);
+}
 
 Option DX11Options::option_list[] = {
 //	{"I",				read_as<array_entry>(&DX11Options::incdirs)											},	//additional include path
@@ -934,8 +1107,8 @@ DX11Options::DX11Options(const char *_incdirs, const char *args)
 	if (!DX11ShaderCompiler.init())
 		throw_accum("Can't find " << D3DCOMPILER_DLL);
 
-	defines.push_back().Set("PLAT_PC", "");
-	defines.push_back().Set("USE_DX11", "");
+	defines.push_back("PLAT_PC");
+	defines.push_back("USE_DX11");
 
 	for (const char *p = args, *e = string_end(p); p < e; ) {
 		p = skip_whitespace(p);
@@ -995,12 +1168,42 @@ field_value field_names<D3D11_FILTER>::s[] = {
 
 
 struct DX11ErrorCollector : ErrorCollector {
-	void Errors(char *e);
+	const char *base_fn;
+	DX11ErrorCollector(const char *base_fn) : base_fn(base_fn) {}
+	void Errors(string_scan ss, bool dxc);
 };
-void DX11ErrorCollector::Errors(char *e) {
-	string_accum &b = error_builder;
+void DX11ErrorCollector::Errors(string_scan ss, bool dxc) {
+	if (dxc) {
+		while (ss.skip_whitespace().remaining()) {
+			const char *s	= ss.getp();
+			if (!ss.scan_skip(':'))
+				break;
 
-	for (string_scan ss(e); ss.skip_whitespace().remaining(); ) {
+			if (is_digit(ss.peekc())) {
+				if (auto nl = str(s, ss.getp()).rfind('\n')) {
+					s = nl + 1;
+				}
+				filename	fn		= str(s, ss.getp() - 1);
+				uint32		line	= 0, col = 0;
+
+				ss >> line;
+				if (ss.check(':') && ss.peekc() != '\n') {
+					ss >> col;
+					ss.scan_skip(':');
+					auto	tok			= ss.get_token();
+					auto	severity	= tok == "warning:" ? SEV_WARNING : tok == "error:" ? SEV_ERROR : SEV_INFO;
+					if (fn == "hlsl.hlsl")
+						fn = base_fn;
+					Error(severity, 0, ss.get_token(~char_set('\n')), fn, line, col);
+				}
+			} else {
+				Error(SEV_ERROR, 0, ss.get_token(~char_set('\n')), 0, 0, 0);
+			}
+		}
+		return;
+	}
+
+	while (ss.skip_whitespace().remaining()) {
 		const char *s	= ss.getp();
 		filename	fn;
 		uint32		line = 0, col = 0, code = 0;
@@ -1020,11 +1223,9 @@ void DX11ErrorCollector::Errors(char *e) {
 		}
 
 		auto	tok			= ss.get_token();
-		int		severity	= tok == "warning" ? 1 : tok == "error" ? 2 : 0;
-		if (severity) {
-			(severity == 1 ? have_warnings : have_errors) = true;
+		auto	severity	= tok == "warning" ? SEV_WARNING : tok == "error" ? SEV_ERROR : SEV_INFO;
+		if (severity)
 			ss.move(2) >> code;
-		}
 
 		if (ss.peekc() == ':')
 			ss.move(1).skip_whitespace();
@@ -1032,10 +1233,7 @@ void DX11ErrorCollector::Errors(char *e) {
 		if (!ss.scan('\n'))
 			ss.move(int(ss.remaining()));
 
-		count_string	msg	= str(s, ss.getp());
-
-		if (had.insert(entry(code, fn, line, col)))
-			Error(b, code, msg, fn, line);
+		Error(severity, code, str(s, ss.getp()), fn, line, col);
 	}
 }
 
@@ -1109,15 +1307,15 @@ void CalcDXBCHash(dx::DXBC *dxbc) {
 	last[15] = size * 2 + 1;
 	md5.process(last);
 
-	memcpy(dxbc->md5digest, &md5.state.a, 16);
+	memcpy(dxbc->digest, &md5.state.a, 16);
 }
 
 #if 0
 void PatchSamplers(void *data, const map<string, D3D11_SAMPLER_DESC> &samplers) {
 	dx::DXBC	*dxbc	= (dx::DXBC*)data;
-	dx::RDEF	*rdef	= ((dx::DXBC*)data)->GetBlob<dx::RDEF>();
+	dx::ResourceDef	*rdef	= ((dx::DXBC*)data)->GetBlob<dx::ResourceDef>();
 	for (auto &i : rdef->Bindings()) {
-		if (i.type == dx::RDEF::Binding::SAMPLER) {
+		if (i.type == dx::ResourceDef::Binding::SAMPLER) {
 			if (D3D11_SAMPLER_DESC *d = samplers.find(i.name.get(rdef)))
 				i.samples = DX11CompactSampler(*d).u;
 		}
@@ -1126,60 +1324,68 @@ void PatchSamplers(void *data, const map<string, D3D11_SAMPLER_DESC> &samplers) 
 }
 #else
 void PatchSamplers(com_ptr<ID3DBlob> &shader, const map<string, D3D11_SAMPLER_DESC> &samplers) {
-	uint32		size	= (uint32)shader->GetBufferSize();
-	void		*data	= shader->GetBufferPointer();
-	dx::DXBC	*dxbc	= (dx::DXBC*)data;
-	dx::RDEF	*rdef	= ((dx::DXBC*)data)->GetBlob<dx::RDEF>();
-	uint32		add		= 0;
+	uint32			size	= (uint32)shader->GetBufferSize();
+	void			*data	= shader->GetBufferPointer();
+	dx::DXBC		*dxbc	= (dx::DXBC*)data;
 
-	for (auto &i : rdef->Bindings()) {
-		if (i.type == dx::RDEF::Binding::SAMPLER) {
-			if (samplers.find(i.name.get(rdef)))
-				++add;
-		}
-	}
-	if (add) {
-		uint32	size2	= align(size + add * sizeof(D3D11_SAMPLER_DESC), 16);
-		com_ptr<ID3DBlob>	shader2;
-		DX11ShaderCompiler.CreateBlob(size2, &shader2);
+	if (auto rdef = dxbc->GetBlob<dxbc->ResourceDef>()) {
+		uint32	add		= 0;
 
-		void	*data2	= shader2->GetBufferPointer();
-		memcpy(data2, data, size);
-
-		dxbc	= (dx::DXBC*)data2;
-		rdef	= ((dx::DXBC*)data2)->GetBlob<dx::RDEF>();
-
-		D3D11_SAMPLER_DESC	*desc = (D3D11_SAMPLER_DESC*)((uint8*)data2 + size);
 		for (auto &i : rdef->Bindings()) {
-			if (i.type == dx::RDEF::Binding::SAMPLER) {
-				if (auto d = samplers.find(i.name.get(rdef))) {
-					i.samples = (uint8*)desc - (uint8*)&i.samples;
-					*desc++ = *d;
-				}
+			if (i.type == dx::DXBC::BlobT<iso::dx::DXBC::ResourceDef>::Binding::SAMPLER) {
+				//rdef->Binding::SAMPLER) {
+				if (samplers.find(i.name.get(rdef)))
+					++add;
 			}
 		}
 
-		dxbc->size	= size2;
+		if (add) {
+			uint32	size2	= align(size + add * sizeof(D3D11_SAMPLER_DESC), 16);
+			com_ptr<ID3DBlob>	shader2;
+			DX11ShaderCompiler.CreateBlob(size2, &shader2);
 
-		CalcDXBCHash(dxbc);
-		swap(shader, shader2);
+			void	*data2	= shader2->GetBufferPointer();
+			memcpy(data2, data, size);
+
+			dxbc	= (dx::DXBC*)data2;
+			rdef	= dxbc->GetBlob<dxbc->ResourceDef>();
+
+			D3D11_SAMPLER_DESC	*desc = (D3D11_SAMPLER_DESC*)((uint8*)data2 + size);
+			for (auto &i : rdef->Bindings()) {
+				if (i.type == dx::DXBC::BlobT<iso::dx::DXBC::ResourceDef>::Binding::SAMPLER) {
+					//if (i.type == rdef->Binding::SAMPLER) {
+					if (auto d = samplers.find(i.name.get(rdef))) {
+						i.samples = (uint8*)desc - (uint8*)&i.samples;
+						*desc++ = *d;
+					}
+				}
+			}
+
+			dxbc->size	= size2;
+
+			CalcDXBCHash(dxbc);
+			swap(shader, shader2);
+		}
 	}
 }
 #endif
 
-ISO_ptr<void> ReadDX11FX(tag id, istream_ref file, const filename *fn) {
+ISO_ptr<void> ReadDX11FX(tag id, istream_ref file, const filename *fn, bool allow_sm6) {
 	ISO::Browser		vars	= ISO::root("variables");
-	DX11Options				options(vars["incdirs"].GetString(), vars["fxargs"].GetString());
-	DX11ErrorCollector	errors;
+	DX11Options			options(vars["incdirs"].GetString(), vars["fxargs"].GetString());
+	DX11ErrorCollector	errors(*fn);
+
+	if (allow_sm6)
+		options.defines.push_back("HAS_SM6");
 
 	size_t			filelen	= size_t(file.length());
 	malloc_block	srce(filelen);
 	file.readbuff(srce, filelen);
 
 	com_ptr<ID3DBlob>	shader, err;
-	HRESULT hr = options.Preprocess(srce, fn, &shader, &err);
+	HRESULT hr = options.Preprocess(srce, fn, shader, err);
 	if (err)
-		errors.Errors((char*)err->GetBufferPointer());
+		errors.Errors({(char*)err->GetBufferPointer(), err->GetBufferSize()}, false);
 
 	if (!shader || errors.have_errors) {
 		throw(errors.error_builder.detach()->begin());
@@ -1202,9 +1408,17 @@ ISO_ptr<void> ReadDX11FX(tag id, istream_ref file, const filename *fn) {
 		{"SetHullShader",		SS_HULL,	true,},
 		{"SetDomainShader",		SS_LOCAL,	true,},
 		{"SetComputeShader",	SS_PIXEL,	true,},
+		{"SetMeshShader",		SS_LOCAL,	true,},
+		{"SetAmplificationShader",	SS_HULL,true,},
 
 		{"PixelShader",			SS_PIXEL,	false,},
 		{"VertexShader",		SS_VERTEX,	false,},
+		{"GeometryShader",		SS_GEOMETRY,false,},
+		{"HullShader",			SS_HULL,	false,},
+		{"DomainShader",		SS_LOCAL,	false,},
+		{"ComputeShader",		SS_PIXEL,	false,},
+		{"MeshShader",			SS_LOCAL,	false,},
+		{"AmplificationShader",	SS_HULL,	false,},
 	};
 
 	map<string, D3D11_SAMPLER_DESC>	samplers;
@@ -1215,7 +1429,7 @@ ISO_ptr<void> ReadDX11FX(tag id, istream_ref file, const filename *fn) {
 			case cgclib::TECHNIQUE: {
 				cgclib::technique	*cgct	= (cgclib::technique*)i;
 				if (!cgct->passes)
-					errors.Error(0, buffer_accum<256>("No passes in technique ") << cgct->name);
+					errors.Error(errors.SEV_ERROR, 0, buffer_accum<256>("No passes in technique ") << cgct->name);
 
 				ISO_ptr<technique>	tech	= pfx->Append().Create(cgct->name);
 				for (cgclib::item *passes = cgct->passes; passes; passes = passes->next) {
@@ -1239,36 +1453,39 @@ ISO_ptr<void> ReadDX11FX(tag id, istream_ref file, const filename *fn) {
 								if (s.skip_whitespace().getc() != ',')
 									continue;
 							} else {
-								profile = i->state == SS_PIXEL ? "ps_5_0" : "vs_5_0";
-								options.flags1 &= ~D3DCOMPILE_ENABLE_STRICTNESS;
-								options.flags1 |= D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY;
+								if (s.skip_whitespace().check('{')) {
+									profile = s.get_token(tokspec);
+									if (s.skip_whitespace().getc() != ',')
+										continue;
+								} else {
+									profile = i->state == SS_PIXEL ? "ps_5_0" : "vs_5_0";
+									options.flags1 &= ~D3DCOMPILE_ENABLE_STRICTNESS;
+									options.flags1 |= D3DCOMPILE_ENABLE_BACKWARDS_COMPATIBILITY;
+								}
 							}
 
 							count_string	entry	= s.get_token(tokspec);
+							auto			dxc	= get_model(profile) >= 0x600;
 
 							com_ptr<ID3DBlob>	shader, err;
-							HRESULT hr = options.Compile(srce, fn, profile, string(entry), &shader, &err);
+							HRESULT hr = options.Compile(srce, fn, profile, string(entry), shader, err, dxc);
 							if (err)
-								errors.Errors((char*)err->GetBufferPointer());
+								errors.Errors({(char*)err->GetBufferPointer(), err->GetBufferSize()}, dxc);
 
 							if (shader) {
-							#if 1
-								PatchSamplers(shader, samplers);
-								uint32		size	= (uint32)shader->GetBufferSize();
-								void		*data	= shader->GetBufferPointer();
-							#else
-								uint32		size	= (uint32)shader->GetBufferSize();
-								void		*data	= shader->GetBufferPointer();
-								PatchSamplers(data, samplers);
-							#endif
-								memcpy(*(*pass)[i->state].Create(0, size), data, size);
 								got_shader		= true;
+								if (!errors.have_errors) {
+									PatchSamplers(shader, samplers);
+									uint32		size	= (uint32)shader->GetBufferSize();
+									void		*data	= shader->GetBufferPointer();
+									memcpy(*(*pass)[i->state].Create(0, size), data, size);
+								}
 							}
 
 						}
 					}
 					if (!got_shader)
-						errors.Error(0, buffer_accum<256>("No shaders in technique ") << cgct->name << ", pass " << cgcp->name);
+						errors.ErrorAlways(errors.SEV_WARNING, 0, buffer_accum<256>("No shaders in technique ") << cgct->name << ", pass " << cgcp->name);
 
 				}
 				break;
@@ -1298,10 +1515,10 @@ ISO_ptr<void> ReadDX11FX(tag id, istream_ref file, const filename *fn) {
 //	MakeDX11Shader
 //-----------------------------------------------------------------------------
 
-ISO_ptr<void> MakeDX11Shader(const ISO_ptr<ISO_openarray<ISO_ptr<string> > > &shader) {
+ISO_ptr<void> MakeDX11Shader(const ISO_ptr<ISO_openarray<ISO_ptr<string>>> &shader) {
 	ISO::Browser		vars	= ISO::root("variables");
-	DX11Options				options(vars["incdirs"].GetString(), vars["fxargs"].GetString());
-	DX11ErrorCollector	errors;
+	DX11Options			options(vars["incdirs"].GetString(), vars["fxargs"].GetString());
+	DX11ErrorCollector	errors(nullptr);
 
 	static struct StateName {
 		const char		*name;
@@ -1325,7 +1542,7 @@ ISO_ptr<void> MakeDX11Shader(const ISO_ptr<ISO_openarray<ISO_ptr<string> > > &sh
 			map<string, D3D11_SAMPLER_DESC>	samplers;
 			HRESULT							hr;
 
-			hr = options.Preprocess(memory_block(s->begin(), s->length()), 0, &output, &err);
+			hr = options.Preprocess(memory_block(s->begin(), s->length()), 0, output, err);
 
 			if (output) {
 				cgclib::item *items = ParseFX((char*)output->GetBufferPointer());
@@ -1337,9 +1554,9 @@ ISO_ptr<void> MakeDX11Shader(const ISO_ptr<ISO_openarray<ISO_ptr<string> > > &sh
 			}
 
 			err.clear();
-			hr = options.Compile(memory_block(s->begin(), s->length()), 0, i->profile, "main", &output, &err);
+			hr = options.Compile(memory_block(s->begin(), s->length()), 0, i->profile, "main", output, err, false);
 			if (err)
-				errors.Errors((char*)err->GetBufferPointer());
+				errors.Errors({(char*)err->GetBufferPointer(), err->GetBufferSize()}, false);
 
 			if (output) {
 			#if 1
@@ -1370,11 +1587,11 @@ ISO_ptr<void> MakeDX11Shader(const ISO_ptr<ISO_openarray<ISO_ptr<string> > > &sh
 
 class PlatformDX11 : Platform {
 public:
-	PlatformDX11() : Platform("dx11") {
+	PlatformDX11(const char *platform) : Platform(platform) {
 		ISO::getdef<DX11Buffer>();
 		ISO::getdef<DX11Texture>();
 		ISO::getdef<DX11SubMesh>();
-//		ISO::getdef<PCSoundBuffer>();
+		//ISO::getdef<PCSoundBuffer>();
 		ISO_get_cast(MakeDX11Buffer);
 		ISO_get_cast(Bitmap2DX11Texture);
 		ISO_get_cast(HDRBitmap2DX11Texture);
@@ -1389,27 +1606,19 @@ public:
 		return PT_LITTLEENDIAN;
 	}
 	ISO_ptr<void>	ReadFX(tag id, istream_ref file, const filename *fn) {
-		return ReadDX11FX(id, file, fn);
+		return ReadDX11FX(id, file, fn, false);
 	}
 	ISO_ptr<void>	MakeShader(const ISO_ptr<ISO_openarray<ISO_ptr<string> > > &shader) {
 		return MakeDX11Shader(shader);
 	}
 
-} platform_dx11;
+} platform_dx11("dx11");
 
-class PlatformDX12 : Platform {
+class PlatformDX12 : PlatformDX11 {
 public:
-	PlatformDX12() : Platform("dx12") {
-	}
-	type	Set() {
-		Redirect<DataBuffer,	DX11Buffer>();
-		Redirect<Texture,		DX11Texture>();
-		Redirect<SampleBuffer,	sample>();
-		Redirect<SubMeshPtr,	DX11SubMesh>();
-		return PT_LITTLEENDIAN;
-	}
+	PlatformDX12() : PlatformDX11("dx12") {}
 	ISO_ptr<void>	ReadFX(tag id, istream_ref file, const filename *fn) {
-		return ReadDX11FX(id, file, fn);
+		return ReadDX11FX(id, file, fn, true);
 	}
 	ISO_ptr<void>	MakeShader(const ISO_ptr<ISO_openarray<ISO_ptr<string> > > &shader) {
 		return MakeDX11Shader(shader);

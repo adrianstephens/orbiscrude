@@ -7,18 +7,15 @@
 
 namespace ISO {
 
-template<typename R, typename T> struct def<_read_as<R,T>> { Type* operator&() { return getdef<R>(); } };
-
 #ifndef SCENEGRAPH_H
 ISO_DEFCALLBACK(Texture, ISO_ptr_machine<void>);
+ISO_DEFCALLBACK(DataBuffer, ISO_ptr_machine<void>);
 #endif
 
-ISO_DEFUSERCOMPV(GlyphInfo, u, v, w, s, k, flags);
-
-ISO_DEFUSERCOMPV(Font, 
-	firstchar, numchars, height, baseline, top, spacing, outline,
-	glyph_info, tex
-);
+ISO_DEFUSERCOMPV(TexGlyphInfo, w, s, k, flags, u, v);
+ISO_DEFUSERCOMPV(TexFont, height, baseline, top, spacing, firstchar, numchars, outline, glyph_info, tex);
+ISO_DEFUSERCOMPV(SlugGlyphInfo, w, s, k, flags, indices_offset, curves_offset, bands, y, h);
+ISO_DEFUSERCOMPV(SlugFont, height, baseline, top, spacing, firstchar, numchars, glyph_buffer, band_buffer, indices_buffer, curve_buffer, palette);
 }
 
 #endif	// FONT_ISO_H

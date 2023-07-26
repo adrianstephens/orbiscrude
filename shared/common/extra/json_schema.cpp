@@ -58,7 +58,7 @@ const auto rel_json_pointer	= non_neg_int + ("#" | json_pointer);
 
 template <typename T> void range_check(const JSONpath &path, const T value, const T min, const T max, const error_handler &e) {
 	if (!between(value, min, max))
-		e(path, buffer_accum<256>() << "Value " << value << " should be in interval [" << min << "," << max << "] but is not!");
+		e(path, (buffer_accum<256>() << "Value " << value << " should be in interval [" << min << "," << max << "] but is not!").begin());
 }
 
 void rfc3339_date_check(const JSONpath &path, const count_string &value, const error_handler &e) {
@@ -151,7 +151,7 @@ format_checker checkers[] = {
 content_checker content_checker_base64([](const JSONpath &path, content &c, const error_handler &e) {
 	if (c.encoding == cstr("base64")) {
 		char_set	cs("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=");
-		if (auto p = string_find((const char*)c.data.begin(), ~cs, (const char*)c.data.end()))
+		if (auto p = string_find((const char*)c.data.begin(), (const char*)c.data.end(), ~cs))
 			e(path, string("base64-decode: unexpected character in encode string:") + *p);
 
 		malloc_block	temp = transcode(base64_decoder(), c.data);
@@ -533,9 +533,9 @@ class schema_string : public schema {
 		if (minLength.exists() || maxLength.exists()) {
 			auto	len = chars_count<char32>(instance.get(""));
 			if (minLength.exists() && len < minLength)
-				e(path, format_string("instance is too short as per minLength:%i", minLength));
+				e(path, format_string("instance is too short as per minLength:%i", get(minLength)));
 			if (maxLength.exists() && len > maxLength)
-				e(path, format_string("instance is too long as per maxLength:%i", maxLength));
+				e(path, format_string("instance is too long as per maxLength:%i", get(maxLength)));
 		}
 
 		if (contentEncoding.exists() || contentMediaType.exists()) {
@@ -608,13 +608,13 @@ template<typename T> class schema_numeric : public schema {
 		T value = instance.template get<T>(); // conversion of JSON to value_type
 
 		if (multipleOf.exists() && not_multiple_of(value, multipleOf))
-			e(path, "instance is not a multiple of " + to_string(multipleOf));
+			e(path, "instance is not a multiple of " + to_string(get(multipleOf)));
 
 		if (maximum.exists() && (exclusiveMaximum ? value >= maximum : value > maximum))
-			e(path, "instance exceeds maximum of " + to_string(maximum));
+			e(path, "instance exceeds maximum of " + to_string(get(maximum)));
 
 		if (minimum.exists() && (exclusiveMinimum ? value <= minimum : value < minimum))
-			e(path, "instance is below minimum of " + to_string(minimum));
+			e(path, "instance is below minimum of " + to_string(get(minimum)));
 	}
 	void walk(walker *w) { w->handle(this); }
 

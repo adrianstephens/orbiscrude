@@ -280,7 +280,7 @@ public:
 //	Pin
 //-----------------------------------------------------------------------------
 
-class Pin : public com2<IQualityControl, com<IPin> > {
+class Pin : public com<IQualityControl, com<IPin> > {
 	friend class Filter;
 protected:
 	string			name;
@@ -407,7 +407,7 @@ public:
 //	InputPin
 //-----------------------------------------------------------------------------
 
-class InputPin : public com2<IMemInputPin, Pin> {
+class InputPin : public com<IMemInputPin, Pin> {
 	com_ptr2<IMemAllocator>	allocator;
 	bool	read_only;
 public:
@@ -466,7 +466,7 @@ public:
 //	SeekPosPassThru
 //-----------------------------------------------------------------------------
 
-class SeekPosPassThru : public com2<IMediaSeeking, TDispatch<IMediaPosition> > {
+class SeekPosPassThru : public com<IMediaSeeking, TDispatch<IMediaPosition> > {
 	com_ptr<IPin>	pin;
 
 	template<typename T> bool	GetPeer(T **p) {

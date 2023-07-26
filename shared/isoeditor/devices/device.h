@@ -13,7 +13,7 @@ namespace app {
 using namespace iso;
 using namespace win;
 
-typedef virtfunc<ISO_ptr<void>(const Control&)>	DeviceCreate;
+typedef virtfunc<ISO_ptr_machine<void>(const Control&)>	DeviceCreate;
 template<typename T> struct DeviceCreateT : DeviceCreate { DeviceCreateT() : DeviceCreate(static_cast<T*>(this)) {} };
 win::Bitmap LoadPNG(win::ID id);
 
@@ -114,7 +114,7 @@ public:
 	fixed_string<1024>	pw;
 	int					ret;
 
-	LRESULT	Proc(UINT message, WPARAM wParam, LPARAM lParam);
+	LRESULT	Proc(MSG_ID message, WPARAM wParam, LPARAM lParam);
 	operator bool()				{ return ret != 0;	}
 	operator const char *()		{ return url.blank() ? NULL : (const char*)url; }
 

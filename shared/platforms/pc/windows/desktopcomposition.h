@@ -8,7 +8,7 @@
 #include "winrt/Windows.UI.Composition.Desktop.0.h"
 #include "winrt/Windows.UI.Xaml.h"
 #include "winrt/Windows.UI.Xaml.Hosting.0.h"
-#include "base/colour.h"
+#include "extra/colour.h"
 
 namespace composition {
 using namespace iso;

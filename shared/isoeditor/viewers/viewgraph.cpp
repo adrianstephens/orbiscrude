@@ -44,7 +44,7 @@ class MiniWindow : public Window<MiniWindow> {
 	dynamic_array<Link>		linksfrom;
 
 public:
-	LRESULT Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+	LRESULT Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 		switch (message) {
 
 			case WM_CREATE: {
@@ -182,7 +182,7 @@ class ViewGraph : public aligned<Window<ViewGraph>, 16> {
 	Point	mouse;
 
 public:
-	LRESULT Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+	LRESULT Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 		switch (message) {
 			case WM_CREATE: {
 				break;

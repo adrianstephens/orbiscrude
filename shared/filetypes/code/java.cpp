@@ -477,15 +477,15 @@ uint32 get_len(const uint8 *p) {
 class DisassemblerJAVA : public Disassembler {
 public:
 	const char*	GetDescription() override { return "JAVA bytecode"; }
-	State*		Disassemble(const iso::memory_block &block, uint64 addr, SymbolFinder sym_finder) override;
+	State*		Disassemble(const_memory_block block, uint64 addr, SymbolFinder sym_finder) override;
 	static uint8		GetNextOp(byte_reader &r, uint32 *params);
 } javabytecode;
 
-Disassembler::State *DisassemblerJAVA::Disassemble(const iso::memory_block &block, uint64 addr, SymbolFinder sym_finder) {
+Disassembler::State *DisassemblerJAVA::Disassemble(const_memory_block block, uint64 addr, SymbolFinder sym_finder) {
 	StateDefault	*state	= new StateDefault;
 	const uint8		*p		= block;
 	while (p < block.end()) {
-		uint32	offset		= p - (uint8*)block;
+		uint32	offset		= p - block;
 		uint8	op			= *p;
 		PARAMS	params		= ops[op].params;
 		uint8	len;
@@ -543,7 +543,7 @@ Disassembler::State *DisassemblerJAVA::Disassemble(const iso::memory_block &bloc
 		}
 
 		p += len;
-		state->lines.push_back((const char*)ba);
+		state->lines.push_back(ba);
 	}
 	return state;
 }

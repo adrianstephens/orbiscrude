@@ -364,6 +364,12 @@
     <ClCompile Include="shared\common\utilities.cpp">
       <Filter>common</Filter>
     </ClCompile>
+    <ClCompile Include="shared\filetypes\code\pdb_ctype.cpp">
+      <Filter>filetypes</Filter>
+    </ClCompile>
+    <ClCompile Include="shared\common\comms\ip.cpp">
+      <Filter>common\comms</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="shared\common\base\algorithm.h">
@@ -716,6 +722,27 @@
     </ClInclude>
     <ClInclude Include="shared\common\base\sparse_array.h">
       <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\isoeditor\viewers\viewbin.h">
+      <Filter>viewers</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\base\coroutine.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\base\deferred.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\base\constants.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\base\block.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\base\colour.h">
+      <Filter>common\base</Filter>
+    </ClInclude>
+    <ClInclude Include="shared\common\extra\marshal.h">
+      <Filter>common\extra</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

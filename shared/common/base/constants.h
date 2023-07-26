@@ -5,6 +5,14 @@
 
 namespace iso {
 
+template<typename K> auto	operator==(const constant<K>, const constant<K>)	{ return true; }
+template<typename K> auto	operator!=(const constant<K>, const constant<K>)	{ return false; }
+template<typename K> auto	operator< (const constant<K>, const constant<K>)	{ return false; }
+template<typename K> auto	operator<=(const constant<K>, const constant<K>)	{ return true; }
+template<typename K> auto	operator> (const constant<K>, const constant<K>)	{ return false; }
+template<typename K> auto	operator>=(const constant<K>, const constant<K>)	{ return true; }
+
+
 template<typename K, typename A> auto	operator==(A a, const constant<K> &b)->enable_if_t<use_constants<A>, decltype(a == b.template co<A>())>	{ return a == b.template co<A>(); }
 template<typename K, typename A> auto	operator!=(A a, const constant<K> &b)->enable_if_t<use_constants<A>, decltype(a != b.template co<A>())>	{ return a != b.template co<A>(); }
 template<typename K, typename A> auto	operator< (A a, const constant<K> &b)->enable_if_t<use_constants<A>, decltype(a <  b.template co<A>())>	{ return a <  b.template co<A>(); }
@@ -40,8 +48,11 @@ template<typename X, typename Y>	struct __add	{ template<typename R> static cons
 template<typename X, typename Y>	struct __sub	{ template<typename R> static constexpr R as() { return X::template as<R>() - Y::template as<R>(); } };
 template<typename X, typename Y>	struct __mul	{ template<typename R> static constexpr R as() { return X::template as<R>() * Y::template as<R>(); } };
 template<typename X, typename Y>	struct __div	{ template<typename R> static constexpr R as() { return X::template as<R>() / Y::template as<R>(); } };
-template<typename N>				struct __sqrt;
-template<typename N, typename B>	struct __log;
+//template<typename N>				struct __sqrt;
+//template<typename N, typename B>	struct __log;
+
+template<typename N>				struct __sqrt	{ template<typename R> static constexpr R as(); };
+template<typename N, typename B>	struct __log	{ template<typename R> static R as(); };
 
 template<typename K> struct constant_type<__abs<K>> : constant_type<K> {};
 template<typename K> struct constant_type<__neg<K>> : constant_type<K> {};
@@ -88,6 +99,11 @@ template<typename X, typename Y> 	constexpr auto	operator+(const constant<X> &x,
 template<typename X, typename Y> 	constexpr auto	operator+(const constant<__neg<X>> &x, const constant<Y> &y)		{ return y - -x; }
 template<typename X, typename Y> 	constexpr auto	operator+(const constant<__neg<X>> &x, const constant<__neg<Y>> &y)	{ return -(-x + -y); }
 template<int X, int Y> 				constexpr auto	operator+(const constant_int<X> &x, const constant_int<Y> &y)		{ return constant_int<X + Y>(); }
+template<typename X>				constexpr auto	operator+(const constant<X> &x, decltype(zero))						{ return x; }
+template<typename Y>				constexpr auto	operator+(decltype(zero), const constant<Y> &y)						{ return y; }
+template<int X>						constexpr auto	operator+(const constant_int<X> &x, decltype(zero))					{ return x; }
+template<int Y>						constexpr auto	operator+(decltype(zero), const constant_int<Y> &y)					{ return y; }
+constexpr auto 	operator+(decltype(zero), decltype(zero))					{ return zero; }
 
 //sub
 template<typename X, typename Y> 	constexpr auto	operator-(const constant<X>&, const constant<Y>&)					{ return constant<__sub<X,Y>>(); }
@@ -113,16 +129,21 @@ template<typename X, typename YN, typename YD>	constexpr auto 	mul2(const consta
 
 template<typename Y> 				constexpr auto 	operator*(decltype(one), const constant<Y> &y)						{ return y; }
 template<typename X> 				constexpr auto 	operator*(const constant<X> &x, decltype(one))						{ return x; }
+template<typename Y> 				constexpr auto 	operator*(decltype(zero), const constant<Y> &y)						{ return zero; }
+template<typename X> 				constexpr auto 	operator*(const constant<X> &x, decltype(zero))						{ return zero; }
 					 				constexpr auto 	operator*(decltype(one), decltype(one))								{ return one; }
 
-template<int Y> 					constexpr auto 	operator*(decltype(zero), const constant_int<Y>&)					{ return zero; }
-template<int X> 					constexpr auto 	operator*(const constant_int<X>&, decltype(zero))					{ return zero; }
+template<int Y> 					constexpr auto 	operator*(const decltype(zero)&, const constant_int<Y>&)			{ return zero; }
+template<int X> 					constexpr auto 	operator*(const constant_int<X>&, const decltype(zero)&)			{ return zero; }
 template<int Y> 					constexpr auto 	operator*(decltype(one), const constant_int<Y>& y)					{ return y; }
 template<int X> 					constexpr auto 	operator*(const constant_int<X>& x, decltype(one))					{ return x; }
+constexpr auto 	operator*(decltype(zero), decltype(one))					{ return zero; }
+constexpr auto 	operator*(decltype(one), decltype(zero))					{ return zero; }
+constexpr auto 	operator*(decltype(zero), decltype(zero))					{ return zero; }
 
 template<typename X, typename Y> 	constexpr auto 	operator*(const constant<X> &x, const constant<Y> &y)				{ return mul2(x, y); }
 template<int X, int Y> 				constexpr auto 	operator*(const constant_int<X>&, const constant_int<Y>&)			{ return constant_int<X * Y>(); }
-template<typename X> 				constexpr auto 	operator*(const constant<__sqrt<X>>&, const constant<__sqrt<X>>&)	{ return constant<X>(); }
+//template<typename X> 				constexpr auto 	operator*(const constant<__sqrt<X>>&, const constant<__sqrt<X>>&)	{ return constant<X>(); }
 template<typename X, typename Y> 	constexpr auto 	operator*(const constant<__neg<X>> &x, const constant<Y> &y)		{ return -mul2(-x, y); }
 template<typename X> 				constexpr auto 	operator*(const constant<__neg<X>> &x, decltype(one))				{ return x; }
 template<typename XN, typename XD, typename Y>	constexpr auto 	operator*(const constant<__div<XN,XD>> &x, const constant<Y> &y)	{ return (constant<XN>() * y) / constant<XD>(); }
@@ -143,12 +164,25 @@ template<typename X, typename Y> 	constexpr auto 	operator/(const constant<__neg
 template<typename X, typename Y> 	constexpr auto 	operator/(const constant<X> &x, const constant<__neg<Y>> &y)		{ return -(x / -y); }
 template<typename X, typename Y> 	constexpr auto 	operator/(const constant<__neg<X>> &x, const constant<__neg<Y>> &y)	{ return -x / -y; }
 
+template<typename A, typename B1, typename B2> constexpr auto	operator+(const constant<__mul<A,B1>>&, const constant<__mul<A,B2>>&)	{
+	return constant<A>() * (constant<B1>() + constant<B2>());
+}
+
+template<typename N1, typename D1, typename N2, typename D2> constexpr auto	operator+(const constant<__div<N1,D1>>&, const constant<__div<N2,D2>>&)	{
+	return (constant<N1>() * constant<D2>() + constant<N2>() *constant<D1>()) / (constant<D1>() * constant<D2>());
+}
+
+template<typename N, typename M, typename D> constexpr auto	operator+(const constant<__mul<N,M>>&, const constant<__div<N,D>>&)	{
+	return constant<N>() * (constant<M>() + one / constant<D>());
+}
+
 //sqrt
 template<typename X> constexpr auto	sqrt(const constant<X>&)						{ return constant<__sqrt<X> >(); }
 template<typename X> constexpr auto	sqrt(const constant<__mul<X,X>>&)				{ return constant<X>(); }
-template<typename N> constexpr auto	sqrt(decltype(one))								{ return one; }
-template<typename X, typename Y> constexpr auto	sqrt(const constant<__div<X, Y>>&)	{ return constant<__div<__sqrt<X>, __sqrt<Y> > >(); }
+constexpr auto	sqrt(const decltype(one)&)				{ return one; }
+template<typename X, typename Y> constexpr auto	sqrt(const constant<__div<X, Y>>&)	{ return sqrt(constant<X>()) / sqrt(constant<Y>()); }//constant<__div<__sqrt<X>, __sqrt<Y> > >(); }
 template<typename X> constexpr auto	rsqrt(const constant<X> &x)						{ return one / sqrt(x); }
+template<typename X, typename Y>	constexpr auto 	operator*(const constant<__sqrt<X>>&, const constant<__sqrt<Y>>&)	{ return sqrt(constant<X>() * constant<Y>()); }
 
 //log
 template<typename B, typename X> 	constexpr auto	log_const(const constant<X>&)	{ return constant<__log<X, B>>(); }
@@ -170,7 +204,8 @@ template<typename X, typename Y, Y...y> constexpr auto	operator-(const constant<
 template<typename X, typename Y, Y...y> constexpr auto	operator*(const constant<X> &x, const meta::value_list<Y, y...>&)	{ return type_list<decltype(x * constant_int<y>())...>(); }
 template<typename X, typename Y, Y...y> constexpr auto	operator/(const constant<X> &x, const meta::value_list<Y, y...>&)	{ return type_list<decltype(x / constant_int<y>())...>(); }
 template<typename X, typename Y, Y...y> constexpr auto	operator%(const constant<X> &x, const meta::value_list<Y, y...>&)	{ return type_list<decltype(x % constant_int<y>())...>(); }
-	
+template<typename X, X...x>				constexpr auto	operator*(const meta::value_list<X, x...>&, const _zero&)			{ return meta::value_list<X, (x, X(0))...>(); }
+
 template<typename X, typename Y, X...x> constexpr auto	operator+(const meta::value_list<X, x...>&, const constant<Y> &y)	{ return type_list<decltype(constant_int<x>() + y)...>(); }
 template<typename X, typename Y, X...x> constexpr auto	operator-(const meta::value_list<X, x...>&, const constant<Y> &y)	{ return type_list<decltype(constant_int<x>() - y)...>(); }
 template<typename X, typename Y, X...x> constexpr auto	operator*(const meta::value_list<X, x...>&, const constant<Y> &y)	{ return type_list<decltype(constant_int<x>() * y)...>(); }
@@ -194,6 +229,7 @@ template<typename...X, typename...Y> 	constexpr auto	operator-(const type_list<X
 template<typename...X, typename...Y> 	constexpr auto	operator*(const type_list<X...>&, const type_list<Y...>&)			{ return type_list<decltype(X() * Y())...>(); }
 template<typename...X, typename...Y> 	constexpr auto	operator/(const type_list<X...>&, const type_list<Y...>&)			{ return type_list<decltype(X() / Y())...>(); }
 template<typename...X, typename...Y> 	constexpr auto	operator%(const type_list<X...>&, const type_list<Y...>&)			{ return type_list<decltype(X() % Y())...>(); }
+
 
 // axioms:
 

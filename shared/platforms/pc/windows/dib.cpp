@@ -141,7 +141,7 @@ void GetCursorColor(DeviceContext &dc, const Icon::Params &info, const block<DIB
 		for (int y = 0, y1 = min(size1.y / 2, dest.size<2>()); y < y1; y++) {
 			uint8	*and_mask	= mask + scan * y;
 			uint8	*xor_mask	= mask + scan * (y + size1.y / 2);
-			DIBHEADER::RGBQUAD	*d	= dest[y];
+			DIBHEADER::RGBQUAD	*d	= dest[y].begin();
 			for (int x = 0; x < scan; x++, and_mask++, xor_mask++) {
 				uint8	and8	= *and_mask, xor8 = *xor_mask;
 				for (int i = 0; i < 8; i++, and8 <<= 1, xor8 <<= 1, ++d)

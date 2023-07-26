@@ -14,7 +14,10 @@ namespace iso {
 //	function - type inspector for functions
 //-----------------------------------------------------------------------------
 
-template<typename F> struct function : function<decltype(&F::operator())> {};
+template<typename F> struct function : function<decltype(&F::operator())> {
+	typedef function<decltype(&F::operator())>	B;
+};
+
 template<typename F> struct function<F*> : function<F> {};
 
 // types of functions
@@ -36,10 +39,18 @@ template<class t, typename r, typename... pp> struct function<r(t::*)(pp...)> {
 	typedef type_list<pp...> P;
 	typedef R (t::*F)(pp...);
 
+	static	r	lambda_to_static_end(pp... p, void *me)		{ return (*static_cast<T*>(me))(p...); }
+
+
 	template<F f, class U>							static	r	to_static(U *me, pp... p)			{ return (static_cast<T*>(me)->*f)(p...); }
 	template<F f, class U, class R, typename... PP>	static	R	to_static(U *me, PP... p)			{ return (static_cast<T*>(me)->*f)(p...); }
 	template<F f, class U>							static	r	to_static(void *me, pp... p)		{ return (static_cast<T*>((U*)me)->*f)(p...); }
 	template<F f, class U, class R, typename... PP>	static	R	to_static(void *me, PP... p)		{ return (static_cast<T*>((U*)me)->*f)(p...); }
+
+	template<F f, class U>							static	r	to_static_end(pp... p, U *me)		{ return (static_cast<T*>(me)->*f)(p...); }
+	template<F f, class U, class R, typename... PP>	static	R	to_static_end(PP... p, U *me)		{ return (static_cast<T*>(me)->*f)(p...); }
+	template<F f, class U>							static	r	to_static_end(pp... p, void *me)	{ return (static_cast<T*>((U*)me)->*f)(p...); }
+	template<F f, class U, class R, typename... PP>	static	R	to_static_end(PP... p, void *me)	{ return (static_cast<T*>((U*)me)->*f)(p...); }
 };
 
 template<class t, typename r, typename... pp> struct function<r(t::*)(pp...) const> {
@@ -49,10 +60,18 @@ template<class t, typename r, typename... pp> struct function<r(t::*)(pp...) con
 	typedef type_list<pp...> P;
 	typedef R (t::*F)(pp...) const;
 
+	static	r	lambda_to_static_end(pp... p, void *me)		{ return (*static_cast<T*>(me))(p...); }
+
+
 	template<F f, class U>							static	r	to_static(U *me, pp... p)			{ return (static_cast<T*>(me)->*f)(p...); }
 	template<F f, class U, class R, typename... PP>	static	R	to_static(U *me, PP... p)			{ return (static_cast<T*>(me)->*f)(p...); }
 	template<F f, class U>							static	r	to_static(void *me, pp... p)		{ return (static_cast<T*>((U*)me)->*f)(p...); }
 	template<F f, class U, class R, typename... PP>	static	R	to_static(void *me, PP... p)		{ return (static_cast<T*>((U*)me)->*f)(p...); }
+
+	template<F f, class U>							static	r	to_static_end(pp... p, U *me)		{ return (static_cast<T*>(me)->*f)(p...); }
+	template<F f, class U, class R, typename... PP>	static	R	to_static_end(PP... p, U *me)		{ return (static_cast<T*>(me)->*f)(p...); }
+	template<F f, class U>							static	r	to_static_end(pp... p, void *me)	{ return (static_cast<T*>((U*)me)->*f)(p...); }
+	template<F f, class U, class R, typename... PP>	static	R	to_static_end(PP... p, void *me)	{ return (static_cast<T*>((U*)me)->*f)(p...); }
 };
 
 #ifdef USE_STDCALL
@@ -86,6 +105,13 @@ template<class t, typename r, typename... pp> struct function<r(__stdcall t::*)(
 
 #endif
 
+#define make_staticfunc(f)			function<decltype(f)>::template to_static<f>
+#define make_staticfunc2(f,T)		function<decltype(f)>::template to_static<f,T>
+#define make_staticfunc1(T,f)		function<decltype(&T::f)>::template to_static<&T::f, T>
+#define make_staticfunc_end(f)		function<decltype(f)>::template to_static_end<f>
+#define make_staticlambda_end(f)	function<decltype(f)>::lambda_to_static_end
+
+
 // types of functions defined by typelists
 template<typename r, typename L> struct function_p;
 template<typename r, typename... pp> struct function_p<r, type_list<pp...>> : function<r(pp...)>	{};
@@ -95,6 +121,21 @@ template<typename F> struct strip_param1;
 template<typename F> struct strip_param1<F*> : strip_param1<F> {};
 template<typename r, typename p1, typename... pp> struct strip_param1<r(p1, pp...)> : function<r(pp...)> {};
 
+// call a function using array
+template<typename T, size_t N> class dynamic_array;
+
+template<typename A, int I> struct _call_array_param {
+	A	&a;
+	_call_array_param(A &a) : a(a) {}
+	template<typename T> operator T() const { return a[I]; }
+	template<typename T> operator range<T>() const { return slice(a, I); }
+	template<typename T> operator dynamic_array<T,0>() const { return slice(a, I); }
+};
+template<typename F, typename A, size_t... I, typename...P> force_inline auto _call_array(F f, A&& a, index_list<I...>&&, P&&...p) {
+//	return f(forward<P>(p)..., a[I]...);
+	return f(forward<P>(p)..., _call_array_param<A,I>(a)...);
+}
+
 // call a function using tuple
 template<int O, typename F, typename P, size_t... I> force_inline auto call(F f, const TL_tuple<P> &p, index_list<I...>&&) {
 	return f(p.template get<O + I>()...);
@@ -103,6 +144,8 @@ template<int O, typename F, typename P, size_t... I> force_inline auto call(F f,
 template<int O, class T, typename F, typename P, size_t... I> force_inline typename function<F>::R call(T &t, F f, const TL_tuple<P> &p, index_list<I...>&&) {
 	return (t.*f)(p.template get<O + I>()...);
 }
+
+template<typename F, typename...P, typename A>	force_inline auto call_array(F f, A&& a, P&&...p)		{ return _call_array(f, forward<A>(a), meta::make_index_list<function<F>::N - sizeof...(P)>(), forward<P>(p)...); }
 
 template<typename F,typename P>					force_inline auto call(F f, const TL_tuple<P> &p)		{ return call<0>(f, p, meta::make_index_list<function<F>::N>()); }
 template<int O, typename F,typename P>			force_inline auto call(F f, const TL_tuple<P> &p)		{ return call<O>(f, p, meta::make_index_list<function<F>::N>()); }
@@ -115,14 +158,17 @@ template<class T, int O, typename F,typename P>	force_inline auto call(T &t, F f
 //	must inherit from this, because obj assumed relative to virtfunc itself
 //-----------------------------------------------------------------------------
 
+template<class T, T> struct virtfunc_maker;
+#define make_virtfunc(f)	virtfunc_maker<decltype(f),f>
+
 template<class F> class virtfunc;
 
 template<class R, typename... PP> class virtfunc<R(PP...)> {
 protected:
 	typedef R	F(PP...);
 	R		(*f)(virtfunc*, PP...);
-	template<class T>					static	R	thunk(virtfunc *me, PP... pp)	{ return (*static_cast<T*>(me))(pp...);	}
-	template<class T, typename F2, F2 f>static	R	thunk(virtfunc *me, PP... pp)	{ return ((static_cast<T*>(me))->*f)(pp...); }
+	template<class T>						static	R	thunk(virtfunc *me, PP... pp)	{ return (*static_cast<T*>(me))(pp...);	}
+	template<class T, typename F2, F2 f2>	static	R	thunk(virtfunc *me, PP... pp)	{ return ((static_cast<T*>(me))->*f2)(pp...); }
 public:
 	force_inline R	operator()(PP... pp)				{ return (*f)(this, pp...); }
 	force_inline R	operator()(PP... pp)		const	{ return (*f)(unconst(this), pp...); }
@@ -137,6 +183,7 @@ public:
 	constexpr virtfunc()							: f(nullptr)	{}
 	constexpr virtfunc(R (*f)(virtfunc*, PP...))	: f(f)			{}
 	template<class T> constexpr virtfunc(T*)		: f(thunk<T>)	{}
+	template<class T, typename F2, F2 f2> virtfunc(const virtfunc_maker<F2 T::*, f2> &m) : f(thunk<T,F2,f2>) {}
 };
 
 template<class F, class L, class> struct lambda_virt;
@@ -162,6 +209,15 @@ template<class V, class L> V *new_lambda(L &&lambda) {
 }
 
 //-----------------------------------------------------------------------------
+//	virtfunc_ref - constructed from reference
+//-----------------------------------------------------------------------------
+
+template<class F> struct virtfunc_ref : virtfunc<F> {
+	force_inline virtfunc_ref(const virtfunc_ref &)			= default;
+	template<class T>	force_inline virtfunc_ref(T &me)	: virtfunc<F>(&me) {}
+};
+
+//-----------------------------------------------------------------------------
 //	callback
 //	function pointer + object pointer
 //-----------------------------------------------------------------------------
@@ -170,6 +226,7 @@ template<class T, T> struct callback_maker;
 template<class C, typename F, F C::*f> struct callback_maker<F C::*, f> {
 	C	*c;
 	callback_maker(C *c = 0) : c(c)	{}
+//	template<typename...T> decltype(auto)	operator()(T&&...t) { return c->f(forward<T>(t)...); }
 };
 #define make_callback(c, f)		callback_maker<decltype(f),f>(c)
 
@@ -213,8 +270,6 @@ public:
 	template<class T>	constexpr callback(T *me, R (*f)(T*, PP...))	: me((void*)me), f((ftype*)f)	{}
 	template<class T>	constexpr callback(T *me)						: me((void*)me), f(thunk<T>)	{}
 	template<class F2, F2 f2> callback(const callback_maker<F2, f2> &m) : me(m.c), f(thunk<noref_t<decltype(*m.c)>,F2,f2>) {}
-
-	//template<class T>	static constexpr callback make(T&& me)	{ return &me; }
 };
 
 template<class R, typename... PP> class callback<R(PP...) const> {
@@ -252,9 +307,23 @@ public:
 	template<class T>	constexpr callback(const T *me)								: me(me), f(thunk<T>)	{}
 	template<class F2, F2 f2> callback(callback_maker<F2, f2> &&m) : me(m.c), f(thunk<noref_t<decltype(*m.c)>,F2,f2>) {}
 	template<class F2, F2 f2> callback(const callback_maker<F2, f2> &m) : me(m.c), f(thunk<noref_t<decltype(*m.c)>,F2,f2>) {}
-
-	//template<class T>	static constexpr callback make(const T& me)	{ return &me; }
 };
+
+template<class F, class T> typename callback<F>::ftype		*callback_function()				{ return callback<F>::template thunk<T>; }
+template<class F, class T> typename callback<F>::ftype		*callback_function(T*)				{ return callback<F>::template thunk<T>; }
+template<class F, class T> typename callback<F>::ftype_end	*callback_function_end()			{ return callback<F>::template thunk_end<T>; }
+template<class F, class T> typename callback<F>::ftype_end	*callback_function_end(T*)			{ return callback<F>::template thunk_end<T>; }
+
+template<class F, class T> typename callback<F>::ftype		*stdcall_callback_function()		{ return callback<F>::template stdcall_thunk<T>; }
+template<class F, class T> typename callback<F>::ftype		*stdcall_callback_function(T*)		{ return callback<F>::template stdcall_thunk<T>; }
+template<class F, class T> typename callback<F>::ftype_end	*stdcall_callback_function_end()	{ return callback<F>::template stdcall_thunk_end<T>; }
+template<class F, class T> typename callback<F>::ftype_end	*stdcall_callback_function_end(T*)	{ return callback<F>::template stdcall_thunk_end<T>; }
+
+
+//-----------------------------------------------------------------------------
+//	async_callback
+//	function pointer + (allocated) object
+//-----------------------------------------------------------------------------
 
 template<class F, int S = 64> class async_callback;
 
@@ -264,14 +333,15 @@ protected:
 	using callback<F>::me;
 	async_callback(const async_callback &b) = delete;
 public:
-	async_callback()		{}
-	async_callback(_none)	{}
+	async_callback()				{}
+	async_callback(const _none&)	{}
 	async_callback(async_callback &&b) : callback<F>(b) {
 		del		= b.del;
 		b.me	= 0;
 	}
 	template<class T>	async_callback(T &&me)	: callback<F>(dup(forward<T>(me))), del(deleter_fn<T>) {}
 	template<class T>	async_callback(T *me, void(*del)(void*) = deleter_fn<T>) : callback<F>(me), del(del) {}
+	template<class F2, F2 f2> async_callback(callback_maker<F2, f2> &&m, void(*del)(void*) = deleter_fn<void>) : callback<F>(m), del(del) {}
 
 	async_callback& operator=(async_callback &&b) {
 		raw_swap(*this, b);
@@ -292,8 +362,8 @@ template<class F, int S> class async_callback : public async_callback<F, 0> {
 	using B::me;
 	uint8	space[S];
 public:
-	async_callback()		{}
-	async_callback(_none)	{}
+	async_callback()				{}
+	async_callback(const _none&)	{}
 	async_callback(async_callback &&b) : B(move((B&)b)) {
 		if (me == b.space) {
 			memcpy(space, b.space, S);
@@ -302,6 +372,7 @@ public:
 	}
 	template<class T, enable_if_t<(sizeof(T) <=S),int> = 0> async_callback(T &&me)	: B(new(space) T(forward<T>(me)), destructor_fn<T>) {}
 	template<class T, enable_if_t<(sizeof(T) > S),int> = 0> async_callback(T &&me)	: B(dup(forward<T>(me)), deleter_fn<T>) {}
+	template<class F2, F2 f2> async_callback(callback_maker<F2, f2> &&m, void(*del)(void*) = destructor_fn<int>) : B(move(m), del) {}
 
 	template<class T, enable_if_t<(sizeof(T) <=S),int> = 0>	void operator=(T &&me2)	{
 		if (me)
@@ -312,10 +383,9 @@ public:
 	template<class T, enable_if_t<(sizeof(T) > S),int> = 0>	void operator=(T &&me2)	{ B::operator=(forward<T>(me2)); }
 };
 
-template<class F> struct virtfunc_ref : virtfunc<F> {
-	force_inline virtfunc_ref(const virtfunc_ref &)			= default;
-	template<class T>	force_inline virtfunc_ref(T &me)	: virtfunc<F>(&me) {}
-};
+//-----------------------------------------------------------------------------
+//	callback_ref - constructed from reference
+//-----------------------------------------------------------------------------
 
 template<class F> struct callback_ref : callback<F> {
 	force_inline callback_ref()			{}
@@ -323,7 +393,7 @@ template<class F> struct callback_ref : callback<F> {
 	force_inline callback_ref(callback_ref&& b)				: callback<F>(b)	{}
 	force_inline callback_ref(const callback_ref& b)		: callback<F>(b)	{}
 	force_inline callback_ref(async_callback<F>& b)			: callback<F>(b)	{}
-	force_inline callback_ref(_none)						: callback<F>(nullptr) {}
+	force_inline callback_ref(const _none&)					: callback<F>(nullptr) {}
 
 	template<class T>	force_inline callback_ref(T *me)	: callback<F>(me) {}
 	template<class T>	force_inline callback_ref(T &&me)	: callback<F>(&me) {}
@@ -331,36 +401,6 @@ template<class F> struct callback_ref : callback<F> {
 
 	force_inline callback_ref& operator=(const callback_ref &)= default;
 };
-
-template<typename F> struct function_tocallback;
-template<typename C, typename R, typename...PP> struct function_tocallback<R(C*,PP...)> { typedef callback<R(PP...)> type; };
-
-template<class T, T> struct funtion_maker;
-template<class C, typename F, F C::*f> struct funtion_maker<F C::*, f> {
-	template<typename F2> operator virtfunc<F2>() const {
-		virtfunc<F2> vf;
- 		vf.template bind<C, F C::*, f>();
-		return vf;
-	}
-	operator typename callback<F>::ftype*		()	const { return callback<F>::template thunk<C, F C::*, f>; }
-//	operator typename callback<F>::ftype_end*	()	const { return callback<F>::template thunk_end<void, C, F C::*, f>; }
-	template<typename F2> operator F2*			()	const { typedef typename function_tocallback<F2>::type cb; return cb::template thunk<C, F C::*, f>; }
-};
-
-#define make_virtfunc(f)		funtion_maker<decltype(f),f>
-#define make_staticfunc(f)		function<decltype(f)>::template to_static<f>
-#define make_staticfunc2(f,T)	function<decltype(f)>::template to_static<f,T>
-#define make_staticfunc1(T,f)	function<decltype(&T::f)>::template to_static<&T::f, T>
-
-template<class F, class T> typename callback<F>::ftype		*callback_function()				{ return callback<F>::template thunk<T>; }
-template<class F, class T> typename callback<F>::ftype		*callback_function(T*)				{ return callback<F>::template thunk<T>; }
-template<class F, class T> typename callback<F>::ftype_end	*callback_function_end()			{ return callback<F>::template thunk_end<T>; }
-template<class F, class T> typename callback<F>::ftype_end	*callback_function_end(T*)			{ return callback<F>::template thunk_end<T>; }
-
-template<class F, class T> typename callback<F>::ftype		*stdcall_callback_function()		{ return callback<F>::template stdcall_thunk<T>; }
-template<class F, class T> typename callback<F>::ftype		*stdcall_callback_function(T*)		{ return callback<F>::template stdcall_thunk<T>; }
-template<class F, class T> typename callback<F>::ftype_end	*stdcall_callback_function_end()	{ return callback<F>::template stdcall_thunk_end<T>; }
-template<class F, class T> typename callback<F>::ftype_end	*stdcall_callback_function_end(T*)	{ return callback<F>::template stdcall_thunk_end<T>; }
 
 //-----------------------------------------------------------------------------
 //	callbacks
@@ -379,6 +419,7 @@ public:
 
 //-----------------------------------------------------------------------------
 //	watched
+//	add to container to watch modifications
 //-----------------------------------------------------------------------------
 
 template<typename T, typename K> struct watched_base : T {

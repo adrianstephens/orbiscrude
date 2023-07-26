@@ -14,7 +14,7 @@ extern class PLISTFileHandler plist;
 
 class XcodeFileHandler : public FileHandler {
 protected:
-	bool					Write(ISO::Browser b, ostream_ref file, const filename &fn);
+	bool			Write2(ISO::Browser b, ostream_ref file, const filename &fn);
 
 	const char*		GetExt() override { return "pbxproj"; }
 	const char*		GetDescription() override { return "Xcode 4 project";	}
@@ -24,7 +24,7 @@ protected:
 	}
 
 	bool			WriteWithFilename(ISO_ptr<void> p, const filename &fn) override {
-		return Write(ISO::Browser(p), FileOutput(fn).me(), filename(fn).rem_dir());
+		return Write2(ISO::Browser(p), FileOutput(fn).me(), filename(fn).rem_dir());
 	}
 } xcode;
 
@@ -33,7 +33,7 @@ class XcodeDirHandler : public XcodeFileHandler {
 	//ISO_ptr<void>	ReadWithFilename(tag id, const filename &fn) override;
 	bool			WriteWithFilename(ISO_ptr<void> p, const filename &fn) override {
 		return (is_dir(fn) || create_dir(fn))
-			&& Write(ISO::Browser(p), FileOutput(filename(fn).add_dir("project.pbxproj")).me(), fn);
+			&& Write2(ISO::Browser(p), FileOutput(filename(fn).add_dir("project.pbxproj")).me(), fn);
 	}
 } xcode_dir;
 
@@ -43,7 +43,7 @@ struct entry {
 		ref()					: p(0) {}
 		ref(entry *_p)			: p(_p) {}
 		ref(const char *_name)	: p(new entry(_name)) {}
-		bool	operator==(const char *n)	const	{ return p->name == n; }
+		bool	operator==(string_ref n)	const	{ return p->name == n; }
 		bool	operator==(entry *r)		const	{ return p == r; }
 		operator entry*()					const	{ return p; }
 		entry*	operator->()				const	{ return p; }
@@ -82,11 +82,36 @@ ISO_ptr<anything> make_item(const char *isa, const char *hashname, const char *n
 	return make_item(identifier("isa", ISO_ptr<void>(isa)), hashname, name);
 }
 
-template<typename T, typename V> T &add_entry(dynamic_array<T> &a, const V &v) {
+template<typename T, typename V> static T &add_entry(dynamic_array<T> &a, const V &v) {
+#if 1
+	for (auto i = begin(a), e = end(a); i != e; ++i) {
+		if (*i == v)
+			return *i;
+	}
+	return a.push_back(v);
+#else
 	T *r = find(a, v);
 	return r == a.end() ? a.push_back(v) : *r;
+#endif
 }
+#if 0
+static entry::ref &add_entry(dynamic_array<entry::ref> &a, const ISO::tag &v) {
+	typedef entry::ref	T;
+	//for (auto i = begin(a), e = end(a); i != e; ++i) {
+	//	if (*i == v)
+	//		return *i;
+	//}
+	//return a.push_back(v);
 
+//	auto	comp = op_bind_second<equal_to, const ISO::tag&>(v);
+	for (auto i = begin(a), e = end(a); i != e; ++i) {
+		//if (comp(*i))
+			return *i;
+	}
+	return a.push_back(v);
+
+}
+#endif
 class tracewriter : public stream_defaults<tracewriter> {
 public:
 	size_t		writebuff(const void *buffer, size_t size)		{ trace_accum() << str((char*)buffer, size); return size;	}
@@ -94,7 +119,7 @@ public:
 };
 typedef writer_mixout<tracewriter> TraceOutput;
 
-bool XcodeFileHandler::Write(ISO::Browser b, ostream_ref file, const filename &fn) {
+bool XcodeFileHandler::Write2(ISO::Browser b, ostream_ref file, const filename &fn) {
 	static const char *settings[][2] = {
 		{"ALWAYS_SEARCH_USER_PATHS",			"NO"			 },
 		{"CLANG_CXX_LANGUAGE_STANDARD",			"gnu++0x"		 },

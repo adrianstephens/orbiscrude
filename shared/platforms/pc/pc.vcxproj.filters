@@ -144,6 +144,9 @@
     <ClCompile Include="dx\dxgi_helpers.cpp">
       <Filter>dx</Filter>
     </ClCompile>
+    <ClCompile Include="dx12\dx12_helpers.cpp">
+      <Filter>dx12</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <MARMASM Include="arm64\fcontext.asm">
@@ -152,10 +155,5 @@
   </ItemGroup>
   <ItemGroup>
     <MASM Include="x64\fcontext.asm" />
-  </ItemGroup>
-  <ItemGroup>
-    <IsoCmd Include="winrt\generate.ix">
-      <Filter>winrt</Filter>
-    </IsoCmd>
   </ItemGroup>
 </Project>

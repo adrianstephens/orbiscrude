@@ -1809,6 +1809,7 @@ size_t	from_string(const char* s, mpf &f) {
 //-----------------------------------------------------------------------------
 //	TEST
 //-----------------------------------------------------------------------------
+#ifdef ISO_TEST
 
 struct test_mpi {
 	test_mpi() {
@@ -1899,5 +1900,7 @@ struct test_mpi {
 		}
 	};
 };// _test_mpi;
+
+#endif
 
 } // namespace iso

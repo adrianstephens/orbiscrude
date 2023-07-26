@@ -20,6 +20,5 @@
 		<PlatformToolset Condition="'$(Clang)'=='true'">ClangCL</PlatformToolset>
 		<PlatformToolset Condition="'$(Clang)'=='true' and '$(VisualStudioVersion)'=='15.0'">v141_clang_c2</PlatformToolset>
 		<PreferredToolArchitecture>x64</PreferredToolArchitecture>
-		<WindowsTargetPlatformVersion>10.0.19041.0</WindowsTargetPlatformVersion>
 	</PropertyGroup>
 </Project>

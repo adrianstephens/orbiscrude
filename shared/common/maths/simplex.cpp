@@ -394,7 +394,7 @@ public:
 	void	Probe(const convex2& a, float eps, int max_out);
 	int		GetVerts(float2* A, int max_size) {
 		int	i = 0;
-		for (auto first = heap.front(), facet = first; i < max_size;) {
+		for (auto first = heap.top(), facet = first; i < max_size;) {
 			A[i] = facet->v0;
 			++i;
 			if ((facet = facet->adjFacets[1]) == first)
@@ -516,7 +516,7 @@ public:
 	bool		PenetrationIteration(const convex2& a, const convex2& b);
 	int			GetVerts(float2* A, float2* B, int max_size) {
 		int	i = 0;
-		for (auto first = heap.front(), facet = first; i < max_size;) {
+		for (auto first = heap.top(), facet = first; i < max_size;) {
 			A[i] = facet->ab.xy;
 			B[i] = facet->ab.zw;
 			++i;

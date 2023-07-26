@@ -43,15 +43,17 @@ template<typename T> struct FaceData {
 	T		v[3];
 };
 
-float TestCache(uint16 *faces, int nfaces, int cachesize);
+float TestCache(range<uint16*> faces, int cachesize);
 
-template<typename T> T *MeshOptimise(T *faces, uint32 nfaces, uint32 nverts, const MeshCacheParams &params) {
+template<typename T> void MeshOptimise(range<T*> faces, uint32 nverts, const MeshCacheParams &params) {
+	uint32	nfaces = faces.size32() / 3;
 	if (nfaces == 0)
-		return faces;
+		return;
+
 //	float	test1 = TestCache(faces, nfaces, 16);
 
-	FaceData<T>	*fd			= new FaceData<T>[nfaces];
-	VertData<T>	*vd			= new VertData<T>[nverts];
+	temp_array<FaceData<T>>	fd(nfaces);
+	temp_array<VertData<T>>	vd(nverts);
 
 	for (uint32 i = 0; i < nfaces; i++) {
 		for (uint32 j = 0; j < 3; j++) {
@@ -159,11 +161,9 @@ template<typename T> T *MeshOptimise(T *faces, uint32 nfaces, uint32 nverts, con
 //	float	test32	= TestCache(faces, nfaces, 32);
 //	float	test1024= TestCache(faces, nfaces, 1024);
 //	float	test4 = TestCache(faces, nfaces, 4);
-
-	return faces;
 }
 
-float TestCache(uint16 *faces, uint32 nfaces, uint32 cachesize) {
+float TestCache(range<uint16*> faces, uint32 cachesize) {
 	int	cache[1024];
 	for (uint32 i = 0; i < cachesize; i++)
 		cache[i] = -1;
@@ -171,8 +171,7 @@ float TestCache(uint16 *faces, uint32 nfaces, uint32 cachesize) {
 	uint32	cp		= 0;
 	uint32	misses	= 0;
 
-	for (uint32 i = 0; i < nfaces * 3; i++) {
-		uint32	v	= faces[i];
+	for (auto v : faces) {
 		bool	hit	= false;
 		for (uint32 i = 0; i < cachesize; i++) {
 			if (cache[i] == v) {
@@ -187,19 +186,20 @@ float TestCache(uint16 *faces, uint32 nfaces, uint32 cachesize) {
 		}
 	}
 
-	return float(misses) / nfaces;
+	return float(misses) / faces.size() * 3;
 }
 
-template uint32 *MeshOptimise(uint32 *faces, uint32 nfaces, uint32 nverts, const MeshCacheParams &params);
-template uint16 *MeshOptimise(uint16 *faces, uint32 nfaces, uint32 nverts, const MeshCacheParams &params);
+template void MeshOptimise(range<uint32*> faces, uint32 nverts, const MeshCacheParams &params);
+template void MeshOptimise(range<uint16*> faces, uint32 nverts, const MeshCacheParams &params);
 
 //-----------------------------------------------------------------------------
 //	MeshSort sort faces from back to front
 //-----------------------------------------------------------------------------
 
-template<typename T> T *MeshSort(T *faces, uint32 nfaces, stride_iterator<float3p> verts, param(float3) centre) {
-	float	*d	= new float[nfaces];
-	uint32	*x	= new uint32[nfaces];
+template<typename T> void MeshSort(range<T*> faces, stride_iterator<float3p> verts, param(float3) centre) {
+	uint32		nfaces = faces.size() / 3;
+	temp_array<float>	d(nfaces);
+	temp_array<uint32>	x = int_range(nfaces);
 
 	for (uint32 i = 0; i < nfaces; i++) {
 		float3	v0	= (float3)verts[faces[3 * i + 0]];
@@ -207,23 +207,16 @@ template<typename T> T *MeshSort(T *faces, uint32 nfaces, stride_iterator<float3
 		float3	v2	= (float3)verts[faces[3 * i + 2]];
 		float3	n	= normalise(cross(v1 - v0, v2 - v0));
 		d[i] = dot(n, v0.xyz - centre);
-		x[i] = i;
 	}
-	sort(x, x + nfaces, [d](uint32 a, uint32 b)	{ return d[a] < d[b]; });
+	sort(x, [&d](uint32 a, uint32 b) { return d[a] < d[b]; });
 
-	T	*old_faces	= new T[3 * nfaces];
-	memcpy(old_faces, faces, 3 * nfaces * sizeof(T));
+	temp_array<T>	old_faces(faces);
 	for (uint32 i = 0; i < nfaces; i++)
-		memcpy(faces + 3 * i, old_faces + 3 * x[i],  sizeof(T) * 3);
-	delete[] old_faces;
-	delete[] x;
-	delete[] d;
-
-	return faces;
+		memcpy(faces.begin() + 3 * i, old_faces.begin() + 3 * x[i], sizeof(T) * 3);
 }
 
-template uint32 *MeshSort<uint32>(uint32 *faces, uint32 nfaces, stride_iterator<float3p> verts, param(float3) centre);
-template uint16 *MeshSort<uint16>(uint16 *faces, uint32 nfaces, stride_iterator<float3p> verts, param(float3) centre);
+template void MeshSort<uint32>(range<uint32*> faces, stride_iterator<float3p> verts, param(float3) centre);
+template void MeshSort<uint16>(range<uint16*> faces, stride_iterator<float3p> verts, param(float3) centre);
 
 //-----------------------------------------------------------------------------
 //	normals
@@ -421,7 +414,7 @@ void MeshBuilder::AddFace(uint32 v0, uint32 v1, uint32 v2) {
 int MeshBuilder::TryAdd(uint32 v) {
 	auto	&i = map[v];
 	if (i == 0) {
-		if (num_verts >= 65535)
+		if (num_verts >= max_verts_per_mesh)
 			return -1;
 		i = ++num_verts;
 	}
@@ -487,7 +480,7 @@ void ModelBuilder::InitVerts(const ISO::Type *_vert_type, uint32 _max_verts) {
 void ModelBuilder::Purge(const void *verts) {
 	SubMesh *mesh = _AddMesh((uint32)NumVerts(), (uint32)NumFaces());
 	MeshBuilder::Purge(mesh->indices, mesh->VertData(), verts, vert_size);
-	mesh->UpdateExtents();
+	mesh->UpdateExtent();
 }
 
 //-----------------------------------------------------------------------------
@@ -531,8 +524,8 @@ void OffsetBones(const ISO_ptr<void> &verts, uint32 count1, uint32 count2, int b
 }
 
 void AppendIndices(SubMesh *d, SubMesh *s, int dcount, int scount, int offset) {
-	uint16			*pd = &d->indices[0][0] + dcount * 3;
-	const uint16	*ps = &s->indices[0][0];
+	auto		*pd = &d->indices[0][0] + dcount * 3;
+	const auto	*ps = &s->indices[0][0];
 	for (int i = 0; i < scount * 3; i++)
 		*pd++ = *ps++ + offset;
 }
@@ -590,7 +583,7 @@ void ModelMerge(Model3 *model1, Model3 *model2, const float3x4 *tm, int bone_off
 			AppendIndices(sm1, sm2, icount1, icount2, count1);
 
 			if (tm) {
-				sm1->UpdateExtents();
+				sm1->UpdateExtent();
 			} else {
 				submesh1->minext	= min(float3(submesh1->minext), float3(submesh2->minext));
 				submesh1->maxext	= max(float3(submesh1->maxext), float3(submesh2->maxext));
@@ -742,20 +735,19 @@ const ISO::Type *RemoveDoubles(const ISO::Type *type) {
 ISO_ptr<void> RemoveDoubles(ISO_ptr<void> verts) {
 	ISO::Browser	b(verts);
 
-	auto	&comp		= *(const ISO::TypeComposite*)b[0].GetTypeDef()->SkipUser();
-	bool	has_doubles = false;
-	for (auto &el : comp) {
-		if (has_doubles = HasDoubles(el.type))
-			break;
+	if (auto comp = ISO::TypeAs<ISO::COMPOSITE>(b[0].GetTypeDef()->SkipUser())) {
+		for (auto &el : *comp) {
+			if (HasDoubles(el.type)) {
+				ISO::TypeCompositeN<64>	builder(0);
+				for (auto &el : *comp)
+					builder.Add(RemoveDoubles(el.type), comp->GetID(comp->index_of(el)));
+
+				return ISO_conversion::convert(verts, new ISO::TypeArray(builder.Duplicate(), b.Count()));
+			}
+		}
 	}
-	if (!has_doubles)
-		return verts;
 
-	ISO::TypeCompositeN<64>	builder(0);
-	for (auto &el : comp)
-		builder.Add(RemoveDoubles(el.type), comp.GetID(comp.index_of(el)));
-
-	return ISO_conversion::convert(verts, new ISO::TypeArray(builder.Duplicate(), b.Count()));
+	return verts;
 }
 
 } // namespace iso

@@ -22,7 +22,10 @@ template<> const char *field_names<dx::SHADERSTAGE>::s[]	= {
 	"DS",
 	"HS",
 	"GS",
+	"AS",
+	"MS",
 	"CS",
+	"LIB",
 };
 
 field_prefix<const char*> field_names<DXGI_FORMAT>::s	= {"DXGI_FORMAT_", (const char*[]) {
@@ -268,17 +271,17 @@ template<> field	fields<DXGI_SAMPLE_DESC>::f[] =	{
 	0,
 };
 
-field_value field_names<D3D_FEATURE_LEVEL>::s[]	= {
-	{"D3D_FEATURE_LEVEL_9_1",	0x9100},
-	{"D3D_FEATURE_LEVEL_9_2",	0x9200},
-	{"D3D_FEATURE_LEVEL_9_3",	0x9300},
-	{"D3D_FEATURE_LEVEL_10_0",	0xa000},
-	{"D3D_FEATURE_LEVEL_10_1",	0xa100},
-	{"D3D_FEATURE_LEVEL_11_0",	0xb000},
-	{"D3D_FEATURE_LEVEL_11_1",	0xb100},
-	{"D3D_FEATURE_LEVEL_12_0",	0xc000},
-	{"D3D_FEATURE_LEVEL_12_1",	0xc100}
-};
+field_prefix<field_value> field_names<D3D_FEATURE_LEVEL>::s	= {"D3D_FEATURE_LEVEL_", (field_value[]) {
+	{"9_1",		0x9100},
+	{"9_2",		0x9200},
+	{"9_3",		0x9300},
+	{"10_0",	0xa000},
+	{"10_1",	0xa100},
+	{"11_0",	0xb000},
+	{"11_1",	0xb100},
+	{"12_0",	0xc000},
+	{"12_1",	0xc100}
+}};
 
 field_prefix<const char*> field_names<D3D_SHADER_VARIABLE_CLASS>::s	= {"D3D_SVC_", (const char*[]) {
 	"SCALAR",

@@ -1192,7 +1192,7 @@ string_accum &IntelOp::Dump(string_accum &sa, Disassembler::SymbolFinder sym_fin
 
 class DisassemblerIntel : public Disassembler {
 public:
-	static Disassembler::InstructionInfo GetInstructionInfo(const iso::memory_block &block, IntelOp::ARCH arch) {
+	static Disassembler::InstructionInfo GetInstructionInfo(const_memory_block block, IntelOp::ARCH arch) {
 		IntelOp		op(arch);
 		int			len	= op.Parse(block) - block;
 		Disassembler::InstructionInfo	info(len);
@@ -1212,7 +1212,7 @@ public:
 class DisassemblerIntel16 : public DisassemblerIntel {
 public:
 	virtual	const char*	GetDescription()	{ return "Intel 16"; }
-	virtual Disassembler::InstructionInfo	GetInstructionInfo(const iso::memory_block &block) {
+	virtual Disassembler::InstructionInfo	GetInstructionInfo(const_memory_block block) {
 		return DisassemblerIntel::GetInstructionInfo(block, IntelOp::X16);
 	}
 	virtual void		DisassembleLine(string_accum &a, const void *data, uint64 addr, SymbolFinder sym_finder) {
@@ -1223,7 +1223,7 @@ public:
 class DisassemblerIntel32 : public DisassemblerIntel {
 public:
 	virtual	const char*	GetDescription()	{ return "Intel 32"; }
-	virtual Disassembler::InstructionInfo	GetInstructionInfo(const iso::memory_block &block) {
+	virtual Disassembler::InstructionInfo	GetInstructionInfo(const_memory_block block) {
 		return DisassemblerIntel::GetInstructionInfo(block, IntelOp::X32);
 	}
 	virtual void		DisassembleLine(string_accum &a, const void *data, uint64 addr, SymbolFinder sym_finder) {
@@ -1234,7 +1234,7 @@ public:
 class DisassemblerIntel64 : public DisassemblerIntel {
 public:
 	virtual	const char*	GetDescription()	{ return "Intel 64"; }
-	virtual Disassembler::InstructionInfo	GetInstructionInfo(const iso::memory_block &block) {
+	virtual Disassembler::InstructionInfo	GetInstructionInfo(const_memory_block block) {
 		return DisassemblerIntel::GetInstructionInfo(block, IntelOp::X64);
 	}
 	virtual void		DisassembleLine(string_accum &a, const void *data, uint64 addr, SymbolFinder sym_finder) {

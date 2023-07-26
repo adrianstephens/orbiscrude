@@ -15,7 +15,7 @@ uint32 C_type_composite::alignment() const {
 	return a;
 }
 
-C_element *C_type_struct::add(string_param &&id, const C_type* type, C_element::ACCESS access, bool is_static) {
+C_element *C_type_struct::add(string_ref id, const C_type* type, C_element::ACCESS access, bool is_static) {
 	if (is_static)
 		return add_static(move(id), type, access);
 
@@ -39,17 +39,24 @@ C_element *C_type_struct::add(string_param &&id, const C_type* type, C_element::
 	return C_type_composite::add(move(id), type, offset, access);
 }
 
-C_element *C_type_struct::add_atoffset(string_param &&id, const C_type* type, uint32 offset, C_element::ACCESS access) {
-	_size	= max(_size, offset + type->size());
+C_element *C_type_struct::add_atoffset(string_ref id, const C_type* type, uint32 offset, C_element::ACCESS access) {
+	_size	= type ? max(_size, offset + type->size()) : 0;
 	return C_type_composite::add(move(id), type, offset, access);
 }
 
-C_element *C_type_struct::add_atbit(string_param &&id, const C_type* type, uint32 bit, C_element::ACCESS access) {
+C_element *C_type_struct::add_atbit(string_ref id, const C_type* type, uint32 bit, C_element::ACCESS access) {
+	//flags |= PACKED;
 	auto	*e		= C_type_composite::add(move(id), type, bit >> 3, access);
 	e->shift = bit & 7;
 	_size	= max(_size, (bit + type->size() + 7) >> 3);
 	return e;
 }
+
+C_type_struct::C_type_struct(string_ref id, FLAGS f, initializer_list<C_element> elements) : C_type_composite(STRUCT, f, move(id)) {
+	for (auto &i : elements)
+		add(i.id, i.type, C_element::ACCESS(i.access), false);
+}
+
 
 const C_element *C_type_composite::get(const char *id, const C_type *type) const {
 	bool	foundid = false;
@@ -127,7 +134,7 @@ C_type *C_types::instantiate(const C_type *type, const char *name, const C_type 
 			}
 			a << '>';
 
-			name = a;
+			name = a.term();
 			if (type = lookup(name))
 				return unconst(type);
 
@@ -212,10 +219,15 @@ CRC32Chash::CRC32Chash(const C_type &t) {
 		case C_type::UNION:
 		case C_type::NAMESPACE: {
 			const C_type_composite &s = static_cast<const C_type_composite&>(t);
-			if (s.id)
-				u = CRC32C::calc(s.id);
-			else
-				u = CRC32C::calc(s.elements.begin(), s.elements.size() * sizeof(C_element));
+			//if (s.id) {
+			//	u = CRC32C::calc(s.id);
+			//} else {
+				for (auto &i : s.elements) {
+					u = CRC32C::calc(i.id, u);
+					u = CRC32C::calc(i.u, u);
+				}
+//				u = CRC32C::calc(s.elements.begin(), s.elements.size() * sizeof(C_element));
+			//}
 			break;
 		}
 		case C_type::ARRAY:		u = CRC32C::calc(&t, sizeof(C_type_array));break;
@@ -279,7 +291,7 @@ string_accum &iso::DumpData(string_accum &sa, const void *data, const C_type *ty
 			uint64	scale = i->scale();
 			if (i->sign()) {
 				int64	s = sign_extend(v, i->num_bits()) + int(v == 0 && i->no_zero());
-				sa << ifelse(scale == 1, formatted(v, flags), formatted(float(s) / scale, flags));
+				sa << ifelse(scale == 1, formatted(s, flags), formatted(float(s) / scale, flags));
 			} else {
 				v += int(v == 0 && i->no_zero());
 				sa << ifelse(scale == 1, formatted(v, flags), formatted(float(v) / scale, flags));
@@ -504,6 +516,7 @@ int iso::NumChildren(const C_type *type) {
 int iso::NumElements(const C_type *type) {
 	if (!type)
 		return 0;
+
 	switch (type->type) {
 		case C_type::ARRAY: {
 			const C_type_array	*a = (const C_type_array*)type;

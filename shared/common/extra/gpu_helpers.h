@@ -13,10 +13,10 @@ namespace iso {
 
 struct _indices {
 	const void	*p;
-	uint32	size;
-	uint32	offset;
+	uint32		size;
+	uint32		offset;
 
-	_indices(const void *_p, uint32 _size, uint32 _offset = 0) : p(_p), size(_size), offset(_offset) {}
+	_indices(const void *p, uint32 size, uint32 offset = 0) : p(p), size(size), offset(offset) {}
 	void*				addr(int i)			const	{ return !p ? 0 : size == 2 ? (void*)((uint16*)p + i) : (void*)((uint32*)p + i); }
 	uint32				operator[](int i)	const	{ return (p ? (size == 2 ? ((uint16*)p)[i] : ((uint32*)p)[i]) : i) + offset; }
 	friend constexpr ptrdiff_t	operator-(const _indices &a, const _indices &b) { return a.size ? ((uint8*)a.p - (uint8*)b.p) / a.size : (uint8*)a.p - (uint8*)b.p; }
@@ -34,17 +34,15 @@ struct indices : _indices {
 		uint32		operator*()						const	{ return (size == 0 ? (uint32)(intptr_t)p : size == 2 ? *(uint16*)p : *(uint32*)p) + offset; }
 		iterator&	operator++()							{ p = (char*)p + (size ? size : 1); return *this; }
 		iterator&	operator+=(int i)						{ p = (char*)p + (size ? size * i : i); return *this; }
-		iterator	operator+(int i)				const	{ return iterator((char*)p + (size ? size * i : i), size, offset); }
+		iterator	operator+(int i)				const	{ return {(char*)p + (size ? size * i : i), size, offset}; }
 	};
-	typedef iterator	const_iterator;
-	typedef uint32		element, reference;
 
-	indices(uint32 _num = 0)	: _indices(0, 0, 0), num(_num) {}
-	indices(const void *p, uint32 size, uint32 offset, uint32 num) : _indices(p, size, offset), num(num) {}
-	template<typename T> indices(const T *p, uint32 offset, uint32 num) : _indices(p, sizeof(T), offset), num(num) {}
-	template<typename T> indices(const dynamic_array<T> &p, uint32 offset = 0) : _indices(p.begin(), sizeof(T), offset), num(p.size32()) {}
-	iterator		begin()		const	{ return iterator(p, size, offset); }
-	iterator		end()		const	{ return iterator((char*)p + (size ? size * num : num), size, offset); }
+	indices(uint32 num = 0)	: _indices(0, 0, 0), num(num) {}
+	indices(const void *p, uint32 size, uint32 offset, uint32 num)			: _indices(p, size, offset), num(num) {}
+	template<typename T> indices(const T *p, uint32 offset, uint32 num)		: _indices(p, sizeof(T), offset), num(num) {}
+	template<typename T> indices(const _ptr_array<T> &p, uint32 offset = 0)	: _indices(p.begin(), sizeof(T), offset), num(p.size32()) {}
+	iterator		begin()		const	{ return {p, size, offset}; }
+	iterator		end()		const	{ return {(char*)p + (size ? size * num : num), size, offset}; }
 	uint32			size32()	const	{ return num; }
 	uint32			max_index()	const	{ return p ? reduce<op_max>(begin(), end()) : num + offset - 1; }
 
@@ -65,7 +63,7 @@ struct Prim2Vert {
 	uint32	prims_to_verts(uint32 n)	const { return n * mul + add + adj; }
 	uint32	verts_to_prims(uint32 n)	const { uint8 a = add + adj; return (max(n, a) - a) / mul; }
 	uint32	verts_per_prim()			const { return mul + add + adj; }
-	uint32	first_vert(uint32 p)		const { return p * mul + adj; }
+	uint32	first_vert(uint32 p)		const { return p * mul; }// + adj; }
 	uint32	first_prim(uint32 v)		const { uint8 a = add + adj; return (max(v, a) - a) / mul; }
 	uint32	last_prim(uint32 v)			const { return (max(v, adj) - adj) / mul; }
 	bool	winding(int p)				const { return !!(p & flip); }
@@ -82,52 +80,48 @@ template<typename I> struct prim_iterator {
 	int			index;
 
 	struct prim {
-		typedef typename iterator_traits<I>::reference reference;
 		struct iterator {
 			prim		&p;
 			int			i;
 			iterator(prim &p, int i) : p(p), i(i)			{}
-			iterator&	operator++()						{ ++i; return *this;}
-			bool		operator==(const iterator &b)		{ return i == b.i;}
-			bool		operator!=(const iterator &b)		{ return i != b.i;}
-			reference	operator*()							{ return p[i]; }
-			reference	operator[](int j)					{ return p[i + j]; }
+			iterator&		operator++()					{ ++i; return *this;}
+			bool			operator==(const iterator &b)	{ return i == b.i;}
+			bool			operator!=(const iterator &b)	{ return i != b.i;}
+			decltype(auto)	operator*()						{ return p[i]; }
+			decltype(auto)	operator[](int j)				{ return p[i + j]; }
 		};
 		struct const_iterator {
 			const prim	&p;
 			int			i;
 			const_iterator(const prim &p, int i) : p(p), i(i)	{}
-			const_iterator&	operator++()					{ ++i; return *this;}
-			bool		operator==(const const_iterator &b)	{ return i == b.i;}
-			bool		operator!=(const const_iterator &b)	{ return i != b.i;}
-			const reference	operator*()						{ return p[i]; }
-			const reference	operator[](int j)				{ return p[i + j]; }
+			const_iterator&	operator++()						{ ++i; return *this;}
+			bool			operator==(const const_iterator &b)	{ return i == b.i;}
+			bool			operator!=(const const_iterator &b)	{ return i != b.i;}
+			decltype(auto)	operator*()							{ return p[i]; }
+			decltype(auto)	operator[](int j)					{ return p[i + j]; }
 		};
 		I			i;
-		Prim2Vert	p2v;
-		int			exor, add;
-		prim(const I &i, Prim2Vert	p2v, bool flip) : i(i), p2v(p2v), exor(flip ? 3 : 0), add(flip ? -1 : 0) {}
-		reference		operator[](int j)		{ return i[(j ^ exor) + add]; }
-		const reference operator[](int j) const { return i[(j ^ exor) + add]; }
-		uint32			size()	const			{ return p2v.verts_per_prim(); }
-		const_iterator	begin()	const			{ return const_iterator(*this, 0); }
-		const_iterator	end()	const			{ return const_iterator(*this, p2v.verts_per_prim()); }
-		const reference	front()	const			{ return (*this)[0]; }
-		const reference	back()	const			{ return (*this)[p2v.verts_per_prim() - 1]; }
-		iterator		begin()					{ return iterator(*this, 0); }
-		iterator		end()					{ return iterator(*this, p2v.verts_per_prim()); }
-		bool			is_rect() const			{ return p2v.rect; }
+		int			num, eor;
+		bool		rect;
+		prim(const I &i, const Prim2Vert &p2v, int index) : i(i + p2v.first_vert(index)), num(p2v.verts_per_prim()), eor(p2v.winding(index) ? 3 : 0), rect(p2v.rect) {}
+		decltype(auto)	operator[](int j)		{ return i[(j ^ eor) - (eor & 1)]; }
+		decltype(auto)	operator[](int j) const { return i[(j ^ eor) - (eor & 1)]; }
+		uint32			size()	const			{ return num; }
+		const_iterator	begin()	const			{ return {*this, 0}; }
+		const_iterator	end()	const			{ return {*this, num}; }
+		decltype(auto)	front()	const			{ return (*this)[0]; }
+		decltype(auto)	back()	const			{ return (*this)[num - 1]; }
+		iterator		begin()					{ return {*this, 0}; }
+		iterator		end()					{ return {*this, num}; }
+		bool			is_rect() const			{ return rect; }
 	};
-
-	typedef random_access_iterator_t	iterator_category;
-	typedef prim						element, reference;
 
 	prim_iterator(const Prim2Vert p2v, const I &i) : p2v(p2v), i(i), index(0) {}
 	prim_iterator&	operator++()							{ ++index; return *this; }
 	prim_iterator&	operator+=(intptr_t i)					{ index += int(i); return *this; }
 	prim_iterator	operator+(intptr_t i)			const	{ return prim_iterator(*this) += i; }
 	intptr_t		operator-(const prim_iterator &b) const	{ return index - b.index; }
-	prim			operator*()						const	{ return prim(i + p2v.first_vert(index), p2v, p2v.winding(index)); }
+	prim			operator*()						const	{ return {i + p2v.first_vert(index), p2v.verts_per_prim(), p2v.winding(index)};}
 	ref_helper<prim> operator->()					const	{ return operator*(); }
 	prim			operator[](intptr_t i)			const	{ return *(*this + i); }
 	bool		operator==(const prim_iterator &b)	const	{ return index == b.index; }
@@ -192,7 +186,7 @@ template<typename D, typename C> D *convex_to_tristrip(D *d, C&& c) {
 //	Topology
 //-----------------------------------------------------------------------------
 
-struct Topology {
+struct Topology : Prim2Vert {
 	enum Type : uint8 {	//	mul	add	num
 		UNKNOWN,		//	0	0	0
 		POINTLIST,		//	1	0	1
@@ -212,7 +206,6 @@ struct Topology {
 		TRISTRIP_ADJ,	//	2	2	6
 		PATCH,			//	n	0	n
 	} type;
-	Prim2Vert	p2v;
 
 	Topology() : type(UNKNOWN) {}
 	Topology(Type type) : type(type) {
@@ -237,14 +230,14 @@ struct Topology {
 			{0xff,	0,	0,	0,  0},	//PATCH,
 		};
 
-		p2v		= p2v_table[type];
+		*(Prim2Vert*)this	= p2v_table[type];
 	}
 
-	void	SetNumCP(int n)					{ p2v.mul = n; }
-	int		VertsPerPrim()			const	{ return p2v.verts_per_prim(); }
-	int		PrimFromVertex(int v)	const	{ return p2v.last_prim(v); }
-	int		VertexFromPrim(int p)	const	{ return p2v.first_vert(p); }
-	bool	Winding(int p)			const	{ return p2v.winding(p); }
+	void	SetNumCP(int n)					{ mul = n; }
+	int		VertsPerPrim()			const	{ return verts_per_prim(); }
+	int		PrimFromVertex(int v)	const	{ return last_prim(v); }
+	int		VertexFromPrim(int p)	const	{ return first_vert(p); }
+	bool	Winding(int p)			const	{ return winding(p); }
 	explicit operator bool()		const	{ return type != UNKNOWN; }
 };
 
@@ -300,27 +293,28 @@ struct Topology2 : Topology {
 	uint32		chunks;
 
 	Topology2() {}
-	Topology2(Type type, uint32 chunks = 0) : Topology(type), hw((Type)get_hw(type).type), hw_mul(get_hw(type).num), chunks(chunks) {}
+	Topology2(Topology top, uint32 chunks = 0)	: Topology(top), hw((Type)get_hw(top.type).type), hw_mul(top.type == PATCH ? top.mul : get_hw(top.type).num), chunks(chunks) {}
+//	Topology2(Type type, uint32 chunks = 0)		: Topology(type), hw((Type)get_hw(type).type), hw_mul(get_hw(type).num), chunks(chunks) {}
 
-	void	SetNumCP(int n)							{ hw_mul = p2v.mul = n; }
+	void	SetNumCP(int n)							{ hw_mul = mul = n; }
 
-	int		FirstPrimFromVertex(int v, bool _hw)	const	{ return (_hw ? hw.p2v : p2v).first_prim(v); }
-	int		LastPrimFromVertex(int v, bool _hw)		const	{ return (_hw ? hw.p2v : p2v).last_prim(v); }
-	int		PrimFromVertex(int v, bool _hw)			const	{ return (_hw ? hw.p2v : p2v).last_prim(v); }
-	int		VertexFromPrim(int p, bool _hw)			const	{ return (_hw ? hw.p2v : p2v).first_vert(p); }
-	bool	Winding(int p)							const	{ return hw.p2v.winding(p); }
-	int		NumHWVertices(int nv)					const	{ return hw.p2v.prims_to_verts(p2v.verts_to_prims(nv) * hw_mul); }
+	int		FirstPrimFromVertex(int v, bool _hw)	const	{ return (_hw ? hw : *this).first_prim(v); }
+	int		LastPrimFromVertex(int v, bool _hw)		const	{ return (_hw ? hw : *this).last_prim(v); }
+	int		PrimFromVertex(int v, bool _hw)			const	{ return (_hw ? hw : *this).last_prim(v); }
+	int		VertexFromPrim(int p, bool _hw)			const	{ return (_hw ? hw : *this).first_vert(p); }
+	bool	Winding(int p)							const	{ return hw.winding(p); }
+	int		NumHWVertices(int nv)					const	{ return hw.prims_to_verts(verts_to_prims(nv) * hw_mul); }
 
 	int		PrimFromVertexChunks(int v, bool _hw) const	{
 		if (chunks) {
-			int		ppc = p2v.verts_to_prims(chunks);
+			int		ppc = verts_to_prims(chunks);
 			return (v / chunks) * ppc + clamp(PrimFromVertex(v % chunks, _hw), 0, ppc - 1);
 		}
 		return PrimFromVertex(v, _hw);
 	}
 	int		VertexFromPrimChunks(int p, bool _hw)	const {
 		if (chunks) {
-			int		ppc = p2v.verts_to_prims(chunks);
+			int		ppc = verts_to_prims(chunks);
 			return  (p / ppc) * chunks + VertexFromPrim(p % ppc, _hw);
 		}
 		return VertexFromPrim(p, _hw);

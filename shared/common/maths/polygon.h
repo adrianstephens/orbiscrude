@@ -3,14 +3,15 @@
 
 #include "maths/geometry.h"
 #include "base/algorithm.h"
+#include "dynamic_vector.h"
 
 namespace iso {
 
 struct slope {
 	float2	v;
-	slope(param(float2) v)					: v(v)			{}
-	slope(param(position2) a, param(position2) b) : v(b - a)		{}
-	slope(const line2 &p)					: v(p.dir())	{}
+	slope(param(float2) v)							: v(v)			{}
+	slope(param(position2) a, param(position2) b)	: v(b - a)		{}
+	slope(const line2 &p)							: v(p.dir())	{}
 	slope operator-() const { return -v; }
 
 	friend bool approx_equal(slope a, slope b, float tol = ISO_TOLERANCE) {
@@ -36,41 +37,117 @@ struct slope {
 	}
 };
 
-int			optimise_polyline(position2 *p, int n, float eps, bool closed);
-int			optimise_polyline_verts(position2 *p, int n, int verts, bool closed);
-int			expand_polygon(const position2 *p, int n, float x, position2 *result);
+int	optimise_polyline(position2 *p, int n, float eps, bool closed);
+int	optimise_polyline_verts(position2 *p, int n, int verts, bool closed);
+int	expand_polygon(const position2 *p, int n, float x, position2 *result);
 
-int			intersection(const normalised<n_plane<float, 2>> *p, int n, position2 *out);
-int			intersection(const plane *p, int n, position3 *out);
-int			intersection(const plane *p, int n, param(plane) pl, position3 *out);
+int	intersection(const normalised<n_plane<float, 2>> *p, int n, position2 *out);
+int	intersection(const plane *p, int n, position3 *out);
+int	intersection(const plane *p, int n, param(plane) pl, position3 *out);
 
 template<int N>	obb<float,N>	minimum_obb(stride_iterator<pos<float, N>> p, uint32 n);
 template<>		obb<float,2>	minimum_obb(stride_iterator<position2> p, uint32 n);
 template<>		obb<float,3>	minimum_obb(stride_iterator<position3> p, uint32 n);
 
+triangle	minimum_triangle(stride_iterator<position2> p, uint32 n);
 
-template<int N>	n_sphere<float, N>	_minimum_sphere(stride_iterator<pos<float, N>> p, uint32 n);
+dynamic_array<position2> sub_poly(range<position2*> a, range<position2*> b);
+
+//-----------------------------------------------------------------------------
+// minimum sphere
+//-----------------------------------------------------------------------------
+
+template<typename E, int N>	n_sphere<E, N> _minimum_sphere(pos<E, N> *p, uint32 n, uint32 b, n_sphere<E, N> s0, vec<E, N> *v) {
+	auto	s = s0;
+	for (uint32 i = 0; i < n; i++) {
+		auto t = p[i];
+		if (!s.contains(t)) {
+			for (int j = i; j > 0; j--)
+				p[j] = p[j - 1];
+
+			p[0] = t;
+
+			if (b == 0) {
+				s		= {t, zero};
+				v[b]	= t;
+			} else {
+				auto	vt	= t.v - v[0];
+				for (int i = 1; i < b; ++i)
+					vt -= dot(v[i], vt) * v[i] / len2(v[i]);
+				v[b]	= vt;
+
+				// update sphere
+				auto e	= len2(t - s0.centre()) - s0.radius2();
+				auto f	= e / len2(vt) * half;
+				s	= s.with_r2(s0.centre() + f * vt, s0.radius2() + e * f * half);
+			}
+			s	= _minimum_sphere(p + 1, i, b + 1, s, v);
+		}
+	}
+	return s;
+}
+
+template<typename E, int N>	n_sphere<E, N> _minimum_sphere(pos<E, N> *p, uint32 n) {
+	vec<E, N>	v[N + 1];
+	return n <= 2
+		? n_sphere<E, N>::through(make_range_n(p, n))
+		: _minimum_sphere<E, N>(p, n, 0, none, v);
+}
 
 template<int N, typename C> auto minimum_sphere(C &&c) {
 	typedef pos<float, N>	P;
-	return _minimum_sphere<N>(new_auto_container(P, c).begin(), c.size32());
+	return _minimum_sphere<float, N>(new_auto_container(P, c).begin(), num_elements32(c));
 }
 template<typename C>	auto	minimum_circle(C &&c) {
-	return _minimum_sphere<2>(new_auto_container(position2, c).begin(), c.size32());
+	return _minimum_sphere<float, 2>(new_auto_container(position2, c).begin(), c.size32());
+}
+
+//-----------------------------------------------------------------------------
+// minimum ellipsoid
+//-----------------------------------------------------------------------------
+
+// Khachiyan Algorithm
+template<typename E, int N> auto khachiyan(const pos<E, N> *p, uint32 n, float eps) {
+	auto	u	= dynamic_vector<double>(n);	// u is an nx1 vector where each element is 1/n
+	auto	Q	= dynamic_matrix<vec<double, N + 1>>(n);
+
+	for (int i = 0; i < n; i++) {
+		u[i]	= 1.f / n;
+		Q[i]	= to<double>(p[i].v, one);
+	}
+
+	eps		= max(eps, 1e-6f);
+
+	double err2;
+	do {
+		auto	X	= Q * scale(u) * transpose(Q);
+		auto	M	= (transpose(Q) * inverse(X) * Q).diagonal();
+
+		// Find the value and location of the maximum element in the vector M
+		int		j	= max_component_index(M);
+		auto	max	= M[j];
+
+		// Calculate the step size for the ascent
+		auto	step = (max - N - 1) / ((N + 1) * (max - 1));
+
+		// Calculate the new_u
+		u		*= 1 - step;		// multiply all elements in u by (1 - step_size)
+		u[j]	+= step;			// Increment the jth element of u by step_size
+
+		err2	= (len2(u) + 1 - u[j] * 2) * square(step);
+	} while (err2 > eps);
+
+	return to<E>(get(inverse(Q * scale(u) * transpose(Q))));
 }
 
 template<int N> struct ellipsoid_type	: T_type<ellipse> {};
 template<> struct ellipsoid_type<3>		: T_type<ellipsoid> {};
 template<int N> using ellipsoid_t		= typename ellipsoid_type<N>::type;
 
-template<int N>	ellipsoid_t<N>	minimum_ellipsoid(stride_iterator<pos<float, N>> p, uint32 n, float eps);
-template<>		ellipsoid_t<2>	minimum_ellipsoid(stride_iterator<position2> p, uint32 n, float eps);
-template<>		ellipsoid_t<3>	minimum_ellipsoid(stride_iterator<position3> p, uint32 n, float eps);
-inline			ellipse			minimum_ellipse(stride_iterator<position2> p, uint32 n, float eps) { return minimum_ellipsoid(p, n, eps); }
-
-triangle	minimum_triangle(stride_iterator<position2> p, uint32 n);
-
-dynamic_array<position2> sub_poly(range<position2*> a, range<position2*> b);
+template<int N>	ellipsoid_t<N>	minimum_ellipsoid(pos<float, N> *p, uint32 n, float eps);
+template<>		ellipsoid_t<2>	minimum_ellipsoid(position2 *p, uint32 n, float eps);
+template<>		ellipsoid_t<3>	minimum_ellipsoid(position3 *p, uint32 n, float eps);
+inline			ellipse			minimum_ellipse(position2 *p, uint32 n, float eps) { return minimum_ellipsoid(p, n, eps); }
 
 //-----------------------------------------------------------------------------
 // hull
@@ -98,7 +175,7 @@ template<typename I> int get_right_of_line(I i0, I i1, position2 *dest, param(po
 }
 
 template<typename I> auto get_extrema(I i0, I i1, I *extrema) {
-	auto		a	= decltype(plus_minus(*i0))(minimum);
+	auto		a	= decltype(plus_minus(*i0))(maximum);
 	while (i0 != i1) {
 		auto	t	= plus_minus(*i0);
 		int		mask = bit_mask(t < a);
@@ -186,7 +263,7 @@ template<typename I> int generate_hull_2d(I i0, I i1) {
 	if (i0 == i1)
 		return 0;
 
-	typedef typename iterator_traits<I>::element T;
+	typedef it_element_t<I> T;
 	I		p		= i0;
 	I		mini	= i0, maxi = i0;
 	float	minx	= as_vec(*i0).x, maxx = minx;
@@ -342,15 +419,14 @@ template<int N, typename C> int generate_hull(const C &c, int *out) {
 //-----------------------------------------------------------------------------
 
 template<typename C> struct point_cloud {
-	typedef element_t<C>						E;
-	static const int N = num_elements_v<E>;
-	typedef mat<float, N, N+1>					M;
+	typedef element_t<C>		E;
+	static const int			N = num_elements_v<E>;
+	typedef mat<float, N, N+1>	M;
 
 	C	c;
-	template<typename C2>	explicit point_cloud(const point_cloud<C2> &c)	: c(c.c) 	{}
+	template<typename C2>	explicit point_cloud(const point_cloud<C2> &c) : c(c.c) {}
 	template<typename...U>	explicit point_cloud(U&&...u)	: c(forward<U>(u)...) 	{}
-	explicit		point_cloud(initializer_list<E> i)	: c(i) 	{}
-	//point_cloud(C &&c)		: c(forward<C>(c)) 	{}
+	point_cloud(initializer_list<E> i)		: c(i) 	{}
 	auto			antipode(param_t<E> p0, param_t<E> p1)	const	{ return iso::support(points(), perp(p1 - p0)); }
 	auto			support(param_t<vec<float, N>> v)		const	{ return pos<float, N>(*iso::support(points(), v)); }
 	bool			hull_contains(param_t<E> b)	const	{ return check_inside_hull<N>(c, b); }
@@ -365,12 +441,7 @@ template<typename C> struct point_cloud {
 
 	const C&		points()					const	{ return c; }
 	C&				points()							{ return c; }
-	auto			begin()						const	{ return c.begin(); }
-	auto			end()						const	{ return c.end(); }
 	auto			operator[](int i)			const	{ return c[i]; }
-	bool			empty()						const	{ return c.empty(); }
-	auto			size()						const	{ return c.size(); }
-	auto			size32()					const	{ return uint32(size()); }
 
 	point_cloud&	operator*=(const M &m) {
 		for (auto &&i : c)
@@ -379,27 +450,21 @@ template<typename C> struct point_cloud {
 	}
 };
 
-template<typename C> auto make_point_cloud(C &&c) {
-	return point_cloud<C>(forward<C>(c));
-}
-template<typename I> auto make_point_cloud(I &&a, I &&b) {
-	return make_point_cloud(range<I>(forward<I>(a), forward<I>(b)));
-}
-template<typename I> auto make_point_cloud(I a, size_t n) {
-	return make_point_cloud(range<I>(a, a + n));
-}
+template<typename C> auto make_point_cloud(C &&c)			{ return point_cloud<C>(forward<C>(c)); }
+template<typename I> auto make_point_cloud(I &&a, I &&b)	{ return make_point_cloud(range<I>(forward<I>(a), forward<I>(b))); }
+template<typename I> auto make_point_cloud(I a, size_t n)	{ return make_point_cloud(range<I>(a, a + n)); }
 
 //-----------------------------------------------------------------------------
 // path - sequence of vertices
 //-----------------------------------------------------------------------------
 
 template<typename I> float path_len(I begin, I end) {
-	if (begin == end)
-		return zero;
-	--end;
 	float	t	= 0;
-	for (auto i = begin; i != end; ++i)
-		t += len(i[1] - i[0]);
+	if (begin != end) {
+		--end;
+		for (auto i = begin; i != end; ++i)
+			t += len(i[1] - i[0]);
+	}
 	return t;
 }
 template<typename C> float path_len(C &&c)	{ return path_len(begin(c), end(c)); }
@@ -432,6 +497,24 @@ template<typename I1, typename I2> float path_dist(I1 begin1, I2 begin2, size_t 
 		t += len(*begin1 - *begin2);
 	return t;
 }
+
+template<typename I1, typename I2> float path_dist2(I1 begin1, I1 end1, I2 begin2) {
+	float	t	= 0;
+	while (begin1 != end1) {
+		t += len2(*begin1 - *begin2);
+		++begin1;
+		++begin2;
+	}
+	return sqrt(t);
+}
+
+template<typename I1, typename I2> float path_dist2(I1 begin1, I2 begin2, size_t n) {
+	float	t	= 0;
+	for (size_t i = n; i--; ++begin1, ++begin2)
+		t += len2(*begin1 - *begin2);
+	return sqrt(t);
+}
+
 
 template<typename O, typename I> O resample_path(I points, I end, O out, float px) {
 	auto	prev = *points;
@@ -722,7 +805,7 @@ template<> struct polygon_helper<2> {
 			area	+= as_vec(p0) * as_vec(p1).yx;
 			p0		= p1;
 		}
-		return abs(diff(area)) * half;
+		return diff(area) * half;
 	}
 	template<typename I> static bool convex_contains(I begin, I end, param(position2) b) {
 		auto	p0	= end[-1] - b;
@@ -874,6 +957,7 @@ template<typename C> struct polygon : point_cloud<C> {
 
 template<typename C> auto	make_polygon(point_cloud<C> &c)		{ return polygon<C&>(c.c); }
 template<typename C> auto	make_polygon(point_cloud<C> &&c)	{ return polygon<C>(move(c.c)); }
+template<typename C> auto	make_polygon(C &&c)					{ return polygon<C>(forward<C>(c)); }
 
 //-----------------------------------------------------------------------------
 // polyhedron
@@ -896,7 +980,7 @@ template<typename C> struct polyhedron : point_cloud<C> {
 	typedef point_cloud<C>	B;
 	using B::B;
 	template<typename C2> polyhedron(C2 &&c)	: B(forward<C2>(c)) 	{}
-	int			num_tris()		const	{ return B::size32() / 3; }
+	int			num_tris()		const	{ return B::points().size32() / 3; }
 	triangle3	tri(int j)		const	{ auto a = B::points().begin() + j * 3; return triangle3(a[0], a[1], a[2]); }
 	auto		tris()			const	{ return transformc(range<int_iterator<int> >(0, num_tris()), [this](int i) { return tri(i); }); }
 
@@ -1045,7 +1129,7 @@ struct Cell : circle {	// cell center & distance from cell center to polygon
 	float		h;		// half the cell size
 	float		max;	// max distance to polygon within a cell
 	Cell(param(circle) c, float h) : circle(c), h(h), max(radius() + h * sqrt(2)) {}
-	template<typename C> Cell(param(position2) c, float h, const simple_polygon<C> &poly) : circle(with_r2(c, poly.distance2(c))), h(h), max(radius() + h * sqrt(2)) {}
+	template<typename C> Cell(param(position2) c, float h, const simple_polygon<C> &poly) : Cell(circle::with_r2(c, poly.distance2(c)), h) {}
 	friend bool operator<(const Cell &a, const Cell &b) { return a.max < b.max; }
 	friend bool operator>(const Cell &a, const Cell &b) { return a.max > b.max; }
 };
@@ -1130,7 +1214,7 @@ template<typename C> struct complex_polygon {
 	auto			centroid() const {
 		float3	sum(zero);
 		for (auto &i : c)
-			sum += polygon_helper<2>::centroid0(i.begin(), i.end());
+			sum += polygon_helper<2>::centroid0(i.points().begin(), i.points().end());
 		return position2(sum.xy / sum.z);
 	}
 	auto		centre() const { return centroid(); }
@@ -1390,7 +1474,7 @@ template<typename C> struct convex_polygon : simple_polygon<C> {
 		return true;
 	}
 	template<typename S> bool	overlaps_shape(const S &s)	const {
-		if (B::empty())
+		if (B::points().empty())
 			return false;
 		for (auto i : B::lines()) {
 			if (!i.test(s.support(i.normal())))
@@ -1528,9 +1612,9 @@ template<typename C> convex_polyhedron<C> as_convex_polyhedron(C &&c) {
 }
 
 template<typename C> auto get_hull3d(const point_cloud<C> &c) {
-	int		maxi	= convex_polyhedron_base::max_indices(c.size());
+	int		maxi	= convex_polyhedron_base::max_indices(c.points().size());
 	uint16	*i		= alloc_auto(uint16, maxi);
-	int		numi	= generate_hull_3d(c.begin(), c.size32(), i, 0);
+	int		numi	= generate_hull_3d(c.points().begin(), c.points().size32(), i, 0);
 	return as_convex_polyhedron(make_indexed_container(c.c, ref_array_size<uint16>(make_range_n(i, numi))));
 }
 
@@ -1543,9 +1627,9 @@ template<typename E, int N> struct halfspace_intersection : range<const normalis
 	typedef normalised<n_plane<E, N>>	plane;
 	typedef pos<E,N>		P;
 	halfspace_intersection(const range<const plane*> &t)				: range<const plane*>(t) {}
-	template<typename C> halfspace_intersection(const point_cloud<C> &c, plane *p)	: range<const plane*>(p, p + generate_hull<N>(c.begin(), c.end(), p)) {}
+	template<typename C> halfspace_intersection(const point_cloud<C> &c, plane *p)	: range<const plane*>(p, p + generate_hull<N>(c.points().begin(), c.points().end(), p)) {}
 
-	bool				contains(P b)	const {
+	bool		contains(P b)	const {
 		if (this->empty())
 			return false;
 		for (auto &i : *this) {
@@ -1555,11 +1639,11 @@ template<typename E, int N> struct halfspace_intersection : range<const normalis
 		return true;
 	}
 
-	sphere				inscribe(float epsilon = 1e-5)	const;
-	auto				points(P *v)					const	{ return make_point_cloud(v, intersection(this->begin(), this->size32(), v)); }
-	const range<const plane*>&	planes()				const	{ return *this; }
-	P					any_interior()					const;
-	bool				clip(ray<E, N> &r, float &t0, float &t1) const;
+	sphere		inscribe(float epsilon = 1e-5)	const;
+	auto		points(P *v)					const	{ return make_point_cloud(v, intersection(this->begin(), this->size32(), v)); }
+	const range<const plane*>&	planes()		const	{ return *this; }
+	P			any_interior()					const;
+	bool		clip(ray<E, N> &r, float &t0, float &t1) const;
 
 	auto		cross_section(plane pl, P *out) const {
 		return convex_polygon<range<P*>>(make_range_n(out, intersection(this->begin(), this->size32(), pl, out)));
@@ -1587,6 +1671,10 @@ template<typename E, int N> struct halfspace_intersection : range<const normalis
 	static int	max_planes(int n)	{ return N == 2 ? n : max(2 * n - 4, 0); }
 	size_t		max_verts()			{ return N == 2 ? this->size() : max(2 * this->size() - 4, 0); }
 };
+
+typedef halfspace_intersection<float,2> halfspace_intersection2;
+typedef halfspace_intersection<float,3> halfspace_intersection3;
+
 
 // return true if some remains
 template<typename E, int N> bool halfspace_intersection<E,N>::clip(ray<E,N> &r, float &t0, float &t1) const {
@@ -1628,7 +1716,7 @@ template<typename E, int N> sphere halfspace_intersection<E,N>::inscribe(float e
 			plane	d = trans * i;
 			*p++ = project(as_vec(d));
 		}
-		auto	s	= _minimum_sphere<N>(dual, this->size32());
+		auto	s	= _minimum_sphere<E, N>(dual, this->size32());
 		float	d2	= len2(s.centre().v);
 
 		if (d2 < eps)
@@ -1637,9 +1725,6 @@ template<typename E, int N> sphere halfspace_intersection<E,N>::inscribe(float e
 		o += normalise(s.centre().v) * sqrt(d2) / (s.radius2() - d2);
 	}
 }
-
-typedef halfspace_intersection<float,2> halfspace_intersection2;
-typedef halfspace_intersection<float,3> halfspace_intersection3;
 
 
 template<typename C> sphere convex_polyhedron<C>::inscribe(float eps) const {

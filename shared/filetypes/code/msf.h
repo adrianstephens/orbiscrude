@@ -181,7 +181,7 @@ struct FPM : dynamic_bitarray<uint64> {
 	}
 
 	bool EnsureRoom(PN32 upnMax) {
-		return resize(upnMax, fill);
+		return (bool)resize(upnMax, fill);
 	}
 };
 
@@ -302,7 +302,7 @@ struct StreamTable : dynamic_array<SI> {
 		PN16	*ppn = (PN16*)psi;
 		for (auto& i : slice_to(max)) {
 			if (i.isValid()) {
-				copy(i, (PN16*)pb);
+				copy(i, ppn);
 				ppn += i.size();
 			}
 		}

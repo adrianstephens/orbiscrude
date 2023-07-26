@@ -37,6 +37,10 @@ template<typename T, int N, typename U=void>	using not_undersized_t	= enable_if_
 template<typename T, int N, typename U=void>	using not_oversized_t	= enable_if_t<!is_oversized<T,  N>,	U>;
 template<typename T, int N, typename U=void>	using normalsized_t		= enable_if_t<!is_oversized<T,  N> && !is_undersized<T,  N>,	U>;
 
+template<int S>	struct T_bool_type		: T_sint_type<S> {};
+template<>		struct T_bool_type<1>	: T_type<char> {};
+template<typename T>	using bool_for_t = typename T_bool_type<sizeof(T)>::type;
+
 //-----------------------------------------------------------------------------
 // supported vector types
 //-----------------------------------------------------------------------------
@@ -47,25 +51,18 @@ template<typename T> static constexpr bool is_vec_element = iso::is_builtin_num<
 template<typename T> static constexpr bool is_vec_element = iso::is_builtin_num<T>;
 #endif
 
-template<typename T, int N, bool B = is_vec_element<T>> struct get_type {
-	typedef __attribute__((__ext_vector_type__(N),__aligned__(min(pow2_ceil<sizeof(T) * N>, 16)))) T type;
+template<typename T, int N, size_t A, bool B = is_vec_element<T>> struct get_type {
+	typedef __attribute__((__ext_vector_type__(N),__aligned__(A))) T type;
+//	typedef __attribute__((__vector_size__(N * sizeof(T)))) T type;
 };
 
-template<typename T, int N, bool B = is_vec_element<T>> struct get_packed_type {
-//	typedef __unaligned __attribute__((__ext_vector_type__(N),__aligned__(sizeof(T)))) T type;
-	typedef __attribute__((__ext_vector_type__(N),__aligned__(1))) T type;
-};
+template<typename T, int N, size_t A> struct get_type<T, N, A, false>	{};
+//template<typename T, int N, size_t A> struct get_type<T, N, A, false> { typedef void type; };
 
-template<typename T, int N> struct get_type<T, N, false> {};
-template<typename T, int N> struct get_packed_type<T, N, false> { typedef void type; };
+template<typename T, size_t A> struct get_type<T, 1, A, true> { typedef T	type; };
 
-template<typename T> struct get_type<T, 1, true> {
-	typedef T	type;
-};
-
-template<typename T, int N> using vec 			= typename get_type<T,N>::type;
-//template<typename T, int N> using packed_simd 	= __unaligned typename get_type<T,N>::type;
-template<typename T, int N> using packed_simd 	= typename get_packed_type<T,N>::type;
+template<typename T, int N> using vec 			= typename get_type<T, N, min(pow2_ceil<sizeof(T) * N>, max_register_bits / 8)>::type;
+template<typename T, int N> using packed_simd 	= typename get_type<T, N, sizeof(T)>::type;
 
 typedef vec<int8, 2>	int8x2;
 typedef vec<int8, 3>	int8x3;
@@ -136,8 +133,10 @@ typedef vec<hfloat, 32>	hfloat32;
 
 template<typename V, bool can_index> struct element_type_s1	{ typedef iso::noref_t<decltype(iso::declval<V>()[0])> type; };
 template<typename V> struct element_type_s1<V, false>		{ typedef V type; };
-template<typename V> struct	element_type_s : element_type_s1<V, can_index<V>> {};
-template<typename V> using	element_type = typename element_type_s<V>::type;
+template<typename V> struct	element_type_s		: element_type_s1<V, can_index<V>> {};
+template<typename V> struct	raw_element_type_s	: element_type_s1<V, can_index<V>> {};
+template<typename V> using	element_type		= typename element_type_s<V>::type;
+template<typename V> using	raw_element_type	= typename raw_element_type_s<V>::type;
 
 template<typename V, typename T, int N> static constexpr bool is_simdN = iso::same_v<V, vec<T, N>> || iso::same_v<V, packed_simd<T, N>>;
 template<typename V> struct not_simd { static const int value = sizeof(element_type<V>) ? sizeof(V) / sizeof(element_type<V>) : 0; static const bool simd = false; };
@@ -172,9 +171,14 @@ template<typename V, int...I> SIMD_FUNC vec<element_type<V>, sizeof...(I)> swizz
 	return __builtin_shufflevector(a, b, I...);
 }
 
+template<typename V, int I> SIMD_FUNC auto swizzle(meta::value_list<int, I>, const V &a, const V &b) {
+	return a[I];
+}
+
 template<int F, int T, typename = void>	struct resize_s;
 template<int F, int T>	struct resize_s<F, T, enable_if_t<(F > 1 && F < T)>> {
-	template<typename V>	static SIMD_FUNC auto f(const V &a) { return swizzle(meta::VL_concat<meta::make_value_sequence<F>, meta::muladd<0, -1, meta::make_value_sequence<T-F>>>(), a, a); }
+//	template<typename V>	static SIMD_FUNC auto f(const V &a) { return swizzle(meta::VL_concat<meta::make_value_sequence<F>, meta::muladd<0, -1, meta::make_value_sequence<T-F>>>(), a, a); }
+	template<typename V>	static SIMD_FUNC auto f(const V &a) { return swizzle(concat(meta::make_value_sequence<F>(), meta::make_value_sequence<T - F>() * 0_kk - 1_kk), a, a); }
 };
 template<int F, int T>	struct resize_s<F, T, enable_if_t<(T > 1 && F > T)>> {
 	template<typename V>	static SIMD_FUNC auto f(const V &a) { return swizzle(meta::make_value_sequence<T>(), a, a); }
@@ -192,6 +196,7 @@ template<> 				struct resize_s<1, 1> {
 	template<typename V>	static SIMD_FUNC auto f(const V &a)	{ return a; }
 };
 
+template<int S, typename V>	SIMD_FUNC	auto	shrink_top(const V &a)	{ return swizzle(meta::make_value_sequence<S>() + meta::int_constant<num_elements_v<V> - S>(), a, a); }
 template<int S, typename V>	SIMD_FUNC	auto	shrink(const V &a)		{ return resize_s<num_elements_v<V>, S>::f(a); }
 template<int S, typename V>	SIMD_FUNC	auto	grow(const V &a)		{ return resize_s<num_elements_v<V>, S>::f(a); }
 
@@ -200,8 +205,8 @@ template<typename V>		SIMD_FUNC	auto 	simd_lo_hi(V lo, V hi)	{
 	return swizzle(meta::VL_concat<meta::make_value_sequence<N>, meta::muladd<1, N, meta::make_value_sequence<N>>>(), lo, hi);
 }
 
-template<typename T, typename F> SIMD_FUNC auto		as(const F &p)	{ return reinterpret_cast<const vec<T,num_elements_v<F> * sizeof(element_type<F>) / sizeof(T)>&>(p); }
-template<typename T, typename F> SIMD_FUNC auto&	as(F &p)		{ return reinterpret_cast<vec<T,num_elements_v<F> * sizeof(element_type<F>) / sizeof(T)>&>(p); }
+template<typename T, typename F> SIMD_FUNC auto		as(const F &p)	{ return reinterpret_cast<const typename get_type<T,num_elements_v<F> * sizeof(raw_element_type<F>) / sizeof(T), alignof(F)>::type&>(p); }
+template<typename T, typename F> SIMD_FUNC auto&	as(F &p)		{ return reinterpret_cast<typename get_type<T,num_elements_v<F> * sizeof(raw_element_type<F>) / sizeof(T), alignof(F)>::type&>(p); }
 
 template<typename T, typename V> SIMD_FUNC enable_if_t<is_simd<V>, vec<T, num_elements_v<V>>> 	to(V v)	{ return __builtin_convertvector(v, vec<T, num_elements_v<V>>); }
 template<typename T, typename V> SIMD_FUNC enable_if_t<(num_elements_v<V> == 1), T>				to(V v)	{ return T(v); }

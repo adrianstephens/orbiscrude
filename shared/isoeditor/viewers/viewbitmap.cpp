@@ -7,69 +7,26 @@ using namespace iso;
 using namespace win;
 
 //-----------------------------------------------------------------------------
-//	histogram
+//	histogram4
 //-----------------------------------------------------------------------------
 
-void histogram::init_medians() {
-	for (int i = 0; i < 4; i++) {
-		for (int j = 0; j < 256; j++)
-			order[i][j] = j;
-
-		uint32	(&h1)[256] = h[i];
-		sort(order[i], order[i] + 256, [&h1](uint8 i0, uint8 i1) { return h1[i0] < h1[i1]; });
-		int	a = 0, b = 256;
-		while (a < b) {
-			int	c = (a + b) / 2;
-			if (h1[order[i][c]] == 0)
-				a = c + 1;
-			else
-				b = c;
-		}
-		first_nonzero[i] = a;
-	}
-}
-
-void histogram::add(const block<ISO_rgba, 1> &b) {
-	for (auto i = b.begin(), e = b.end(); i != e; ++i) {
-		++h[0][i->r];
-		++h[1][i->g];
-		++h[2][i->b];
-		++h[3][i->a];
-	}
-}
-void histogram::add(const block<ISO_rgba, 2> &b) {
-	for (auto i = b.begin(), e = b.end(); i != e; ++i)
-		add(i);
-}
-void histogram::init(bitmap64 *bm) {
+void histogram4::init(bitmap64 *bm) {
 	reset();
+	auto	tovec = [](const ISO_rgba &x) { return reinterpret_cast<const uint8x4&>(x); };
+
 	if (int nmips = bm->Mips()) {
 		for (int m = 0; m < nmips; m++)
-			add(bm->Mip(m));
+			add(bm->Mip(m), tovec);
 	} else {
-		add(bm->All());
+		add(bm->All(), tovec);
 	}
 	init_medians();
 }
 
-void histogram::add(const block<HDRpixel, 1> &b, const scale_offset &s) {
-	for (auto i = b.begin(), e = b.end(); i != e; ++i) {
-		float4	a = {i->r, i->g, i->b, i->a};
-		a = select(a == a, (a + s.o) * s.s, zero);
-		++h[0][clamp(int(a.x), 0, 255)];
-		++h[1][clamp(int(a.y), 0, 255)];
-		++h[2][clamp(int(a.z), 0, 255)];
-		++h[3][clamp(int(a.w), 0, 255)];
-	}
-}
-void histogram::add(const block<HDRpixel, 2> &b, const scale_offset &s) {
-	for (auto i = b.begin(), e = b.end(); i != e; ++i)
-		add(i, s);
-}
-
-void histogram::init(HDRbitmap64 *bm, HDRpixel minpix, HDRpixel maxpix) {
+void histogram4::init(HDRbitmap64 *bm, HDRpixel minpix, HDRpixel maxpix) {
 	reset();
 	scale_offset	s(minpix, maxpix);
+
 	if (int nmips = bm->Mips()) {
 		for (int m = 0; m < nmips; m++)
 			add(bm->Mip(m), s);
@@ -79,17 +36,12 @@ void histogram::init(HDRbitmap64 *bm, HDRpixel minpix, HDRpixel maxpix) {
 	init_medians();
 }
 
-// draw histogram
-void DrawHistogram(d2d::Target &target, win::Rect &rect, const histogram &hist, int c) {
+void ViewBitmap_base::DrawHistogram(d2d::Target &target, win::Rect &rect, const histogram4 &hist, int c) {
 	uint32	max_val = 0;
-	if (c & CHAN_R)
-		max_val = max(max_val, hist.max_value(0));
-	if (c & CHAN_G)
-		max_val = max(max_val, hist.max_value(1));
-	if (c & CHAN_B)
-		max_val = max(max_val, hist.max_value(2));
-	if (c & CHAN_A)
-		max_val = max(max_val, hist.max_value(3));
+	if (c & CHAN_R) max_val = max(max_val, hist[0].max_value());
+	if (c & CHAN_G) max_val = max(max_val, hist[1].max_value());
+	if (c & CHAN_B) max_val = max(max_val, hist[2].max_value());
+	if (c & CHAN_A) max_val = max(max_val, hist[3].max_value());
 
 	target.SetTransform(translate(rect.Left(), rect.Bottom()) * scale(rect.Width() / 256.f, -float(rect.Height()) / max_val));
 	target.Fill(d2d::rect(0, 0, 256, max_val), d2d::SolidBrush(target, d2d::colour(0,0,0,0.5f)));
@@ -102,10 +54,10 @@ void DrawHistogram(d2d::Target &target, win::Rect &rect, const histogram &hist, 
 
 	for (int i = 0; i < 256; i++) {
 		uint32	h[4]		= {
-			c & CHAN_R ? hist.h[0][i] : 0,
-			c & CHAN_G ? hist.h[1][i] : 0,
-			c & CHAN_B ? hist.h[2][i] : 0,
-			c & CHAN_A ? hist.h[3][i] : 0
+			c & CHAN_R ? hist[0].h[i] : 0,
+			c & CHAN_G ? hist[1].h[i] : 0,
+			c & CHAN_B ? hist[2].h[i] : 0,
+			c & CHAN_A ? hist[3].h[i] : 0
 		};
 		uint8	order[4]	= {0,1,2,3};
 		bool	swapped = true;
@@ -132,9 +84,9 @@ void DrawHistogram(d2d::Target &target, win::Rect &rect, const histogram &hist, 
 //-----------------------------------------------------------------------------
 
 void ViewBitmap_base::UpdateBitmapRect() {
-	num_slices			= flags.test(SEPARATE_SLICES) ? bitmap_depth : 1;
+	num_slices	= flags.test(SEPARATE_SLICES) ? bitmap_depth : 1;
 	int	width, height;
-	if (auto hdr = test_cast<HDRbitmap64>(bm)) {
+	if (auto hdr = bm.test_cast<HDRbitmap64>()) {
 		width	= hdr->Width();
 		height	= hdr->Height();
 	} else {
@@ -165,6 +117,7 @@ int ViewBitmap_base::CalcSlice(d2d::point &ret) {
 	}
 	return -1;
 }
+
 int ViewBitmap_base::CalcMip(d2d::point &ret) {
 	int		m = 0;
 	int		w = bitmap_rect.Width();
@@ -194,10 +147,7 @@ void ViewBitmap_base::Autoscale(int sw, int sh) {
 }
 
 bool ViewBitmap_base::SetBitmap(const ISO_ptr_machine<void> &p) {
-	if (p.IsType<bitmap64>()) {
-		bm		= p;
-
-	} else if (p.IsType<HDRbitmap64>()) {
+	if (p.IsType<bitmap64>() || p.IsType<HDRbitmap64>()) {
 		bm		= p;
 
 	} else if (p.IsType<bitmap>()) {
@@ -219,9 +169,7 @@ bool ViewBitmap_base::SetBitmap(const ISO_ptr_machine<void> &p) {
 			bm = ISO_ptr_machine<HDRbitmap64>(p.ID(), *(HDRbitmap*)*p2);
 
 	} else if (ISO_ptr<bitmap2> p2 = ISO::Conversion::convert<bitmap2>(p)) {
-		if (p2->IsType<bitmap64>())
-			bm = *p2;
-		else if (p2.IsType<HDRbitmap64>())
+		if (p2->IsType<bitmap64>() || p2.IsType<HDRbitmap64>())
 			bm = *p2;
 		else if (p2->IsType<bitmap>())
 			bm	= ISO_ptr_machine<bitmap64>(p.ID(), *(bitmap*)*p2);
@@ -233,62 +181,24 @@ bool ViewBitmap_base::SetBitmap(const ISO_ptr_machine<void> &p) {
 	} else {
 		return false;
 	}
+	
+	flags.clear(HAVE_STATS);
+	chan_range	= {zero, one};
+	disp_range	= alpha_range = rgb_range = {zero, one};
 
-	if (auto hdr = test_cast<HDRbitmap64>(bm)) {
+	if (auto hdr = bm.test_cast<HDRbitmap64>()) {
 		bitmap_depth	= hdr->Depth();
 		flags.set(CUBEMAP, hdr->IsCube());
 		if (hdr->Mips())
 			flags.set_all(HAS_MIPS | SHOW_MIPS);
-
-#if 1
-		stats<float4>	s;
-		HDRpixel	*p	= hdr->ScanLine(0);
-		for (int n = hdr->Width() * hdr->Height(); n--; p++) {
-			s.add(*p);
-		}
-		float	q0 = invphi_approx(0.05f);
-		float	q1 = invphi_approx(0.95f);
-		HDRpixel	p0, p1;
-		assign(p0, s.mean() + s.sigma() * q0);
-		assign(p1, s.mean() + s.sigma() * q1);
-
-#else
-		HDRpixel	*p	= hdr->ScanLine(0);
-		HDRpixel	p0	= *p, p1 = p0;
-		for (int n = hdr->Width() * hdr->Height(); n--; p++) {
-			p0 = min(p0, *p);
-			p1 = max(p1, *p);
-		}
-		p0 = max(p0, -FLT_MAX);
-		p1 = min(p1, FLT_MAX);
-#endif
-		chan_range		= interval<float>(min(min(min(p0.r, p0.g), p0.b), 0), max(max(max(p1.r, p1.g), p1.b), 1));
-		alpha_range		= interval<float>(min(p0.a, 0), max(p1.a, 1));
-		disp_range		= interval<float>(-chan_range.a / (chan_range.b - chan_range.a), 1);
-
-		col_range		= interval<HDRpixel>(p0, p1);
-		col_range.a.a	= col_range.a.a * chan_range.b / alpha_range.b;
-		col_range.b.a	= col_range.b.a * chan_range.b / alpha_range.b;
-
 	} else {
 		bitmap64	*bm = this->bm;
 		bitmap_depth	= bm->Depth();
 		flags.set(CUBEMAP, bm->IsCube());
 		if (bm->Mips())
 			flags.set_all(HAS_MIPS | SHOW_MIPS);
-
-		ISO_rgba	*p	= bm->ScanLine(0);
-		ISO_rgba	p0	= *p, p1 = p0;
-		for (int n = bm->Width() * bm->Height(); n--; p++) {
-			p0 = min(p0, *p);
-			p1 = max(p1, *p);
-		}
-
-		disp_range		= alpha_range = chan_range = interval<float>(0, 1);
-		col_range		= interval<HDRpixel>(p0, p1);
 	}
 
-	num_slices	= bitmap_depth;
 	if (bitmap_depth > 1)
 		flags.set_all(SEPARATE_SLICES);
 
@@ -296,47 +206,64 @@ bool ViewBitmap_base::SetBitmap(const ISO_ptr_machine<void> &p) {
 	return true;
 }
 
+void ViewBitmap_base::GetStats() {
+	if (!flags.test_set(HAVE_STATS)) {
+		if (auto hdr = bm.test_cast<HDRbitmap64>()) {
+			stats<float4>	s;
+			for (auto i : hdr->All()) {
+				for (auto &j : i)
+					s.add(j);
+			}
+
+			float4		p0	= s.mean() + s.sigma() * invphi_approx(0.05f);
+			float4		p1	= s.mean() + s.sigma() * invphi_approx(0.95f);
+
+			rgb_range		= {reduce_min(p0.xyz), reduce_max(p1.xyz)};
+			alpha_range		= {min(p0.w, 0), max(p1.w, 1)};
+			disp_range		= {-rgb_range.a / (rgb_range.b - rgb_range.a), 1};
+
+			chan_range		= {p0, p1};
+			chan_range.a.w	= chan_range.a.w * rgb_range.b / alpha_range.b;
+			chan_range.b.w	= chan_range.b.w * rgb_range.b / alpha_range.b;
+
+		} else {
+			bitmap64	*bm = this->bm;
+			ISO_rgba	*p	= bm->ScanLine(0);
+			ISO_rgba	p0	= *p, p1 = p0;
+			for (int n = bm->Width() * bm->Height(); n--; p++) {
+				p0 = min(p0, *p);
+				p1 = max(p1, *p);
+			}
+			chan_range		= {HDRpixel(p0), HDRpixel(p1)};
+		}
+	}
+}
+
+
 void ViewBitmap_base::UpdateBitmap(d2d::Target &target, ID2D1Bitmap *d2d_bitmap) {
 	int			c		= channels;
-	bool		alpha	= (c & CHAN_A) != 0;
 	int			width	= bitmap_rect.Width();
 	int			height	= bitmap_rect.Height() * num_slices;
 
-	if (auto hdr = test_cast<HDRbitmap64>(bm)) {
-		malloc_block	buffer(sizeof(d2d::texel) * width * height);
-		d2d::texel*		d		= buffer;
-		float			multc	= 255 / (disp_range.extent() * (chan_range.b - chan_range.a));
-		float			offsetc = chan_range.a + disp_range.a * (chan_range.b - chan_range.a);
-		float			multa	= 255;
-		float			offseta = 0;
+	if (auto hdr = bm.test_cast<HDRbitmap64>()) {
+		GetStats();
+		float4			mult	= 255 / (disp_range.extent() * (rgb_range.b - rgb_range.a));
+		float4			offset	= rgb_range.a + disp_range.a * (rgb_range.b - rgb_range.a);
 		if (c == CHAN_A) {
-			multa	= 255 / (disp_range.extent() * (alpha_range.b - alpha_range.a));
-			offseta	= alpha_range.a + disp_range.a * (alpha_range.b - alpha_range.a);
+			mult.w		= 255 / (disp_range.extent() * (alpha_range.b - alpha_range.a));
+			offset.w	= alpha_range.a + disp_range.a * (alpha_range.b - alpha_range.a);
+		} else {
+			mult.w		= 255;
+			offset.w	= 0;
 		}
-		for (int y = 0; y < height; y++) {
-			const HDRpixel	*s = hdr->ScanLine(y);
-			for (int i = width; i--; s++, d++) {
-				d->r = int(clamp((s->r - offsetc) * multc, 0.f, 255.f));
-				d->g = int(clamp((s->g - offsetc) * multc, 0.f, 255.f));
-				d->b = int(clamp((s->b - offsetc) * multc, 0.f, 255.f));
-				d->a = int(clamp((s->a - offseta) * multa, 0.f, 255.f));
-			}
-		}
-		d2d_bitmap->CopyFromMemory(0, buffer, width * sizeof(d2d::texel));
+
+		d2d::FillBitmap(d2d_bitmap, transform(hdr->Block(0, 0, width, height), [offset, mult](float4 i) { return to_sat<uint8>((i - offset) * mult); }));
 
 	} else if (bitmap64 *bm = this->bm) {
 		if (bm->IsPaletted()) {
-			if (!prev_bm.Width())
-				prev_bm.Create(width, height);
-			ISO_rgba	*clut	= bm->Clut();
-			ISO_rgba	*s		= bm->ScanLine(0), *d = prev_bm.ScanLine(0);
-			for (int n = width * height; --n; s++, d++) {
-				if (clut[s->r].a != 0)
-					*d = clut[s->r];
-			}
-			target.FillBitmap(d2d_bitmap, prev_bm.All());
+			d2d::FillBitmap(d2d_bitmap, transform(bm->Block(0, 0, width, height), [clut = bm->Clut()](ISO_rgba i) { return clut[i.r]; }));
 		} else {
-			target.FillBitmap(d2d_bitmap, bm->All());
+			d2d::FillBitmap(d2d_bitmap, bm->All());
 		}
 	}
 }
@@ -366,7 +293,7 @@ void ViewBitmap_base::DrawBitmapPaint(d2d::Target &target, win::Rect &rect, ID2D
 
 	target.SetTransform(transform);
 
-	auto			hdr			= test_cast<HDRbitmap64>(bm);
+	auto			hdr			= bm.test_cast<HDRbitmap64>();
 	int				c			= channels;
 	float			multc		= hdr ? 1 : 1 / disp_range.extent();
 	float			offsetc		= hdr ? 0 : -disp_range.a / disp_range.extent();
@@ -498,7 +425,7 @@ string_accum&	ViewBitmap_base::DumpTexelInfo(string_accum &sa, float x, float y,
 	if (flags.test(FLIP_Y))
 		iy = h - 1 - iy;
 
-	if (auto hdr = test_cast<HDRbitmap64>(bm))
+	if (auto hdr = bm.test_cast<HDRbitmap64>())
 		return DumpTexel(sa, hdr, ix, iy);
 
 	return DumpTexel(sa, (bitmap64*)bm, ix, iy);

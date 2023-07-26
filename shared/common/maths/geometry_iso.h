@@ -8,7 +8,7 @@ namespace ISO {
 
 struct circle {
 	union { struct { float2p centre; float radius2; };	float4p _x; };
-	~circle() {}
+	~circle()	{}
 };
 
 struct ellipse {
@@ -82,39 +82,81 @@ struct circle3 : circle {
 	float4p	pl;
 };
 
+struct bezier2d {
+	float2p	c0, c1, c2, c3;
+};
+struct bezier2d2 {
+	float2p	c0, c1, c2;
+};
+
+struct bezier_chain2d {
+	ISO_openarray<float2p>	c;
+};
+struct bezier_chain2d2 {
+	ISO_openarray<float2p>	c;
+};
+
+struct bspline2d {
+	ISO_openarray<float2p>	c;
+	ISO_openarray<float>	k;
+};
+struct bspline2d2 {
+	ISO_openarray<float2p>	c;
+	ISO_openarray<float>	k;
+};
+
+struct nurbs2d {
+	ISO_openarray<float3p>	c;
+	ISO_openarray<float>	k;
+};
+struct nurbs2d2 {
+	ISO_openarray<float3p>	c;
+	ISO_openarray<float>	k;
+};
+
 } // namespace ISO
 
 ISO_DEFCOMPV(ISO::circle, centre, radius2);
-ISO_DEFUSERX(iso::circle, ISO::circle, "circle");
 ISO_DEFCOMPV(ISO::ellipse, centre, major, ratio);
-ISO_DEFUSERX(iso::ellipse, ISO::ellipse, "ellipse");
 ISO_DEFCOMPV(ISO::rectangle, min, max);
-ISO_DEFUSERX(iso::rectangle, ISO::rectangle, "rectangle");
 ISO_DEFCOMPV(ISO::shape2x3, x, y, z);
-ISO_DEFUSERX(iso::triangle, ISO::shape2x3, "triangle");
-ISO_DEFUSERX(iso::parallelogram, ISO::shape2x3, "parallelogram");
 ISO_DEFCOMPV(ISO::quadrilateral, a, b, c, d);
-ISO_DEFUSERX(iso::quadrilateral, ISO::quadrilateral, "quadrilateral");
 ISO_DEFCOMPV(ISO::conic, d3, o);
-ISO_DEFUSERX(iso::conic, ISO::conic, "conic");
 
 ISO_DEFCOMPV(ISO::sphere, centre, radius);
-ISO_DEFUSERX(iso::sphere, ISO::sphere, "sphere");
 ISO_DEFCOMPV(ISO::ellipsoid, centre, axis1, axis2, axis3_len);
-ISO_DEFUSERX(iso::ellipsoid, ISO::ellipsoid, "ellipsoid");
 ISO_DEFCOMPV(ISO::cuboid, min, max);
-ISO_DEFUSERX(iso::cuboid, ISO::cuboid, "cuboid");
 ISO_DEFCOMPV(ISO::directed_shape, centre, radius, dir);
-ISO_DEFUSERX(iso::cylinder, ISO::directed_shape, "cylinder");
-ISO_DEFUSERX(iso::capsule, ISO::directed_shape, "capsule");
-ISO_DEFUSERX(iso::cone, ISO::directed_shape, "cone");
 ISO_DEFCOMPV(ISO::tetrahedron, x, y, z, centre);
-ISO_DEFUSERX(iso::tetrahedron, ISO::tetrahedron, "tetrahedron");
 ISO_DEFCOMPV(ISO::quadric, d4, d3, o);
-ISO_DEFUSERX(iso::quadric, ISO::quadric, "quadric");
 ISO_DEFCOMPV(ISO::circle3, centre, radius2, pl);
-ISO_DEFUSERX(iso::circle3, ISO::circle3, "circle3");
+ISO_DEFUSERCOMPXV(ISO::bezier2d, "bezier2d", c0, c1, c2, c3);
+ISO_DEFUSERCOMPXV(ISO::bezier2d2, "bezier2d2", c0, c1, c2);
+ISO_DEFUSERCOMPXV(ISO::bezier_chain2d, "bezier_chain2d", c);
+ISO_DEFUSERCOMPXV(ISO::bezier_chain2d2, "bezier_chain2d2", c);
+ISO_DEFUSERCOMPXV(ISO::bspline2d, "bspline2d", c, k);
+ISO_DEFUSERCOMPXV(ISO::bspline2d2, "bspline2d2", c, k);
+ISO_DEFUSERCOMPXV(ISO::nurbs2d, "nurbs2d", c, k);
+ISO_DEFUSERCOMPXV(ISO::nurbs2d2, "nurbs2d2", c, k);
 
-ISO_DEFUSERCOMPXV(iso::curve_vertex, "curve_vertex", x, y, flags);
+namespace iso {
+ISO_DEFUSER(circle, ISO::circle);
+ISO_DEFUSER(ellipse, ISO::ellipse);
+ISO_DEFUSER(rectangle, ISO::rectangle);
+ISO_DEFUSER(triangle, ISO::shape2x3);
+ISO_DEFUSER(parallelogram, ISO::shape2x3);
+ISO_DEFUSER(quadrilateral, ISO::quadrilateral);
+ISO_DEFUSER(conic, ISO::conic);
+
+ISO_DEFUSER(sphere, ISO::sphere);
+ISO_DEFUSER(ellipsoid, ISO::ellipsoid);
+ISO_DEFUSER(cuboid, ISO::cuboid);
+ISO_DEFUSER(cylinder, ISO::directed_shape);
+ISO_DEFUSER(capsule, ISO::directed_shape);
+ISO_DEFUSER(cone, ISO::directed_shape);
+ISO_DEFUSER(tetrahedron, ISO::tetrahedron);
+ISO_DEFUSER(quadric, ISO::quadric);
+ISO_DEFUSER(circle3, ISO::circle3);
+}
 
 #endif // GEOMETRY_ISO_H

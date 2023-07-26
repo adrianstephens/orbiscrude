@@ -180,15 +180,14 @@ struct prob_code {
 template<typename T, typename S> class prob_decoder : prob_code {
 	S			file;
 public:
-	T			bits_buffer;
-	int			count;
-	uint8		range;
+	T			bits_buffer	= 0;
+	int			count		= -8;
+	uint8		range		= PROB_MAX;
 protected:
 	void		fill();
 public:
-//	prob_decoder(prob_decoder &b) : file(b.file), bits_buffer(b.bits_buffer), count(b.count), range(b.range) {}
 	prob_decoder(prob_decoder &&b) = default;
-	template<typename P> prob_decoder(const P &_file) : file(_file), bits_buffer(0), count(-8), range(PROB_MAX) {}
+	template<typename P> prob_decoder(const P &file) : file(file) {}
 	template<typename P> void init(const P &_file) {
 		file		= _file;
 		bits_buffer = 0;

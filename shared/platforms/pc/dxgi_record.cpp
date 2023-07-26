@@ -235,8 +235,19 @@ HRESULT Wrap<IDXGIFactoryLatest>::GetWindowAssociation(HWND *pWindowHandle) {
 	return orig->GetWindowAssociation(pWindowHandle);
 }
 HRESULT Wrap<IDXGIFactoryLatest>::CreateSwapChain(IUnknown *pDevice, DXGI_SWAP_CHAIN_DESC *desc, IDXGISwapChain **pp) {
-	if (auto *device = com_wrap_system->unwrap_test(pDevice))
-		return com_wrap_system->make_wrap_qi<IDXGISwapChainLatest>(orig->CreateSwapChain(device, desc, pp), pp, pDevice);
+	if (auto *device = com_wrap_system->unwrap_test(pDevice)) {
+		//return com_wrap_system->make_wrap_qi<IDXGISwapChainLatest>(orig->CreateSwapChain(device, desc, pp), pp, pDevice);
+		HRESULT	h = orig->CreateSwapChain(device, desc, pp);
+		if (h == S_OK) {
+			if (auto w = com_wrap_system->find_wrap_check(*pp)) {
+				*pp = w;
+			} else {
+				com_wrap_system->make_wrap_qi<IDXGISwapChainLatest>(h, pp, pDevice);
+			}
+		}
+		return h;
+
+	}
 	return orig->CreateSwapChain(pDevice, desc, pp);
 }
 HRESULT Wrap<IDXGIFactoryLatest>::CreateSoftwareAdapter(HMODULE Module, IDXGIAdapter **pp) {

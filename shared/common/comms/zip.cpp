@@ -55,7 +55,7 @@ ZIPwriter::~ZIPwriter() {
 	file.write(end);
 }
 
-void ZIPwriter::Write(const char *name, const memory_block &data, const DateTime &mod, const char *password, const char *random) {
+void ZIPwriter::Write(const char *name, const_memory_block data, const DateTime &mod, const char *password, const char *random) {
 	auto		&r		= centraldir.emplace_back(name);
 	r.mod				= mod;
 	r.offset			= file.tell();

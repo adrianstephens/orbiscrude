@@ -341,8 +341,8 @@ public:
 	}
 
 	bool remove(NI ni) {
-		SZO *szo = mapNiSzo.remove(ni);
-		return szo && mapSzoNi.remove(make_param_element(move(*szo), &buf));
+		auto	szo = mapNiSzo.remove_value(ni);
+		return szo.exists() && mapSzoNi.remove(make_param_element(move(szo), &buf));
 	}
 };
 

@@ -13,7 +13,7 @@ namespace iso {
 //-----------------------------------------------------------------------------
 
 struct gost28147 {
-	typedef deferred<array<uint8, 8>> CODE;
+	typedef array<uint8, 8> CODE;
 
 	struct Key {
 		uint32 k[8];
@@ -127,7 +127,7 @@ struct gost28147_mac : gost28147, public block_writer<gost28147_mac, 8> {
 	}
 	void	process(const uint8 *data) {
 		state.mac_encrypt(key, mac.begin(), mac.begin());
-		mac ^= *(CODE*)data;
+		mac = make_deferred(mac) ^ *(CODE*)data;
 	}
 	CODE digest() {
 		if (uint32 o = p % BLOCK_SIZE) {

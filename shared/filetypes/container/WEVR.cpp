@@ -1,6 +1,6 @@
 #include "iso/iso_files.h"
 #include "base/vector.h"
-#include "utilities.h"
+#include "extra/random.h"
 #include "vector_iso.h"
 #include "container/archive_help.h"
 
@@ -209,8 +209,8 @@ public:
 	WVR_AudioTrackDescriptor() {}
 
 	bool			getIsPositional() const { return persistent.isPositional; }
-	const float3p	getPosition() const { return persistent.position; }
-	const float3p	getEmitterDirection() const { return persistent.emitterDirection; }
+	float3p			getPosition() const { return persistent.position; }
+	float3p			getEmitterDirection() const { return persistent.emitterDirection; }
 	float32			getEmitterSpreadInner() const { return persistent.emitterSpreadInner; }
 	float32			getEmitterSpreadOuter() const { return persistent.emitterSpreadOuter; }
 	float32			getAmbientFraction() const { return persistent.ambientFraction; }
@@ -335,12 +335,12 @@ class WVR_VersionedImpl;
 class WVR_Item : public ISO::VirtualDefaults {
 public:
 	virtual						~WVR_Item() {}
-	virtual const string &		getName() const;
+	virtual const string &		getName()		const;
 	virtual void				setName(const string &n);
-	virtual WVR_TypeID			getType() const;
-	virtual WVR_VersionedImpl *	getPimpl() const = 0;
-	virtual bool				isRenderable() const	{ return false; }
-	virtual bool				isPositional() const	{ return false; }
+	virtual WVR_TypeID			getType()		const;
+	virtual WVR_VersionedImpl *	getPimpl()		const = 0;
+	virtual bool				isRenderable()	const { return false; }
+	virtual bool				isPositional()	const { return false; }
 	virtual void				cleanup() {}
 	ISO_ptr<void>		Deref() const;
 };
@@ -384,14 +384,14 @@ enum TextureAlphaType {
 class WVR_Texture : public WVR_Item {
 public:
 	// abstract methods that all subclasses must implement
-	virtual bool				isDynamic(void) const = 0;
-	virtual uint32				getWidth(void) const = 0;
-	virtual uint32				getHeight(void) const = 0;
-	virtual uint32				getPixelFormat(void) const = 0;
-	virtual uint32				getRawDataStrideBytes(void) const = 0;
-	virtual void *				getRawData(void) const = 0;
-	virtual TextureStereoType	getStereoType() const = 0;
-	virtual TextureAlphaType	getAlphaType() const = 0;
+	virtual bool				isDynamic()				const = 0;
+	virtual uint32				getWidth()				const = 0;
+	virtual uint32				getHeight()				const = 0;
+	virtual uint32				getPixelFormat()		const = 0;
+	virtual uint32				getRawDataStrideBytes() const = 0;
+	virtual void *				getRawData()			const = 0;
+	virtual TextureStereoType	getStereoType()			const = 0;
+	virtual TextureAlphaType	getAlphaType()			const = 0;
 };
 
 class WVR_Movie_Impl;
@@ -400,16 +400,16 @@ public:
 	WVR_Movie();
 	virtual	~WVR_Movie();
 
-	virtual WVR_VersionedImpl*	getPimpl() const { return (WVR_VersionedImpl*)pImpl; }
+	WVR_VersionedImpl*	getPimpl() const override { return (WVR_VersionedImpl*)pImpl; }
 
-	virtual bool				isDynamic(void) const { return true; }
-	virtual uint32				getWidth(void) const { return 0; }
-	virtual uint32				getHeight(void) const { return 0; }
-	virtual uint32				getPixelFormat(void) const { return WVR_IMAGE_FORMAT_UNDEFINED;  }
-	virtual uint32				getRawDataStrideBytes(void) const { return 0; }
-	virtual void *				getRawData(void) const { return 0; }
-	virtual TextureStereoType	getStereoType() const;
-	virtual TextureAlphaType	getAlphaType() const;
+	bool				isDynamic()				const override { return true; }
+	uint32				getWidth()				const override { return 0; }
+	uint32				getHeight()				const override { return 0; }
+	uint32				getPixelFormat()		const override { return WVR_IMAGE_FORMAT_UNDEFINED;  }
+	uint32				getRawDataStrideBytes() const override { return 0; }
+	void *				getRawData()			const override { return 0; }
+	TextureStereoType	getStereoType()			const override;
+	TextureAlphaType	getAlphaType()			const override;
 
 	WVR_Movie_Impl	*pImpl;
 };
@@ -422,7 +422,7 @@ public:
 	virtual	~WVR_AudioBank();
 
 	// public methods dictated by the abstract parent class
-	virtual WVR_VersionedImpl*	getPimpl() const { return (WVR_VersionedImpl*)pImpl; }
+	WVR_VersionedImpl*	getPimpl() const override { return (WVR_VersionedImpl*)pImpl; }
 
 	// our own functionality
 //	virtual uint32				getSoundCount() const;
@@ -441,17 +441,17 @@ public:
 	virtual	~WVR_Image();
 
 	// public methods dictated by the abstract parent class
-	virtual WVR_VersionedImpl*	getPimpl() const { return (WVR_VersionedImpl*)pImpl; }
+	WVR_VersionedImpl*	getPimpl() const override { return (WVR_VersionedImpl*)pImpl; }
 
 	// abstract methods that all WVR_Texture subclasses must implement
-	virtual bool				isDynamic() const;
-	virtual uint32				getWidth() const;
-	virtual uint32				getHeight() const;
-	virtual uint32				getPixelFormat() const;
-	virtual uint32				getRawDataStrideBytes(void) const;
-	virtual void *				getRawData() const;
-	virtual TextureStereoType	getStereoType() const;
-	virtual TextureAlphaType	getAlphaType() const;
+	bool				isDynamic()				const override;
+	uint32				getWidth()				const override;
+	uint32				getHeight()				const override;
+	uint32				getPixelFormat()		const override;
+	uint32				getRawDataStrideBytes() const override;
+	void *				getRawData()			const override;
+	TextureStereoType	getStereoType()			const override;
+	TextureAlphaType	getAlphaType()			const override;
 
 	WVR_Image_Impl	*pImpl;
 };
@@ -465,25 +465,25 @@ public:
 	virtual ~WVR_TextureHotspots();
 
 	// public methods dictated by the abstract parent class
-	virtual WVR_VersionedImpl*	getPimpl() const { return (WVR_VersionedImpl*)pImpl; }
+	WVR_VersionedImpl*	getPimpl() const override { return (WVR_VersionedImpl*)pImpl; }
 
-	virtual bool				isDynamic() const;
-	virtual uint32				getWidth() const;
-	virtual uint32				getHeight() const;
-	virtual uint32				getPixelFormat() const;
-	virtual uint32				getRawDataStrideBytes() const;
-	virtual void*				getRawData() const;
-	virtual TextureStereoType	getStereoType() const;
-	virtual TextureAlphaType	getAlphaType() const;
+	bool				isDynamic()				const override;
+	uint32				getWidth()				const override;
+	uint32				getHeight()				const override;
+	uint32				getPixelFormat()		const override;
+	uint32				getRawDataStrideBytes() const override;
+	void *				getRawData()			const override;
+	TextureStereoType	getStereoType()			const override;
+	TextureAlphaType	getAlphaType()			const override;
 
-	WVR_Status					setDisplaySource(WVR_Texture*);
-	WVR_Texture*				getDisplaySource() const;
-	WVR_Status					setHotspotSource(WVR_Texture*);
-	WVR_Texture*				getHotspotSource() const;
-	WVR_Status					addHotspotKey(const WVR_HotspotKey&);
-	const dynamic_array<WVR_HotspotKey>&	getHotspotKeys(void) const;
+	WVR_Status			setDisplaySource(WVR_Texture*);
+	WVR_Texture*		getDisplaySource() const;
+	WVR_Status			setHotspotSource(WVR_Texture*);
+	WVR_Texture*		getHotspotSource() const;
+	WVR_Status			addHotspotKey(const WVR_HotspotKey&);
+	const dynamic_array<WVR_HotspotKey>&	getHotspotKeys() const;
 
-	virtual void	cleanup();
+	void				cleanup() override;
 
 	WVR_TextureHotspots_Impl* pImpl;
 };
@@ -496,7 +496,7 @@ public:
 	virtual	~WVR_TriMesh();
 
 	// public methods dictated by the abstract parent class
-	virtual WVR_VersionedImpl*	getPimpl() const { return (WVR_VersionedImpl*)pImpl; }
+	WVR_VersionedImpl*	getPimpl() const override { return (WVR_VersionedImpl*)pImpl; }
 
 	// public methods specific to this class
 	const WVR_GeomModel&		getModel() const;
@@ -513,15 +513,15 @@ public:
 	virtual	~WVR_ProjScreen();
 
 	// public methods dictated by the abstract parent class
-	virtual WVR_VersionedImpl*	getPimpl() const { return (WVR_VersionedImpl*)pImpl; }
+	WVR_VersionedImpl*	getPimpl() const override { return (WVR_VersionedImpl*)pImpl; }
 
 	// public methods specific to this class
-	WVR_Status					setGeometry(WVR_TriMesh*);
-	WVR_TriMesh*				getGeometry(void) const;
-	WVR_Status					setTexture(WVR_Texture*);
-	WVR_Texture*				getTexture(void) const;
+	WVR_Status		setGeometry(WVR_TriMesh*);
+	WVR_TriMesh*	getGeometry() const;
+	WVR_Status		setTexture(WVR_Texture*);
+	WVR_Texture*	getTexture() const;
 
-	void				cleanup() override;
+	void			cleanup() override;
 	WVR_ProjScreen_Impl	*pImpl;
 };
 
@@ -533,13 +533,13 @@ public:
 	virtual	~WVR_Group();
 
 	// public methods dictated by the abstract parent class
-	virtual WVR_VersionedImpl*	getPimpl() const { return (WVR_VersionedImpl*)pImpl; }
+	WVR_VersionedImpl*	getPimpl() const override { return (WVR_VersionedImpl*)pImpl; }
 
 	// methods special to this class
-	uint32						getChildCount(void) const;
-	WVR_Renderable*				getChild(uint32) const;
+	uint32			getChildCount() const;
+	WVR_Renderable*	getChild(uint32) const;
 
-	void				cleanup() override;
+	void			cleanup() override;
 
 	WVR_Group_Impl	*pImpl;
 };
@@ -552,15 +552,15 @@ public:
 	virtual	~WVR_SwitchRenderable();
 
 	// public methods dictated by the abstract parent class
-	virtual WVR_VersionedImpl*	getPimpl() const { return (WVR_VersionedImpl*)pImpl; }
+	WVR_VersionedImpl*	getPimpl() const override { return (WVR_VersionedImpl*)pImpl; }
 
 	// methods special to this class
-	uint32						getChildCount(void) const;
-	WVR_Renderable*				getChild(uint32) const;
-	void						setCurrentChild(uint32);
-	uint32						getCurrentChild(void) const;
+	uint32			getChildCount() const;
+	WVR_Renderable*	getChild(uint32) const;
+	void			setCurrentChild(uint32);
+	uint32			getCurrentChild() const;
 
-	virtual void				cleanup() override;
+	void			cleanup() override;
 
 	WVR_SwitchRenderable_Impl	*pImpl;
 };
@@ -573,7 +573,7 @@ public:
 	virtual	~WVR_Script();
 
 	// public methods dictated by the abstract parent class
-	virtual WVR_VersionedImpl*	getPimpl() const { return (WVR_VersionedImpl*)pImpl; }
+	WVR_VersionedImpl*	getPimpl() const override { return (WVR_VersionedImpl*)pImpl; }
 
 	//public methods special to us
 	virtual WVR_Status			setScriptByteCode(const string &);
@@ -588,17 +588,17 @@ public:
 	virtual	~WVR_Scene();
 
 	// public methods dictated by the abstract parent class
-	virtual WVR_VersionedImpl*	getPimpl() const { return (WVR_VersionedImpl*)pImpl; }
+	WVR_VersionedImpl*	getPimpl() const override { return (WVR_VersionedImpl*)pImpl; }
 
 	// public methods for adding/accessing items to the scene
-	WVR_Renderable*				getRoot();
-	void						setRoot(WVR_Renderable*);
-	void						setAudioBank(WVR_AudioBank*);
+	WVR_Renderable*	getRoot();
+	void			setRoot(WVR_Renderable*);
+	void			setAudioBank(WVR_AudioBank*);
 
 	//public methods to control the scene
-	WVR_Status					playSound(uint32 indexInAudioBank);
+	WVR_Status		playSound(uint32 indexInAudioBank);
 
-	void	cleanup() override;
+	void			cleanup() override;
 	WVR_Scene_Impl	*pImpl;
 };
 
@@ -608,37 +608,37 @@ public:
 
 class WVR_VersionedImpl {
 public:
-	void						setName(const string &n)	{ instanceName = n; }
-	const string&				getName()		const		{ return instanceName; };
-	void						setId(WVR_UUID newId)		{ instanceId = newId; }
-	WVR_UUID					getId()			const		{ return instanceId; }
-	WVR_TypeID					getType()		const		{ return WVR_TypeID(itemType); }
+	void			setName(const string &n)	{ instanceName = n; }
+	const string&	getName()		const		{ return instanceName; };
+	void			setId(WVR_UUID newId)		{ instanceId = newId; }
+	WVR_UUID		getId()			const		{ return instanceId; }
+	WVR_TypeID		getType()		const		{ return WVR_TypeID(itemType); }
 
 	// abstract functions that all subclasses must implement
 	virtual dynamic_array<shared_ptr<WVR_Item> >	getDescendants() { return dynamic_array<shared_ptr<WVR_Item> >(); }
 
 	// static members
-	static uint16				getCurrentBaseVersion()			{ return cCurrentBaseVersion; };
-	static void					addChildAndDescendants(dynamic_array<shared_ptr<WVR_Item> > &ret, WVR_Item *x) {
+	static uint16	getCurrentBaseVersion()			{ return cCurrentBaseVersion; };
+	static void		addChildAndDescendants(dynamic_array<shared_ptr<WVR_Item> > &ret, WVR_Item *x) {
 		dynamic_array<shared_ptr<WVR_Item> > fromChild = x->getPimpl()->getDescendants();
 		ret.insert(ret.end(), fromChild.begin(), fromChild.end());
 		ret.push_back(x);
 	}
 	// member methods for subclasses to override
-	virtual bool				isRenderable(void)		const	{ return false; }
+	virtual bool	isRenderable()		const	{ return false; }
 	virtual dynamic_array<WVR_EventHandler> &getEventHandlerList() final { return eventHandlers;  }
 
-	void						assignScript(WVR_Item *n, WVR_Script *scr, const WVR_ScriptArguments &args) {
+	void			assignScript(WVR_Item *n, WVR_Script *scr, const WVR_ScriptArguments &args) {
 		assignedScript = new WVR_ScriptInstance(n, args);
 		assignedScript->baseDefinition = scr;
 	}
-	WVR_ScriptInstance*			getAssignedScript()		const	{ return assignedScript; }
+	WVR_ScriptInstance*		getAssignedScript()		const	{ return assignedScript; }
 
 	static const uint16	cCurrentBaseVersion = 1;
 
 	// only subclasses should be creating and destroying
 	WVR_VersionedImpl(uint16 subclassType, uint16 subclassVersion) {
-		itemType		= subclassType;
+		itemType	= subclassType;
 		baseVersion	= cCurrentBaseVersion;
 		version		= subclassVersion;
 		instanceId	= WVR_UUID();
@@ -682,7 +682,7 @@ public:
 	}
 
 	// overridden from the parent
-	virtual bool isRenderable(void) const final { return true; }
+	virtual bool isRenderable() const final { return true; }
 
 	// abstract methods that all subclasses of Renderable must implement
 	virtual void recomputeBoundingBox() {};
@@ -801,7 +801,7 @@ public:
 WVR_Group::WVR_Group() : pImpl(new WVR_Group_Impl){}
 WVR_Group::~WVR_Group()	{ delete pImpl;  }
 void			WVR_Group::cleanup()					{ pImpl->persistent.children.clear();}
-uint32			WVR_Group::getChildCount(void)	const	{ return (uint32)pImpl->persistent.children.size(); }
+uint32			WVR_Group::getChildCount()	const	{ return (uint32)pImpl->persistent.children.size(); }
 WVR_Renderable *WVR_Group::getChild(uint32 i)	const	{ return pImpl->persistent.children[i];}
 
 class WVR_SwitchRenderable_Impl : public WVR_Renderable_Impl {
@@ -832,7 +832,7 @@ public:
 WVR_SwitchRenderable::WVR_SwitchRenderable() : pImpl(new WVR_SwitchRenderable_Impl) {}
 WVR_SwitchRenderable::~WVR_SwitchRenderable() { delete pImpl; }
 void			WVR_SwitchRenderable::cleanup()						{ pImpl->persistent.children.clear();}
-uint32			WVR_SwitchRenderable::getChildCount(void) const		{ return (uint32)pImpl->persistent.children.size();}
+uint32			WVR_SwitchRenderable::getChildCount() const		{ return (uint32)pImpl->persistent.children.size();}
 WVR_Renderable*	WVR_SwitchRenderable::getChild(uint32 i) const		{ return pImpl->persistent.children[i];}
 
 class WVR_Geometry_Impl : public WVR_VersionedImpl {
@@ -1023,9 +1023,9 @@ public:
 };
 WVR_Image::WVR_Image() : pImpl(new WVR_Image_Impl) {}
 WVR_Image::~WVR_Image() { delete pImpl; }
-bool	WVR_Image::isDynamic(void)			const { return false;}
-uint32	WVR_Image::getWidth(void)			const { return pImpl->persistent.width;}
-uint32	WVR_Image::getHeight(void)			const { return pImpl->persistent.height;}
+bool	WVR_Image::isDynamic()			const { return false;}
+uint32	WVR_Image::getWidth()			const { return pImpl->persistent.width;}
+uint32	WVR_Image::getHeight()			const { return pImpl->persistent.height;}
 uint32	WVR_Image::getPixelFormat()			const { return pImpl->persistent.pixelFormat;}
 uint32	WVR_Image::getRawDataStrideBytes()	const { return pImpl->persistent.strideBytes;}
 void*	WVR_Image::getRawData()				const { return pImpl->persistent.imageData;}
@@ -1065,20 +1065,20 @@ public:
 
 WVR_TextureHotspots::WVR_TextureHotspots() : pImpl(new WVR_TextureHotspots_Impl) {}
 WVR_TextureHotspots::~WVR_TextureHotspots() { delete pImpl; }
-bool				WVR_TextureHotspots::isDynamic()			const	{ return getDisplaySource()->isDynamic();}
-uint32				WVR_TextureHotspots::getWidth()				const	{ return getDisplaySource()->getWidth();}
-uint32				WVR_TextureHotspots::getHeight()			const	{ return getDisplaySource()->getHeight();}
-uint32				WVR_TextureHotspots::getPixelFormat()		const	{ return getDisplaySource()->getPixelFormat();}
-uint32				WVR_TextureHotspots::getRawDataStrideBytes()const	{ return getDisplaySource()->getRawDataStrideBytes();}
-void*				WVR_TextureHotspots::getRawData()			const	{ return getDisplaySource()->getRawData();}
-TextureStereoType	WVR_TextureHotspots::getStereoType()		const	{ return getDisplaySource()->getStereoType();}
-TextureAlphaType	WVR_TextureHotspots::getAlphaType()			const	{ return getDisplaySource()->getAlphaType();}
-WVR_Status			WVR_TextureHotspots::setDisplaySource(WVR_Texture *source) { if (!source) return wvrInvalidEntityName; pImpl->persistent.displaySource = source; return wvrSuccess;}
-WVR_Texture*		WVR_TextureHotspots::getDisplaySource()		const	{ return pImpl->persistent.displaySource;}
-WVR_Status			WVR_TextureHotspots::setHotspotSource(WVR_Texture *source) {  if (!source)  return wvrInvalidEntityName; pImpl->persistent.hotspotSource = source; return wvrSuccess;}
-WVR_Texture*		WVR_TextureHotspots::getHotspotSource()		const	{ return pImpl->persistent.hotspotSource;}
+bool				WVR_TextureHotspots::isDynamic()						const	{ return getDisplaySource()->isDynamic();}
+uint32				WVR_TextureHotspots::getWidth()							const	{ return getDisplaySource()->getWidth();}
+uint32				WVR_TextureHotspots::getHeight()						const	{ return getDisplaySource()->getHeight();}
+uint32				WVR_TextureHotspots::getPixelFormat()					const	{ return getDisplaySource()->getPixelFormat();}
+uint32				WVR_TextureHotspots::getRawDataStrideBytes()			const	{ return getDisplaySource()->getRawDataStrideBytes();}
+void*				WVR_TextureHotspots::getRawData()						const	{ return getDisplaySource()->getRawData();}
+TextureStereoType	WVR_TextureHotspots::getStereoType()					const	{ return getDisplaySource()->getStereoType();}
+TextureAlphaType	WVR_TextureHotspots::getAlphaType()						const	{ return getDisplaySource()->getAlphaType();}
+WVR_Status			WVR_TextureHotspots::setDisplaySource(WVR_Texture *source)		{ if (!source) return wvrInvalidEntityName; pImpl->persistent.displaySource = source; return wvrSuccess;}
+WVR_Texture*		WVR_TextureHotspots::getDisplaySource()					const	{ return pImpl->persistent.displaySource;}
+WVR_Status			WVR_TextureHotspots::setHotspotSource(WVR_Texture *source)		{ if (!source)  return wvrInvalidEntityName; pImpl->persistent.hotspotSource = source; return wvrSuccess;}
+WVR_Texture*		WVR_TextureHotspots::getHotspotSource()					const	{ return pImpl->persistent.hotspotSource;}
 WVR_Status			WVR_TextureHotspots::addHotspotKey(const WVR_HotspotKey &key)	{ pImpl->persistent.hotspotKeys.push_back(key); return wvrSuccess;}
-const dynamic_array<WVR_HotspotKey>& WVR_TextureHotspots::getHotspotKeys() const	{ return pImpl->persistent.hotspotKeys;}
+const dynamic_array<WVR_HotspotKey>& WVR_TextureHotspots::getHotspotKeys()	const	{ return pImpl->persistent.hotspotKeys;}
 
 void WVR_TextureHotspots::cleanup() {
     pImpl->persistent.displaySource = nullptr;
@@ -1113,9 +1113,9 @@ struct WVR_FileHeader {
 };
 
 struct WVR_FileEntity {
-	uint16	type;
-	uint16	baseVersion;
-	uint16	version;
+	uint16			type;
+	uint16			baseVersion;
+	uint16			version;
 	packed<uint64>	size;
 };
 
@@ -1235,7 +1235,7 @@ template<> void WVR_FileContents::add(const shared_ptr<WVR_Scene> &item) {
 class WVR_Reader {
 	static uint16		cCurrentBaseVersion;
 
-	istream_ref				fp;
+	istream_ref			fp;
 	WVR_FileContents	&info;
 	bool				amBigEndian;
 	WVR_Status			lastStatus;
@@ -1252,46 +1252,46 @@ class WVR_Reader {
 		return item;
 	}
 
-	void doReadScriptArguments(WVR_ScriptArguments &);
+	void	doReadScriptArguments(WVR_ScriptArguments &);
 
-	void doRead(WVR_AudioBank*, uint16 version, uint16 baseVersion);
-	void doRead(WVR_Group*, uint16 version, uint16 baseVersion);
-	void doRead(WVR_Image*, uint16 version, uint16 baseVersion);
-	void doRead(WVR_Movie*, uint16 version, uint16 baseVersion);
-	void doRead(WVR_ProjScreen*, uint16 version, uint16 baseVersion);
-	void doRead(WVR_Scene*, uint16 version, uint16 baseVersion);
-	void doRead(WVR_Script*, uint16 version, uint16 baseVersion);
-	void doRead(WVR_SwitchRenderable*, uint16 version, uint16 baseVersion);
-	void doRead(WVR_TriMesh*, uint16 version, uint16 baseVersion);
-	void doRead(const shared_ptr<WVR_TextureHotspots>&, uint16 version, uint16 baseVersion);
+	void	doRead(WVR_AudioBank*, uint16 version, uint16 baseVersion);
+	void	doRead(WVR_Group*, uint16 version, uint16 baseVersion);
+	void	doRead(WVR_Image*, uint16 version, uint16 baseVersion);
+	void	doRead(WVR_Movie*, uint16 version, uint16 baseVersion);
+	void	doRead(WVR_ProjScreen*, uint16 version, uint16 baseVersion);
+	void	doRead(WVR_Scene*, uint16 version, uint16 baseVersion);
+	void	doRead(WVR_Script*, uint16 version, uint16 baseVersion);
+	void	doRead(WVR_SwitchRenderable*, uint16 version, uint16 baseVersion);
+	void	doRead(WVR_TriMesh*, uint16 version, uint16 baseVersion);
+	void	doRead(const shared_ptr<WVR_TextureHotspots>&, uint16 version, uint16 baseVersion);
 
-	void doReadEventHandler(WVR_EventHandler & handler);
-	void doReadVersionedCommon(WVR_Item *item, uint16 baseVersion);
-	void doReadRenderableData(WVR_Renderable_Impl &n);
+	void	doReadEventHandler(WVR_EventHandler & handler);
+	void	doReadVersionedCommon(WVR_Item *item, uint16 baseVersion);
+	void	doReadRenderableData(WVR_Renderable_Impl &n);
 
-	uint16 doReadSimpleVersion();
+	uint16	doReadSimpleVersion();
 
-	void doReadTransform(WVR_Transform &);
-	void doReadGeomVertex(WVR_GeomVertex &);
-	void doReadGeomAABox(WVR_GeomAABox &);
-	void doReadGeomObject(WVR_GeomObject &);
-	void doReadGeomModel(WVR_GeomModel &);
-	void doReadGeomModelIndexList(shared_ptr<WVR_IndexBuffer> &);
-	void doReadGeomModelVertexList(shared_ptr<WVR_VertexBuffer> &);
-	void doReadMovieAudioTrack(WVR_AudioTrackDescriptor &, uint16 version);
-	void doReadScriptInstance(shared_ptr<WVR_ScriptInstance> &, WVR_Item *par, const WVR_UUID &parUUID);
-	void doReadSoundEntry(WVR_SoundEntry &);
+	void	doReadTransform(WVR_Transform &);
+	void	doReadGeomVertex(WVR_GeomVertex &);
+	void	doReadGeomAABox(WVR_GeomAABox &);
+	void	doReadGeomObject(WVR_GeomObject &);
+	void	doReadGeomModel(WVR_GeomModel &);
+	void	doReadGeomModelIndexList(shared_ptr<WVR_IndexBuffer> &);
+	void	doReadGeomModelVertexList(shared_ptr<WVR_VertexBuffer> &);
+	void	doReadMovieAudioTrack(WVR_AudioTrackDescriptor &, uint16 version);
+	void	doReadScriptInstance(shared_ptr<WVR_ScriptInstance> &, WVR_Item *par, const WVR_UUID &parUUID);
+	void	doReadSoundEntry(WVR_SoundEntry &);
 
-	shared_ptr<WVR_Renderable>	doReadUUIDasRenderable(void);
-	shared_ptr<WVR_AudioBank>	doReadUUIDasAudioBank(void);
-	shared_ptr<WVR_Geometry>	doReadUUIDasGeometry(void);
-	shared_ptr<WVR_Script>		doReadUUIDasScript(void);
-	shared_ptr<WVR_TriMesh>		doReadUUIDasTriMesh(void);
-	shared_ptr<WVR_Texture>		doReadUUIDasTexture(void);
-	shared_ptr<WVR_Item>		doReadUUIDasItem(void);
+	shared_ptr<WVR_Renderable>	doReadUUIDasRenderable();
+	shared_ptr<WVR_AudioBank>	doReadUUIDasAudioBank();
+	shared_ptr<WVR_Geometry>	doReadUUIDasGeometry();
+	shared_ptr<WVR_Script>		doReadUUIDasScript();
+	shared_ptr<WVR_TriMesh>		doReadUUIDasTriMesh();
+	shared_ptr<WVR_Texture>		doReadUUIDasTexture();
+	shared_ptr<WVR_Item>		doReadUUIDasItem();
 
 public:
-	void doRead(WVR_MetaData &md);
+	void	doRead(WVR_MetaData &md);
 
 	static uint16	getCurrentBaseVersion() { return cCurrentBaseVersion; }
 	void			Read();
@@ -1326,7 +1326,6 @@ void WVR_Reader::doRead(WVR_MetaData &md) {
         md.optional[key] = value;
     }
 }
-
 
 void WVR_Reader::read(string &out) {
 	uint32 len;
@@ -1412,61 +1411,61 @@ void WVR_Reader::Read() {
 
 		// based on the type of object in the header we have to allocate the object and then read it.
 		switch (entity.type) {
-			case WVR_TYPE_ID_SCENE:			{
+			case WVR_TYPE_ID_SCENE: {
 				shared_ptr<WVR_Scene> newScene = allocate<WVR_Scene>();
 				doRead(newScene, version, baseVersion);
 				info.add(newScene);
 				break;
 			}
-			case WVR_TYPE_ID_SCRIPT:			{
+			case WVR_TYPE_ID_SCRIPT: {
 				shared_ptr<WVR_Script> newScript = allocate<WVR_Script>();
 				doRead(newScript, version, baseVersion);
 				info.add(newScript);
 				break;
 			}
-			case WVR_TYPE_ID_GROUP:			{
+			case WVR_TYPE_ID_GROUP: {
 				shared_ptr<WVR_Group> newGroup = allocate<WVR_Group>();
 				doRead(newGroup, version, baseVersion);
 				info.add(newGroup);
 				break;
 			}
-			case WVR_TYPE_ID_SWITCHRENDERABLE:			{
+			case WVR_TYPE_ID_SWITCHRENDERABLE: {
 				shared_ptr<WVR_SwitchRenderable> newSwitchRenderable = allocate<WVR_SwitchRenderable>();
 				doRead(newSwitchRenderable, version, baseVersion);
 				info.add(newSwitchRenderable);
 				break;
 			}
-			case WVR_TYPE_ID_TRIMESH:			{
+			case WVR_TYPE_ID_TRIMESH: {
 				shared_ptr<WVR_TriMesh> newTriMesh = allocate<WVR_TriMesh>();
 				doRead(newTriMesh, version, baseVersion);
 				info.add(newTriMesh);
 				break;
 			}
-			case WVR_TYPE_ID_PROJSCREEN:			{
+			case WVR_TYPE_ID_PROJSCREEN: {
 				shared_ptr<WVR_ProjScreen> newProjScreen = allocate<WVR_ProjScreen>();
 				doRead(newProjScreen, version, baseVersion);
 				info.add(newProjScreen);
 				break;
 			}
-			case WVR_TYPE_ID_MOVIE:			{
+			case WVR_TYPE_ID_MOVIE: {
 				shared_ptr<WVR_Movie> newMovie = allocate<WVR_Movie>();
 				doRead(newMovie, version, baseVersion);
 				info.add(newMovie);
 				break;
 			}
-			case WVR_TYPE_ID_IMAGE:			{
+			case WVR_TYPE_ID_IMAGE: {
 				shared_ptr<WVR_Image> newImage = allocate<WVR_Image>();
 				doRead(newImage, version, baseVersion);
 				info.add(newImage);
 				break;
 			}
-			case WVR_TYPE_ID_AUDIOBANK:			{
+			case WVR_TYPE_ID_AUDIOBANK: {
 				shared_ptr<WVR_AudioBank> newAudioBank = allocate<WVR_AudioBank>();
 				doRead(newAudioBank, version, baseVersion);
 				info.add(newAudioBank);
 				break;
 			}
-			case WVR_TYPE_ID_TEXTUREHOTSPOTS:			{
+			case WVR_TYPE_ID_TEXTUREHOTSPOTS: {
 				shared_ptr<WVR_TextureHotspots> newHotspots = allocate<WVR_TextureHotspots>();
 				doRead(newHotspots, version, baseVersion);
 				info.add(newHotspots);
@@ -1846,7 +1845,7 @@ void WVR_Reader::doReadScriptInstance(shared_ptr<WVR_ScriptInstance> &instance, 
 	instance->baseDefinition = scr;
 }
 
-shared_ptr<WVR_Renderable> WVR_Reader::doReadUUIDasRenderable(void) {
+shared_ptr<WVR_Renderable> WVR_Reader::doReadUUIDasRenderable() {
 	WVR_UUID tmpUuid;
 	read(tmpUuid);
 
@@ -2039,7 +2038,7 @@ void WVR_Reader::doReadSoundEntry(WVR_SoundEntry &sound) {
 	fp.readbuff(sound.datav, sound.dataSize);
 }
 
-shared_ptr<WVR_Geometry> WVR_Reader::doReadUUIDasGeometry(void) {
+shared_ptr<WVR_Geometry> WVR_Reader::doReadUUIDasGeometry() {
 	WVR_UUID tmpUuid;
 	read(tmpUuid);
 
@@ -2056,7 +2055,7 @@ shared_ptr<WVR_Geometry> WVR_Reader::doReadUUIDasGeometry(void) {
 	}
 }
 
-shared_ptr<WVR_Script> WVR_Reader::doReadUUIDasScript(void) {
+shared_ptr<WVR_Script> WVR_Reader::doReadUUIDasScript() {
 	WVR_UUID tmpUuid;
 	read(tmpUuid);
 
@@ -2073,7 +2072,7 @@ shared_ptr<WVR_Script> WVR_Reader::doReadUUIDasScript(void) {
 	}
 }
 
-shared_ptr<WVR_TriMesh> WVR_Reader::doReadUUIDasTriMesh(void) {
+shared_ptr<WVR_TriMesh> WVR_Reader::doReadUUIDasTriMesh() {
 	WVR_UUID tmpUuid;
 	read(tmpUuid);
 
@@ -2090,7 +2089,7 @@ shared_ptr<WVR_TriMesh> WVR_Reader::doReadUUIDasTriMesh(void) {
 	}
 }
 
-shared_ptr<WVR_Texture> WVR_Reader::doReadUUIDasTexture(void) {
+shared_ptr<WVR_Texture> WVR_Reader::doReadUUIDasTexture() {
 	WVR_UUID tmpUuid;
 	read(tmpUuid);
 
@@ -2107,7 +2106,7 @@ shared_ptr<WVR_Texture> WVR_Reader::doReadUUIDasTexture(void) {
 	}
 }
 
-shared_ptr<WVR_Item> WVR_Reader::doReadUUIDasItem(void) {
+shared_ptr<WVR_Item> WVR_Reader::doReadUUIDasItem() {
 	WVR_UUID tmpUuid;
 	read(tmpUuid);
 
@@ -2124,7 +2123,7 @@ shared_ptr<WVR_Item> WVR_Reader::doReadUUIDasItem(void) {
 	}
 }
 
-shared_ptr<WVR_AudioBank> WVR_Reader::doReadUUIDasAudioBank(void) {
+shared_ptr<WVR_AudioBank> WVR_Reader::doReadUUIDasAudioBank() {
 	WVR_UUID tmpUuid;
 	read(tmpUuid);
 

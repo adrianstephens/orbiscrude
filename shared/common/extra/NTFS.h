@@ -93,7 +93,7 @@ enum _FILE_ATTRIBUTE_FLAGS {
 
 #endif
 
-typedef uint16le ntfschar;
+typedef char16le ntfschar;
 
 // Clusters are signed 64-bit values on NTFS volumes
 typedef int64le VCN;

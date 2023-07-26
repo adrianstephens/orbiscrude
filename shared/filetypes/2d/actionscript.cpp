@@ -629,7 +629,7 @@ using namespace iso::flash;
 class DisassemblerAS : public Disassembler {
 public:
 	const char*	GetDescription() override { return "ActionScript"; }
-	State*		Disassemble(const iso::memory_block &block, uint64 addr, SymbolFinder sym_finder) override;
+	State*		Disassemble(const_memory_block block, uint64 addr, SymbolFinder sym_finder) override;
 	static uint8		GetNextOp(byte_reader &r, uint32 *params);
 } actionscript;
 
@@ -1044,12 +1044,12 @@ static struct {const char *op; PARAMS params;} ops[] = {
 	"ff",					NONE,
 };
 
-Disassembler::State *DisassemblerAS::Disassemble(const iso::memory_block &block, uint64 addr, SymbolFinder sym_finder) {
+Disassembler::State *DisassemblerAS::Disassemble(const_memory_block block, uint64 addr, SymbolFinder sym_finder) {
 	StateDefault	*state = new StateDefault;
 	byte_reader		r(block);
-	while (r.p < (uint8*)block.end()) {
+	while (r.p < block.end()) {
 		const uint8	*start	= r.p;
-		uint32	offset		= uint32(start - (uint8*)block);
+		uint32	offset		= uint32(start - (const uint8*)block);
 		uint8	op			= r.getc();
 		PARAMS	params		= ops[op].params;
 
@@ -1082,7 +1082,7 @@ Disassembler::State *DisassemblerAS::Disassemble(const iso::memory_block &block,
 //			case MULTINAME:
 //		}
 
-		state->lines.push_back((const char*)ba);
+		state->lines.push_back(ba);
 	}
 	return state;
 }

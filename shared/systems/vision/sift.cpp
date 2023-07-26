@@ -783,7 +783,7 @@ static void interp_hist_entry(auto_block<double,3> &hist, double rbin, double cb
 				int cb = c0 + c;
 				if (cb >= 0 && cb < d) {
 					int v_c = v_r * ((c == 0) ? 1.0 - d_c : d_c);
-					double *h = row[cb];
+					double *h = row[cb].begin();
 					for (int o = 0; o <= 1; o++) {
 						int ob = (o0 + o) % n;
 						double v_o = v_c * ((o == 0) ? 1.0 - d_o : d_o);

@@ -374,7 +374,7 @@ template<typename T> constexpr auto name_of() { return name<T>::value; };
 
 template<typename T> struct uuid_gen;
 template<typename T, typename V=void> struct uuid;//	{ generate_guid(generate_interface_guid(sigof<T>())); };
-template<typename T> struct uuid<T, typename T_void<typename def<T>::default_interface>::type> : uuid<typename def<T>::default_interface> {};
+template<typename T> struct uuid<T, void_t<typename def<T>::default_interface>> : uuid<typename def<T>::default_interface> {};
 template<typename T> constexpr auto uuidof()	{ return get_guid(uuid<T>); }
 template<typename T> constexpr auto uuidof(T*)	{ return get_guid(uuid<T>); }
 
@@ -950,7 +950,7 @@ template<typename T, typename V=void> struct ref_new : ptr<T> {
 	}
 };
 
-template<typename T> struct ref_new<T, typename T_void<typename def<T>::composer>::type> : ptr<T> {
+template<typename T> struct ref_new<T, void_t<typename def<T>::composer>> : ptr<T> {
 	template<typename...P> ref_new(P&&... p) {
 		IInspectable* inner;
 		this->t = T::activate(forward<P>(p)..., nullptr, &inner);

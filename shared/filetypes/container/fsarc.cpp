@@ -140,7 +140,7 @@ class BCIFileHandler : public FileHandler {
 			*p++ = *s++;
 #endif
 #if 1
-		p = bm->CreateClut(16);
+		p = bm->CreateClut(16).begin();
 		ISO_rgba	col1(0xff,0xff,0xff), col2(0xcc,0xcc,0xcc);
 		p[0] = ISO_rgba(0,0,0,0);
 		p[1] = p[2] = p[3] = p[4] = p[5] = col1;

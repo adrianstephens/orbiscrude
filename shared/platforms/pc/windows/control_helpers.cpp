@@ -14,8 +14,8 @@ using namespace win;
 class _GetValueDialog : public Dialog<_GetValueDialog> {
 	fixed_string<1024>	&value;
 public:
-	LRESULT	Proc(UINT message, WPARAM wParam, LPARAM lParam) {
-		switch (message) {
+	LRESULT	Proc(MSG_ID msg, WPARAM wParam, LPARAM lParam) {
+		switch (msg) {
 			case WM_INITDIALOG:
 				Item(ID_EDIT).SetText(value);
 				SetFocus(ID_EDIT);
@@ -51,7 +51,7 @@ bool win::GetValueDialog(HWND hWndParent, fixed_string<1024> &value) {
 	return _GetValueDialog(value)(hWndParent);
 }
 
-const char *win::GetValueDialog(HWND hWndParent, const char *_value) {
+const char *win::GetValueDialog(HWND hWndParent, text _value) {
 	static fixed_string<1024>	value;
 	value = _value;
 	return _GetValueDialog(value)(hWndParent) ? (const char*)value : 0;
@@ -61,8 +61,8 @@ const char *win::GetValueDialog(HWND hWndParent, const char *_value) {
 //	EditControl2
 //-----------------------------------------------------------------------------
 
-LRESULT EditControl2::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
-	switch (message) {
+LRESULT EditControl2::Proc(MSG_ID msg, WPARAM wParam, LPARAM lParam) {
+	switch (msg) {
 		case WM_CREATE:
 			owner = Parent();
 			break;
@@ -78,7 +78,7 @@ LRESULT EditControl2::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 			break;
 		case WM_CHAR:
 			if (wParam == '\r') {
-				owner(message, wParam, lParam);
+				owner(msg, wParam, lParam);
 				return 0;
 			}
 			break;
@@ -86,7 +86,7 @@ LRESULT EditControl2::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 		case WM_MOUSEACTIVATE:
 			SetFocus();
 		case WM_SETFOCUS: {
-			int	r = Super(message, wParam, lParam);
+			int	r = Super(msg, wParam, lParam);
 			SetAccelerator(0, 0);
 			return r;
 		}
@@ -98,7 +98,7 @@ LRESULT EditControl2::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 			hWnd = 0;
 			break;
 	}
-	return Super(message, wParam, lParam);
+	return Super(msg, wParam, lParam);
 }
 
 void EditLabelCommon(EditControl2 &edit, const WindowPos &wpos, string_param &&text, ID id) {
@@ -153,8 +153,8 @@ bool win::FindNextText(EditControl c, const char *search, int flags) {
 	return false;
 }
 
-//UINT_PTR CALLBACK DummyDialogProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
-//	switch (message) {
+//UINT_PTR CALLBACK DummyDialogProc(HWND hWnd, MSG_ID msg, WPARAM wParam, LPARAM lParam) {
+//	switch (msg) {
 //		case WM_INITDIALOG:
 //			return 1;
 //		case WM_NCDESTROY:
@@ -182,13 +182,13 @@ TextFinder::TextFinder(HWND hWnd) {
 	SetModelessDialog(c);
 }
 
-TextFinder *TextFinder::CheckMessage(UINT message, WPARAM wParam, LPARAM lParam) {
+TextFinder *TextFinder::CheckMessage(MSG_ID msg, WPARAM wParam, LPARAM lParam) {
 	static UINT WM_FINDMSGSTRING = RegisterWindowMessageA(FINDMSGSTRINGA);
-	if (message == WM_FINDMSGSTRING) {
+	if (msg == WM_FINDMSGSTRING) {
 		TextFinder	*t = (TextFinder*)lParam;
 		if (!(t->Flags & FR_DIALOGTERM))
 			return t;
-	} else if (message == WM_PARENTNOTIFY) {
+	} else if (msg == WM_PARENTNOTIFY) {
 		if (LOWORD(wParam) == WM_DESTROY) {
 			TextFinder	*t = Control((HWND)lParam).user;
 			delete t;
@@ -248,17 +248,27 @@ void win::HighLightTree(TreeControl tree, uint32 addr, uint32 val) {
 	}
 }
 
-HTREEITEM win::FindOffset(TreeControl tree, HTREEITEM h, uint32 offset) {
+HTREEITEM win::FindOffset(TreeControl tree, HTREEITEM h, uint32 offset, bool stop_equal) {
+	uint32	poff	= 0;
 	for (HTREEITEM	p = h; p; ) {
-		h = p;
-		p = 0;
-		for (HTREEITEM c = tree.GetChildItem(h); c; p = c, c = tree.GetNextItem(c)) {
-			TreeControl::Item	i	= tree.GetItem(c, TVIF_HANDLE | TVIF_IMAGE | TVIF_PARAM);
-			uint32	off	= i.Param();
-			if (off == offset)
+		h		= p;
+		p		= 0;
+		uint32	parent_off = poff, off	= 0;
+		for (HTREEITEM c = tree.GetChildItem(h); c; poff = off, p = c, c = tree.GetNextItem(c)) {
+			off	= tree.GetItemParam(c);
+			if (off == 0)	// ignore 0
+				continue;
+			if (stop_equal && off == offset)
 				return c;
-			if (off > offset)
+			if (off > offset) {
+				if (auto c2 = tree.GetChildItem(c)) {
+					if ((uint32)tree.GetItemParam(c2) < off) {
+						p		= c;
+						poff	= off;
+					}
+				}
 				break;
+			}
 		}
 	}
 	return h;

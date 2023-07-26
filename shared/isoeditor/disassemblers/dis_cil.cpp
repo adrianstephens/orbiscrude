@@ -352,7 +352,7 @@ Disassembler::State *DisassemblerCIL::Disassemble(const memory_block &block, uin
 		}
 
 		p += oplen;
-		state->lines.push_back((const char*)ba);
+		state->lines.push_back(ba);
 	}
 	return state;
 }

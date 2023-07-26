@@ -2,13 +2,11 @@
 #define MAIN_H
 
 #include "viewers/viewer.h"
-#include "events.h"
 #include "filename.h"
-#include "utilities.h"
 
 #ifdef PLAT_WIN32
-#include "windows\treecolumns.h"
-#include "windows\control_helpers.h"
+#include "windows/treecolumns.h"
+#include "windows/control_helpers.h"
 #include "resource.h"
 #endif
 
@@ -36,56 +34,43 @@ namespace app {
 using namespace iso;
 
 struct ScaleProgress {
-	uint64	offset, total;
-	float	digits;
-	int64	val;
 	timer	time;
+	float	digits			= 0;
+	
+	uint64	offset			= 0;
+	uint64	total			= 1;
 
-	ScaleProgress() : offset(0), total(1), digits(0), val(-1) {}
-	ScaleProgress&	operator++()		{ offset++; return *this; }
-	ScaleProgress&	operator=(uint32 n)	{ total *= n; offset *= n; return *this; }
+	uint64	update_offset	= 0;
+	float	update_time		= 0;
+	int64	update_val		= -1;
+
+	ScaleProgress() {}
+	ScaleProgress&	operator++()		{ ++offset; return *this; }
+	ScaleProgress&	operator=(uint32 n)	{ total *= n; offset *= n; update_offset *= n; return *this; }
 
 	uint32	pos(uint32 range) const {
 		return mul_div(offset, range, total);
 	}
 
-	bool	ready() {
-		uint32	idigits	= uint32(digits + 0.5f);
-		uint64	frac	= pow(uint64(10), idigits);
-		int64	percent	= mul_div(frac * 100, offset, total);
-
-		if (percent != val) {
-			if (time < 0.1f)
-				digits *= 0.9999f;
-			val	= percent;
-			time.reset();
-			return true;
-
-		} else if (time > 0.25f) {
-			++digits;
-		}
-		return false;
-	}
+	bool	ready();
+	float	remaining_time() const;
 
 	friend string_accum& operator<<(string_accum &sa, const ScaleProgress &p) {
 		uint32	idigits	= uint32(p.digits + 0.5f);
 		int64	frac	= pow(int64(10), idigits);
-		return sa << p.val / frac << '.' << formatted(p.val % frac, FORMAT::ZEROES, idigits) << "%";
+		return sa << p.update_val / frac << '.' << formatted(p.update_val % frac, FORMAT::ZEROES, idigits) << "%";
 	}
 };
 
-#ifdef PLAT_WIN
+#ifdef PLAT_WIN32
 struct HierarchyProgress : win::ProgressTaskBar {
 	ScaleProgress	prog;
-	const char	*caption;
+	const char	*caption	= nullptr;
+	HierarchyProgress() {}
 	HierarchyProgress(const WindowPos &wpos, const char *caption) : win::ProgressTaskBar(wpos, 100), caption(caption) {}
 
-	void Next() {
-		++prog;
-		SetPos(prog.pos(100));
-		if (prog.ready())
-			SetText(buffer_accum<256>(caption) << '(' << prog << ')');
-	}
+	void Create(const WindowPos &wpos, const char* _caption, uint32 total);
+	void Next();
 };
 #else
 struct HierarchyProgress {
@@ -96,7 +81,7 @@ struct HierarchyProgress {
 
 #endif
 
-fixed_string<256>	get_id(tag2 id);
+//fixed_string<256>	get_id(tag2 id);
 fixed_string<256>	get_id(ISO_ptr<void> p);
 
 void				WriteFiles(const filename &fn, const ISO::Browser2 &b, HierarchyProgress &progress, int depth = 0);
@@ -108,7 +93,7 @@ ISO::Browser2		GetSettings(const char *path);
 Menu				GetTypesMenu(Menu menu, istream_ref file, const char *ext, int id, int did = 0);
 
 ISO::Browser2		VirtualDeref(ISO::Browser2 b);
-ISO::Browser2		SkipPointer(ISO::Browser2 b);
+ISO::Browser2		SkipPointer(ISO::Browser2 b, bool defer = false);
 ISO_ptr<anything>	UnVirtualise(const ISO::Browser &b0);
 ISO_ptr<void>		RemoteFix(const tag2 &id, const ISO::Type *type, ISO::Browser &v, const char *spec);
 void				BrowserAssign(const ISO::Browser &dest, const ISO::Browser &srce);
@@ -210,7 +195,7 @@ struct route : buffer_accum<1024> {
 		node(route &_r, const char *s)	: r(_r)	{ p = r.getp(); r << onlyif(p[-1] != ';', '.') << s; }
 		~node()									{ r.move(int(p - r.getp())); }
 		operator route&()						{ return r; }
-		operator const char*()					{ return r; }
+		operator string_param()					{ return r; }
 	};
 	node	add_node(int i)			{ return node(*this, i); }
 	node	add_node(const char *s)	{ return node(*this, s); }
@@ -241,11 +226,11 @@ struct ISOTree : public TreeControl {
 	ISOTree(const TreeControl &tree) : TreeControl(tree) {}
 
 	int					GetIndex(HTREEITEM hItem);
-	void				SetItem(HTREEITEM hItem, const ISO::Browser2 &b, const char *name);
-	HTREEITEM			AddItem(HTREEITEM hParent, HTREEITEM hAfter, const char *name, int i, ADD_FLAGS flags);
-	HTREEITEM			AddItem(HTREEITEM hParent, HTREEITEM hAfter, const char *name, int i, ADD_FLAGS flags, ImageListBitmap image);
-	void				RemoveItem(const ISO::Browser2 &b, HTREEITEM hParent, int index);
-	HTREEITEM			InsertItem(HTREEITEM hParent, HTREEITEM hAfter, int i, const ISO::Browser2 &b);
+	void				SetItem(HTREEITEM hItem, const ISO::Browser2 &b, const char *name) const;
+	HTREEITEM			AddItem(HTREEITEM hParent, HTREEITEM hAfter, const char *name, int i, ADD_FLAGS flags) const;
+	HTREEITEM			AddItem(HTREEITEM hParent, HTREEITEM hAfter, const char *name, int i, ADD_FLAGS flags, ImageListBitmap image) const;
+	void				RemoveItem(const ISO::Browser2 &b, HTREEITEM hParent, int index) const;
+	HTREEITEM			InsertItem(HTREEITEM hParent, HTREEITEM hAfter, int i, const ISO::Browser2 &b) const;
 
 	int					Setup(const ISO::Browser2 &b, HTREEITEM hParent, int maximum);
 	ISO::Browser2		GetChild(ISO::Browser2 &b, HTREEITEM hItem);

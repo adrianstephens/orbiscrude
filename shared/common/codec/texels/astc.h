@@ -63,15 +63,15 @@ struct CompressionParams {
 	};
 
 	flags<FLAGS>	flags;
-	ColourParam	power;
-	ColourParam	base_weight;
-	ColourParam	mean_weight;
-	ColourParam	stdev_weight;
-	ColourParam	stdev_radius;
+	ColourParam		power			= 1;
+	ColourParam		base_weight		= 1;
+	ColourParam		mean_weight		= 0;
+	ColourParam		stdev_weight	= 0;
+	ColourParam		stdev_radius	= 0;
 
-	float	rgb_mean_and_stdev_mixing;
-	float	block_artifact_suppression;
-	float	rgba_weights[4];
+	float	rgb_mean_and_stdev_mixing	= 0;
+	float	block_artifact_suppression	= 0;
+	float	rgba_weights[4]				= {1,1,1,1};
 
 	float	block_artifact_suppression_expanded[ASTC::MAX_TEXELS_PER_BLOCK];
 
@@ -87,18 +87,10 @@ struct CompressionParams {
 	auto_block<float, 3>	input_alpha_averages;
 	auto_block<float4, 3>	input_variances;
 
-	CompressionParams()
-		: power(1), base_weight(1), mean_weight(0), stdev_weight(0), stdev_radius(0)
-		, rgb_mean_and_stdev_mixing(0), block_artifact_suppression(0)
-	{
-		rgba_weights[0] = rgba_weights[1]= rgba_weights[2] = rgba_weights[3] = 1;
-	}
-
-	void ComputeAverages(const block<HDRpixel, 3> &b);
-	void ExpandBlockArtifactSuppression(int xdim, int ydim, int zdim);
-
+	void	ComputeAverages(const block<HDRpixel, 3> &b);
+	void	ExpandBlockArtifactSuppression(int xdim, int ydim, int zdim);
 	bool	AnyMeanStdevWeight() const {
-		return base_weight.rgb != 1.0f || base_weight.a != 1.0f || mean_weight.rgb || stdev_weight.rgb || mean_weight.a || stdev_weight.a;
+		return base_weight.rgb != 1 || base_weight.a != 1 || mean_weight.rgb || stdev_weight.rgb || mean_weight.a || stdev_weight.a;
 	}
 };
 

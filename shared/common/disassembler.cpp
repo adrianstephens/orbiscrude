@@ -10,11 +10,11 @@ struct State2 : Disassembler::State {
 	Disassembler				*dis;
 	int							addr_bits, code_units;
 
-	State2(const memory_block &block, uint64 addr, Disassembler *dis) : mem(block), base(addr), dis(dis), addr_bits(64), code_units(1) {}
+	State2(const_memory_block block, uint64 addr, Disassembler *dis) : mem(block), base(addr), dis(dis), addr_bits(64), code_units(1) {}
 
-	virtual	int		Count()				{ return offsets.size32(); }
-	virtual	uint64	GetAddress(int i)	{ return base + (i ? offsets[min(i, offsets.size32()) - 1] : 0); }
-	virtual	void	GetLine(string_accum &a, int i, int flags, Disassembler::SymbolFinder sym_finder) {
+	int		Count()				const override { return offsets.size32(); }
+	uint64	GetAddress(int i)	const override { return base + (i ? offsets[min(i, offsets.size32()) - 1] : 0); }
+	void	GetLine(string_accum &a, int i, int flags, Disassembler::SymbolFinder sym_finder) const override {
 		if (i < offsets.size32()) {
 			uint32			offset		= i == 0 ? 0 : offsets[i - 1];
 			uint64			addr		= base + offset;
@@ -31,7 +31,7 @@ struct State2 : Disassembler::State {
 				int		n = min(offsets[i] - offset, 8);
 				for (int i = 0; i < n; i++)
 					a.format(" %02x", p[i]);
-				a.putc(' ', (8 - n) * 3 + 1);
+				a << repeat(' ', (8 - n) * 3 + 1);
 			}
 
 			dis->DisassembleLine(a, p, addr, flags & Disassembler::SHOW_SYMBOLS ? sym_finder : none);
@@ -39,7 +39,7 @@ struct State2 : Disassembler::State {
 	}
 };
 
-Disassembler::State* Disassembler::Disassemble(const memory_block &block, uint64 addr, Disassembler::SymbolFinder sym_finder) {
+Disassembler::State* Disassembler::Disassemble(const_memory_block block, uint64 addr, Disassembler::SymbolFinder sym_finder) {
 	State2		*state = new State2(block, addr, this);
 	uint32		offset = 0;
 	uint32		length = block.size32();

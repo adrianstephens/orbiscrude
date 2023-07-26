@@ -192,6 +192,7 @@ struct node : refs<node> {
 typedef callback_ref<bool(uint64, void*, size_t)>		get_memory_t;
 typedef callback_ref<ast::node*(const char*)>			get_variable_t;
 typedef callback_ref<void(string_accum&, const char*)>	demangle_t;
+typedef callback_ref<uint64(uint64, bool, uint64&)>		test_memory_t;
 
 
 struct custom_node : node {
@@ -527,6 +528,9 @@ struct basicblock : inherit_refs<basicblock, node>, graph_edges<basicblock> {
 	static bool check(KIND k) { return k == basic_block; }
 
 	basicblock(int id) : inherit_refs<basicblock, node>(basic_block), id(id) {}
+	~basicblock() {
+		destruct(*(graph_edges<basicblock>*)this);
+	}
 
 	void	add(node *p) {
 		stmts.push_back(p);
@@ -767,6 +771,205 @@ template<typename T> void basicblock::apply(T t) {
 template<typename T> void basicblock::apply_stmts(T t) {
 	for (auto &i : stmts)
 		ast::apply_stmts(t, i);
+}
+
+//-----------------------------------------------------------------------------
+//	Stack
+// to help build ASTs of stack-based VMs
+//-----------------------------------------------------------------------------
+
+struct Stack {
+	enum STATE {
+		STACK_UNSET,
+		STACK_SET,
+		STACK_VARS,
+	};
+	enum {
+		SIDE_EFFECTS	= 1 << 0,
+	};
+	struct ENTRY {
+		ast::node	*p;
+		uint32		flags;
+		uint32		offset;
+		ENTRY(ast::node *p, uint32 offset, uint32 flags) : p(p), flags(flags), offset(offset) {}
+		operator ast::node*() const		{ return p; }
+		ast::node*	operator->() const	{ return p; }
+
+		bool	is_float()		const	{ return p->type->type == C_type::FLOAT; }
+		bool	is_ptr()		const	{ return p->type->type == C_type::POINTER; }
+	};
+	dynamic_array<ENTRY>	sp;
+	STATE					state;
+
+	Stack() : state(STACK_UNSET) {}
+
+	void			push(ast::node *p, uint32 offset = 0, uint32 flags = 0)	{ sp.emplace_back(p, offset, flags); }
+	void			push(const ENTRY &e)	{ sp.push_back(e); }
+	const ENTRY&	pop()					{ ISO_ASSERT(sp.size()); return sp.pop_back_retref(); }
+	const ENTRY&	top() const				{ return sp.back(); }
+	ENTRY&			top()					{ return sp.back(); }
+	void			end()					{ sp.clear(); }
+	bool			end(int i)				{ return sp.size() == i; }
+
+	bool	compatible(const Stack &s) const {
+		if (sp.size() != s.sp.size())
+			return false;
+		/*
+		for (auto i0 = sp.begin(), i1 = s.sp.begin(), e0 = sp.end(); i0 != e0; ++i0, ++i1) {
+			if (i0->t != i1->t)
+				return false;
+		}
+		*/
+		return true;
+	}
+	int		first_unequal(const Stack &s) const {
+		for (auto i0 = sp.begin(), i1 = s.sp.begin(), e0 = sp.end(); i0 != e0; ++i0, ++i1) {
+			if (*i0->p != *i1->p)
+				return e0 - i0;
+		}
+		return 0;
+	}
+};
+
+node *fix_type(node *n, const C_type *type);
+
+//-----------------------------------------------------------------------------
+//	builder
+// to help build ASTs of stack-based VMs
+//-----------------------------------------------------------------------------
+
+struct Builder : Stack {
+	struct block : ref_ptr<basicblock>	{
+		uint32		offset;
+		Stack		stack;
+		block(basicblock *b, uint32 offset) : ref_ptr<basicblock>(b), offset(offset) {}
+	};
+
+	struct local_var : C_arg {
+		struct use {
+			basicblock	*b;
+			node		*n;
+		};
+		dynamic_array<use> uses;
+		local_var(const char *id, const C_type *type) : C_arg(id, type) {}
+		void	add_use(basicblock *b, node *n) { uses.push_back({b, n}); }
+	};
+
+	uint32						offset;
+	dynamic_array<local_var*>	locals;
+	dynamic_array<block>		blocks;
+	basicblock					*bb;
+
+	local_var *is_local(const node *n) const {
+		if (const element_node *en = n->cast()) {
+			if (local_var *const *lv = find_check(locals, (local_var*)en->element))
+				return *lv;
+		}
+		return 0;
+	}
+
+	void	push(node *p, uint32 flags = 0)	{ Stack::push(p, offset, flags); }
+	void	push(const ENTRY &e)			{ Stack::push(e.p, offset, e.flags); }
+
+	bool	is_float()		const	{
+		return top().is_float();
+	}
+
+	node*	binary_cmp0(KIND k, uint32 flags = 0) {
+		const ENTRY &right	= pop();
+		const ENTRY &left	= pop();
+		return new binary_node(k, left.p, right.p, flags);
+	}
+	node*	ldelem0(const C_type *type) {
+		const ENTRY &right	= pop();
+		const ENTRY &left	= pop();
+		return new binary_node(ast::ldelem, left.p, right.p, type);
+	}
+	node*	var0(const C_arg *v, uint32 _flags = 0) {
+		return new element_node(ast::var, (const C_element*)v, 0, _flags);
+	}
+
+	void	unary(KIND k, uint32 flags = 0)	{
+		const ENTRY &arg	= pop();
+		push(new unary_node(k, arg.p, flags));//, arg.t);
+	}
+	void	binary(KIND k, uint32 flags = 0) {
+		ENTRY right	= pop();
+		ENTRY left	= pop();
+		push(new binary_node(k, left.p, right.p, flags));//, (TYPE)max(left.t, right.t));
+	}
+	void	binary_cmp(KIND k, uint32 flags = 0)	{
+		push(binary_cmp0(k, flags));
+	}
+	void	ldelem(const C_type *type) {
+		push(ldelem0(type));
+	}
+	void	cast(const C_type *type) {
+		if (top().p->type == type)
+			return;
+		push(new unary_node(ast::cast, pop(), type));
+	}
+	void	var(local_var *v) {
+		push(var0(v));
+	}
+	void	var(const C_arg *v) {
+		push(var0(v));
+	}
+
+	void	get_args(call_node *call, C_arg *args, size_t nargs) {
+		call->args.resize(nargs);
+		for (size_t i = nargs; i--;)
+			call->args[i] = fix_type(pop(), args[i].type);
+	}
+
+	template<typename T> node* lit0(const T &t) {
+		return new lit_node(C_value(t));
+	}
+
+	template<typename T> void lit(const T &t) {
+		push(lit0(t));
+	}
+
+	void add_stmt(node *p) {
+		bb->stmts.push_back(p);
+	}
+
+	void assign(const C_arg *v) {
+		add_stmt(new binary_node(ast::assign, var0(v, ASSIGN), pop()));
+	}
+	void assign(local_var *v) {
+		add_stmt(new binary_node(ast::assign, var0(v, ASSIGN), pop()));
+	}
+
+	block *at_offset(uint32 target) {
+		return lower_boundc(blocks, target, [](const block &a, uint32 b) {
+			return a.offset < b;
+		});
+	}
+
+
+	void	remove_redundant_locals();
+	template<typename C> void	count_local_use(C &&c);
+};
+
+template<typename C> void Builder::count_local_use(C &&c) {
+	for (auto &i : locals) {
+		if (i)
+			i->uses.clear();
+	}
+	for (auto i : c) {
+		ast::basicblock	*bb	= unconst(i->node);
+		bb->apply([this, bb](ref_ptr<ast::node> &r) {
+			if (r->kind == ast::assign) {
+				if (auto *lv = is_local(r->cast<ast::binary_node>()->left))
+					lv->add_use(bb, r);
+			}
+			if (r->kind == ast::var) {
+				if (auto *lv = is_local(r))
+					lv->add_use(bb, r);
+			}
+		});
+	}
 }
 
 //-----------------------------------------------------------------------------
@@ -1127,11 +1330,6 @@ struct Dumper : indenter {
 
 	bool	DumpCPP(string_accum &a, const ast::node *p, int precedence = 0);
 	bool	DumpCS(string_accum &a, const ast::node *p, int precedence = 0);
-
-//	string_accum&	DumpType(string_accum &a, const C_type *type, const char *name = 0, bool _typedef = false);
-//	string_accum&	DumpParams(string_accum &a, const range<ref_ptr<ast::node>*> &args) {
-//		return a << parentheses() << comma_list(args, [&](string_accum &a, ast::node *i) { DumpCPP(a, i); });
-//	}
 };
 
 //from c-header.cpp

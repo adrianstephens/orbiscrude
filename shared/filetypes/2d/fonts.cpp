@@ -1,92 +1,183 @@
+#include "fonts.h"
 #include "iso/iso_files.h"
+#include "iso/iso_convert.h"
 #include "base/vector.h"
+#include "base/algorithm.h"
 #include "vector_iso.h"
+#include "vector_string.h"
 #include "base/algorithm.h"
 #include "ttf.h"
 #include "cff.h"
 #include "utilities.h"
-#include "maths/geometry_iso.h"
 
 using namespace iso;
 
-//-----------------------------------------------------------------------------
-//	Postscript VM
-//-----------------------------------------------------------------------------
+template<typename T> auto& operator<<(string_accum& sa, const packed<T> &v) { return sa << get(v); }
+template<typename T> auto& operator<<(string_accum& sa, const T_swap_endian<T> &v) { return sa << get(v); }
+template<typename T> auto& operator<<(string_accum& sa, const constructable<T> &v) { return sa << get(v); }
 
-template<typename T, int N> struct stack {
-	T	array[N];
-	T	*sp;
 
-	size_t	count()	const		{ return sp - array;}
-	T*		clear()				{ return sp = array;}
-	T		pop()				{ /*ISO_ASSERT(sp > array); */return sp > array ? *--sp : T(0); }
-	void	push(T t)			{ ISO_ASSERT(sp < array + N); *sp++ = t; }
-	T&		top(int i = 0)		{ return sp[~i];	}
-	T&		bot(int i = 0)		{ return array[i];	}
-	T&		operator[](int i)	{ return sp[~i];	}
+/*
+struct tester {
+	tester() {
+		ArcParams	arc(float2{1,2}, degrees(20), false, false);
+		auto		centre	= arc.centre(float2{0,0}, float2{1,0});
+	}
+} _tester;
+*/
 
-	void	roll(int n, int j) {
-		T	*p = sp + ~n;
-		if (j < 0) {
-			for (int i = 0; i < j; ++i)
-				sp[i] = p[i];
-			for (int i = j; i < n; ++i)
-				p[i + j] = p[i];
-			for (int i = 0; i < j; ++i)
-				sp[i - j] = sp[i];
-		} else {
-			for (int i = n; --i;)
-				p[i + j] = p[i];
-			for (int i = 0; i < j; ++i)
-				p[i] = sp[i];
+void iso::reverse_curves(range<curve_vertex*> curves) {
+	for (auto i = curves.begin(), e = curves.end(); i != e;) {
+		auto	z = ++i;
+		while (z != e && z->flags != 0)
+			++z;
+
+		reverse(i, z);
+		i = z;
+	}
+}
+
+bool iso::direction(range<const curve_vertex*> curves) {
+	if (num_elements(curves) < 3)
+		return false;
+
+	float				miny	= maximum;
+	const curve_vertex	*mini	= nullptr;
+	const curve_vertex	*min0	= nullptr;
+	const curve_vertex	*min1	= nullptr;
+	const curve_vertex	*loop	= nullptr;
+
+	for (auto &i : curves) {
+		if (i.flags == ON_BEGIN) {
+			if (min0 == loop)
+				min1 = &i;
+			loop	= &i;
+		}
+		if (i.y < miny) {
+			miny	= i.y;
+			mini	= &i;
+			min0	= loop;
 		}
 	}
 
-	stack() : sp(array)	{}
+	if (min0 == loop)
+		min1 = curves.end();
+
+	if (mini == min0) {
+		for (auto i = min1; i[-1].y == miny;)
+			mini = --i;
+	}
+	const curve_vertex	*next	= mini + 1 == curves.end() || mini + 1 == min1 ? min0 : mini + 1;
+	const curve_vertex	*prev	= (mini == curves.begin() || mini == min0 ? min1 : mini) - 1;
+
+#if 1
+	return cross(*next - *mini, *mini - *prev) < zero;
+#else
+	bool	r = cross(*next - *mini, *mini - *prev) < zero;
+
+	if (next->x != mini->x)
+		ISO_ASSERT((next->x > mini->x) == r);
+
+
+	if (next->x != mini->x)
+		return next->x > mini->x;
+
+	return mini->x > prev->x;
+#endif
+}
+
+bool iso::overlap(range<const curve_vertex*> a, range<const curve_vertex*> b) {
+	return false;
+	//return true;
+}
+
+struct GetBezier2 : CurveTranslator {
+	uint32	max_per_curve	= 6;
+	float	tol				= 0.01f;
+
+	dynamic_array<float2>					points;
+	dynamic_array<bezier_chain<float2, 2>>	chains;
+
+	void Begin(float2 p0) {
+		points.push_back(p0);
+	}
+	void End() {
+		chains.emplace_back(move(points));
+		points.clear();
+	}
+	void Line(float2 p0, float2 p1) {
+		if (approx_equal(p0, p1))
+			return;
+		points.push_back((p0 + p1) / 2);
+		points.push_back(p1);
+	}
+	void Bezier(float2 p0, float2 p1, float2 p2) {
+		if (approx_equal(p0, p2))
+			return;
+		points.push_back(p1);
+		points.push_back(p2);
+	}
+	void Bezier(float2 p0, float2 p1, float2 p2, float2 p3) {
+		if (approx_equal(p0, p3))
+			return;
+		auto	offset	= points.size();
+		points.resize(offset + max_per_curve * 2);
+		auto	p		= reduce_spline(bezier_splineT<float2,3>{p0, p1, p2, p3}, points + offset, points.end(), tol);
+		points.resize(points.index_of(p));
+	}
+	void Arc(float2 p0, float2 p1, float2 p2)				{}
+	void Arc(float2 p0, float2 p1, float2 p2, float2 p3)	{}
+
+	GetBezier2(range<const curve_vertex*> curves, uint32 max_per_curve, float tol) : max_per_curve(max_per_curve), tol(tol) {
+		add(*this, curves);
+	}
 };
 
-template<typename N> class PS_VM {
-protected:
-	typedef	N				num;
-	typedef	array_vec<N, 2>	num2;
+dynamic_array<bezier_chain<float2, 2>> iso::get_bezier2(range<const curve_vertex*> curves, uint32 max_per_curve, float tol) {
+	return move(GetBezier2(curves, max_per_curve, tol).chains);
+}
 
-	stack<num, 48>	st;
-	num2			pt;
+struct GetBezier3 : CurveTranslator {
+	dynamic_array<float2>					points;
+	dynamic_array<bezier_chain<float2, 3>>	chains;
 
-	dynamic_array<float2p>	verts;
-
-	typedef pair<num, num> stem;
-	struct stems : dynamic_array<num2> {
-		void	set(num *s, size_t n)	{
-			resize(n);
-			num	x	= 0;
-			for (auto &i : *this) {
-				i.x = x += *s++;
-				i.y = x += *s++;
-			}
-		}
-	} hstems, vstems;
-
-	void	MoveTo(const num2 &p) {	verts.push_back(to<float>(p));	}
-	void	LineTo(const num2 &p) {	verts.push_back(to<float>(p));	}
-	void	BezierTo(const num2 &p1, const num2 &p2, const num2 &p3) {
-		verts.push_back(to<float>(p1));
-		verts.push_back(to<float>(p2));
-		verts.push_back(to<float>(p3));
+	void Begin(float2 p0) {
+		points.push_back(p0);
 	}
-
-public:
-	void		Reset() {
-		st.clear();
-		pt = zero;
-		hstems.clear();
-		vstems.clear();
-		verts.clear();
+	void End() {
+		chains.emplace_back(move(points));
+		points.clear();
 	}
-
-	size_t		NumVerts()	const { return verts.size(); }
-	float2p*	Verts()		const { return verts; }
+	void Line(float2 p0, float2 p1) {
+		if (approx_equal(p0, p1))
+			return;
+		points.push_back(lerp(p0, p1, 1/3.f));
+		points.push_back(lerp(p0, p1, 2/3.f));
+		points.push_back(p1);
+	}
+	void Bezier(float2 p0, float2 p1, float2 p2) {
+		if (approx_equal(p0, p2))
+			return;
+		auto	b3 = bezier_splineT<float2,2>{p0, p1, p2}.elevate<1>();
+		points.push_back(b3[1]);
+		points.push_back(b3[2]);
+		points.push_back(b3[3]);
+	}
+	void Bezier(float2 p0, float2 p1, float2 p2, float2 p3) {
+		if (approx_equal(p0, 3))
+			return;
+		points.push_back(p1);
+		points.push_back(p2);
+		points.push_back(p3);
+	}
+	void Arc(float2 p0, float2 p1, float2 p2)				{}
+	void Arc(float2 p0, float2 p1, float2 p2, float2 p3)	{}
+	GetBezier3(range<const curve_vertex*> curves) { add(*this, curves); }
 };
+
+dynamic_array<bezier_chain<float2, 3>> iso::get_bezier3(range<const curve_vertex*> curves) {
+	return move(GetBezier3(curves).chains);
+}
 
 //-----------------------------------------------------------------------------
 //	Checksum
@@ -118,26 +209,24 @@ malloc_block ReadTable(istream_ref file, const ttf::TableRecord *table) {
 	return ReadBlock(file, table->offset, table->length);
 }
 
+template<typename T> auto ReadBlockT(tag2 id, istream_ref file, streamptr offset, size_t size) {
+	auto	p = ISO::MakePtrSize<32>(ISO::getdef<T>(), id, size);
+	file.seek(offset);
+	file.readbuff(p, size);
+	return p;
+}
+
 struct TTF {
 	ttf::SFNTHeader		sfnt;
 	dynamic_array<ttf::TableRecord>	tables;
 	unique_ptr<ttf::head>	head;
 
-	ttf::SFNTHeader*	GetSFNT() {
-		return &sfnt;
-	}
-	uint32				NumTables()	const {
-		return sfnt.num_tables;
-	}
 	const ttf::TableRecord*	FindTable(ttf::TAG tag) const {
 		for (auto &i : tables) {
 			if (i.tag == tag)
 				return &i;
 		}
 		return nullptr;
-	}
-	template<typename T> ttf::TableRecord*	FindTable() const {
-		return FindTable(T::tag);
 	}
 	template<typename T> unique_ptr<T>	ReadTable(istream_ref file) const {
 		return ::ReadTable(file, FindTable(T::tag));
@@ -150,7 +239,7 @@ struct TTF {
 	}
 
 	TTF(istream_ref file) {
-		sfnt	= file.get();
+		file.read(sfnt);
 		tables.read(file, sfnt.num_tables);
 		head	= ReadTable<ttf::head>(file);
 	}
@@ -158,61 +247,9 @@ struct TTF {
 	}
 };
 
-ISO_ptr<void> ReadCMAP(tag id, const ttf::cmap *cmap) {
-	ISO_ptr<anything>	p(id);
-	for (int i = 0, n = cmap->num; i < n; i++) {
-		ttf::cmap::format_header1	*table	= (ttf::cmap::format_header1*)((uint8*)cmap + cmap->tables[i].offset);
-		switch (table->format) {
-			case 0: {
-				ttf::cmap::format0	*table0 = (ttf::cmap::format0*)table;
-				ISO_ptr<ISO_openarray<array<uint16,2> > >	t(0);
-				for (int c = 0; c < 256; c++) {
-					if (uint16 g = table0->glyphIndexArray[c])
-						t->Append(make_array<uint16>(c, g));
-				}
-				p->Append(t);
-				break;
-			}
-			case 4: {
-				ttf::cmap::format4	*table4 = (ttf::cmap::format4*)table;
-				uint32		segcount = table4->segCountX2 / 2;
-				uint16be	*ends	= table4->endCode;
-				uint16be	*starts	= ends		+ segcount + 1;
-				uint16be	*deltas	= starts	+ segcount;
-				uint16be	*ranges	= deltas	+ segcount;
-				uint16be	*glyphs	= ranges	+ segcount;
-
-				ISO_ptr<ISO_openarray<array<uint16,2> > >	t(0);
-				for (int i = 0, n = segcount; i < n; i++) {
-					uint16	start = starts[i], end = ends[i];
-					if (uint16 r = ranges[i]) {
-						for (int c = start; c <= end; c++)
-							t->Append(make_array<uint16>(c, ranges[i + r / 2 + c - start]));
-					} else {
-						uint16	d = deltas[i];
-						for (int c = start; c <= end; c++)
-							t->Append(make_array<uint16>(c, c + d));
-					}
-				}
-
-				p->Append(t);
-				break;
-			}
-			default: {
-				ISO_ptr<ISO_openarray<uint8> >	t(0);
-				uint32	length	= table->format <= 6 ? (uint32)table->length : (uint32)((ttf::cmap::format_header2*)table)->length;
-				memcpy(t->Create(length), table, length);
-				p->Append(t);
-				break;
-			}
-		}
-	}
-	return p;
-}
-
-typedef ISO_openarray<curve_vertex>						iso_simpleglyph;
-typedef pair<ISO_ptr<iso_simpleglyph>, float2x3p>		iso_glyphref;
-typedef ISO_openarray<iso_glyphref>						iso_compoundglyph;
+typedef ISO_openarray<curve_vertex>			iso_simpleglyph;
+typedef pair<ISO_ptr<void>, float2x3p>		iso_glyphref;
+typedef ISO_openarray<iso_glyphref>			iso_compoundglyph;
 
 template<typename R> int16 get_glyph_delta(R &r, bool SHORT, bool SAMEPOS) {
 	return SHORT
@@ -220,132 +257,144 @@ template<typename R> int16 get_glyph_delta(R &r, bool SHORT, bool SAMEPOS) {
 		: SAMEPOS ? 0 : int16(r.template get<int16be>());
 }
 
+ISO_ptr<void> ReadSimpleGlyph(const ttf::glyf::simple_glyph *gs) {
+	int		ncnt = gs->num_contours;
+
+#if 0
+	ISO_ptr<iso_simpleglyph>	cont(0, ncnt);
+	uint32	npts	= 0;
+	for (int i = 0; i < ncnt; i++) {
+		uint32	end = gs->end_pts[i] + 1;
+		(*cont)[i].Create(end - npts);
+		npts = end;
+	}
+
+	uint16	inslen	= gs->end_pts[ncnt];
+	byte_reader	r((uint8*)(gs->end_pts + ncnt + 1) + inslen);
+
+	temp_array<uint8>	flags(npts);
+	for (int i = 0; i < npts; ++i) {
+		uint8	f = r.getc();
+		flags[i] = f;
+		if (f & ttf::glyf::simple_glyph::repeat) {
+			for (uint8 x = r.getc(); x--;)
+				flags[++i] = f;
+		}
+	}
+
+	uint8	*f = flags;
+	for (int i = 0, x = 0; i < ncnt; i++) {
+		curve_vertex	*p	= (*cont)[i];
+		for (uint8	*e = flags + gs->end_pts[i] + 1; f < e; ++f, ++p) {
+			p->flags	= *f & ttf::glyf::simple_glyph::on_curve ? 0 : 1;
+			p->x		= x += get_glyph_delta(r, *f & ttf::glyf::simple_glyph::short_x, *f & ttf::glyf::simple_glyph::same_x);
+		}
+	}
+
+	f = flags;
+	for (int i = 0, y = 0; i < ncnt; i++) {
+		curve_vertex	*p	= (*cont)[i];
+		for (uint8	*e = flags + gs->end_pts[i] + 1; f < e; ++f, ++p)
+			p->y		 = y += get_glyph_delta(r, *f & ttf::glyf::simple_glyph::short_y, *f & ttf::glyf::simple_glyph::same_y);
+	}
+	return cont;
+#else
+	uint32	npts	= gs->num_pts();
+	byte_reader	r(gs->contours());
+
+	temp_array<uint8>	flags(npts);
+	for (int i = 0; i < npts; ++i) {
+		uint8	f = r.getc();
+		flags[i] = f;
+		if (f & ttf::glyf::simple_glyph::repeat) {
+			for (uint8 x = r.getc(); x--;)
+				flags[++i] = f;
+		}
+	}
+
+	ISO_ptr<ISO_openarray<curve_vertex>>	curve(0, npts);
+
+	auto	f = flags.begin();
+	int		x	= 0;
+	for (auto &p : *curve) {
+		p.flags	= *f & ttf::glyf::simple_glyph::on_curve ? ON_CURVE : OFF_BEZ2;
+		p.x		= x += get_glyph_delta(r, *f & ttf::glyf::simple_glyph::short_x, *f & ttf::glyf::simple_glyph::same_x);
+		++f;
+	}
+
+	f	= flags.begin();
+	x	= 0;
+	for (auto &p : *curve) {
+		p.y		 = x += get_glyph_delta(r, *f & ttf::glyf::simple_glyph::short_y, *f & ttf::glyf::simple_glyph::same_y);
+		++f;
+	}
+
+	curve_vertex	*curve2	= curve->begin();
+	for (int i = 0, j = 0; i < ncnt; i++) {
+		int	j1 = gs->end_pts[i] + 1;
+
+		if (curve2[j].flags != 1) {
+			for (int k = j; k < j1; k++) {
+				if (curve2[k].flags == 1) {
+					rotate(curve2 + j, curve2 + k, curve2 + j1);
+					break;
+				}
+			}
+		}
+		curve2[j].flags = ON_BEGIN;
+		j = j1;
+	}
+
+	return curve;
+#endif
+}
+
+ISO_ptr<void> ReadCompoundGlyph(const ttf::glyf::compound_glyph *gc, const anything &glyphs) {
+	byte_reader		r(gc->entries);
+	uint16			flags;
+	ISO_ptr<iso_compoundglyph>	comp(0);
+
+	do {
+		auto	entry	= r.get_ptr<ttf::glyf::compound_glyph::entry>();
+		flags	= entry->flags;
+
+		ttf::_fixed16	xoff, yoff;
+		if (flags & ttf::glyf::compound_glyph::arg12_words) {
+			xoff = r.get<ttf::fixed16>();
+			yoff = r.get<ttf::fixed16>();
+		} else {
+			xoff = r.get<fixed<2,6>>();
+			yoff = r.get<fixed<2,6>>();
+		}
+
+		float2x2	mat;
+		if (flags & ttf::glyf::compound_glyph::have_scale) {
+			mat = (float2x2)scale(ttf::_fixed16(r.get<ttf::fixed16>()));
+		} else if (flags & ttf::glyf::compound_glyph::x_and_y_scale) {
+			ttf::fixed16	t[2]; r.read(t);
+			mat = (float2x2)scale(ttf::_fixed16(t[0]), ttf::_fixed16(t[1]));
+		} else if (flags & ttf::glyf::compound_glyph::two_by_two) {
+			ttf::fixed16	t[4]; r.read(t);
+			mat = float2x2(float2{ttf::_fixed16(t[0]), ttf::_fixed16(t[1])}, float2{ttf::_fixed16(t[2]), ttf::_fixed16(t[3])});
+		} else {
+			mat = identity;
+		}
+
+		iso_glyphref	&ref = comp->Append();
+		ref.a	= glyphs[entry->index];
+		ref.b	= float2x3(mat, float2{xoff, yoff});
+	} while (flags & ttf::glyf::compound_glyph::more_components);
+	return comp;
+}
+
 ISO_ptr<void> ReadGlyph(const memory_block &mb, const anything &glyphs) {
 	ttf::glyf::glyph *g = mb;
 	if (!g)
 		return ISO_NULL;
 
-	int	ncnt = g->num_contours;
-	if (ncnt >= 0) {
-		// simple
-		auto	gs = (ttf::glyf::simple_glyph*)g;
-
-#if 0
-		ISO_ptr<iso_simpleglyph>	cont(0, ncnt);
-		uint32	npts	= 0;
-		for (int i = 0; i < ncnt; i++) {
-			uint32	end = gs->end_pts[i] + 1;
-			(*cont)[i].Create(end - npts);
-			npts = end;
-		}
-
-		uint16	inslen	= gs->end_pts[ncnt];
-		byte_reader	r((uint8*)(gs->end_pts + ncnt + 1) + inslen);
-
-		temp_array<uint8>	flags(npts);
-		for (int i = 0; i < npts; ++i) {
-			uint8	f = r.getc();
-			flags[i] = f;
-			if (f & ttf::glyf::simple_glyph::repeat) {
-				for (uint8 x = r.getc(); x--;)
-					flags[++i] = f;
-			}
-		}
-
-		uint8	*f = flags;
-		for (int i = 0, x = 0; i < ncnt; i++) {
-			curve_vertex	*p	= (*cont)[i];
-			for (uint8	*e = flags + gs->end_pts[i] + 1; f < e; ++f, ++p) {
-				p->flags	= *f & ttf::glyf::simple_glyph::on_curve ? 0 : 1;
-				p->x		= x += get_glyph_delta(r, *f & ttf::glyf::simple_glyph::short_x, *f & ttf::glyf::simple_glyph::same_x);
-			}
-		}
-
-		f = flags;
-		for (int i = 0, y = 0; i < ncnt; i++) {
-			curve_vertex	*p	= (*cont)[i];
-			for (uint8	*e = flags + gs->end_pts[i] + 1; f < e; ++f, ++p)
-				p->y		 = y += get_glyph_delta(r, *f & ttf::glyf::simple_glyph::short_y, *f & ttf::glyf::simple_glyph::same_y);
-		}
-		return cont;
-#else
-		uint32	npts	= gs->num_pts();
-		byte_reader	r(gs->contours());
-
-		temp_array<uint8>	flags(npts);
-		for (int i = 0; i < npts; ++i) {
-			uint8	f = r.getc();
-			flags[i] = f;
-			if (f & ttf::glyf::simple_glyph::repeat) {
-				for (uint8 x = r.getc(); x--;)
-					flags[++i] = f;
-			}
-		}
-		
-		ISO_ptr<ISO_openarray<curve_vertex>>	curve(0, npts);
-
-		auto	f = flags.begin();
-		int		x	= 0;
-		for (auto &p : *curve) {
-			p.flags	= *f & ttf::glyf::simple_glyph::on_curve ? 1 : 2;
-			p.x		= x += get_glyph_delta(r, *f & ttf::glyf::simple_glyph::short_x, *f & ttf::glyf::simple_glyph::same_x);
-			++f;
-		}
-
-		f	= flags.begin();
-		x	= 0;
-		for (auto &p : *curve) {
-			p.y		 = x += get_glyph_delta(r, *f & ttf::glyf::simple_glyph::short_y, *f & ttf::glyf::simple_glyph::same_y);
-			++f;
-		}
-
-		for (int i = 0, j = 0; i < ncnt; i++) {
-			(*curve)[j].flags = 0;
-			j = gs->end_pts[i] + 1;
-		}
-
-		return curve;
-#endif
-
-	} else {
-		// compound
-		auto	gc		= (ttf::glyf::compound_glyph*)g;
-		byte_reader		r(gc->entries);
-		uint16			flags;
-		ISO_ptr<iso_compoundglyph>	comp(0);
-
-		do {
-			auto	entry	= r.get_ptr<ttf::glyf::compound_glyph::entry>();
-			flags	= entry->flags;
-
-			ttf::_fixed16	xoff, yoff;
-			if (flags & ttf::glyf::compound_glyph::arg12_words) {
-				xoff = r.get<ttf::fixed16>();
-				yoff = r.get<ttf::fixed16>();
-			} else {
-				xoff = r.get<fixed<2,6> >();
-				yoff = r.get<fixed<2,6> >();
-			}
-
-			float2x2	mat;
-			if (flags & ttf::glyf::compound_glyph::have_scale) {
-				mat = (float2x2)scale(ttf::_fixed16(r.get<ttf::fixed16>()));
-			} else if (flags & ttf::glyf::compound_glyph::x_and_y_scale) {
-				ttf::fixed16	t[2]; r.read(t);
-				mat = (float2x2)scale(ttf::_fixed16(t[0]), ttf::_fixed16(t[1]));
-			} else if (flags & ttf::glyf::compound_glyph::two_by_two) {
-				ttf::fixed16	t[4]; r.read(t);
-				mat = float2x2(float2{ttf::_fixed16(t[0]), ttf::_fixed16(t[1])}, float2{ttf::_fixed16(t[2]), ttf::_fixed16(t[3])});
-			} else {
-				mat = identity;
-			}
-
-			iso_glyphref	&ref = comp->Append();
-			ref.a	= glyphs[entry->index];
-			ref.b	= float2x3(mat, float2{xoff, yoff});
-		} while (flags & ttf::glyf::compound_glyph::more_components);
-		return comp;
-	}
+	if (g->num_contours < 0)
+		return ReadCompoundGlyph(mb, glyphs);
+	return ReadSimpleGlyph(mb);
 }
 
 ISO_ptr<void> ReadNAME(tag id, const ttf::name *name) {
@@ -402,10 +451,13 @@ ISO_ptr<void> ReadNAME(tag id, const ttf::name *name) {
 
 //-----------------------------------------------------------------------------
 //	Compact Font Format
+//	also known as a PostScript Type 1, or CIDFont
+//	container to store multiple fonts together in a single unit known as a FontSet
+//	allows embedding PostScript language code that permits additional flexibility and extensibility of the format for usage with printer environments
 //-----------------------------------------------------------------------------
 
-class CFF_VM : public PS_VM<fixed<16,16> > {
-	typedef PS_VM<fixed<16,16> > B;
+class CFF_VM : public PS_VM<fixed<16,16>> {
+	typedef PS_VM<fixed<16,16>> B;
 	using typename B::num;
 
 	num				temps[32];
@@ -443,6 +495,7 @@ public:
 		cntrmask	= cntrmask_array;
 		width		= _width;
 	}
+	float	Width() const { return width; }
 
 	CFF_VM(cff::index *gs, cff::index *ls, num nom_width) : nom_width(nom_width), gsubrs(gs), lsubrs(ls) {}
 };
@@ -503,11 +556,15 @@ void CFF_VM::Interpret(const uint8 *p, const uint8 *e) {
 					vstems.set(stclear(n * 2), n);
 					break;
 				}
-				case cff::op_hintmask:
-					stclear(0);
+				case cff::op_hintmask: {
+					if (vstems.empty()) {
+						size_t n = st.count() / 2;
+						vstems.set(stclear(n * 2), n);
+					}
 					hintmask = p;
 					p += (hstems.size() + vstems.size() + 7) / 8;
 					break;
+				}
 
 				case cff::op_cntrmask:
 					stclear(0);
@@ -735,6 +792,7 @@ void CFF_VM::Interpret(const uint8 *p, const uint8 *e) {
 
 		} else if (b0 == cff::op_fixed16_16) {
 			st.push(*(packed<BE(num)>*)p);
+			p += sizeof(num);
 
 		} else {
 			st.push(  b0 < 247	?  int(b0) - 139						// 32  < b0 < 246:	bytes:1; range:�107..+107
@@ -751,7 +809,7 @@ ISO_ptr<void> CFFDictValue(tag id, const cff::value &v) {
 	else
 		return ISO_ptr<float>(id, (float&)v.data);
 }
-ISO_ptr<void> CFFDict(tag id, const cff::dictionary &dict, cff::index *strings) {
+ISO_ptr<void> ReadCFFDict(tag id, const cff::dictionary &dict, cff::index *strings) {
 	static const char *props[] = {
 		"version",			"Notice",			"FullName",			"FamilyName",			"Weight",				"FontBBox",			"BlueValues",		"OtherBlues",
 		"FamilyBlues",		"FamilyOtherBlues",	"StdHW",			"StdVW",				"escape",				"UniqueID",			"XUID",				"charset",
@@ -778,16 +836,16 @@ ISO_ptr<void> CFFDict(tag id, const cff::dictionary &dict, cff::index *strings) 
 			if (hetero) {
 				ISO_ptr<anything>	x(id, num);
 				for (int i = 0; i < num; i++)
-					(*x)[i] = CFFDictValue(0, vals[i]);
+					(*x)[i] = CFFDictValue(none, vals[i]);
 				d = x;
 			} else {
 				if (type == cff::t_int) {
-					ISO_ptr<ISO_openarray<int> >	x(id, num);
+					ISO_ptr<ISO_openarray<int>>	x(id, num);
 					for (int i = 0; i < num; i++)
 						(*x)[i] = (int&)vals[i].data;
 					d = x;
 				} else {
-					ISO_ptr<ISO_openarray<float> >	x(id, num);
+					ISO_ptr<ISO_openarray<float>>	x(id, num);
 					for (int i = 0; i < num; i++)
 						(*x)[i] = (float&)vals[i].data;
 					d = x;
@@ -802,7 +860,7 @@ ISO_ptr<void> CFFDict(tag id, const cff::dictionary &dict, cff::index *strings) 
 			case cff::Copyright:
 			case cff::BaseFontName:
 			case cff::PostScript:
-				if (vals[0].data >= cff::nStdStrings) {
+				if ((int)vals[0].data >= cff::nStdStrings) {
 					const_memory_block	m = (*strings)[vals[0].data - cff::nStdStrings];
 					d = ISO_ptr<string>(id, str((const char*)m, m.length()));
 					break;
@@ -816,7 +874,7 @@ ISO_ptr<void> CFFDict(tag id, const cff::dictionary &dict, cff::index *strings) 
 }
 
 ISO_ptr<void> ReadCFFStrings(tag id, cff::index *ind) {
-	ISO_ptr<ISO_openarray<string> >	p(id, ind->count);
+	ISO_ptr<ISO_openarray<string>>	p(id, ind->count);
 	for (int i = 0, n = ind->count; i < n; i++) {
 		const_memory_block	m = (*ind)[i];
 		(*p)[i] = str((const char*)m, m.length());
@@ -825,7 +883,7 @@ ISO_ptr<void> ReadCFFStrings(tag id, cff::index *ind) {
 }
 
 ISO_ptr<void> ReadCFFBlocks(tag id, cff::index *ind) {
-	ISO_ptr<ISO_openarray<ISO_openarray<uint8> > >	p(id, ind->count);
+	ISO_ptr<ISO_openarray<ISO_openarray<uint8>>>	p(id, ind->count);
 	for (int i = 0, n = ind->count; i < n; i++) {
 		const_memory_block	m = (*ind)[i];
 		memcpy((*p)[i].Create(m.size32()), m, m.length());
@@ -834,7 +892,7 @@ ISO_ptr<void> ReadCFFBlocks(tag id, cff::index *ind) {
 }
 
 ISO_ptr<void> ReadCFFCharSet(tag id, uint8 *p, int nglyphs) {
-	ISO_ptr<ISO_openarray<pair<uint16,uint16> >	> r(id);
+	ISO_ptr<ISO_openarray<pair<uint16,uint16>>	> r(id);
 	--nglyphs;
 	switch (*p++) {
 		case 0:
@@ -858,31 +916,729 @@ ISO_ptr<void> ReadCFFCharSet(tag id, uint8 *p, int nglyphs) {
 }
 
 //-----------------------------------------------------------------------------
+//	Colours
+//-----------------------------------------------------------------------------
+void glyph_fill::colour_line::reverse() {
+	iso::reverse(colours);
+	for (auto &i : colours)
+		i.t = 1 - i.t;
+}
+
+void glyph_fill::colour_line::clip(interval<float> t) {
+	auto	b = upper_boundc(colours, t.b, [](float t, const colour_stop &c) { return t < c.t; });
+	if (b != colours.end()) {
+		
+		b->c	= evaluate(b[-1], b[0], t.b);
+		b->t	= t.b;
+		colours.erase(b + 1, colours.end());
+	}
+
+	auto	a = lower_boundc(colours, t.a, [](const colour_stop &c, float t) { return c.t < t; });
+	if (a != colours.begin()) {
+		--a;
+		a->c	= evaluate(a[0], a[1], t.a);
+		a->t	= t.a;
+		colours.erase(colours.begin(), a);
+	}
+}
+
+void glyph_fill::colour_line::strip_redundant(float epsilon) {
+	for (auto i = colours.begin(); i < colours.end() - 2; ) {
+		if (i[1].t != i[0].t) {
+			auto	dist2 = len2(i[1].c - evaluate(i[0], i[2], i[1].t));
+			if (dist2 < epsilon) {
+				colours.erase(i + 1);
+				continue;
+			}
+		}
+		++i;
+	}
+}
+
+void glyph_fill::optimise(interval<float> t) {
+	if (cols.get_range().contains(t))
+		cols.extend = cols.EXTEND_NONE;
+
+//	cols.clip(t);
+	if (cols.colours.size() < 2)
+		grad.Set(GradientTransform::SOLID);
+
+	auto	t2 = cols.get_range();
+	if (grad.scale_range(t2)) {
+		for (auto &i : cols.colours)
+			i.t = t2.to(i.t);
+	}
+
+	cols.strip_redundant();
+
+//	if (extend == EXTEND_NONE && colours.size() == 2)
+//		ISO_TRACEF("only two!\n");
+}
+
+interval<float> glyph_layer::get_extent() const {
+	switch (grad.fill) {
+		default:
+		case GradientTransform::SOLID:
+			return {0, 0};
+
+		case GradientTransform::LINEAR: {
+			rectangle	ext2 = (rectangle(iso::get_extent<position2>(*this)) / grad.transform).get_box();
+			return {ext2.a.v.x, ext2.b.v.x};
+		}
+		case GradientTransform::SWEEP:
+			// could check for centre being outside glyph and restrict angles?
+			return {0, 1};
+
+		case GradientTransform::RADIAL: {
+		case GradientTransform::RADIAL1:
+		case GradientTransform::RADIAL_LT1_SWAP:
+		case GradientTransform::RADIAL_SAME:
+			interval<float>	t = none;
+			for (float2 i : *this)
+				t |= grad.get_value(position2(i));
+			return t;
+		}
+		case GradientTransform::RADIAL0: {
+		case GradientTransform::RADIAL_GT1:
+			interval<float>	t(zero);//assume centre is in rect
+			for (float2 i : *this)
+				t |= grad.get_value(position2(i));
+			return t;
+		}
+	}
+}
+
+struct glyph_layers_maker {
+	glyph_layers			cg;
+	const ttf::COLR1		*head;
+	const ttf::CPAL::Color	*palette;
+	dynamic_array<curves>	&all_curves;
+	float2x3				transform	= identity;
+	curves					temp_curves;
+
+	template<typename T> void	Transform(const T* p) {
+		save(transform, transform * p->matrix()),
+			ttf::process<void>(p->paint.get(p), *this);
+	}
+
+	glyph_layer*	AddSub() {
+		if (temp_curves.empty())
+			return nullptr;
+		auto	&sub	= cg.push_back();
+		(curves&)sub	= move(temp_curves);
+		temp_curves.clear();
+		return &sub;
+	}
+
+	rgba8 GetColour(int i) {
+		auto	&c = palette[i];
+		return {
+			reinterpret_cast<const unorm8&>(c.r),
+			reinterpret_cast<const unorm8&>(c.g),
+			reinterpret_cast<const unorm8&>(c.b),
+			reinterpret_cast<const unorm8&>(c.a)
+		};
+	}
+
+	rgba8 GetColour(int i, float alpha) {
+		auto	c = GetColour(i);
+		c.a *= alpha;
+		return c;
+	}
+
+	glyph_fill::colour_line GetColours(ttf::ColorLine *line) {
+		glyph_fill::colour_line	cols;
+		cols.extend	= glyph_fill::colour_line::EXTEND(line->extend + 1);
+		for (auto& i : line->stops())
+			cols.colours.emplace_back(GetColour(i.paletteIndex, get(i.alpha)), get(i.stopOffset));
+		return cols;
+	}
+
+	glyph_layers_maker(const ttf::COLR1 *head, const ttf::CPAL::Color *palette, dynamic_array<curves> &all_curves)
+		: head(head), palette(palette), all_curves(all_curves) {}
+
+	glyph_layers make(const ttf::PaintBase* p);
+
+	void	operator()(const ttf::Paint<ttf::ColrLayers> *p) {
+		auto	layers	= head->layers1();
+		for (auto &i : layers->all().slice(p->firstLayerIndex, p->numLayers))
+			ttf::process<void>(i.get(layers), *this);
+	}
+
+	void	operator()(const ttf::Paint<ttf::Solid> *p) {
+		if (auto sub = AddSub())
+			sub->SetSolidColour(GetColour(p->paletteIndex));
+	}
+	void	operator()(const ttf::Paint<ttf::LinearGradient> *p) {
+		if (auto sub = AddSub()) {
+			sub->cols = GetColours(p->colorLine.get(p));
+			sub->grad.SetLinear({p->x0, p->y0}, {p->x1, p->y1}, {p->x2, p->y2});
+			sub->grad.Transform(transform);
+		}
+	}
+	void	operator()(const ttf::Paint<ttf::RadialGradient> *p) {
+		if (auto sub = AddSub()) {
+			sub->cols = GetColours(p->colorLine.get(p));
+			sub->grad.SetRadial(circle({p->x0, p->y0}, p->radius0), circle({p->x1, p->y1}, p->radius1));
+			sub->grad.Transform(transform);
+		}
+
+	}
+	void	operator()(const ttf::Paint<ttf::SweepGradient> *p) {
+		if (auto sub = AddSub()) {
+			sub->cols = GetColours(p->colorLine.get(p));
+			sub->grad.SetSweep({p->centerX, p->centerY}, p->startAngle.get(), p->endAngle.get());
+			sub->grad.Transform(transform);
+		}
+	}
+
+	void	operator()(const ttf::Paint<ttf::Glyph> *p) {
+		auto	&g = all_curves[p->glyphID];
+		if (direction(g) ^ (transform.det() < 0))
+		//if (direction(g))
+			reverse_curves(g);
+		//ISO_ASSERT(transform.det() > 0);
+		temp_curves.append(transformc(g, [m = transform](curve_vertex &i) { return m * i; }));
+		ttf::process<void>(p->paint.get(p), *this);
+	}
+	void	operator()(const ttf::Paint<ttf::ColrGlyph> *p) {
+		auto	base	= head->base_glyphs1();
+		ttf::process<void>(base->all()[p->glyphID].paint.get(base), *this);
+	}
+
+	void	operator()(const ttf::Paint<ttf::Transform> *p)					{ Transform(p); }
+	void	operator()(const ttf::Paint<ttf::Translate> *p)					{ Transform(p); }
+	void	operator()(const ttf::Paint<ttf::Scale> *p)						{ Transform(p); }
+	void	operator()(const ttf::Paint<ttf::ScaleAroundCenter> *p)			{ Transform(p); }
+	void	operator()(const ttf::Paint<ttf::ScaleUniform> *p)				{ Transform(p); }
+	void	operator()(const ttf::Paint<ttf::ScaleUniformAroundCenter> *p)	{ Transform(p); }
+	void	operator()(const ttf::Paint<ttf::Rotate> *p)					{ Transform(p); }
+	void	operator()(const ttf::Paint<ttf::RotateAroundCenter> *p)		{ Transform(p); }
+	void	operator()(const ttf::Paint<ttf::Skew> *p)						{ Transform(p); }
+	void	operator()(const ttf::Paint<ttf::SkewAroundCenter> *p)			{ Transform(p); }
+
+	void	operator()(const ttf::Paint<ttf::Composite> *p) {
+		auto	mode = p->mode;
+		ttf::process<void>(p->backdrop.get(p), *this);
+		ttf::process<void>(p->source.get(p), *this);
+	}
+
+	void	operator()(const ttf::PaintBase *p) {
+	}
+
+};
+
+glyph_layers glyph_layers_maker::make(const ttf::PaintBase* p) {
+	cg.clear();
+	temp_curves.clear();
+	transform	= identity;
+	ttf::process<void>(p, *this);
+
+	ISO_ASSERT(!cg.empty());
+	if (cg) {
+		auto	i	= cg.begin(), e = cg.end(), d = i++;
+		for (;i != e; ++i) {
+			if (*(glyph_fill*)i == *(glyph_fill*)d && !overlap(*i, *d)) {
+				d->append(*i);
+			} else {
+				++d;
+				*d = move(*i);
+			}
+		}
+		cg.erase(++d, e);
+		for (auto &i : cg) {
+			i.optimise(i.get_extent());
+		}
+	}
+	return move(cg);
+}
+
+//-----------------------------------------------------------------------------
 //	TTF & OTF FileHandlers
 //-----------------------------------------------------------------------------
 
+struct ISO_new {
+	const ISO::Type*	type;
+	tag2				id;
+	ISO_new(const ISO::Type *type, tag2 id = tag2()) : type(type), id(id) {}
+	void* alloc(size_t size) const {
+		return ISO::MakeRawPtrSize<32>(type, id, size);
+	}
+};
+
+template<typename T> struct ISO_newT : ISO_new {
+	ISO_newT(tag2 id = tag2()) : ISO_new(ISO::getdef<T>(), id) {}
+};
+
+
+void* operator new(size_t size, const ISO_new& n) {
+	return n.alloc(size);
+}
+
 class TTFFileHandler : public FileHandler {
-	const char*		GetExt() override { return "ttf"; }
-	const char*		GetDescription() override { return "Truetype font";	}
-	ISO_ptr<void>	Read(tag id, istream_ref file) override;
+	const char*		GetExt()				override { return "ttf"; }
+	const char*		GetDescription()		override { return "Truetype font";	}
 	int				Check(istream_ref file) override {
 		file.seek(0);
-		uint32	t = file.get<uint32be>();
-		return t == 0x00010000 || t == 'true' || t == 'typ1' ? CHECK_PROBABLE : CHECK_DEFINITE_NO;
+		return is_any(file.get<uint32be>(), 0x00010000, 'true', 'typ1') ? CHECK_PROBABLE : CHECK_DEFINITE_NO;
+	}
+
+	ISO_ptr<void>	Read(tag id, istream_ref file) override;
+
+	struct Wrapper : FontWrapper {
+		Wrapper(ISO_ptr<anything> pa);
+	};
+	static ISO_ptr<FontWrapper> to_wrapper(ISO_ptr<anything> a) {
+		return ISO::GetPtr((new(ISO_newT<FontWrapper>(none)) Wrapper(a)));
+		//return new(ISO_new(ISO::getdef<FontWrapper>())) Wrapper(a);
+	}
+public:
+	TTFFileHandler() {
+		ISO_get_conversion(to_wrapper);
 	}
 } ttf_fh;
 
+
+void svg_layers(glyph_layers &layers, ISO::Browser2 b, ISO_ptr<void> fill, float2x3 transform) {
+	if (b.GetType() == ISO::REFERENCE)
+		b = *b;
+
+	if (b.Is<ISO_openarray_machine<curve_vertex>>()) {
+		auto&	sub		= layers.push_back();
+		(curves&)sub	= transformc((ISO_openarray_machine<curve_vertex>&)b, [&](curve_vertex &i) { return transform * i; });
+		//if (direction(sub)) {
+			reverse_curves(sub);
+		//}
+		if (fill) {
+			if (fill.IsType<rgba8>()) {
+				sub.SetSolidColour(*(rgba8*)fill);
+			}
+		}
+
+	} else if (b.Is<Filled>()) {
+		const Filled	*f = b;
+		svg_layers(layers, f->element, f->fill, transform);
+
+	} else  if (b.Is<Transformed>()) {
+		const Transformed *t = b;
+		svg_layers(layers, t->element, fill, t->transform * transform);
+
+	} else {
+		for (auto i : b)
+			svg_layers(layers, i, fill, transform);
+	}
+}
+
+void svg_curves(curves &c, glyph_layers &layers, ISO::Browser2 b) {
+#if 1
+	svg_layers(layers, b, ISO_NULL, scale(1,-1));
+#else
+	static const float2x3	transform	= identity;
+	//static const float2x3	transform	= scale(1,-1);
+
+	if (b.GetType() == ISO::REFERENCE)
+		b = *b;
+
+	if (b.Is<ISO_openarray_machine<curve_vertex>>()) {
+		c.append(transformc((ISO_openarray_machine<curve_vertex>&)b, [](const curve_vertex &i) { return transform * i; }));
+
+	} else if (b.Is<Filled>()) {
+		const Filled	*f = b;
+		svg_layers(layers, f->element, f->fill, scale(1,-1));
+
+	} else  if (b.Is<Transformed>()) {
+		const Transformed *t = b;
+		svg_layers(layers, t->element, ISO_NULL, t->transform * transform);
+
+	} else {
+		for (auto i : b)
+			svg_curves(c, layers, i);
+	}
+#endif
+}
+
+curves	FlattenGlyph(ISO_ptr<void> p) {
+	curves	out;
+	if (p.IsType<iso_simpleglyph>()) {
+		out = *(iso_simpleglyph*)p;
+
+	} else if (p.IsType<iso_compoundglyph>()) {
+		for (auto& i : *(iso_compoundglyph*)p) {
+			if (i.a)
+				out.append(transformc(FlattenGlyph(i.a), [m = float2x3(i.b)](const curve_vertex &i) { return m * i; }));
+		}
+	}
+
+	if (direction(out))
+		reverse_curves(out);
+	return out;
+}
+
+
+TTFFileHandler::Wrapper::Wrapper(ISO_ptr<anything> pa) {
+	auto		&a		= *pa;
+	ttf::hhea	*hhea	= ISO::Browser(a["hhea"]);
+	ttf::hmtx	*hmtx	= ISO::Browser(a["hmtx"]);
+
+
+	if (const ttf::cmap* cmap = ISO::Browser(a["cmap"])) {
+		const ttf::cmap::cmap_table	*uvs_table	= nullptr;
+
+		//score the tables to favour UNICODE_FULL
+		temp_array<uint32>	scores = transformc(cmap->tables, [&uvs_table](const ttf::cmap::cmap_table &i) {
+			switch (i.platform) {
+				case ttf::cmap::UNICODE:
+					if (i.encoding == ttf::cmap::UNICODE_UVS)
+						uvs_table = &i;
+					return  abs(i.encoding - ttf::cmap::UNICODE_FULL);
+				case ttf::cmap::WINDOWS:
+					return i.encoding == ttf::cmap::WIN_UNICODE_FULL ? 1 : i.encoding == ttf::cmap::WIN_UNICODE_BMP ? 2 : 3;
+				default:
+					return 4;
+			}
+		});
+		
+		uint32	i	= scores.index_of(argmin(scores));
+		max_char	= cmap->tables[i].data.get(cmap)->get(glyph_map);
+	}
+
+#if 0
+	if (const ttf::GSUB* gsub = ISO::Browser(a["GSUB"])) {
+		auto	scripts		= gsub->scripts.get(gsub);
+		auto	features	= gsub->features.get(gsub);
+		auto	lookups		= gsub->lookups.get(gsub);
+
+		auto	script		= scripts->begin()->script.get(scripts);
+		auto	lang		= script->defaultLangSys.get(script);
+
+		uint32	dummy_char	= max_char + 1;
+
+		for (auto& i : lang->featureIndices) {
+			auto	f = (*features)[i];
+			if (f.tag == "ccmp"_u32) {
+				auto	f2	= f.feature.get(features);
+				for (auto& j : f2->indices) {
+					auto	*lookup = (*lookups)[j].get(lookups);
+
+					for (auto& k : lookup->subtables) {
+						auto	table	= k.get(lookup);
+						uint32	format	= table->format;
+
+						switch (lookup->type) {
+							/*
+							case ttf::GSUB::SINGLE: {
+								ISO_ASSERT(format == 2);
+								auto	table1 = (ttf::GSUB::Single2*)table;
+								auto	all		= table1->substitutes.all();
+								break;
+							}*/
+							case ttf::GSUB::LIGATURE: {
+								ISO_ASSERT(format == 1);
+								auto	table1 = (ttf::GSUB::Ligature1*)table;
+								for (auto& set : table1->sets) {
+									auto	set2 = set.get(table1);
+									for (auto& lig : *set2) {
+										auto	lig2	= lig.get(set2);
+										auto&	dest	= ligatures.push_back();
+										dest.a			= lig2->ligature;
+										dest.b.glyphs	= *lig2;
+
+										glyph_map[dummy_char++] = dest.a;
+									}
+								}
+								break;
+							}
+							default:
+								break;
+
+						}
+					}
+
+				}
+
+			}
+		}
+	}
+#endif
+
+	hash_map<uint32, uint32>	glyphid_to_index;
+	temp_array<uint32>			index_to_glyphid(glyph_map.size());
+
+	uint32	j = 0;
+	for (auto& i : glyph_map) {
+		if (!glyphid_to_index[*i].exists()) {
+			glyphid_to_index[*i]	= j;
+			index_to_glyphid[j]		= *i;
+			++j;
+		}
+	}
+
+	for (auto& i : glyph_map)
+		*i	= glyphid_to_index[*i];
+
+	glyphs.resize(j);
+
+	dynamic_array<curves>	all_curves;
+
+	if (auto b = ISO::Browser(a["glyphs"])) {
+		anything	&in_curves = b;
+		all_curves	= transformc(in_curves, [](const ISO_ptr<void> &p) { return FlattenGlyph(p); });
+
+		for (auto &g : glyphs) {
+			int	i2	= index_to_glyphid[glyphs.index_of(g)];
+			g		= glyph(all_curves[i2], hmtx->left(hhea, i2), hmtx->advance(hhea, i2));
+		}
+
+	} else if (b = ISO::Browser(a["CFF"])) {
+		anything	&in_curves	= b["curves"];
+		all_curves	= transformc(in_curves, [](const iso_simpleglyph *p)->curves {
+			return *p;
+		});
+
+		int		*bbox	= b["dict"]["isFixedPitch"].get<bool>() ? (int*)b["dict"]["FontBBox"][0] : nullptr;
+		
+		for (auto &g : glyphs) {
+			int	i2	= index_to_glyphid[glyphs.index_of(g)];
+			g		= glyph(all_curves[i2], hmtx->left(hhea, i2), bbox ? bbox[2] : (float)hmtx->advance(hhea, i2));
+		}
+	}
+
+
+#if 1
+	if (const ttf::SVG* svg = ISO::Browser(a["SVG"])) {
+		if (auto fh = FileHandler::Get("svg")) {
+			for (auto&& i : svg->documents()) {
+				auto			d	= get(i);
+				ISO::Browser2	svg = fh->Read(none, memory_reader(d.data));
+
+				if (d.start == d.end) {
+					svg_curves(all_curves[d.start], layers_map[glyphid_to_index[d.start]], svg);
+				} else {
+					for (uint32 g = 0; g <= d.end - d.start; g++) {
+						svg_curves(all_curves[g + d.start], layers_map[glyphid_to_index[g + d.start]], svg[g]);
+					}
+				}
+			}
+		}
+	}
+#endif
+	if (ttf::COLR0 *colr = ISO::Browser(a["COLR"])) {
+		ttf::CPAL	*cpal = ISO::Browser(a["CPAL"]);
+
+		switch (colr->version) {
+			case 0: {
+				break;
+			}
+			case 1: {
+				auto	head	= static_cast<const ttf::COLR1*>(colr);
+				auto	base	= head->base_glyphs1();
+				glyph_layers_maker	maker(head, cpal->colors.get(cpal) + cpal->colorRecordIndices[0], all_curves);
+
+				for (auto &i0 : base->all()) {
+					auto	i2 = glyphid_to_index[i0.glyphID];
+					if (i2.exists())
+						layers_map[i2] = maker.make(i0.paint.get(base));
+				}
+				break;
+			}
+			default:
+				break;
+		}
+
+	}
+
+	height		= hhea->ascent - hhea->descent;
+	baseline	= hhea->ascent;
+	top			= 0;
+	spacing		= height + hhea->lineGap;
+}
+
 class OTFFileHandler : public TTFFileHandler {
-	const char*		GetExt() override { return "otf"; }
-	const char*		GetDescription() override { return "Opentype font";	}
-	int				Check(istream_ref file) override {
+	const char*		GetExt()				override { return "otf"; }
+	const char*		GetDescription()		override { return "Opentype font";	}
+	int				Check(istream_ref file)	override {
 		return 0;
 		file.seek(0);
 		return file.get<uint32be>() == 'OTTO' ? CHECK_PROBABLE : CHECK_DEFINITE_NO;
 	}
 } otf_fh;
 
-ISO_ptr<void>	TTFFileHandler::Read(tag id, istream_ref file) {
+ISO_DEFUSERCOMPV(ttf::head,
+	version, font_revision, checksum_adjustment, magic, flags, units_per_em, created, modified,
+	xMin, yMin, xMax, yMax,
+	macStyle, lowestRecPPEM, fontDirectionHint, indexToLocFormat, glyphDataFormat
+);
+
+ISO_DEFUSERCOMPV(ttf::maxp,
+	version,numGlyphs,maxPoints,maxContours,maxComponentPoints,maxComponentContours,maxZones,maxTwilightPoints,
+	maxStorage,maxFunctionDefs,maxInstructionDefs,maxStackElements,maxSizeOfInstructions,maxComponentElements,maxComponentDepth
+);
+
+ISO_DEFUSERCOMPV(ttf::PANOSE,bFamilyType,bSerifStyle,bWeight,bProportion,bContrast,bStrokeVariation,bArmStyle,bLetterform,bMidline,bXHeight);
+ISO_DEFUSERCOMPV(ttf::OS2,
+	version,avg_char_width,weight_class,width_class,type,
+	subscript_size_x,subscript_size_y,subscript_offset_x,subscript_offset_y,superscript_size_x,superscript_size_y,superscript_offset_x,superscript_offset_y,
+	strikeout_size,strikeout_position,family_class,panose,unicode_range,vend_id,selection,first_char_index,last_char_index,
+	typo_ascender,typo_descender,typo_line_gap,win_ascent,win_descent,codepage_range,height,cap_height,default_char,break_char,max_context
+);
+
+
+ISO_DEFUSERCOMPV(ttf::hhea,
+	version, ascent, descent, lineGap, advanceWidthMax, minLeftSideBearing, minRightSideBearing,xMaxExtent,
+	caretSlopeRise, caretSlopeRun, caretOffset, reserved, metricDataFormat, numOfLongHorMetrics
+);
+
+ISO_DEFUSERCOMPV(ttf::sbix, version, flags, numStrikes, strikes2);
+ISO_DEFUSERCOMPV(ttf::sbix::strike, ppem, ppi, glyphs2);
+ISO_DEFUSERCOMPV(ttf::sbix::glyph, originOffsetX, originOffsetY, graphicType);
+
+struct glyph_ref {
+	const ttf::sbix::glyph	*g;
+	const void	*end;
+
+	ISO_ptr<void>	image() const {
+		switch (g->graphicType) {
+			case g->JPG:	return FileHandler::Read(none, memory_reader(g->data, end), "jpg");
+			case g->PNG:	return FileHandler::Read(none, memory_reader(g->data, end), "png");
+			case g->TIFF:	return FileHandler::Read(none, memory_reader(g->data, end), "tiff");
+			default:		return ISO_NULL;
+		}
+	}
+};
+ISO_DEFUSERCOMPV(glyph_ref, g, image);
+
+glyph_ref get(const param_element<offset_pointer<ttf::sbix::glyph, uint32be, ttf::sbix::strike>&, const ttf::sbix::strike*>& p) {
+	return {p.t.get(p.p), (&p.t)[1].get(p.p)};
+}
+
+ISO_DEFUSERCOMPV(ttf::SVG::Document_ref, start, end, data);
+ISO_DEFUSERCOMPV(ttf::SVG, documents);
+
+ISO_DEFUSERCOMPV(ttf::GSUB, majorVersion, minorVersion);
+
+#if 0
+void dump(const ttf::Coverage* cov) {
+	ISO_TRACEF("coverage fmt ") << cov->format << '\n';
+	switch (cov->format) {
+		case 1: {
+			auto	cov1 = (ttf::Coverage1*)cov;
+			for (auto &i : cov1->glyphs)
+				ISO_TRACEF("glyph=") << hex(i) << '\n';
+			break;
+		}
+		case 2: {
+			auto	cov1 = (ttf::Coverage2*)cov;
+			for (auto& i : cov1->ranges)
+				ISO_TRACEF("start=") << hex(i.start) << " end=" << hex(i.end) << " cov=" << hex(i.startCoverageIndex) << '\n';
+			break;
+		}
+		default: ISO_ASSERT(0);
+	}
+}
+
+void dump(const ttf::SequenceLookup& seq) {
+
+}
+
+void dump(const ttf::GSUB* gsub) {
+	auto	scripts = gsub->scripts.get(gsub);
+	auto	features = gsub->features.get(gsub);
+	auto	lookups = gsub->lookups.get(gsub);
+
+	auto	script	= scripts->begin()->script.get(scripts);
+	auto	lang	= script->defaultLangSys.get(script);
+
+	for (auto& i : lang->featureIndices) {
+		auto	f = (*features)[i];
+		ISO_TRACEF("TAG:") << (char(&)[4])f.tag << '\n';
+		auto	f2	= f.feature.get(features);
+
+		for (auto& j : f2->indices) {
+			auto	*lookup = (*lookups)[j].get(lookups);
+			ISO_TRACEF("index:") << j << " type:" << lookup->type << " flag:" << hex(lookup->flag) << '\n';
+
+			for (auto& k : lookup->subtables.all()) {
+				auto	table	= k.get(lookup);
+				uint32	format	= table->format;
+
+				ISO_TRACEF("format:") << table->format << '\n';
+				switch (lookup->type) {
+					case ttf::GSUB::SINGLE:
+						break;
+					case ttf::GSUB::MULTIPLE:
+						break;
+					case ttf::GSUB::ALTERN:
+						break;
+
+					case ttf::GSUB::LIGATURE: {
+						ISO_ASSERT(format == 1);
+						auto	table1 = (ttf::GSUB::Ligature1*)table;
+						dump(table1->coverage.get(table1));
+						for (auto& set : table1->sets) {
+							auto	set2 = set.get(table1);
+							for (auto& lig : *set2) {
+								auto	lig2 = lig.get(set2);
+								ISO_TRACEF("ligature ") << hex(lig2->ligature) << ':';
+								for (auto &g : *lig2)
+									ISO_TRACEF(" ") << hex(g);
+								ISO_TRACEF("\n");
+							}
+						}
+						break;
+					}
+
+					case ttf::GSUB::CONTEXTUAL:
+						switch (format) {
+							case 3: {
+								auto	table1 = (ttf::SequenceContext3*)table;
+
+								for (auto &i : table1->coverages()) 
+									dump(i.get(table1));
+								for (auto &i : table1->seqLookup()) 
+									dump(i);
+
+								break;
+							}
+							default: ISO_ASSERT(0);
+						}
+						break;
+
+					case ttf::GSUB::CHAINED:
+						switch (format) {
+							case 3: {
+								auto	table1 = (ttf::ChainedSequenceContext3*)table;
+
+								for (auto &i : table1->backtrack())
+									dump(i.get(table1));
+								for (auto &i : table1->input())
+									dump(i.get(table1));
+								for (auto &i : table1->lookahead())
+									dump(i.get(table1));
+								for (auto &i : table1->seqLookup())
+									dump(i);
+
+
+								break;
+							}
+							default: ISO_ASSERT(0);
+						}
+						break;
+
+					case ttf::GSUB::EXTENSION:
+						break;
+					case ttf::GSUB::REVERSE:
+						break;
+				}
+			}
+
+		}
+
+	}
+
+}
+#endif
+
+ISO_ptr<void> TTFFileHandler::Read(tag id, istream_ref file) {
 	TTF	t(file);
 
 	ISO_ptr<anything>	p(id);
@@ -891,12 +1647,15 @@ ISO_ptr<void>	TTFFileHandler::Read(tag id, istream_ref file) {
 		uint32	length	= table.length;
 		uint32	offset	= table.offset;
 		switch (table.tag) {
-			case 'loca':
-			case 'head':
+			case "loca"_u32:
 				break;
 
-			case 'glyf': {
-				auto	mb = ReadTable(file, t.FindTable('loca'));
+			case "head"_u32:
+				p->Append(ReadBlockT<ttf::head>("head",file, offset, length));
+				break;
+
+			case "glyf"_u32: {
+				auto	mb = ReadTable(file, t.FindTable("loca"_u32));
 				dynamic_array<uint32>	locs;
 				if (t.head->indexToLocFormat == 0) {
 					locs	= make_range<uint16be>(mb);
@@ -908,66 +1667,75 @@ ISO_ptr<void>	TTFFileHandler::Read(tag id, istream_ref file) {
 				ISO_ptr<anything>	x("glyphs", locs.size32() - 1);
 				auto	*loc = locs.begin();
 				for (auto &i : *x) {
-					i = ReadGlyph(ReadBlock(file, table.offset + loc[0], loc[1] - loc[0]), *x);
+					if (auto mb = ReadBlock(file, table.offset + loc[0], loc[1] - loc[0])) {
+						if (((ttf::glyf::glyph*)mb)->num_contours >= 0)
+							i = ReadSimpleGlyph(mb);
+					}
+					++loc;
+				}
+
+				loc = locs.begin();
+				for (auto &i : *x) {
+					if (!i) {
+						if (auto mb = ReadBlock(file, table.offset + loc[0], loc[1] - loc[0])) {
+							if (((ttf::glyf::glyph*)mb)->num_contours < 0)
+								i = ReadCompoundGlyph(mb, *x);
+						}
+					}
 					++loc;
 				}
 
 				p->Append(x);
 				break;
 			}
-			case 'cmap':
-				p->Append(ReadCMAP("cmap", ReadBlock(file, offset, length)));
-				break;
 
-			case 'cvt ': {
+			case "cvt "_u32: {
 				file.seek(offset);
 				uint32	n = length / sizeof(ttf::fword);
-				ISO_ptr<ISO_openarray<int16> >	x("cvt", n);
+				ISO_ptr<ISO_openarray<int16>>	x("cvt", n);
 				for (int16 *d = *x; n--; d++)
 					*d = file.get<ttf::fword>();
 				p->Append(x);
 				break;
 			}
-			case 'name':
+			case "name"_u32:
 				p->Append(ReadNAME("names", ReadBlock(file, offset, length)));
 				break;
 
-			case 'CFF ': {
+			case "CFF "_u32: {
 				ISO_ptr<anything>	x("CFF");
-				cff::header	*h			= ReadBlock(file, offset, length);
+				auto	buff = ReadBlock(file, offset, length);
+				cff::header	*h			= buff;
 				cff::index	*names		= (cff::index*)((uint8*)h + h->hdrSize);
 				cff::index	*dict		= (cff::index*)names->end();
 				cff::index	*strings	= (cff::index*)dict->end();
 				cff::index	*gsubrs		= (cff::index*)strings->end();
 				cff::index	*lsubrs		= 0;
-				void		*prvt		= 0;
 				float		nominalWidth = 0, defaultWidth = 0;
 
-				cff::dictionary	pub_dict(dict);
-				cff::dictionary	prv_dict;
+				cff::dictionary					pub_dict(dict);
+				cff::dictionary_with_defaults	pub_dict2(pub_dict, cff::dict_top_defaults());
 
 				x->Append(ReadCFFStrings("names", names));
-				x->Append(CFFDict("dict", pub_dict, strings));
+				x->Append(ReadCFFDict("dict", pub_dict, strings));
 				x->Append(ReadCFFStrings("strings", strings));
 				x->Append(ReadCFFBlocks("global_subrs", gsubrs));
 
-				auto e = pub_dict.lookup(cff::Private);
-				if (!e.empty()) {
-					prvt	= (uint8*)h + e[0].data;
-					prv_dict.add(memory_reader(const_memory_block(prvt, e[0].data)));
-
+				if (auto e = pub_dict.lookup(cff::Private)) {
+					void	*prvt	= (uint8*)h + e[1].data;
+					
+					cff::dictionary					prv_dict(memory_reader(const_memory_block(prvt, e[0].data)));
 					cff::dictionary_with_defaults	prv_dict2(prv_dict, cff::dict_pvr_defaults());
-					e = prv_dict2.lookup(cff::nominalWidthX);
-					if (!e.empty())
+
+					if (e = prv_dict2.lookup(cff::nominalWidthX))
 						nominalWidth = e[0];
-					e = prv_dict2.lookup(cff::nominalWidthX);
-					if (!e.empty())
+
+					if (e = prv_dict2.lookup(cff::nominalWidthX))
 						defaultWidth = e[0];
 
-					x->Append(CFFDict("prvt", prv_dict, strings));
+					x->Append(ReadCFFDict("prvt", prv_dict, strings));
 
-					e = prv_dict.lookup(cff::Subrs);
-					if (!e.empty()) {
+					if (e = prv_dict.lookup(cff::Subrs)) {
 						lsubrs = (cff::index*)((uint8*)prvt + e[0].data);
 						x->Append(ReadCFFBlocks("local_subrs", lsubrs));
 					}
@@ -977,25 +1745,54 @@ ISO_ptr<void>	TTFFileHandler::Read(tag id, istream_ref file) {
 				x->Append(ReadCFFBlocks("CharStrings", chrstr));
 				x->Append(ReadCFFCharSet("charset",	(uint8*)h + pub_dict.lookup(cff::charset)[0].data, chrstr->count));
 
-				ISO_ptr<ISO_openarray<ISO_ptr< ISO_openarray<float2p> > > > curves("curves", chrstr->count);
+				ISO_ptr<ISO_openarray<ISO_ptr<iso_simpleglyph>>> curves("curves", chrstr->count);
 				x->Append(curves);
 
 				CFF_VM	vm(gsubrs, lsubrs, nominalWidth);
-				for (int i = 0; i < chrstr->count; i++) {
+				for (int j = 0; j < chrstr->count; j++) {
 					vm.Reset(defaultWidth);
-					vm.Interpret((*chrstr)[i]);
-					memcpy((*curves)[i].Create()->Create(uint32(vm.NumVerts())), vm.Verts(), vm.NumVerts() * sizeof(float2p));
+					vm.Interpret((*chrstr)[j]);
+					*(*curves)[j].Create() = vm.Verts1();
+					//if (direction(*(*curves)[j]))
+					//	reverse_curves(*(*curves)[j]);
+					//else
+					//	ISO_TRACEF("whoops ") << j << '\n';
 				}
 
 				p->Append(x);
 				break;
 			}
+			
+			case "OS/2"_u32:
+				p->Append(ReadBlockT<ttf::OS2>("OS/2",file, offset, length));
+				break;
+
+			case "sbix"_u32:
+				p->Append(ReadBlockT<ttf::sbix>("sbix",file, offset, length));
+				break;
+
+			case "maxp"_u32:
+				p->Append(ReadBlockT<ttf::maxp>("maxp",file, offset, length));
+				break;
+
+			case "hhea"_u32:
+				p->Append(ReadBlockT<ttf::hhea>("hhea",file, offset, length));
+				break;
+
+			case "SVG "_u32:
+				p->Append(ReadBlockT<ttf::SVG>("SVG",file, offset, length));
+				break;
+
+			case "GSUB"_u32:
+				p->Append(ReadBlockT<ttf::GSUB>("GSUB",file, offset, length));
+				//dump((const ttf::GSUB*)p->back());
+				break;
 
 			default: {
 				char		name[5];
 				memcpy(name, &table.tag, 4);
 				name[4] = 0;
-				ISO_ptr<ISO_openarray<uint8> >	x(name, length);
+				ISO_ptr<ISO_openarray<uint8>>	x(name, length);
 				file.seek(offset);
 				file.readbuff(*x, length);
 				p->Append(x);
@@ -1180,7 +1977,7 @@ struct tokeniser {
 	const char *p, *e;
 	char	token[256], *t;
 
-	tokeniser(const char *_p, size_t len) : p(_p), e(_p + len), t(token) {}
+	tokeniser(const char *p, size_t len) : p(p), e(p + len), t(token) {}
 
 	void	skip(size_t n) {
 		p += n;
@@ -1233,13 +2030,13 @@ public:
 			if (s == 2)
 				enc.eexec_decrypt(mb, mb, len);
 
-			ISO_ptr<ISO_openarray<uint8> > x(0);
+			ISO_ptr<ISO_openarray<uint8>> x(0);
 			memcpy(x->Create(len), mb, len);
 			p->Append(x);
 
 			if (s == 2) {
 				ISO_ptr<anything> x("subrs");
-				ISO_ptr<ISO_openarray<ISO_ptr< ISO_openarray<float2p> > > > curves("curves");
+				ISO_ptr<ISO_openarray<ISO_ptr< ISO_openarray<curve_vertex>>>> curves("curves");
 				p->Append(x);
 
 				TYPE1_VM	vm;
@@ -1263,14 +2060,15 @@ public:
 						}
 					} else if (str(t) == "RD") {
 						int	len = stack[sp & 7];
-						ISO_ptr<ISO_openarray<uint8> > y(last_name);
+						ISO_ptr<ISO_openarray<uint8>> y(last_name);
 						enc.charstring_decrypt(tok.p, y->Create(len - 4), len);
 						x->Append(y);
 						tok.skip(len);
 						if (charstrings) {
 							vm.Reset();
 							vm.Interpret(*y, *y + len);
-							memcpy(curves->Append().Create(last_name)->Create(uint32(vm.NumVerts())), vm.Verts(), vm.NumVerts() * sizeof(float2p));
+							*curves->Append().Create(last_name) = vm.Verts1();
+							//memcpy(curves->Append().Create(last_name)->Create(uint32(vm.NumVerts())), vm.Verts(), vm.NumVerts() * sizeof(float2p));
 						}
 						last_name.clear();
 					}
@@ -1304,7 +2102,7 @@ class TTCFileHandler : public FileHandler {
 
 ISO_ptr<void> ReadTTF(tag id, istream_ref file) {
 	TTF		t(file);
-	ISO_ptr<ISO_openarray<uint8> >	p(id);
+	ISO_ptr<ISO_openarray<uint8>>	p(id);
 	uint8	*data	= p->Create(uint32(t.CalcSize()), false);
 
 	int		n		= t.tables.size();
@@ -1322,22 +2120,20 @@ ISO_ptr<void> ReadTTF(tag id, istream_ref file) {
 		offset			+= length;
 	}
 
-	memcpy(data, t.GetSFNT(), sizeof(ttf::SFNTHeader));
+	memcpy(data, &t.sfnt, sizeof(t.sfnt));
 	memcpy(data + sizeof(ttf::SFNTHeader), t.tables, n * sizeof(ttf::TableRecord));
 	return p;
 }
 
 ISO_ptr<void>	TTCFileHandler::Read(tag id, istream_ref file) {
 	ttf::TTCHeader	h	= file.get();
-	if (h.tag != 'ttcf')
+	if (h.tag != "ttcf"_u32)
 		return ISO_NULL;
 
-	int				n		= h.num_fonts;
-	temp_array<ttf::uint32>	offsets(n);
-//	ttf::uint32*	offsets = new ttf::uint32[n];
-	file.readbuff(offsets, n * sizeof(ttf::uint32));
-
-	ISO_ptr<anything>	p(id);
+	int				n	= h.num_fonts;
+	
+	temp_array<uint32be>	offsets(file, n);
+	ISO_ptr<anything>		p(id);
 	p->Create(n);
 
 	for (int i = 0; i < n; i++) {
@@ -1345,7 +2141,6 @@ ISO_ptr<void>	TTCFileHandler::Read(tag id, istream_ref file) {
 		(*p)[i] = ReadTTF(to_string(i), file);
 	}
 
-//	delete[] offsets;
 	return p;
 }
 
@@ -1354,8 +2149,8 @@ ISO_ptr<void>	TTCFileHandler::Read(tag id, istream_ref file) {
 //-----------------------------------------------------------------------------
 
 class EOTFileHandler : public FileHandler {
-	const char*		GetExt() override { return "eot"; }
-	const char*		GetDescription() override { return "Embedded Opentype";	}
+	const char*		GetExt()			override { return "eot"; }
+	const char*		GetDescription()	override { return "Embedded Opentype";	}
 	ISO_ptr<void>	Read(tag id, istream_ref file) override;
 } eot;
 
@@ -1397,7 +2192,7 @@ void WriteEOT(uint8 *font_data, size_t font_size, ostream_ref file) {
 		uint8	*start = font_data + tables[i].offset;
 
 		switch (tables[i].tag) {
-			case 'OS/2': {
+			case "OS/2"_u32: {
 				ttf::OS2	*OS2 = (ttf::OS2*)start;
 				eot.panose = OS2->panose;
 				eot.italic = OS2->selection & 1;
@@ -1411,12 +2206,12 @@ void WriteEOT(uint8 *font_data, size_t font_size, ostream_ref file) {
 					eot.codepage_range[j] = OS2->codepage_range[j];
 				break;
 			}
-			case 'head': {
+			case "head"_u32: {
 				ttf::head* head = (ttf::head*)start;
 				eot.checksum_adjustment = head->checksum_adjustment;
 				break;
 			}
-			case 'name': {
+			case "name"_u32: {
 				ttf::name* name = (ttf::name*)start;
 				for (int j = 0; j < name->count; j++) {
 					if (name->names[j].platformID == ttf::PLAT_microsoft && name->names[j].encodingID == ttf::name::MS_UCS2 && name->names[j].languageID == 0x0409) {
@@ -1459,12 +2254,17 @@ void WriteEOT(uint8 *font_data, size_t font_size, ostream_ref file) {
 
 class DisassemblerPostscript : public Disassembler {
 protected:
-	void		_Disassemble(const memory_block &block, uint64 addr, dynamic_array<string> &lines, SymbolFinder sym_finder, const char **ops, size_t nops);
+	void		_Disassemble(const_memory_block block, uint64 addr, dynamic_array<string> &lines, SymbolFinder sym_finder, const char **ops, size_t nops);
 };
 
-void DisassemblerPostscript::_Disassemble(const memory_block &block, uint64 addr, dynamic_array<string> &lines, SymbolFinder sym_finder, const char **ops, size_t nops) {
+void DisassemblerPostscript::_Disassemble(const_memory_block block, uint64 addr, dynamic_array<string> &lines, SymbolFinder sym_finder, const char **ops, size_t nops) {
 	byte_reader	r(block);
-	while (r.p < (uint8*)block.end()) {
+	dynamic_array<cff::value>	stack;
+
+	//bias	= 107 or 1131 or 32768;
+
+
+	while (r.p < block.end()) {
 		const uint8	*start	= r.p;
 
 		buffer_accum<1024>	ba("%08x ", r.p - start);
@@ -1478,12 +2278,33 @@ void DisassemblerPostscript::_Disassemble(const memory_block &block, uint64 addr
 			p++;
 		}
 		switch (v.type) {
-			case cff::t_int:	ba << (int&)v.data; break;
-			case cff::t_float:	ba << (fixed<16,16>&)v.data; break;
-			case cff::t_prop:	ba << (v.data > nops || ops[v.data] == 0 ? "--unknown--"  : ops[v.data]); break;
+			case cff::t_int:
+				stack.push_back(v);
+				ba << (int&)v.data;
+				break;
+
+			case cff::t_float:
+				stack.push_back(v);
+				ba << (float)(fixed<16,16>&)v.data;
+				break;
+
+			case cff::t_prop:
+				if (v.data > nops || ops[v.data] == 0) {
+					ba << "--unknown--";
+					break;
+				}
+				ba << ops[v.data];
+				if (!stack.empty()) {
+					switch (v.data) {
+						case cff::op_callsubr:
+						case cff::op_callgsubr:	ba << " " << (int)stack.back() + 107; break;
+					}
+					stack.clear();
+				}
+				break;
 		}
 
-		lines.push_back((const char*)ba);
+		lines.push_back(ba);
 	}
 }
 
@@ -1491,7 +2312,7 @@ class DisassemblerCFF : public DisassemblerPostscript {
 	static const char *ops[];
 public:
 	const char*	GetDescription() override { return "Adobe Compact Font"; }
-	State*		Disassemble(const iso::memory_block &block, uint64 addr, SymbolFinder sym_finder) override;
+	State*		Disassemble(const_memory_block block, uint64 addr, SymbolFinder sym_finder) override;
 } disassembler_cff;
 
 const char *DisassemblerCFF::ops[] = {
@@ -1514,7 +2335,7 @@ const char *DisassemblerCFF::ops[] = {
 	0,				0,				"hflex",		"flex",
 	"hflex1",		"flex1",
 };
-Disassembler::State *DisassemblerCFF::Disassemble(const iso::memory_block &block, uint64 addr, SymbolFinder sym_finder) {
+Disassembler::State *DisassemblerCFF::Disassemble(const_memory_block block, uint64 addr, SymbolFinder sym_finder) {
 	StateDefault	*state = new StateDefault;
 	_Disassemble(block, addr, state->lines, sym_finder, ops, num_elements(ops));
 	return state;
@@ -1525,7 +2346,7 @@ class DisassemblerType1 : public DisassemblerPostscript {
 	static const char *ops[];
 public:
 	const char*	GetDescription() override { return "Adobe Type1 Font"; }
-	State*		Disassemble(const iso::memory_block &block, uint64 addr, SymbolFinder sym_finder) override;
+	State*		Disassemble(const_memory_block block, uint64 addr, SymbolFinder sym_finder) override;
 } disassembler_type1;
 
 const char *DisassemblerType1::ops[] = {
@@ -1548,7 +2369,7 @@ const char *DisassemblerType1::ops[] = {
 	0,				"setcurrentpoint",
 };
 
-Disassembler::State *DisassemblerType1::Disassemble(const iso::memory_block &block, uint64 addr, SymbolFinder sym_finder) {
+Disassembler::State *DisassemblerType1::Disassemble(const_memory_block block, uint64 addr, SymbolFinder sym_finder) {
 	StateDefault	*state = new StateDefault;
 	_Disassemble(block, addr, state->lines, sym_finder, ops, num_elements(ops));
 	return state;

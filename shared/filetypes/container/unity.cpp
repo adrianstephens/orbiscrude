@@ -1198,13 +1198,13 @@ ISO_ptr<void> UnityPackageFileHandler::Read(tag id, istream_ref file) {
 
 			malloc_block	data(z, uint32(size));
 			if (name.name_ext() == "asset") {
-				hash[name.dir()].put().data = move(data);
+				hash[crc32(name.dir())].put().data = move(data);
 
 			} else if (name.name() == "pathname") {
 				auto	path = str((const char*)data, (const char*)data.end());
 				if (auto end = path.find('\n'))
 					path = path.slice_to(end);
-				hash[name.dir()].put().path = path;
+				hash[crc32(name.dir())].put().path = path;
 
 			} else {
 				//hash[name.dir()].data = data;
@@ -1380,7 +1380,7 @@ ISO_ptr<void> UnityInfoFileHandler::Read(tag id, istream_ref file) {
 		return ISO_NULL;
 
 	file.seek(sizeof(block) + b0.offset);
-	istream_offset	file2(file, b1.offset);
+	istream_offset	file2(copy(file), b1.offset);
 
 	UNITY_INFO_YAML	unity_yaml(id);
 	YAMLreader		reader(&unity_yaml, file2);
@@ -1396,7 +1396,7 @@ ISO_ptr<void> UnityInfoFileHandler::Read(tag id, istream_ref file) {
 
 	if (FileHandler *yaml = FileHandler::Get("yaml")) {
 		file.seek(sizeof(block) + b0.offset);
-		return yaml->Read(id, unconst(istream_offset(file, b1.offset)));
+		return yaml->Read(id, make_reader_offset(file, b1.offset));
 	}
 
 	return ISO_NULL;

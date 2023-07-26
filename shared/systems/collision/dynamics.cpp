@@ -597,13 +597,7 @@ void DynamicsSystem::operator()(FrameEvent &ev) {
 //-----------------------------------------------------------------------------
 //	Create
 //-----------------------------------------------------------------------------
-
-struct DynamicsMaker: Handles2<DynamicsMaker, WorldEvent> {
-	void	operator()(WorldEvent *ev) {
-		if (ev->state == WorldEvent::BEGIN)
-			new DynamicsSystem(ev->world);
-	}
-} dynamics_maker;
+CreateWithWorld<DynamicsSystem> DynamicsSystem::maker;
 
 void DynamicsSystem::Create(const CreateParams &cp, crc32 id, const PhysicsData *t) {
 	if (MassPropertiesData *m = cp.obj->FindType<MassPropertiesData>()) {

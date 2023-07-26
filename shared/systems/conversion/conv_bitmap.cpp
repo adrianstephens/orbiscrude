@@ -11,10 +11,6 @@
 
 using namespace iso;
 
-//-----------------------------------------------------------------------------
-//	bitmap functions
-//-----------------------------------------------------------------------------
-
 class ArrayTexture_conversion : public ISO_conversion {
 public:
 	ISO_ptr<void> operator()(ISO_ptr_machine<void> p, const ISO::Type* type, bool recurse) {
@@ -352,49 +348,47 @@ ISO_ptr<bitmap> Combine(ISO_ptr<bitmap> bm1, ISO_ptr<bitmap> bm2, int dir) {
 
 struct VQ_rgba {
 	typedef HDRpixel element, welement;
-	HDRpixel*		 vec;
-	uint32			 count;
+	HDRpixel*	vec;
+	uint32		count;
 
-	HDRpixel& data(size_t i) { return vec[i]; }
-	uint32	size() { return count; }
-	float	 weightedsum(HDRpixel& s, size_t i) {
+	HDRpixel&	data(size_t i)		{ return vec[i]; }
+	uint32		size()				{ return count; }
+
+	float		weightedsum(HDRpixel& s, size_t i) {
 		s += vec[i];
 		return 1;
 	}
 
-	static void  reset(HDRpixel& s) { clear(s); }
-	static void  scale(HDRpixel& e, float f) { e *= f; }
-	static float norm(const HDRpixel& e) { return sqrt(e.r * e.r + e.g * e.g + e.b * e.b); }
+	static void  reset(HDRpixel& s)				{ clear(s); }
+	static void  scale(HDRpixel& e, float f)	{ e *= f; }
+	static float norm(const HDRpixel& e)		{ return sqrt(e.r * e.r + e.g * e.g + e.b * e.b); }
 
 	static float distsquared(const HDRpixel& a, const HDRpixel& b, float max = 1e38f) { return (square(a.r - b.r) + square(a.g - b.g) + square(a.b - b.b)); }
 
-	VQ_rgba(HDRpixel* _vec, uint32 _size) : vec(_vec), count(_size) {}
+	VQ_rgba(HDRpixel* vec, uint32 size) : vec(vec), count(size) {}
 };
 
 ISO_ptr<bitmap> VQbitmap(ISO_ptr<HDRbitmap> bm, int n) {
 	if (n == 0)
 		n = 256;
 
-	int		  width	= bm->Width();
-	int		  height   = bm->Height();
-	int		  num_vecs = width * height;
-	HDRpixel* vectors  = bm->ScanLine(0);
+	int			width		= bm->Width();
+	int			height		= bm->Height();
+	int			num_vecs	= width * height;
+	HDRpixel*	vectors		= bm->ScanLine(0);
 
 	vq<VQ_rgba> vqt(n);
 	VQ_rgba		t(vectors, num_vecs);
 	vqt.build(t);
 
-	ISO_ptr<bitmap> bm2(0);
-	bm2->Create(width, height);
-	bm2->CreateClut(n);
-	for (int i = 0; i < n; i++)
-		bm2->Clut(i) = vqt.codebook[i];
+	ISO_ptr<bitmap> bm2(none, width, height);
+	copy(vqt.codebook, bm2->CreateClut(n));
 
-	uint32* index = new uint32[num_vecs];
+	temp_array<uint32> index(num_vecs);
 	vqt.generate_indices(t, index);
+	auto	d	= bm2->ScanLine(0);
 	for (int i = 0; i < num_vecs; i++)
-		bm2->ScanLine(0)[i] = int(index[i]);
-	delete[] index;
+		*d++ = int(index[i]);
 
 	return bm2;
 }
@@ -451,10 +445,10 @@ ISO_ptr<void> grabcut(ISO_ptr<bitmap> bm, int x, int y, int w, int h, int iterCo
 	iso::grabCut(force_cast<block<rgbx8, 2> >(bm->All()), x, y, w, h, iterCount);
 
 	static const uint8 lookup[] = {
-			0x00,  // an obvious background pixel
-			0xff,  // an obvious foreground pixel
-			0x00,  // a possible background pixel
-			0xff,  // a possible foreground pixel
+		0x00,  // an obvious background pixel
+		0xff,  // an obvious foreground pixel
+		0x00,  // a possible background pixel
+		0xff,  // a possible foreground pixel
 	};
 	for (auto *p = bm->ScanLine(0), *e = p + bm->Width() * bm->Height(); p != e; ++p)
 		p->a = lookup[p->a];
@@ -542,14 +536,14 @@ ISO_ptr<bitmap2> RawBitmap(ISO_ptr<void> p, string format, int width, int height
 		return ISO_NULL;
 	}
 
-	ChannelUse		  cu(format);
-	ChannelUse::chans bits = cu.analog & cu.all(channels::SIZE_MASK);
-	uint32			  bpp  = cu.IsCompressed() ? (bits.a == 1 ? 4 : 8) : bits.r + bits.g + bits.b + bits.a;
+	ChannelUse			cu(format);
+	ChannelUse::chans	bits = cu.analog & cu.all(channels::SIZE_MASK);
+	uint32				bpp  = cu.IsCompressed() ? (bits.a == 1 ? 4 : 8) : bits.r + bits.g + bits.b + bits.a;
 
 	ISO_openarray<void>* array = p;
-	void*				 srce  = *array;
-	uint32				 size  = array->Count() * ((ISO::TypeOpenArray*)type)->subsize;
-	uint32				 pitch = width * bpp / 8;
+	void*				srce  = *array;
+	uint32				size  = array->Count() * ((ISO::TypeOpenArray*)type)->subsize;
+	uint32				pitch = width * bpp / 8;
 
 	if (!depth)
 		depth = 1;
@@ -617,7 +611,9 @@ ISO_ptr<bitmap> ContactSheet(const ISO_openarray<ISO_ptr<bitmap>> &bms, int w, i
 //	HDR manipulation
 //-----------------------------------------------------------------------------
 
-float gamma_component(float f, float gamma) { return f == 0 ? 0 : f < 0 ? -pow(-f, gamma) : pow(f, gamma); }
+float gamma_component(float f, float gamma) {
+	return f == 0 ? 0 : f < 0 ? -pow(-f, gamma) : pow(f, gamma);
+}
 
 ISO_ptr<HDRbitmap> Gamma(ISO_ptr<HDRbitmap> bm, float gamma) {
 	if (gamma != 1) {
@@ -804,7 +800,9 @@ ISO_ptr<HDRbitmap> Resize(ISO_ptr<HDRbitmap> bm, int destw, int desth, float gam
 	return _Resize(bm, destw, desth * bm->Depth(), gamma);
 }
 
-ISO_ptr<HDRbitmap> Scale(ISO_ptr<HDRbitmap> bm, float scale, float gamma) { return _Resize(bm, bm->Width() * scale, bm->Height() * scale, gamma); }
+ISO_ptr<HDRbitmap> Scale(ISO_ptr<HDRbitmap> bm, float scale, float gamma) {
+	return _Resize(bm, bm->Width() * scale, bm->Height() * scale, gamma);
+}
 
 //-----------------------------------------------------------------------------
 //	init

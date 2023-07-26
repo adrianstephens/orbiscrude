@@ -92,6 +92,7 @@ template<class R, typename T> static constexpr int read_type_v<R,T,void_t<declty
 #ifndef PLAT_MSVC
 template<class R, typename T> static constexpr int read_type_v<R,T,void_t<decltype(custom_read(declval<R>(), declval<T>()))>>	= 3;
 #endif
+template<class R, typename T> static constexpr int read_type_v<R,T,void_t<decltype(declval<R>().custom_read(declval<T&>()))>>	= 4;
 
 template<class R, typename T> static constexpr bool has_read = read_type_v<R,T> == 2;
 
@@ -109,10 +110,13 @@ template<>	struct read_s<3> {
 	template<class R, typename T> static inline bool f(R &r, T &t)				{ return custom_read(r, t); }
 	template<class R, typename T> static inline bool f(R &r, T *t, size_t n)	{ bool ret = true; for (int i = 0; i < n && (ret = custom_read(r, t[i])); i++) {} return ret; }
 };
+template<>	struct read_s<4> {
+	template<class R, typename T> static inline bool f(R &r, T &t)				{ return r.custom_read(t); }
+	template<class R, typename T> static inline bool f(R &r, T *t, size_t n)	{ bool ret = true; for (int i = 0; i < n && (ret = r.custom_read(t[i])); i++) {} return ret; }
+};
 
 template<class R, typename T>			inline bool	read(R &r, T &t)				{ return read_s<read_type_v<R,T>>::f(r, t);		}
 template<class R, typename T, int N>	inline bool	read(R &r, T (&t)[N])			{ return read_s<read_type_v<R,T>>::f(r, t, N);	}
-template<class R, class A, class T>		inline bool read(R &r, _read_as<A,T> &t)	{ A a; if (read(r, a)) { t.t = a; return true; } return false; }
 template<class R, typename T>			inline bool read(R &r, optional<T&> &t)		{ return !t.exists() || read(r, get(t)); }
 
 template<class R, typename T>			inline bool	readn(R &r, T *t, size_t n)		{ return read_s<read_type_v<R,T>>::f(r, t, n);	}
@@ -193,7 +197,8 @@ template<class W> inline bool check_writebuff(W &&w, const void *buffer, size_t 
 template<class W, typename T> static meta::array<uint8,1>	write_type_test(...);
 template<class W, typename T> static meta::array<uint8,2>	write_type_test(decltype(declval<const T>().write(declval<W>()))*);
 template<class W, typename T> static meta::array<uint8,3>	write_type_test(decltype(custom_write(declval<W>(), declval<const T&>()))*);
-template<class R, typename T>	static constexpr int write_type_v = sizeof(write_type_test<R,T>(0));
+template<class W, typename T> static meta::array<uint8,4>	write_type_test(decltype(declval<W>().custom_write(declval<const T&>()))*);
+template<class W, typename T>	static constexpr int write_type_v = sizeof(write_type_test<W,T>(0));
 
 template<int N>	struct write_s;
 	
@@ -211,6 +216,11 @@ template<>	struct write_s<3> {
 	template<class W, typename I> static inline bool f(W &w, I i, size_t n)				{ bool ret = true; while (n-- && (ret = custom_write(w, *i))) ++i; return ret; }
 	template<class W, typename T, int N> static inline bool f(W &w, const T (&t)[N])	{ return f(w, t, N); }
 };
+template<>	struct write_s<4> {
+	template<class W, typename T> static inline bool f(W &w, const T &t)				{ return w.custom_write(t); }
+	template<class W, typename I> static inline bool f(W &w, I i, size_t n)				{ bool ret = true; while (n-- && (ret = w.custom_write(*i))) ++i; return ret; }
+	template<class W, typename T, int N> static inline bool f(W &w, const T (&t)[N])	{ return f(w, t, N); }
+};
 
 template<class W, typename T>			inline bool write(W &w, const T &t)					{ return write_s<write_type_v<W,T>>::f(w, t); }
 template<class W, typename T>			inline bool writen(W &w, const T *t, size_t n)		{ return write_s<write_type_v<W,T>>::f(w, t, n); }
@@ -219,19 +229,23 @@ template<class W, typename T, int N>	inline bool write(W &w, const T (&t)[N])			
 
 
 template<class S> struct writer {
-	S&							me()							{ return *static_cast<S*>(this); }
-	template<typename...T>bool	write(const T&...t)				{ return write_early(me(), t...); }
-	void						align(int a, char pad = 0x55)	{ while (me().tell() % a) me().putc(pad);	}
-	uint32						tell32()						{ return uint32(me().tell()); }
-	uint32						size32()						{ return uint32(me().length()); }
+	S&			me()							{ return *static_cast<S*>(this); }
+	void		align(int a, char pad = 0x55)	{ while (me().tell() % a) me().putc(pad);	}
+	uint32		tell32()						{ return uint32(me().tell()); }
+	uint32		size32()						{ return uint32(me().length()); }
+	template<typename...T>bool	write(const T&...t)	{
+		return write_early(me(), t...);
+	}
 };
 
 template<class S> struct writer<const S> {
-	const S&					me()							const { return *static_cast<const S*>(this); }
-	template<typename...T>bool	write(const T&...t)				const { return write_early(me(), t...); }
-	void						align(int a, char pad = 0x55)	const { while (me().tell() % a) me().putc(pad);	}
-	uint32						tell32()						const { return uint32(me().tell()); }
-	uint32						size32()						const { return uint32(me().length()); }
+	const S&	me()							const { return *static_cast<const S*>(this); }
+	void		align(int a, char pad = 0x55)	const { while (me().tell() % a) me().putc(pad);	}
+	uint32		tell32()						const { return uint32(me().tell()); }
+	uint32		size32()						const { return uint32(me().length()); }
+	template<typename...T>bool	write(const T&...t) const {
+		return write_early(me(), t...);
+	}
 };
 
 template<class S> struct writer_mixin : writer<S>, stream_defaults<S> {
@@ -285,6 +299,8 @@ template<class S> struct readwriter_mixin<const S> : readwriter<const S>, stream
 };
 
 template<typename S> struct readwriter_mixout : S, readwriter<readwriter_mixout<S>> {
+	auto	get_block(size_t size)	{ return malloc_block(*this, size); }
+	int		putc(int c)				{ uint8 v = c; return this->writebuff(&v, 1) ? v : EOF; }
 	template<typename...P> readwriter_mixout(P&&...p) : S(forward<P>(p)...) {}
 };
 
@@ -328,10 +344,22 @@ template<class R, typename T> bool read(R &r, const T *&t) { t = readp<T>(r); re
 //	helpers
 //-----------------------------------------------------------------------------
 
+struct _skip {
+	uint32	n;
+	_skip(uint32 n) : n(n) {}
+	template<typename R>	bool read(R &&r)		{ r.seek_cur(n); return true; }
+	template<typename W>	bool write(W &&w) const	{ w.seek_cur(n); return true; }
+};
+inline _skip skip(uint32 n)	{ return n; }
+
+template<typename T> struct _skip_t {
+	template<typename R>	bool read(R &&r)		{ return r.read(lvalue(T())); }
+};
+template<typename T> inline _skip_t<T> skip() { return {}; }
+
 template<typename T, typename I = uint32> struct with_size : T {
 	using T::T;
 	using T::operator=;
-//	with_size() {}
 	with_size(T&& t) : T(move(t)) {}
 	template<typename R>	bool read(R &&r)		{ return T::read(r, r.template get<I>()); }
 	template<typename W>	bool write(W &&w) const	{ return w.write((I)T::size()) && T::write(w); }
@@ -879,9 +907,9 @@ template<typename T> class reader_offset : public reader_ref<T> {
 	using reader_ref<T>::t;
 	streamptr	offset, end;
 public:
-	reader_offset(T t, streamptr offset, streamptr end)		: reader_ref<T>(forward<T>(t)), offset(offset), end(end ? end : t.length() - offset) { t.seek(offset); }
-	reader_offset(T t, streamptr end)						: reader_ref<T>(forward<T>(t)), offset(t.tell()), end(end)					{}
-	reader_offset(T t)										: reader_ref<T>(forward<T>(t)), offset(t.tell()), end(t.length() - offset)	{}
+	reader_offset(T&& _t, streamptr offset, streamptr end)	: reader_ref<T>(forward<T>(_t)), offset(offset), end(end ? end : t.length() - offset) { t.seek(offset); }
+	reader_offset(T&& _t, streamptr end)					: reader_ref<T>(forward<T>(_t)), offset(t.tell()), end(end)					{}
+	reader_offset(T&& _t)									: reader_ref<T>(forward<T>(_t)), offset(t.tell()), end(t.length() - offset)	{}
 
 	size_t		readbuff(void *buffer, size_t size) {
 		streamptr p = tell();
@@ -909,7 +937,7 @@ template<typename T> reader_offset<T> make_reader_offset(T &&t, streamptr offset
 template<typename T> reader_offset<T> make_reader_offset(T &&t, streamptr end) {
 	return {forward<T>(t), end};
 }
-template<typename T> auto make_reader_offset(T &&t) {
+template<typename T> reader_offset<T> make_reader_offset(T &&t) {
 	return forward<T>(t);
 }
 
@@ -1086,12 +1114,13 @@ protected:
 		memory_reader	&b;
 		size_t			n;
 		_get_ptr(memory_reader &b, size_t n) : b(b), n(n)	{}
-		template<typename T> operator const T*() const			{ return b.get_ptr<T>(n); }
+		template<typename T> operator const T*() const		{ return b.get_ptr<T>(n); }
 	};
 public:
-	memory_reader(const const_memory_block &b)	: b(b), p(b) {}
+	memory_reader(const_memory_block b)			: b(b), p(b) {}
 	memory_reader(const void *p, const void *e)	: b(p, e), p((const uint8*)p) {}
 	size_t				remaining()				const	{ return (const uint8*)b.end() - p; }
+	const_memory_block	peek_block()			const	{ return const_memory_block(p, remaining()); }
 	const_memory_block	peek_block(size_t size)	const	{ return const_memory_block(p, min(size, remaining())); }
 	int					peekc()					const	{ return *p; }
 	const_memory_block	get_block(size_t size)			{ size = min(size, remaining()); p += size; return const_memory_block(p - size, size); }
@@ -1108,7 +1137,7 @@ public:
 	const void*		get_data(size_t at)			const	{ return b + at; }
 	const void*		getp()						const	{ return p; }
 	template<typename T> const T* get_ptr(size_t n = 1)	{ const T *t = (const T*)p; p = (const uint8*)(t + n); return t; }
-	_get_ptr					get_ptr(size_t n = 1)	{ return {*this, n}; }
+	_get_ptr		get_ptr(size_t n = 1)				{ return {*this, n}; }
 
 	struct _with_len {
 		memory_reader		&r;
@@ -1188,7 +1217,7 @@ public:
 		return b + alloc_offset(n);
 	}
 
-	dynamic_memory_writer() : p(0), e(0)					{}
+	dynamic_memory_writer(uint32 reserve = 0) : b(reserve), p(0), e(0)	{}
 	streamptr	tell()								const	{ return p; }
 	streamptr	length()							const	{ return e; }
 	void		seek(streamptr offset)						{ p = offset; }
@@ -1205,7 +1234,7 @@ public:
 	memory_block			get_block(size_t size)			{ return memory_block(alloc(size), size); }
 
 	const_memory_block		data()					const	{ return const_memory_block(b, e); }
-	operator malloc_block&&()								{ b.n = min(b.n, e); return move(b); }
+	operator malloc_block&&()	&&							{ b.n = min(b.n, e); return move(b); }
 };
 
 //-----------------------------------------------------------------------------
@@ -1286,7 +1315,7 @@ protected:
 	template<typename T> reader_intf(T *t, const vtable &vt = vtable_t<T>::table)	: common_intf(t, &vt.common) {}
 public:
 	reader_intf()				{}
-	reader_intf(_none&)			{}
+	reader_intf(const _none&)	{}
 	reader_intf(reader_intf& b)				: common_intf(b)	{}
 	reader_intf(reader_intf&& b)			: common_intf(b)	{}
 	reader_intf(const reader_intf& b)		: common_intf(b)	{}
@@ -1340,7 +1369,7 @@ protected:
 	template<typename T> writer_intf(T *t, const vtable &vt = vtable_t<T>::table)	: common_intf(t, &vt.common) {}
 public:
 	writer_intf()				{}
-	writer_intf(_none&)			{}
+	writer_intf(const _none&)	{}
 	writer_intf(writer_intf& b)				: common_intf(b)	{}
 	writer_intf(writer_intf&& b)			: common_intf(b)	{}
 	writer_intf(const writer_intf& b)		: common_intf(b)	{}
@@ -1394,7 +1423,7 @@ protected:
 	template<typename T> readwrite_intf(T *t)	: writer_intf(t, vtable_t<T>::table.w) {}
 	readwrite_intf()				{}
 public:
-	readwrite_intf(_none)			{}
+	readwrite_intf(const _none&)	{}
 	readwrite_intf(readwrite_intf& b)			: writer_intf((writer_intf&)b)	{}
 	readwrite_intf(readwrite_intf&& b)			: writer_intf((writer_intf&)b)	{}
 	readwrite_intf(const readwrite_intf& b)		: writer_intf((writer_intf&)b)	{}
@@ -1406,12 +1435,12 @@ public:
 	template<typename T> readwrite_intf(T &&t)	: readwrite_intf(&t) {}
 	readwrite_intf& operator=(readwrite_intf &&b)		{ p =  exchange(b.p, nullptr); vt = b.vt; return *this; }
 
-	int			getc()									{ return ((vtable*)vt)->r.getc(p);					}
-	size_t		readbuff(void *buffer, size_t size)		{ return ((vtable*)vt)->r.readbuff(p, buffer, size);	}
-	const_memory_block_own	get_block(size_t size)	const { return ((vtable*)vt)->r.get_block(p, size); }
-	auto&		_clone()						const	{ return *this; }
-	auto		clone()							const	{ return ((vtable*)vt)->w.clone(p); }
-	explicit operator bool()					const	{ return !!p; }
+	int			getc()								const	{ return ((vtable*)vt)->r.getc(p); }
+	size_t		readbuff(void *buffer, size_t size)	const	{ return ((vtable*)vt)->r.readbuff(p, buffer, size); }
+	const_memory_block_own	get_block(size_t size)	const	{ return ((vtable*)vt)->r.get_block(p, size); }
+	auto&		_clone()							const	{ return *this; }
+	auto		clone()								const	{ return ((vtable*)vt)->w.clone(p); }
+	explicit operator bool()						const	{ return !!p; }
 };
 
 inline reader_intf::reader_intf(const readwrite_intf &t) : reader_intf(t.p, ((readwrite_intf::vtable*)t.vt)->r)	{}

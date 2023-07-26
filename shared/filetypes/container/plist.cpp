@@ -59,7 +59,7 @@ ISO_ptr_machine<void> bplist_reader::_get_element(streamptr pos, tag id) {
 			};
 		}
 		case Date & 0xf0:
-			return ISO_ptr<DateTime>(id, DateTime::Secs(file.get<float64be>()) + DateTime(2001, 1, 1));
+			return ISO_ptr<DateTime>(id, DateTime(2001, 1, 1) + Duration::Secs(file.get<float64be>()));
 
 		case Data: {
 			if (b == 0xf)
@@ -395,7 +395,7 @@ ISO_ptr<void> PLISTreader::get_item(tag id) {
 			ISO_ptr<plist_array>	p(id);
 			while ((c = skip_whitespace()) != ')') {
 				put_back(c);
-				p->Append(get_item(0));
+				p->Append(get_item(none));
 				expect(',');
 			}
 			return p;
@@ -602,7 +602,7 @@ ISO_ptr<void> XPLISTreader::get_value(XMLiterator &i, tag id) {
 	} else if (data.Is("array")) {
 		ISO_ptr<anything>	p(id);
 		for (i.Enter(); i.Next();)
-			p->Append(get_value(i, 0));
+			p->Append(get_value(i, none));
 		return p;
 
 	} else if (data.Is("false")) {

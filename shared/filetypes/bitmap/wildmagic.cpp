@@ -47,7 +47,8 @@ class IMFileHandler : public FileHandler {
 	const char*		GetDescription() override { return "WildMagic image file"; }
 	int				Check(istream_ref file) override {
 		file.seek(0);
-		return file.get<header>().check() ? CHECK_PROBABLE : CHECK_DEFINITE_NO;
+		header	h;
+		return file.read(h) && h.check() ? CHECK_PROBABLE : CHECK_DEFINITE_NO;
 	}
 	ISO_ptr<void>	Read(tag id, istream_ref file) override {
 		header			h	= file.get();

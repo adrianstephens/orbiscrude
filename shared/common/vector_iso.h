@@ -2,7 +2,7 @@
 #define VECTOR_ISO_H
 
 #include "base/vector.h"
-#include "base/colour.h"
+#include "extra/colour.h"
 #include "iso/iso.h"
 
 namespace ISO {
@@ -20,8 +20,8 @@ template<typename I, uint64 ONE> struct ISO_def_scaled<I,ONE,2> : ISO::TypeInt {
 	constexpr ISO_def_scaled() : ISO::TypeInt(sizeof(I) * 8, klog2<ONE + 1>, (num_traits<I>::is_signed ? SIGN : NONE) | FRAC_ADJUST)	{}
 };
 template<typename I, uint64 ONE> struct def<scaled<I,ONE> > : ISO_def_scaled<I, ONE, ((ONE & (ONE - 1))==0 ? 1 : (ONE & (uint64(ONE) + 1))==0 ? 2 : 0)> {};
-template<int whole, int frac> struct def<fixed<whole,frac> > : def<typename fixed<whole,frac>::base> {};
-template<int whole, int frac> struct def<ufixed<whole,frac> > : def<typename ufixed<whole,frac>::base> {};
+template<int whole, int frac> struct def<fixed<whole,frac> > : def<typename fixed<whole,frac>::B> {};
+template<int whole, int frac> struct def<ufixed<whole,frac> > : def<typename ufixed<whole,frac>::B> {};
 
 template<typename T> struct arg_type;
 template<typename T, typename U> struct arg_type<T(U)> { typedef U type; };

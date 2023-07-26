@@ -36,21 +36,21 @@ struct MassProperties {
 };
 
 
-auto rotate_inertia(const symmetrical3 &inertia, const float3x3 &rot) {
+inline auto rotate_inertia(const symmetrical3 &inertia, const float3x3 &rot) {
 	return rot * inertia * transpose(rot);
 }
 
-auto scale_inertia(const diagonal3 &inertia, float3 s) {
+inline auto scale_inertia(const diagonal3 &inertia, float3 s) {
 	auto	d	= (inertia.trace() * half - inertia.d) * square(s);
 	return d.zxy + d.yzx;
 }
 
-auto scale_inertia(const symmetrical3 &inertia, float3 s) {
+inline auto scale_inertia(const symmetrical3 &inertia, float3 s) {
 	auto	d	= (inertia.trace() * half - inertia.d) * square(s);
 	return symmetrical3(d.zxy + d.yzx, inertia.o * s * s.yzx);
 }
 
-auto inertia_from_translation(float3 t, float mass) {
+inline auto inertia_from_translation(float3 t, float mass) {
 	auto	t2 = square(t);
 	return symmetrical3(t2.yzx + t2.zxy, -(t * t.yzx) * mass);
 }
@@ -405,6 +405,7 @@ public:
 //-----------------------------------------------------------------------------
 
 class DynamicsSystem : RigidBody, public HandlesWorld<DynamicsSystem, FrameEvent>, public DeleteOnDestroy<DynamicsSystem> {//, EVENT_PRIORITY_MAX> {
+	static CreateWithWorld<DynamicsSystem> maker;
 	e_list<RigidBody>	rigid_bodies;
 	e_list<Constraint>	constraints;
 	RigidBody			*rb_parent;

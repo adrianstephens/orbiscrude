@@ -25,7 +25,7 @@ struct Filetime : FILETIME {
 	double	seconds()		const	{ return double(time() / (SECOND / 10000)) / 10000;	}
 	float	secs_in_day()	const	{ return (time() % (SECOND * uint64(60 * 60 * 24))) / float(SECOND);	}
 	uint32	day()			const	{ return time() / (SECOND * uint64(60 * 60 * 24));	} //25 bits
-	Date	date()			const	{ return day();	}
+	Date	date()			const	{ return Date(day());	}
 };
 
 namespace ShellLink {

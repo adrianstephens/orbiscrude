@@ -66,7 +66,7 @@ class ViewShader : public Window<ViewShader>, public WindowTimer<ViewShader> {
 	}
 
 public:
-	LRESULT Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+	LRESULT Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 		switch (message) {
 			case WM_SIZE:
 				if (output)
@@ -81,9 +81,9 @@ public:
 				drawing = true;
 
 				DeviceContextPaint	dc(*this);
-				if (quaternion *q = GetShaderParameter("orientation"))
+				if (quaternion *q = GetShaderParameter("orientation"_crc32))
 					camera.rot = ~*q;
-				if (position3 *p = GetShaderParameter("position"))
+				if (position3 *p = GetShaderParameter("position"_crc32))
 					camera.trans4 = -*p;
 				try {
 					GraphicsContext ctx;
@@ -135,7 +135,7 @@ public:
 			case WM_MOUSEMOVE: {
 				Point		new_mouse(lParam);
 				float2		dm{float(mouse.x - new_mouse.x), float(mouse.y - new_mouse.y)};
-				bool		obj = (wParam & MK_SHIFT) || GetShaderParameter("orientation");
+				bool		obj = (wParam & MK_SHIFT) || GetShaderParameter("orientation"_crc32);
 				if (buttons & MK_LBUTTON) {
 					quaternion	q(normalise(concat(dm.yx, 0, 512)));
 					if (obj)
@@ -159,7 +159,7 @@ public:
 			}
 
 			case WM_MOUSEWHEEL: {
-				bool		obj		= (wParam & MK_SHIFT) || GetShaderParameter("orientation");
+				bool		obj		= (wParam & MK_SHIFT) || GetShaderParameter("orientation"_crc32);
 				float		dist	= min(GetDist(camera.trans4.xyz - object.trans4.xyz), 1) / 512;
 				float3		d{0, 0, (short)HIWORD(wParam) * dist};
 				if (obj)
@@ -240,7 +240,7 @@ struct Signature {
 		int				usage_index;
 		Element() {}
 		Element(ComponentType _type, const char *_usage, int _usage_index = 0) : type(_type), usage(_usage), usage_index(_usage_index) {}
-		bool	matches(const dx::SIG::Element &d, dx::SIG *sig) const {
+		bool	matches(const dx::SIG::Element &d, const dx::SIG *sig) const {
 			return strcmp(usage, d.name.get(sig)) == 0 && usage_index == d.semantic_index;
 		}
 	};
@@ -254,11 +254,11 @@ struct Signature {
 	}
 
 	Signature(int _num_inputs, int _num_outputs, Element *_elements) : num_inputs(_num_inputs), num_outputs(_num_outputs), elements(_elements) {}
-	bool	matches(dx::ISGN *isig, dx::OSGN *osig) const;
+	bool	matches(const dx::DXBC::BlobT<dx::DXBC::InputSignature> *isig, const dx::DXBC::BlobT<dx::DXBC::OutputSignature> *osig) const;
 	bool	matches(const DX11Shader::SubShader &s) const;
 };
 
-bool Signature::matches(dx::ISGN *isig, dx::OSGN *osig) const {
+bool Signature::matches(const dx::DXBC::BlobT<dx::DXBC::InputSignature> *isig, const dx::DXBC::BlobT<dx::DXBC::OutputSignature> *osig) const {
 	if (isig->num_elements == num_inputs && osig->num_elements == num_outputs) {
 		Element	*e = elements;
 		for (auto &i : isig->Elements()) {
@@ -276,7 +276,7 @@ bool Signature::matches(dx::ISGN *isig, dx::OSGN *osig) const {
 
 bool Signature::matches(const DX11Shader::SubShader &s) const {
 	dx::DXBC *dxbc = (dx::DXBC*)s.raw();
-	return matches(dxbc->GetBlob<dx::ISGN>(), dxbc->GetBlob<dx::OSGN>());
+	return matches(dxbc->GetBlob<dx::DXBC::InputSignature>(), dxbc->GetBlob<dx::DXBC::OutputSignature>());
 }
 
 Signature::Element	sig[] = {

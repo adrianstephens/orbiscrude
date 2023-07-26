@@ -20,13 +20,6 @@ template<typename X> struct T_signed<X,  false,	enable_if_t<simd::is_vec<X>>>	: 
 //template<typename V> enable_if_t<simd::is_simd<V>, simd::element_type<V>*> end(const V &v) 		{ return (simd::element_type<V>*)&v + num_elements_v<V>; }
 
 namespace simd {
-	using iso::pi;
-	using iso::one;
-	using iso::zero;
-	using iso::two;
-	using iso::half;
-	using iso::horner;
-	using iso::square;
 	using iso::atan2;
 	using iso::abs;
 	
@@ -92,17 +85,25 @@ namespace simd {
 		return rotate_s<N, pow2_ceil<N> / 2>::f(v, i < 0 ? i + N : i);
 	}
 
+	template<int N2, typename V>				auto extend_left_by(V v)				{ return concat(vec<element_type<V>, N2>(zero), v); }
+	template<int N2, typename V>				auto extend_right_by(V v)				{ return concat(v, vec<element_type<V>, N2>(zero)); }
+	template<int N2, typename V, typename X>	auto extend_left_by(V v, X x = zero)	{ return concat(vec<element_type<V>, N2>(x), v); }
+	template<int N2, typename V, typename X>	auto extend_right_by(V v, X x = zero)	{ return concat(v, vec<element_type<V>, N2>(x)); }
+
 	template<int N, int N2> struct extend_s {
-		template<typename V> static auto	left(V v)	{ return concat(vec<element_type<V>, N2 - N>(zero), v); }
-		template<typename V> static auto	right(V v)	{ return concat(v, vec<element_type<V>, N2 - N>(zero)); }
+		template<typename V, typename X> static auto	left(V v, X x)	{ return extend_left_by<N2 - N>(v, x); }
+		template<typename V, typename X> static auto	right(V v, X x)	{ return extend_right_by<N2 - N>(v, x); }
 	};
 	template<int N> struct extend_s<N, N> {
-		template<typename V> static V		left(V v)	{ return v; }
-		template<typename V> static V		right(V v)	{ return v; }
+		template<typename V, typename X> static V		left(V v, X)	{ return v; }
+		template<typename V, typename X> static V		right(V v, X)	{ return v; }
 	};
 
-	template<int N2, typename V>	auto extend_left(V v)	{ return extend_s<num_elements_v<V>, N2>::left(v); }
-	template<int N2, typename V>	auto extend_right(V v)	{ return extend_s<num_elements_v<V>, N2>::right(v); }
+	template<int N2, typename V>				auto extend_left(V v)					{ return extend_s<num_elements_v<V>, N2>::left(v, zero); }
+	template<int N2, typename V>				auto extend_right(V v)					{ return extend_s<num_elements_v<V>, N2>::right(v, zero); }
+	template<int N2, typename V, typename X>	auto extend_left(V v, X x = zero)		{ return extend_s<num_elements_v<V>, N2>::left(v, x); }
+	template<int N2, typename V, typename X>	auto extend_right(V v, X x = zero)		{ return extend_s<num_elements_v<V>, N2>::right(v, x); }
+
 
 	//-----------------------------------------------------------------------------
 	// make_mask
@@ -130,8 +131,9 @@ namespace simd {
 	}
 	//so we can use make_mask in macros (e.g. _mm_mask_i32gather_epi32)
 	#define MAKE_MASK(E, N, M)	make_mask<E,N,M>()
+	#define MAKE_MASKV(E, N, M)	make_mask<E,N>(M)
 	template<typename E, int N> vec<E, N> SIMD_FUNC make_mask(int m) { return make_mask_s<E, N>::m(m); }
-	template<typename E, int N, typename M> enable_if_t<is_simd<M>, vec<E, N>> SIMD_FUNC make_mask(M m) { return as<E>(m); }
+	template<typename E, int N, typename M> enable_if_t<is_simd<M>, vec<E, N>> SIMD_FUNC make_mask(M m) { return to<E>(m); }	//was as
 
 	template<typename E, int N, int M, int...I> vec<E, N> SIMD_FUNC _make_sign_mask(meta::value_list<int, I...>) {
 		static const int	BITS = sizeof(E) * 8;
@@ -144,8 +146,9 @@ namespace simd {
 	template<typename E, int N> vec<E, N> SIMD_FUNC make_sign_mask(vec<E, N> M)	{ return M & (E(1) << (sizeof(E) * 8 - 1)); }
 
 	//-----------------------------------------------------------------------------
-	// load/stores
+	// loads/stores
 	//-----------------------------------------------------------------------------
+
 #if defined __ARM_NEON__
 	template<typename E> constexpr int 	fullnum 	= 16 / sizeof(E);
 	template<typename E> using 			fullvec 	= vec<E, fullnum<E>>;
@@ -263,66 +266,96 @@ namespace simd {
 #endif
 	
 #elif defined __SSE2__
+	force_inline void load_vec(vec<int, 1>  &t, const int *p)							{ t = *(vec<int, 1>*)p; }
+	force_inline void load_vec(vec<int, 2>  &t, const int *p)							{ t = *(vec<int, 2>*)p; }
+	force_inline void load_vec(vec<int, 4>  &t, const int *p)							{ t = _mm_loadu_si128((__m128i*)p); }
 
-	template<int S=4> force_inline vec<int32, 4>	load_gather(const int32 *p, vec<int32, 4> indices)	{ return _mm_i32gather_epi32(p, indices, S); }
-	template<int S=8> force_inline vec<int64, 2>	load_gather(const int64 *p, vec<int32, 2> indices)	{ return _mm_i32gather_epi64(p, grow<4>(indices), S); }
-	template<int S=4> force_inline vec<int32, 8>	load_gather(const int32 *p, vec<int32, 8> indices)	{ return _mm256_i32gather_epi32(p, indices, S); }
-	template<int S=8> force_inline vec<int64, 4>	load_gather(const int64 *p, vec<int32, 4> indices)	{ return _mm256_i32gather_epi64(p, indices, S); }
-  #ifdef __AVX512F__
-	template<int S=4> force_inline vec<int32, 16>	load_gather(const int32 *p, vec<int32, 16> indices)	{ return _mm512_i32gather_epi32(indices, p, S); }
-	template<int S=8> force_inline vec<int64, 8>	load_gather(const int64 *p, vec<int32, 8> indices)	{ return _mm512_i32gather_epi64(indices, p, S); }
-  #endif
-  
-  #ifdef __AVX512F__
-	template<int M, int S=4> force_inline vec<int32, 4>	load_gather_mask(const int32 *p, vec<int32, 4> indices)	{ return _mm_mmask_i32gather_epi32(_mm_undefined_si128(), 		p, indices, 			MAKE_MASK(int32, 4, M), S); }
-	template<int M, int S=8> force_inline vec<int64, 2>	load_gather_mask(const int64 *p, vec<int32, 2> indices)	{ return _mm_mmask_i32gather_epi64(_mm_undefined_si128(), 		p, grow<4>(indices), 	MAKE_MASK(int64, 2, M), S); }
-	template<int M, int S=4> force_inline vec<int32, 8>	load_gather_mask(const int32 *p, vec<int32, 8> indices)	{ return _mm256_mmask_i32gather_epi32(_mm256_undefined_si256(), p, indices, 			MAKE_MASK(int32, 8, M), S); }
-	template<int M, int S=8> force_inline vec<int64, 4>	load_gather_mask(const int64 *p, vec<int32, 4> indices)	{ return _mm256_mmask_i32gather_epi64(_mm256_undefined_si256(), p, indices, 			MAKE_MASK(int64, 4, N), S); }
-	template<int M, int S=4> force_inline vec<int32,16>	load_gather_mask(const int32 *p, vec<int32,16> indices)	{ return _mm512_mask_i32gather_epi32(_mm512_undefined_epi32(), N, indices, p, S); }
-	template<int M, int S=8> force_inline vec<int64, 8>	load_gather_mask(const int64 *p, vec<int32, 8> indices)	{ return _mm512_mask_i32gather_epi64(_mm512_undefined_epi32(), N, indices, p, S); }
-  #else
-	template<int M, int S=4> force_inline vec<int32, 4>	load_gather_mask(const int32 *p, vec<int32, 4> indices)	{ return _mm_mask_i32gather_epi32(_mm_undefined_si128(), 		p, indices, 			MAKE_MASK(int32, 4, M), S); }
-	template<int M, int S=8> force_inline vec<int64, 2>	load_gather_mask(const int64 *p, vec<int32, 2> indices)	{ return _mm_mask_i32gather_epi64(_mm_undefined_si128(), 		p, grow<4>(indices), 	MAKE_MASK(int64, 2, M), S); }
-	template<int M, int S=4> force_inline vec<int32, 8>	load_gather_mask(const int32 *p, vec<int32, 8> indices)	{ return _mm256_mask_i32gather_epi32(_mm256_undefined_si256(), 	p, indices, 			MAKE_MASK(int32, 8, M), S); }
-	template<int M, int S=8> force_inline vec<int64, 4>	load_gather_mask(const int64 *p, vec<int32, 4> indices)	{ return _mm256_mask_i32gather_epi64(_mm256_undefined_si256(), 	p, indices, 			MAKE_MASK(int64, 4, M), S); }
-  #endif
+	force_inline void store_vec(const int8  &t, int8 *p)								{ *(int8*)p = t; }
+	force_inline void store_vec(const int8x2  &t, int8 *p)								{ *(int8x2*)p = t; }
+	force_inline void store_vec(const int8x16  &t, int8 *p)								{ _mm_storeu_si128((__m128i*)p, t); }
 
-	template<int S, typename E, typename I> 		force_inline auto	load_gather(const E *p, I indices)	{
-		return simd_lo_hi(load_gather<S>(p, indices.lo), load_gather<S>(p, indices.hi));
-	}
-	template<int M, int S, typename E, typename I> 	force_inline auto	load_gather_mask(const E *p, I indices)	{
-		return simd_lo_hi(load_gather<S>(p, indices.lo), load_gather_mask<(M >> (num_elements_v<I> / 2)), S>(p, indices.hi));
-	}
+	force_inline void store_vec(const vec<int, 1>  &t, int *p)							{ *(vec<int, 1>*)p = t; }
+	force_inline void store_vec(const vec<int, 2>  &t, int *p)							{ *(vec<int, 2>*)p = t; }
+	force_inline void store_vec(const vec<int, 4>  &t, int *p)							{ _mm_storeu_si128((__m128i*)p, t); }
 
-	template<typename E, int N, int S, typename=void> struct load_gather_s;
-	template<typename E, int N, int S> struct load_gather_s<E, N, S, enable_if_t<sizeof(E) >= 4 && meta::is_pow2<N>>> {
-		typedef sint_for_t<E>		I;
-		static force_inline vec<E, N> f(const E *p, vec<int32, N> indices)	{ return as<E>(load_gather<S>((const I*)p, indices)); }
-	};
-	template<typename E, int N, int S> struct load_gather_s<E, N, S, enable_if_t<sizeof(E) >= 4 && !meta::is_pow2<N>>> {
-		typedef sint_for_t<E>		I;
-		static const int N2 = pow2_ceil<N>;
-		static force_inline vec<E, N> f(const E *p, vec<int32, N> indices)	{ return shrink<N>(as<E>(load_gather_mask<(1 << N) - 1, S>((const I*)p, grow<N2>(indices)))); }
-	};
-	template<typename E, int N, int S> struct load_gather_s<E, N, S, enable_if_t<sizeof(E) < 4>> {
-		static force_inline vec<E, N> f(const E *p, vec<int32, N> indices)	{ return to<E>(load_gather_s<int32, N, S>::f((const int32*)p, indices)); }
-	};
-	template<typename E, typename I> force_inline auto	load_gather(const E *p, I indices)	{
-		return load_gather_s<E, num_elements_v<I>, sizeof(E)>::f(p, indices);
-	}
+	force_inline void masked_store(const int8x8  &m, const int8x8  &t, int8 *p)			{ _m_maskmovq(t,			m, (char*)p); }
+	force_inline void masked_store(const int16x4 &m, const int16x4 &t, int16 *p)		{ _m_maskmovq(t,			m, (char*)p); }
+	force_inline void masked_store(const int32x2 &m, const int32x2 &t, int32 *p)		{ _m_maskmovq(t,			m, (char*)p); }
 
-	force_inline void load_vec(vec<int, 1>  &t, const int *p)	{ t = *(vec<int, 1>*)p; }
-	force_inline void load_vec(vec<int, 2>  &t, const int *p)	{ t = *(vec<int, 2>*)p; }
-	force_inline void load_vec(vec<int, 4>  &t, const int *p)	{ t = _mm_loadu_si128((__m128i*)p); }
+	force_inline void masked_store(const int8x16 &m, const int8x16 &t, int8  *p)		{ _mm_maskmoveu_si128(t, 	m, (char*)p); }
+	force_inline void masked_store(const int16x8 &m, const int16x8 &t, int16 *p)		{ _mm_maskmoveu_si128(t, 	m, (char*)p); }
+
   #ifdef __AVX2__
-	force_inline void load_vec(vec<int, 8>  &t, const int *p)	{ t = _mm256_loadu_si256((__m256i*)p); }
+	force_inline void load_vec(vec<int, 8>  &t, const int *p)							{ t = _mm256_loadu_si256((__m256i*)p); }
+	force_inline void store_vec(const int8x32  &t, int8 *p)								{ _mm256_storeu_si256((__m256i*)p, t); }
+	force_inline void store_vec(const vec<int, 8>  &t, int *p)							{ _mm256_storeu_si256((__m256i*)p, t); }
+
+	force_inline void masked_load(const int32x4 &m, const _zero&, int32x4 &t, int32 *p)	{ t = _mm_maskload_epi32(p, m); }
+	force_inline void masked_load(const int32x8 &m, const _zero&, int32x8 &t, int32 *p)	{ t = _mm256_maskload_epi32(p, m); }
+	force_inline void masked_load(const int64x2 &m, const _zero&, int64x2 &t, int64 *p)	{ t = _mm_maskload_epi64(p, m); }
+	force_inline void masked_load(const int64x4 &m, const _zero&, int64x4 &t, int64 *p)	{ t = _mm256_maskload_epi64(p, m); }
+
+	force_inline void masked_store(const int32x4 &m, const int32x4 &t, int32 *p)		{ _mm_maskstore_epi32(p, 	m, t); }
+	force_inline void masked_store(const int64x2 &m, const int64x2 &t, int64 *p)		{ _mm_maskstore_epi64(p, 	m, t); }
+	force_inline void masked_store(const int32x8 &m, const int32x8 &t, int32 *p)		{ _mm256_maskstore_epi32(p,	m, t); }
+	force_inline void masked_store(const int64x4 &m, const int64x4 &t, int64 *p)		{ _mm256_maskstore_epi64(p,	m, t); }
+  #else
+	force_inline void masked_store(const int32x4 &m, const int32x4 &t, int32 *p)		{ _mm_maskmoveu_si128(as<int8>(t), m, (char*)p); }
+	force_inline void masked_store(const int64x2 &m, const int64x2 &t, int64 *p)		{ _mm_maskmoveu_si128(as<int8>(t), m, (char*)p); }
   #endif
+
   #ifdef __AVX512F__
-	force_inline void load_vec(vec<int, 16> &t, const int *p)	{ t = _mm512_loadu_epi32(p); }
-  #endif
+	force_inline void load_vec(vec<int, 16> &t, const int *p)							{ t = _mm512_loadu_epi32(p); }
+	force_inline void store_vec(const int8x64 &t, int8 *p)								{ _mm512_storeu_epi32(p, t); }
+	force_inline void store_vec(const vec<int, 16> &t, int *p)							{ _mm512_storeu_epi32(p, t); }
+
+	force_inline void masked_store(int m, const int8x16  &t, int8  *p)					{ _mm_mask_storeu_epi8 (p, m, *(__m256i*)t); }
+	force_inline void masked_store(int m, const int16x8  &t, int16 *p)					{ _mm_mask_storeu_epi16(p, m, *(__m256i*)t); }
+	force_inline void masked_store(int m, const int32x4  &t, int32 *p)					{ _mm_mask_storeu_epi32(p, m, *(__m256i*)t); }
+	force_inline void masked_store(int m, const int64x2  &t, int64 *p)					{ _mm_mask_storeu_epi64(p, m, *(__m256i*)t); }
+
+	force_inline void masked_store(int m, const int8x32  &t, int8  *p)					{ _mm256_mask_storeu_epi8 (p, m, *(__m256i*)t); }
+	force_inline void masked_store(int m, const int16x16  &t, int16 *p)					{ _mm256_mask_storeu_epi16(p, m, *(__m256i*)t); }
+	force_inline void masked_store(int m, const int32x8  &t, int32 *p)					{ _mm256_mask_storeu_epi32(p, m, *(__m256i*)t); }
+	force_inline void masked_store(int m, const int64x4  &t, int64 *p)					{ _mm256_mask_storeu_epi64(p, m, *(__m256i*)t); }
+
+	force_inline void masked_store(int m, const int8x32  &t, int8  *p)					{ _mm512_mask_storeu_epi8 (p, m, *(__m512*)t); }
+	force_inline void masked_store(int m, const int16x16  &t, int16 *p)					{ _mm512_mask_storeu_epi16(p, m, *(__m512*)t); }
+	force_inline void masked_store(int m, const int32x8  &t, int32 *p)					{ _mm512_mask_storeu_epi32(p, m, *(__m512i*)t); }
+	force_inline void masked_store(int m, const int64x4  &t, int64 *p)					{ _mm512_mask_storeu_epi64(p, m, *(__m512i*)t); }
+
+	force_inline void masked_load(int m, const int8x16 &s, int8x16 &t, int8 *p)			{ t = mm_mask_loadu_epi8(s, m, p); }
+	force_inline void masked_load(int m, const int16x8 &s, int16x8 &t, int16 *p)		{ t = mm_mask_loadu_epi16(s, m, p); }
+	force_inline void masked_load(int m, const int32x4 &s, int32x4 &t, int32 *p)		{ t = mm_mask_loadu_epi32(s, m, p); }
+	force_inline void masked_load(int m, const int64x2 &s, int64x2 &t, int64 *p)		{ t = mm_mask_loadu_epi64(s, m, p); }
+	force_inline void masked_load(int m, const int8x32 &s, int8x32 &t, int8 *p)			{ t = mm256_mask_loadu_epi8(s, m, p); }
+	force_inline void masked_load(int m, const int16x16 &s, int16x16 &t, int16 *p)		{ t = mm256_mask_loadu_epi16(s, m, p); }
+	force_inline void masked_load(int m, const int32x8 &s, int32x8 &t, int32 *p)		{ t = mm256_mask_loadu_epi32(s, m, p); }
+	force_inline void masked_load(int m, const int64x4 &s, int64x4 &t, int64 *p)		{ t = mm256_mask_loadu_epi64(s, m, p); }
+	force_inline void masked_load(int m, const int8x64 &s, int8x64 &t, int8 *p)			{ t = mm512_mask_loadu_epi8(s, m, p); }
+	force_inline void masked_load(int m, const int16x32 &s, int16x32 &t, int16 *p)		{ t = mm512_mask_loadu_epi16(s, m, p); }
+	force_inline void masked_load(int m, const int32x16 &s, int32x16 &t, int32 *p)		{ t = mm512_mask_loadu_epi32(s, m, p); }
+	force_inline void masked_load(int m, const int64x8 &s, int64x8 &t, int64 *p)		{ t = mm512_mask_loadu_epi64(s, m, p); }
+
+	force_inline void masked_load(int m, const _zero&, int8x16 &t, int8 *p)				{ t = mm_maskz_loadu_epi8(m, p); }
+	force_inline void masked_load(int m, const _zero&, int16x8 &t, int16 *p)			{ t = mm_maskz_loadu_epi16(m, p); }
+	force_inline void masked_load(int m, const _zero&, int32x4 &t, int32 *p)			{ t = mm_maskz_loadu_epi32(m, p); }
+	force_inline void masked_load(int m, const _zero&, int64x2 &t, int64 *p)			{ t = mm_maskz_loadu_epi64(m, p); }
+	force_inline void masked_load(int m, const _zero&, int8x32 &t, int8 *p)				{ t = mm256_maskz_loadu_epi8(m, p); }
+	force_inline void masked_load(int m, const _zero&, int16x16 &t, int16 *p)			{ t = mm256_maskz_loadu_epi16(m, p); }
+	force_inline void masked_load(int m, const _zero&, int32x8 &t, int32 *p)			{ t = mm256_maskz_loadu_epi32(m, p); }
+	force_inline void masked_load(int m, const _zero&, int64x4 &t, int64 *p)			{ t = mm256_maskz_loadu_epi64(m, p); }
+	force_inline void masked_load(int m, const _zero&, int8x64 &t, int8 *p)				{ t = mm512_maskz_loadu_epi8(m, p); }
+	force_inline void masked_load(int m, const _zero&, int16x32 &t, int16 *p)			{ t = mm512_maskz_loadu_epi16(m, p); }
+	force_inline void masked_load(int m, const _zero&, int32x16 &t, int32 *p)			{ t = mm512_maskz_loadu_epi32(m, p); }
+	force_inline void masked_load(int m, const _zero&, int64x8 &t, int64 *p)			{ t = mm512_maskz_loadu_epi64(m, p); }
+#endif
 
 	template<typename V, typename E> force_inline enable_if_t<(sizeof(V) * 8 <= max_register_bits)> load_vec(V &t, const E *p) {
-		load_vec((vec<int, pow2_ceil<num_elements_v<V>> * sizeof(E) / sizeof(int)>&)t, (const int*)p);
+		vec<int, (pow2_ceil<num_elements_v<V>> * sizeof(E) + 3) / sizeof(int)>	t2;
+		load_vec(t2, (const int*)p);
+		t = (V&)t2;
+		//load_vec((vec<int, (pow2_ceil<num_elements_v<V>> * sizeof(E) + 3) / sizeof(int)>&)t, (const int*)p);
 	}
 
 	template<typename V, typename E> force_inline enable_if_t<(sizeof(V) * 8 > max_register_bits)> load_vec(V &t, const E *p) {
@@ -332,73 +365,256 @@ namespace simd {
 		load_vec(*(vec<E, N - N2>*)((E*)&t + N2), p + N2);
 	}
 
-	force_inline void store_vec(const vec<int, 1>  &t, int *p)	{ *(vec<int, 1>*)p = t; }
-	force_inline void store_vec(const vec<int, 2>  &t, int *p)	{ *(vec<int, 2>*)p = t; }
-	force_inline void store_vec(const vec<int, 4>  &t, int *p)	{ _mm_storeu_si128((__m128i*)p, t); }
-  #ifdef __AVX2__
-	force_inline void store_vec(const vec<int, 8>  &t, int *p)	{ _mm256_storeu_si256((__m256i*)p, t); }
-  #endif
-  #ifdef __AVX512F__
-	force_inline void store_vec(const vec<int, 16> &t, int *p)	{ _mm512_storeu_epi32(p, t); }
-  #endif
-
-	constexpr int double_bits(int N) { return N * N + N * 2; }
-
-	template<int N> force_inline void store_vec_mask(const vec<int8,  4>  &t, int8 *p) 	{ _m_maskmovq(grow<8>(t), 	make_mask<int8, 8, N>(), 				(char*)p); }
-	template<int N> force_inline void store_vec_mask(const vec<int16, 2>  &t, int8 *p) 	{ _m_maskmovq(grow<4>(t), 	make_mask<int8, 8, double_bits(N)>(),	(char*)p); }
-	template<int N> force_inline void store_vec_mask(const vec<int8,  8>  &t, int8 *p)	{ _m_maskmovq(t, 			make_mask<int8, 8, N>(), 				(char*)p); }
-	template<int N> force_inline void store_vec_mask(const vec<int16, 4>  &t, int8 *p)	{ _m_maskmovq(t, 			make_mask<int8, 8, double_bits(N)>(), 	(char*)p); }
-	template<int N> force_inline void store_vec_mask(const vec<int32, 2>  &t, int8 *p)	{ _m_maskmovq(t, 			make_mask<int8, 8, double_bits(double_bits(N))>(), (char*)p); }
-  #ifdef __AVX512F__
-	template<int N> force_inline void store_vec_mask(const vec<int8, 16>  &t, int8  *p)	{ _mm_mask_storeu_epi8 (p, N, *(__m256i*)t); }
-	template<int N> force_inline void store_vec_mask(const vec<int16, 8>  &t, int16 *p)	{ _mm_mask_storeu_epi16(p, N, *(__m256i*)t); }
-	template<int N> force_inline void store_vec_mask(const vec<int32, 4>  &t, int32 *p)	{ _mm_mask_storeu_epi32(p, N, *(__m256i*)t); }
-	template<int N> force_inline void store_vec_mask(const vec<int64, 2>  &t, int64 *p)	{ _mm_mask_storeu_epi64(p, N, *(__m256i*)t); }
-
-	template<int N> force_inline void store_vec_mask(const vec<int8, 32>  &t, int8  *p)	{ _mm256_mask_storeu_epi8 (p, N, *(__m256i*)t); }
-	template<int N> force_inline void store_vec_mask(const vec<int16,16>  &t, int16 *p)	{ _mm256_mask_storeu_epi16(p, N, *(__m256i*)t); }
-	template<int N> force_inline void store_vec_mask(const vec<int32, 8>  &t, int32 *p)	{ _mm256_mask_storeu_epi32(p, N, *(__m256i*)t); }
-	template<int N> force_inline void store_vec_mask(const vec<int64, 4>  &t, int64 *p)	{ _mm256_mask_storeu_epi64(p, N, *(__m256i*)t); }
-
-	template<int N> force_inline void store_vec_mask(const vec<int8, 32>  &t, int8  *p)	{ _mm512_mask_storeu_epi8 (p, N, *(__m512*)t); }
-	template<int N> force_inline void store_vec_mask(const vec<int16,16>  &t, int16 *p)	{ _mm512_mask_storeu_epi16(p, N, *(__m512*)t); }
-	template<int N> force_inline void store_vec_mask(const vec<int32, 8>  &t, int32 *p)	{ _mm512_mask_storeu_epi32(p, N, *(__m512i*)t); }
-	template<int N> force_inline void store_vec_mask(const vec<int64, 4>  &t, int64 *p)	{ _mm512_mask_storeu_epi64(p, N, *(__m512i*)t); }
-  #else
-	template<int N> force_inline void store_vec_mask(const vec<int8, 16>  &t, int8  *p)	{ _mm_maskmoveu_si128(t, 	make_mask<int8, 16, N>(), (char*)p); }
-	template<int N> force_inline void store_vec_mask(const vec<int16, 8>  &t, int16 *p)	{ _mm_maskmoveu_si128(t, 	make_mask<int8, 16, N>(), (char*)p); }
-	template<int N> force_inline void store_vec_mask(const vec<int8, 32>  &t, int8  *p)	{ store_vec(as<int>(t.lo), (int*)p); store_vec_mask<(N >> 16)>(t.hi, p + 16); }
-	template<int N> force_inline void store_vec_mask(const vec<int16,16>  &t, int16 *p)	{ store_vec(as<int>(t.lo), (int*)p); store_vec_mask<(N >>  8)>(t.hi, p + 8); }
-	#ifdef __AVX2__
-	template<int N> force_inline void store_vec_mask(const vec<int32, 4>  &t, int32 *p)	{ _mm_maskstore_epi32(p, 	make_mask<int32, 4, N>(), t); }
-	template<int N> force_inline void store_vec_mask(const vec<int64, 2>  &t, int64 *p)	{ _mm_maskstore_epi64(p, 	make_mask<int64, 2, N>(), t); }
-	template<int N> force_inline void store_vec_mask(const vec<int32, 8>  &t, int32 *p)	{ _mm256_maskstore_epi32(p,	make_mask<int32, 8, N>(), t); }
-	template<int N> force_inline void store_vec_mask(const vec<int64, 4>  &t, int64 *p)	{ _mm256_maskstore_epi64(p,	make_mask<int64, 4, N>(), t); }
-	#else
-	template<int N> force_inline void store_vec_mask(const vec<int32, 4>  &t, int32 *p)	{ _mm_maskmoveu_si128(as<int8>(t), make_mask<int32, 4, N>(), (char*)p); }
-	template<int N> force_inline void store_vec_mask(const vec<int64, 2>  &t, int64 *p)	{ _mm_maskmoveu_si128(as<int8>(t), make_mask<int64, 2, N>(), (char*)p); }
-	#endif
-  #endif
-  
-  	template<int M, typename V, typename E> force_inline auto	store_vec_mask(const V &t, E *p)	{
-		static const int N2 = num_elements_v<V> / 2;
-		store_vec(as<int>(t.lo), (int*)p);
-		store_vec_mask<(M >> N2)>(t.hi, p + N2);
+	template<typename V, typename E> force_inline void masked_store(const vec<bool_for_t<E>,num_elements_v<V>> &m, const V& t, E* p) {
+		typedef sint_for_t<E>		I;
+		static const int N2 = meta::max_v<num_elements_v<V>, min_register_bits / (sizeof(E) * 8)>;
+		masked_store(extend_right<N2>(as<I>(m)), grow<N2>(as<I>(t)), (I*)p);
 	}
 
-	template<typename E, int N, typename=void> struct store_vec_s;
-	template<typename E, int N> struct store_vec_s<E, N, enable_if_t<meta::is_pow2<N>>> {
-		static void f(const vec<E, N> &t, E *p) { store_vec(as<int>(t), (int*)p); }
-	};
-	template<typename E, int N> struct store_vec_s<E, N, enable_if_t<!meta::is_pow2<N>>> {
+	template<typename V, typename E> force_inline enable_if_t<same_v<sint_for_t<E>, E> && sizeof(V) * 8 >= min_register_bits> masked_store(int m, const V &t, E *p) {
+		masked_store(make_mask<element_type<V>, num_elements_v<V>>(m), t, p);
+	}
+	template<typename V, typename E> force_inline enable_if_t<same_v<sint_for_t<E>, E> && sizeof(V) * 8 < min_register_bits> masked_store(int m, const V& t, E *p) {
+		masked_store(m, grow<pow2_ceil<num_elements_v<V> + 1>>(t), p);
+	}
+	template<typename V, typename E> force_inline enable_if_t<!same_v<sint_for_t<E>, E>> masked_store(int m, const V& v, E* p) {
 		typedef sint_for_t<E>		I;
-		static const int N2 	= pow2_ceil<N>;
-		static void f(const vec<E, N> &t, E *p) { store_vec_mask<(1 << N) - 1>(as<I>(grow<N2>(t)), (I*)p); }
-	};
-	template<typename V, typename E> void store_vec(const V &t, E *p) {
-		store_vec_s<E, num_elements_v<V>>::f(t, p);
+		masked_store(m, as<I>(v), (I*)p);
+	}
+
+	template<typename V, typename E> undersized_t<E, num_elements_v<V>> store_vec(const V &t, E *p) {
+		static const int N	= num_elements_v<V>;
+		masked_store<(1 << N) - 1>(grow<pow2_ceil<N + 1>>(t), p);
+	}
+	template<typename V, typename E> normalsized_t<E, num_elements_v<V>> store_vec(const V &t, E *p) {
+		typedef sint_t<(sizeof(E) < 4 ? 1 : 4)>		I;
+		store_vec(as<I>(t), (I*)p);
+	}
+	template<typename V, typename E> oversized_t<E, num_elements_v<V>> store_vec(const V &t, E *p) {
+		auto	lo = t.lo;
+		store_vec(lo, p);
+		store_vec(t.hi, p + num_elements_v<decltype(lo)>);
 	}
 #endif
+
+	//-----------------------------------------------------------------------------
+	// generic gather/scatter
+	//-----------------------------------------------------------------------------
+
+	template<int S, int N, typename E, typename I> force_inline void	scatter_fallback(vec<E, N> v, void *p, vec<I, N> indices)	{
+		for (int i = 0; i < N; i++)
+			*(E*)((char*)p + indices[i] * S) = v[i];
+	}
+
+#if defined __SSE2__
+
+	template<int S> force_inline int32x4	gather(const int32 *p, int32x4 indices)				{ return _mm_i32gather_epi32(	p, indices, S); }
+	template<int S> force_inline int64x2	gather(const int64 *p, int32x2 indices)				{ return _mm_i32gather_epi64(	p, grow<4>(indices), S); }
+	template<int S> force_inline int32x8	gather(const int32 *p, int32x8 indices)				{ return _mm256_i32gather_epi32(p, indices, S); }
+	template<int S> force_inline int64x4	gather(const int64 *p, int32x4 indices)				{ return _mm256_i32gather_epi64(p, indices, S); }
+	template<int S> force_inline int32x2	gather(const int32 *p, int32x2 indices)				{ return gather<S>(p, indices.xyxy).xy; }
+
+  #ifdef __AVX512F__
+	template<int S> force_inline int32x16	gather(const int32 *p, int32x16 indices)			{ return _mm512_i32gather_epi32(indices, p, S); }
+	template<int S> force_inline int64x8	gather(const int64 *p, int32x8 indices)				{ return _mm512_i32gather_epi64(indices, p, S); }
+
+	template<int S> force_inline int32x2	gather(const int32 *p, int64x2 indices)				{ return _mm_i64gather_epi32(	indices, p, S); }
+	template<int S> force_inline int32x4	gather(const int32 *p, int64x4 indices)				{ return _mm256_i64gather_epi32(indices, p, S); }
+	template<int S> force_inline int32x8	gather(const int32 *p, int64x8 indices)				{ return _mm512_i64gather_epi32(indices, p, S); }
+	template<int S> force_inline int64x2	gather(const int64 *p, int64x2 indices)				{ return _mm_i64gather_epi64(	indices, p, S); }
+	template<int S> force_inline int64x4	gather(const int64 *p, int64x4 indices)				{ return _mm256_i64gather_epi64(indices, p, S); }
+	template<int S> force_inline int64x8	gather(const int64 *p, int64x8 indices)				{ return _mm512_i64gather_epi64(indices, p, S); }
+
+	template<int S> force_inline void		scatter(int32x4 v, void *p, int32x4 indices)		{ _mm_i32scatter_epi32(		p, indices, v, S); }
+	template<int S> force_inline void		scatter(int64x2 v, void *p, int32x2 indices)		{ _mm_i32scatter_epi64(		p, grow<4>(indices), S); }
+	template<int S> force_inline void		scatter(int32x8 v, void *p, int32x8 indices)		{ _mm256_i32scatter_epi32(	p, indices, v, S); }
+	template<int S> force_inline void		scatter(int64x4 v, void *p, int32x4 indices)		{ _mm256_i32scatter_epi64(	p, indices, v, S); }
+
+	template<int S> force_inline void		scatter(int32x16 v, void *p, int32x16 indices)		{ _mm512_i32scatter_epi32(	indices, p, v, S); }
+	template<int S> force_inline void		scatter(int64x8 v, void *p, int32x8 indices)		{ _mm512_i32scatter_epi64(	indices, p, v, S); }
+
+	template<int S> force_inline void		scatter(int32x2 v, void *p, int64x2 indices)		{ _mm_i64scatter_epi32(		indices, p, v, S); }
+	template<int S> force_inline void		scatter(int32x4 v, void *p, int64x4 indices)		{ _mm256_i64scatter_epi32(	indices, p, v, S); }
+	template<int S> force_inline void		scatter(int64x2 v, void *p, int64x2 indices)		{ _mm_i64scatter_epi64(		indices, p, v, S); }
+	template<int S> force_inline void		scatter(int64x4 v, void *p, int64x4 indices)		{ _mm256_i64scatter_epi64(	indices, p, v, S); }
+	template<int S> force_inline void		scatter(int64x8 v, void *p, int64x8 indices)		{ _mm512_i64scatter_epi64(	indices, p, v, S); }
+  #else
+	template<int S> force_inline void		scatter(int32x4 v, void *p, int32x4 indices)		{ scatter_fallback<S, 4, int, int>(v, p, indices); }
+	template<int S> force_inline void		scatter(int64x2 v, void *p, int32x2 indices)		{ scatter_fallback<S, 2, int, int>(v, p, indices); }
+	template<int S> force_inline void		scatter(int32x8 v, void *p, int32x8 indices)		{ scatter_fallback<S, 8, int, int>(v, p, indices); }
+	template<int S> force_inline void		scatter(int64x4 v, void *p, int32x4 indices)		{ scatter_fallback<S, 4, int, int>(v, p, indices); }
+
+	template<int S> force_inline void		scatter(int32x2 v, void *p, int64x2 indices)		{ scatter_fallback<S, 2, int, int64>(v, p, indices); }
+	template<int S> force_inline void		scatter(int32x4 v, void *p, int64x4 indices)		{ scatter_fallback<S, 4, int, int64>(v, p, indices); }
+	template<int S> force_inline void		scatter(int64x2 v, void *p, int64x2 indices)		{ scatter_fallback<S, 2, int, int64>(v, p, indices); }
+	template<int S> force_inline void		scatter(int64x4 v, void *p, int64x4 indices)		{ scatter_fallback<S, 4, int, int64>(v, p, indices); }
+#endif
+
+	template<int S> force_inline int32x4	masked_gather(int32x4 m, int32x4 s, const int32 *p, int32x4 indices)	{ return _mm_mask_i32gather_epi32(		s, p, indices, 			m, S); }
+	template<int S> force_inline int64x2	masked_gather(int32x2 m, int32x2 s, const int64 *p, int32x2 indices)	{ return _mm_mask_i32gather_epi64(		s, p, grow<4>(indices),	m, S); }
+	template<int S> force_inline int32x8	masked_gather(int32x8 m, int32x8 s, const int32 *p, int32x8 indices)	{ return _mm256_mask_i32gather_epi32(	s, p, indices, 			m, S); }
+	template<int S> force_inline int64x4	masked_gather(int32x4 m, int32x4 s, const int64 *p, int32x4 indices)	{ return _mm256_mask_i32gather_epi64(	s, p, indices, 			m, S); }
+	template<int S> force_inline int32x4	masked_gather(int64x4 m, int64x4 s, const int32 *p, int64x4 indices)	{ return _mm256_mask_i64gather_epi32(	s, p, indices, 			m, S); }
+	template<int S> force_inline int64x2	masked_gather(int64x2 m, int64x2 s, const int64 *p, int64x2 indices)	{ return _mm256_mask_i64gather_epi64(	s, p, grow<4>(indices), m, S); }
+	template<int S> force_inline int32x8	masked_gather(int64x8 m, int64x8 s, const int32 *p, int64x8 indices)	{ return _mm512_mask_i64gather_epi32(	s, p, indices, 			m, S); }
+	template<int S> force_inline int64x4	masked_gather(int64x4 m, int64x4 s, const int64 *p, int64x4 indices)	{ return _mm512_mask_i64gather_epi64(	s, p, indices, 			m, S); }
+
+  #ifdef __AVX512F__
+	template<int S> force_inline int32x4	masked_gather(uint64 m, int32x4 s, const int32 *p, int32x4 indices)		{ return _mm_mmask_i32gather_epi32(		s, m, indices, p, S); }
+	template<int S> force_inline int64x2	masked_gather(uint64 m, int64x2 s, const int64 *p, int32x2 indices)		{ return _mm_mmask_i32gather_epi64(		s, m, grow<4>(indices), p, S); }
+	template<int S> force_inline int32x8	masked_gather(uint64 m, int32x8 s, const int32 *p, int32x8 indices)		{ return _mm256_mmask_i32gather_epi32(	s, m, indices, p, S); }
+	template<int S> force_inline int64x4	masked_gather(uint64 m, int64x4 s, const int64 *p, int32x4 indices)		{ return _mm256_mmask_i32gather_epi64(	s, m, indices, p, S); }
+	template<int S> force_inline int32x16	masked_gather(uint64 m, int32x16 s, const int32 *p, int32x16 indices)	{ return _mm512_mask_i32gather_epi32(	s, m, indices, p, S); }
+	template<int S> force_inline int64x8	masked_gather(uint64 m, int64x8 s, const int64 *p, int32x8 indices)		{ return _mm512_mask_i32gather_epi64(	s, m, indices, p, S); }
+
+	template<int S> force_inline int64x2	masked_gather(uint64 m, int64x2 s, const int64 *p, int64x2 indices)		{ return _mm_mmask_i64gather_epi64(		s, m, indices, p, S); }
+	template<int S> force_inline int32x4	masked_gather(uint64 m, int32x4 s, const int32 *p, int64x4 indices)		{ return _mm256_mmask_i64gather_epi32(	s, m, indices, p, S); }
+	template<int S> force_inline int64x4	masked_gather(uint64 m, int64x4 s, const int64 *p, int64x4 indices)		{ return _mm256_mmask_i64gather_epi64(	s, m, indices, p, S); }
+	template<int S> force_inline int32x8	masked_gather(uint64 m, int32x8 s, const int32 *p, int64x8 indices)		{ return _mm512_mask_i64gather_epi32(	s, m, indices, p, S); }
+	template<int S> force_inline int64x8	masked_gather(uint64 m, int64x8 s, const int64 *p, int64x8 indices)		{ return _mm512_mask_i64gather_epi64(	s, m, indices, p, S); }
+
+	template<int S> force_inline int32x4	masked_gather(uint64 m, _zero, const int32 *p, int32x4 indices)		{ return _mm_mmaskz_i32gather_epi32(	m, indices, p, S); }
+	template<int S> force_inline int64x2	masked_gather(uint64 m, _zero, const int64 *p, int32x2 indices)		{ return _mm_mmaskz_i32gather_epi64(	m, grow<4>(indices), p, S); }
+	template<int S> force_inline int32x8	masked_gather(uint64 m, _zero, const int32 *p, int32x8 indices)		{ return _mm256_mmaskz_i32gather_epi32(	m, indices, p, S); }
+	template<int S> force_inline int64x4	masked_gather(uint64 m, _zero, const int64 *p, int32x4 indices)		{ return _mm256_mmaskz_i32gather_epi64(	m, indices, p, S); }
+	template<int S> force_inline int32x16	masked_gather(uint64 m, _zero, const int32 *p, int32x16 indices)	{ return _mm512_maskz_i32gather_epi32(	m, indices, p, S); }
+	template<int S> force_inline int64x8	masked_gather(uint64 m, _zero, const int64 *p, int32x8 indices)		{ return _mm512_maskz_i32gather_epi64(	m, indices, p, S); }
+
+	template<int S> force_inline int64x2	masked_gather(uint64 m, _zero, const int64 *p, int64x2 indices)		{ return _mm_mmaskz_i64gather_epi64(	m, indices, p, S); }
+	template<int S> force_inline int32x4	masked_gather(uint64 m, _zero, const int32 *p, int64x4 indices)		{ return _mm256_mmaskz_i64gather_epi32(	m, indices, p, S); }
+	template<int S> force_inline int64x4	masked_gather(uint64 m, _zero, const int64 *p, int64x4 indices)		{ return _mm256_mmaskz_i64gather_epi64(	m, indices, p, S); }
+	template<int S> force_inline int32x8	masked_gather(uint64 m, _zero, const int32 *p, int64x8 indices)		{ return _mm512_maskz_i64gather_epi32(	m, indices, p, S); }
+	template<int S> force_inline int64x8	masked_gather(uint64 m, _zero, const int64 *p, int64x8 indices)		{ return _mm512_maskz_i64gather_epi64(	m, indices, p, S); }
+
+	template<int S> force_inline void		masked_scatter(uint64 m, int32x4 v, int32 *p, int32x4 indices)		{ _mm_mask_i32scatter_epi32(	p, m, indices, 			v, S); }
+	template<int S> force_inline void		masked_scatter(uint64 m, int64x2 v, int64 *p, int32x2 indices)		{ _mm_mask_i32scatter_epi64(	p, m, grow<4>(indices),	v, S); }
+	template<int S> force_inline void		masked_scatter(uint64 m, int32x8 v, int32 *p, int32x8 indices)		{ _mm256_mask_i32scatter_epi32(	p, m, indices, 			v, S); }
+	template<int S> force_inline void		masked_scatter(uint64 m, int64x4 v, int64 *p, int32x4 indices)		{ _mm256_mask_i32scatter_epi64(	p, m, indices, 			v, S); }
+	template<int S> force_inline void		masked_scatter(uint64 m, int32x16 v, int32 *p, int32x16 indices)	{ _mm512_mask_i32scatter_epi32(	p, m, indices,			v, S); }
+	template<int S> force_inline void		masked_scatter(uint64 m, int64x8 v, int64 *p, int32x8 indices)		{ _mm512_mask_i32scatter_epi64(	p, m, indices,			v, S); }
+
+	template<int S> force_inline void		masked_scatter(uint64 m, int64x2 v, int64 *p, int64x2 indices)		{ _mm_mmask_i64scatter_epi64(	p, m, indices, v, S); }
+	template<int S> force_inline void		masked_scatter(uint64 m, int32x4 v, int32 *p, int64x4 indices)		{ _mm256_mmask_i64scatter_epi32(p, m, indices, v, S); }
+	template<int S> force_inline void		masked_scatter(uint64 m, int64x4 v, int64 *p, int64x4 indices)		{ _mm256_mmask_i64scatter_epi64(p, m, indices, v, S); }
+	template<int S> force_inline void		masked_scatter(uint64 m, int32x8 v, int32 *p, int64x8 indices)		{ _mm512_mask_i64scatter_epi32(	p, m, indices, v, S); }
+	template<int S> force_inline void		masked_scatter(uint64 m, int64x8 v, int64 *p, int64x8 indices)		{ _mm512_mask_i64scatter_epi64(	p, m, indices, v, S); }
+  #endif
+#endif
+
+	template<int S, typename E, typename I> force_inline auto	gather(const E *p, I indices);
+	template<int S, typename V, typename I> force_inline void	scatter(V v, void *p, I indices);
+	template<int S, typename M, typename U, typename E, typename I> force_inline auto	masked_gather(M m, U u, const E *p, I indices);
+	template<int S, typename M, typename V, typename I> force_inline void	masked_scatter(M m, V v, void *p, I indices);
+
+	template<int N, int ES, typename=void> struct indexed_s;
+
+	template<int N, int ES> struct indexed_s<N, ES, enable_if_t<ES >= 4 && (N * ES * 8 > max_register_bits)>> {
+		typedef sint_t<ES>		I;
+		static const int N2		= pow2_ceil<N> / 2;
+
+		template<int S, typename X>							static force_inline vec<I, N>	g(const void *p, X indices)	{
+			return concat(gather<S>((const I*)p, shrink<N2>(indices)), gather<S>((const I*)p, shrink_top<N - N2>(indices)));
+		}
+		template<int S, typename V, typename X>				static force_inline void		s(V v, void *p, X indices)	{
+			scatter<S>(as<I>(shrink<N2>(v)), p, shrink<N2>(indices));
+			scatter<S>(as<I>(shrink_top<N-N2>(v)), p, shrink_top<N-N2>(indices));
+		}
+		template<int S, typename M, typename U, typename X>	static force_inline vec<I, N>	gm(M m, U u, const void *p, X indices)	{
+			return concat(masked_gather<S>(m, shrink<N2>(u), (const I*)p, shrink<N2>(indices)), masked_gather<S>(m >> N2, shrink_top<N - N2>(u), (const I*)p, shrink_top<N - N2>(indices)));
+		}
+		template<int S, typename M, typename V, typename X> static force_inline void		sm(M m, V v, void *p, X indices)	{
+			masked_scatter<S>(m, as<I>(shrink<N2>(v)), p, shrink<N2>(indices));
+			masked_scatter<S>(m >> N2, as<I>(shrink_top<N-N2>(v)), p, shrink_top<N-N2>(indices));
+		}
+	};
+	template<int N, int ES> struct indexed_s<N, ES, enable_if_t<ES >= 4 && (N > 1) && (N * ES * 8 <= max_register_bits) && meta::is_pow2<N>>> {
+		typedef sint_t<ES>		I;
+		template<int S, typename X>							static force_inline vec<I, N>	g(const void *p, X indices)			{ return gather<S>((const I*)p, indices); }
+		template<int S, typename V, typename X>				static force_inline void		s(V v, void *p, X indices)			{ scatter<S>(as<I>(v), p, indices); }
+		template<int S, typename M, typename X>				static force_inline vec<I, N>	gm(M m, _zero, const void *p, X indices)	{ return masked_gather<S>(m, vec<I,N>(zero), (const I*)p, indices); }
+		template<int S, typename M, typename X>				static force_inline vec<I, N>	gm(M m, vec<I,N> u, const void *p, X indices)	{ return masked_gather<S>(m, u, (const I*)p, indices); }
+		template<int S, typename M, typename V, typename X> static force_inline void		sm(M m, V v, void *p, X indices)	{ masked_scatter<S>(m, as<I>(v), p, indices); }
+	};
+
+	template<int N, int ES> struct indexed_s<N, ES, enable_if_t<ES >= 4 && (N * ES * 8 <= max_register_bits) && !meta::is_pow2<N>>> {
+		typedef sint_t<ES>		I;
+		static const int N2		= pow2_ceil<N>;
+		static const uint64 M	= kbits<uint64, N>;
+		template<int S, typename X>							static force_inline vec<I, N>	g(const void *p, X indices)			{ return shrink<N>(masked_gather<S>(M, zero, (const I*)p, grow<N2>(indices))); }
+		template<int S, typename V, typename X>				static force_inline void		s(V v, void *p, X indices)			{ masked_scatter<S>(M, grow<N2>(v), p, grow<N2>(indices))); }
+		template<int S, typename M, typename U, typename X>	static force_inline vec<I, N>	gm(M m, U u, const void *p, X indices)	{ return shrink<N>(masked_gather<S>(m, u, (const I*)p, grow<N2>(indices))); }
+		template<int S, typename M, typename V, typename X>	static force_inline void		sm(M m, V v, void *p, X indices)	{ masked_scatter<S>(m, grow<N2>(v), p, grow<N2>(indices))); }
+	};
+
+	template<int N, int ES> struct indexed_s<N, ES, enable_if_t<ES < 4>> {
+		typedef sint_t<ES>		I;
+		template<int S, typename X>							static force_inline vec<I, N>	g(const void *p, X indices)			{ return to<I>(indexed_s<N, 4>::template g<S>(p, indices)); }
+		template<int S, typename V, typename X>				static force_inline void		s(V v, void *p, X indices)			{
+			for (int i = 0; i < N; i++)
+				*(element_type<V>*)((uint8*)p + indices[i] * S) = v[i];
+		}
+		template<int S, typename M, typename U, typename X>	static force_inline vec<I, N>	gm(M m, U u, const void *p, X indices)	{ return to<I>(indexed_s<N, 4>::template gm<S>(m, u, p, indices)); }
+		template<int S, typename M, typename V, typename X> static force_inline void		sm(M m, V v, void *p, X indices)	{
+			for (int i = 0, m2 = bit_mask(m); i < N; i++, m2 >>= 1)
+				if (m2 & 1)
+					*(element_type<V>*)((uint8*)p + indices[i] * S) = v[i];
+		}
+	};
+
+	template<int ES> struct indexed_s<1, ES> {
+		typedef sint_t<ES>		I;
+		template<int S>							static force_inline vec<I, 1>	g(const void *p, int64 index)			{ return *(I*)((const uint8*)p + index * S); }
+		template<int S, typename V>				static force_inline void		s(V v, void *p, int64 index)			{ *(I*)((uint8*)p + index * S) = v; }
+		template<int S, typename M, typename U>	static force_inline vec<I, 1>	gm(M m, U u, const void *p, int64 index){ return m ? *(I*)((const uint8*)p + index * S) : u; }
+		template<int S, typename M, typename V> static force_inline void		sm(M m, V v, void *p, int64 index)		{ if (m) *(I*)((uint8*)p + index * S) = v; }
+	};
+
+
+	template<int S, typename E, typename I> force_inline auto	gather(const E *p, I indices) {
+		return as<E>(indexed_s<num_elements_v<I>, sizeof(E)>::template g<S>(p, indices));
+	}
+	template<int S, typename V, typename I> force_inline void	scatter(V v, void *p, I indices) {
+		indexed_s<num_elements_v<I>, sizeof(element_type<V>)>::template s<S>(v, p, indices);
+	}
+
+	template<int S, typename M, typename U, typename E, typename I> force_inline auto	masked_gather(M m, U u, const E *p, I indices) {
+		return as<E>(indexed_s<num_elements_v<I>, sizeof(E)>::template gm<S>(m, u, p, indices));
+	}
+	template<int S, typename M, typename V, typename I> force_inline void	masked_scatter(M m, V v, void *p, I indices) {
+		indexed_s<num_elements_v<I>, sizeof(element_type<V>)>::template sm<S>(m, v, p, indices);
+	}
+
+	template<int S, typename U, typename E, typename I, typename=enable_if_t<same_v<sint_for_t<E>, E> && sizeof(E) * num_elements_v<I> * 8 >= min_register_bits>> force_inline auto masked_gather(uint64 m, U u, const E *p, I indices) {
+		return masked_gather<S>(make_mask<E, num_elements_v<I>>(m), u, p, indices);
+	}
+	template<int S, typename E, typename I> force_inline enable_if_t<same_v<sint_for_t<E>, E> && sizeof(E) * num_elements_v<I> * 8 >= min_register_bits> masked_scatter(uint64 m, const E *p, I indices) {
+		masked_scatter<S>(make_mask<E, num_elements_v<I>>(m), p, indices);
+	}
+
+	//default S to sizeof(E)
+	template<typename E, typename I> force_inline auto	gather(const E *p, I indices)		{ return gather<sizeof(E)>(p, indices); }
+	template<typename V, typename I> force_inline void	scatter(V v, void *p, I indices)	{ scatter<sizeof(element_type<V>)>(v, p, indices); }
+	template<typename M, typename E, typename I> force_inline auto	masked_gather(M m, const E *p, I indices)		{ return masked_gather<sizeof(E)>(m, p, indices); }
+	template<typename M, typename V, typename I> force_inline void	masked_scatter(M m, V v, void *p, I indices)	{ masked_scatter<sizeof(element_type<V>)>(m, v, p, indices); }
+
+	//-----------------------------------------------------------------------------
+	// load/store
+	//-----------------------------------------------------------------------------
+
+	template<typename V, typename I> force_inline enable_if_t<is_simd<V>>	load(V &v, I p) 		{ load_vec(v, p); }
+	template<typename V, typename I> force_inline enable_if_t<is_simd<V>>	store(const V &v, I p)	{ store_vec(v, p); }
+
+	template<typename T> force_inline enable_if_t<is_builtin_num<T>>	load(T &t, const T *p) 	{ t = *p; }
+	template<typename T> force_inline enable_if_t<is_builtin_num<T>>	store(const T &t, T *p)	{ *p = t; }
+
+	template<typename V, typename I> SIMD_FUNC V	load(I p) 	{ V v; load(v, p); return v; }
+
+	template<int N, typename E>				auto	load(const E *p)							{ vec<E,N> v; load(v, p); return v; }
+	template<int N, typename E, int S>		auto	load(fixed_stride_iterator<E, S> p)			{ return gather<1>(&p[0], to<int>(meta::make_value_sequence<N, int>()) * S); }
+	template<int N, typename E>				auto	load(stride_iterator<E> p)					{ return gather<1>(&p[0], to<int>(meta::make_value_sequence<N, int>()) * p.stride()); }
+
+	template<typename V, typename E, int S> void	store(V v, fixed_stride_iterator<E, S> p)	{ return scatter<1>(v, &p[0], to<int>(meta::make_value_sequence<num_elements_v<V>, int>()) * S); 	}
+	template<typename V, typename E>		void	store(V v, stride_iterator<E> p)			{ return scatter<1>(v, &p[0], to<int>(meta::make_value_sequence<num_elements_v<V>, int>()) * p.stride()); }
 
 	//-----------------------------------------------------------------------------
 	// bit_mask:	bit-per-field
@@ -410,8 +626,10 @@ namespace simd {
 	SIMD_FUNC int bit_mask(int32x4 m)	{ return _mm_movemask_ps(_mm_castsi128_ps(m)); }
 	SIMD_FUNC int bit_mask(int64x2 m)	{ return _mm_movemask_pd(_mm_castsi128_pd(m)); }
 
-  #ifdef __AVX__
+ #ifdef __AVX2__
 	SIMD_FUNC int bit_mask(int8x32 m)	{ return _mm256_movemask_epi8(m); }
+ #endif
+ #ifdef __AVX__
 	SIMD_FUNC int bit_mask(int32x8 m)	{ return _mm256_movemask_ps(_mm256_castsi256_ps(m)); }
 	SIMD_FUNC int bit_mask(int64x4 m)	{ return _mm256_movemask_pd(_mm256_castsi256_pd(m)); }
   #endif
@@ -521,7 +739,7 @@ namespace simd {
 	}
 	template<typename V> inline enable_if_t<(BIT_COUNT<V> < min_register_bits), bool> contains_zero(V x) {
 		typedef uint_t<sizeof(V)>	I;
-		return iso::contains_zero<I, BIT_COUNT<element_type<V>>>(reinterpret_cast<I&>(x));
+		return bits_contains_zero<I, BIT_COUNT<element_type<V>>>(reinterpret_cast<I&>(x));
 	}
 
 	//-----------------------------------------------------------------------------
@@ -541,7 +759,7 @@ namespace simd {
 
 
 #if defined __SSE2__
-	template<int N>	SIMD_FUNC bool all(vec<int16,N> x)	{ int64 mask = ((1 << (N * 2)) / 3) * 2; return (bit_mask(as<char>(x)) & mask) == mask; }
+	template<int N>	SIMD_FUNC bool all(vec<int16,N> x)	{ int64 mask = ((1ull << (N * 2)) / 3) * 2; return (bit_mask(as<char>(x)) & mask) == mask; }
 
 #elif defined __ARM_NEON__
 
@@ -583,7 +801,7 @@ namespace simd {
 
 	// bitselect: select bits of x or y based on a mask
 	template<typename T, int N, typename M> static SIMD_FUNC vec<T,N> bitselect(vec<T,N> x, vec<T,N> y, M mask) {
-		return as<T>((as<iso::sint_for_t<T>>(x) & ~mask) | (as<iso::sint_for_t<T>>(y) & mask));
+		return as<T>((as<sint_for_t<T>>(x) & ~mask) | (as<sint_for_t<T>>(y) & mask));
 	}
 
 	template<typename X, typename Y, typename M> static SIMD_FUNC enable_if_t<is_vec<X>, vec_type<X>> bitselect(X x, Y y, M mask) {
@@ -735,8 +953,8 @@ namespace simd {
 	static SIMD_FUNC double8	min(double8 x, double8 y)		{ return _mm512_min_pd(x, y); }
 	static SIMD_FUNC double8	max(double8 x, double8 y)		{ return _mm512_max_pd(x, y); }
 #else
-	static SIMD_FUNC float4		min(float4 x, float4 y)			{ return _mm_min_ps(x, y); }
-	static SIMD_FUNC float4		max(float4 x, float4 y)			{ return _mm_max_ps(x, y); }
+	static SIMD_FUNC float4		min(float4 x, float4 y)			{ return _mm_min_ps(y, x); }	// want x if y is nan
+	static SIMD_FUNC float4		max(float4 x, float4 y)			{ return _mm_max_ps(y, x); }	// want x if y is nan
 #endif
 
 #if defined __AVX512VL__
@@ -822,7 +1040,7 @@ namespace simd {
 	template<typename X, typename Y, typename>	SIMD_FUNC auto	max(X x, Y y) { return max1<element_type<X>, num_elements_v<X>>(x, y); }
 #else
 	template<typename X, typename Y, typename = enable_if_t<is_vec<X>||is_vec<Y>>>	SIMD_FUNC auto	min(X x, Y y) {	return select(y < x, y, x); }
-	template<typename X, typename Y, typename = enable_if_t<is_vec<X>||is_vec<Y>>>	SIMD_FUNC auto	max(X x, Y y) { return select(y < x, x, y); }
+	template<typename X, typename Y, typename = enable_if_t<is_vec<X>||is_vec<Y>>>	SIMD_FUNC auto	max(X x, Y y) { return select(y > x, y, x); }
 #endif
 
 	template<typename X>		SIMD_FUNC enable_if_t<is_vec<X>, int>	min_component_index(X x);
@@ -875,7 +1093,7 @@ namespace simd {
 		return to_sat<T>(v);
 	}
 	template<typename F, typename T> struct to_sat_s_split {
-		template<typename V> static SIMD_FUNC auto f(V v) { return to_sat_split<T>(v); }
+		template<typename V> static SIMD_FUNC auto f(V v) { return to_sat_split<T, F, num_elements_v<V>>(v); }
 	};
 	template<> struct to_sat_s<int32, int16>	: to_sat_s_split<int32, int16> {};
 	template<> struct to_sat_s<int32, uint16>	: to_sat_s_split<int32, uint16> {};
@@ -893,6 +1111,9 @@ namespace simd {
 	template<> SIMD_FUNC int8x8		to_sat<int8>(int16x8 x)		{ return shrink<8>(int8x16(_mm_packs_epi16(x, x))); }
 	template<> SIMD_FUNC uint8x8	to_sat<uint8>(int16x8 x)	{ return shrink<8>(uint8x16(_mm_packus_epi16(x, x))); }
 
+	template<> SIMD_FUNC uint8x4	to_sat<uint8>(int16x4 x)	{ return shrink<4>(to_sat<uint8>(grow<8>(x))); }
+
+
 	template<> SIMD_FUNC int16x8	to_sat<int16>(int32x8 x)	{ return _mm_packs_epi32(x.lo, x.hi); }
 	template<> SIMD_FUNC uint16x8	to_sat<uint16>(int32x8 x)	{ return _mm_packus_epi32(x.lo, x.hi); }
 	template<> SIMD_FUNC int8x16	to_sat<int8>(int16x16 x)	{ return _mm_packs_epi16(x.lo, x.hi); }
@@ -901,8 +1122,8 @@ namespace simd {
 #ifdef __AVX2__
 	template<> SIMD_FUNC int16x16	to_sat<int16>(int32x16 x)	{ return _mm256_packs_epi32(x.lo, x.hi); }
 	template<> SIMD_FUNC uint16x16	to_sat<uint16>(int32x16 x)	{ return _mm256_packus_epi32(x.lo, x.hi); }
-	template<> SIMD_FUNC int8x32	to_sat<int8>(int16x32 x)	{ return _mm256_packs_epi16(x.lo, x.hi); }
-	template<> SIMD_FUNC uint8x32	to_sat<uint8>(int16x32 x)	{ return _mm256_packus_epi16(x.lo, x.hi); }
+	template<> SIMD_FUNC int8x32	to_sat<int8>(int16x32 x)	{ int64x4  t = _mm256_packs_epi16(x.lo, x.hi); return as<int8>(int64x4(t.xzyw)); }
+	template<> SIMD_FUNC uint8x32	to_sat<uint8>(int16x32 x)	{ uint64x4 t = _mm256_packus_epi16(x.lo, x.hi); return as<uint8>(uint64x4(t.xzyw)); }
 #endif
 
 #ifdef __AVX512F__
@@ -988,8 +1209,9 @@ namespace simd {
 		return copysign<num_elements_v<X> == 1 ? num_elements_v<Y> : num_elements_v<X>>(x, y);
 	}
 
-	template<typename X> static SIMD_FUNC enable_if_t<is_vec<X>, X>	sign1(X x)	{ return copysign(one, x); }
-	template<typename X> static SIMD_FUNC enable_if_t<is_vec<X>, X>	sign(X x)	{ return select(x == zero, x, copysign(one, x)); }
+	template<typename X> static SIMD_FUNC enable_if_t<is_vec<X> && is_float<element_type<X>>, X>	sign1(X x)	{ return copysign(one, x); }
+	template<typename X> static SIMD_FUNC enable_if_t<is_vec<X> && !is_float<element_type<X>>, X>	sign1(X x)	{ return select(x < zero, X(-one), X(one)); }
+	template<typename X> static SIMD_FUNC enable_if_t<is_vec<X>, X>	sign(X x)	{ return select(x == zero, x, sign1(x)); }
 
 	//-----------------------------------------------------------------------------
 	// trunc/ceil/floor/frac
@@ -1257,30 +1479,44 @@ namespace simd {
 	template<typename T, typename X> 	static SIMD_FUNC auto	reduce_add(X x)			{ return reduce_add<T, num_elements_v<X>>(x); }
 	template<typename X>				static SIMD_FUNC auto	reduce_add(X x)			{ return reduce_add<element_type<X>>(x); }
 
+	// reduce_or
+	template<typename X>				static SIMD_FUNC auto	reduce_or(X x);
+#ifdef __clang__
+	template<typename T>				static SIMD_FUNC T		reduce_or(vec<T, 1> x)	{ return x; }
+#else
+	template<typename T>				static SIMD_FUNC T		reduce_or(vec<T, 1> x)	{ return x.x; }
+#endif
+	template<typename T>				static SIMD_FUNC T		reduce_or(vec<T, 2> x)	{ return x.x | x.y; }
+	template<typename T>				static SIMD_FUNC T		reduce_or(vec<T, 3> x)	{ return x.x | x.y | x.z; }
+	template<typename T, int N> 		static SIMD_FUNC T		reduce_or(vec<T, N> x)	{ return reduce_or(x.lo | x.hi); }
+	template<typename T, typename X> 	static SIMD_FUNC auto	reduce_or(X x)			{ return reduce_or<T, num_elements_v<X>>(x); }
+	template<typename X>				static SIMD_FUNC auto	reduce_or(X x)			{ return reduce_or<element_type<X>>(x); }
+	
 	// reduce_mul
 	template<typename X>				static SIMD_FUNC auto	reduce_mul(X x);
 	template<typename T>				static SIMD_FUNC T		reduce_mul(vec<T, 2> x)	{ return x.x * x.y; }
 	template<typename T>				static SIMD_FUNC T		reduce_mul(vec<T, 3> x)	{ return x.x * x.y * x.z; }
-	template<typename T, int N> 		static SIMD_FUNC T		reduce_mul(vec<T, N> x)	{ return reduce_mul(x.lo * x.hi); }
+	template<typename T, int N> 		static SIMD_FUNC enable_if_t<is_pow2(N), T>		reduce_mul(vec<T, N> x)	{ return reduce_mul(x.lo * x.hi); }
+	template<typename T, int N> 		static SIMD_FUNC enable_if_t<!is_pow2(N), T>	reduce_mul(vec<T, N> x)	{ return reduce_mul(extend_right<pow2_ceil<N + 1>>(x, one)); }
 	template<typename T, typename X> 	static SIMD_FUNC auto	reduce_mul(X x)			{ return reduce_mul<T, num_elements_v<X>>(x); }
 	template<typename X>				static SIMD_FUNC auto	reduce_mul(X x)			{ return reduce_mul<element_type<X>>(x); }
 
 	// reduce_min
 	template<typename X>				static SIMD_FUNC auto	reduce_min(X x);
-	template<typename T>				static SIMD_FUNC T		reduce_min(vec<T, 2> x)	{ return x.y < x.x ? x.y : x.x; }
-	template<typename T>				static SIMD_FUNC T		reduce_min(vec<T, 3> x)	{ T t = x.z < x.x ? x.z : x.x; return x.y < t ? x.y : t; }
-	template<typename T, int N> 		static SIMD_FUNC T		reduce_min(vec<T, N> x)	{ return reduce_min(min(x.lo, x.hi)); }
-	template<typename T, typename X> 	static SIMD_FUNC auto	reduce_min(X x)			{ return reduce_min<T, num_elements_v<X>>(x); }
-	template<typename X>				static SIMD_FUNC auto	reduce_min(X x)			{ return reduce_min<element_type<X>>(x); }
+	template<int N> struct reduce_min_s		{ template<typename X> static SIMD_FUNC auto f(X x) { return reduce_min(min(x.lo, x.hi)); } };
+	template<>		struct reduce_min_s<1>	{ template<typename X> static SIMD_FUNC auto f(X x) { return x; } };
+	template<>		struct reduce_min_s<2>	{ template<typename X> static SIMD_FUNC auto f(X x) { return x.y < x.x ? x.y : x.x;; } };
+	template<>		struct reduce_min_s<3>	{ template<typename X> static SIMD_FUNC auto f(X x) { typedef element_type<X> T; T t = x.z < x.x ? T(x.z) : T(x.x); return x.y < t ? T(x.y) : t; } };
+	template<typename X>				static SIMD_FUNC auto	reduce_min(X x)			{ return reduce_min_s<num_elements_v<X>>::f(x); }
 
 	// reduce_max
 	template<typename X>				static SIMD_FUNC auto	reduce_max(X x);
-	template<typename T>				static SIMD_FUNC T		_reduce_max(vec<T, 1> x)	{ return x; }
-	template<typename T>				static SIMD_FUNC T		_reduce_max(vec<T, 2> x)	{ return x.y > x.x ? x.y : x.x; }
-	template<typename T>				static SIMD_FUNC T		_reduce_max(vec<T, 3> x)	{ T t = x.z > x.x ? x.z : x.x; return x.y > t ? x.y : t; }
-	template<typename T, int N> 		static SIMD_FUNC T		_reduce_max(vec<T, N> x)	{ return reduce_max(max(x.lo, x.hi)); }
-	template<typename T, typename X> 	static SIMD_FUNC auto	_reduce_max(X x)			{ return _reduce_max<T, num_elements_v<X>>(x); }
-	template<typename X>				static SIMD_FUNC auto	reduce_max(X x)			{ return _reduce_max<element_type<X>>(x); }
+	template<int N> struct reduce_max_s		{ template<typename X> static SIMD_FUNC auto f(X x) { return reduce_max(max(x.lo, x.hi)); } };
+	template<>		struct reduce_max_s<1>	{ template<typename X> static SIMD_FUNC auto f(X x) { return x; } };
+	template<>		struct reduce_max_s<2>	{ template<typename X> static SIMD_FUNC auto f(X x) { return x.y > x.x ? x.y : x.x; } };
+	template<>		struct reduce_max_s<3>	{ template<typename X> static SIMD_FUNC auto f(X x) { typedef element_type<X> T; T t = x.z > x.x ? T(x.z) : T(x.x); return x.y > t ? T(x.y) : t; } };
+	template<typename X>				static SIMD_FUNC auto	reduce_max(X x)			{ return reduce_max_s<num_elements_v<X>>::f(x); }
+
 
 	// is_uniform
 	template<typename X>				static SIMD_FUNC bool	is_uniform(X x);
@@ -1289,6 +1525,59 @@ namespace simd {
 	template<typename T, int N> 		static SIMD_FUNC bool	is_uniform(vec<T, N> x)	{ return is_uniform(x.lo) && all(x.lo == x.hi); }
 	template<typename T, typename X> 	static SIMD_FUNC bool	is_uniform(X x)			{ return is_uniform<T, num_elements_v<X>>(x); }
 	template<typename X>				static SIMD_FUNC bool	is_uniform(X x)			{ return is_uniform<element_type<X>>(x); }
+
+	//-----------------------------------------------------------------------------
+	// accumulations
+	//-----------------------------------------------------------------------------
+
+	template<int N, int M> struct accum_s {
+	#if 1
+		//just swizzles
+		static constexpr auto get_swizzle() {
+			typedef	meta::make_value_sequence<N>	I;
+			return select(I() & meta::int_constant<M>(),
+				(I() | meta::int_constant<M - 1>()) - meta::int_constant<M>(),
+				I() * 0_kk + meta::int_constant<N>()
+			);
+		}
+		template<typename X> static SIMD_FUNC auto add(X x) { auto y = accum_s<N, M / 2>::add(x); return y + swizzle(get_swizzle(), y, zero); }
+		template<typename X> static SIMD_FUNC auto mul(X x) { auto y = accum_s<N, M / 2>::mul(x); return y * swizzle(get_swizzle(), y, one); }
+		template<typename X> static SIMD_FUNC auto And(X x) { auto y = accum_s<N, M / 2>::And(x); return y & swizzle(get_swizzle(), y, zero); }
+		template<typename X> static SIMD_FUNC auto Or (X x) { auto y = accum_s<N, M / 2>::Or (x); return y | swizzle(get_swizzle(), y, zero); }
+		template<typename X> static SIMD_FUNC auto max(X x) { auto y = accum_s<N, M / 2>::max(x); return simd::max(y, swizzle(get_swizzle(), y, element_type<X>(minimum))); }
+		template<typename X> static SIMD_FUNC auto min(X x) { auto y = accum_s<N, M / 2>::min(x); return simd::min(y, swizzle(get_swizzle(), y, element_type<X>(maximum))); }
+	#else
+		//swizzle + masked ops
+		static const int	MASK = bits(N) & ~bitblocks<uint32, M * 2, M>;
+		static constexpr auto get_swizzle() {
+			typedef	meta::make_value_sequence<N>	I;
+			return select(I() & meta::int_constant<M>(),
+				(I() | meta::int_constant<M - 1>()) - meta::int_constant<M>(),
+				I() * 0_kk - 1_kk
+			);
+		}
+		template<typename X> static SIMD_FUNC auto add(X x) { auto y = accum_s<N, M / 2>::add(x); return maskedi<MASK>(y) + swizzle(get_swizzle(), y); }
+		template<typename X> static SIMD_FUNC auto mul(X x) { auto y = accum_s<N, M / 2>::mul(x); return maskedi<MASK>(y) * swizzle(get_swizzle(), y); }
+		template<typename X> static SIMD_FUNC auto And(X x) { auto y = accum_s<N, M / 2>::And(x); return maskedi<MASK>(y) & swizzle(get_swizzle(), y); }
+		template<typename X> static SIMD_FUNC auto Or (X x) { auto y = accum_s<N, M / 2>::Or (x); return maskedi<MASK>(y) | swizzle(get_swizzle(), y); }
+		template<typename X> static SIMD_FUNC auto max(X x) { auto y = accum_s<N, M / 2>::max(x); return simd::max(maskedi<MASK>(y), swizzle(get_swizzle(), y)); }
+		template<typename X> static SIMD_FUNC auto min(X x) { auto y = accum_s<N, M / 2>::min(x); return simd::min(maskedi<MASK>(y), swizzle(get_swizzle(), y)); }
+	#endif
+	};
+
+	template<int N> struct accum_s<N, 0> {
+		template<typename X> static SIMD_FUNC auto add(X x) { return x; }
+		template<typename X> static SIMD_FUNC auto mul(X x) { return x; }
+		template<typename X> static SIMD_FUNC auto max(X x) { return x; }
+		template<typename X> static SIMD_FUNC auto min(X x) { return x; }
+	};
+
+	template<typename X> static SIMD_FUNC auto	accum_add(X x)	{ static const int N = num_elements_v<X>; return accum_s<N, pow2_ceil<N> / 2>::add(x); }
+	template<typename X> static SIMD_FUNC auto	accum_mul(X x)	{ static const int N = num_elements_v<X>; return accum_s<N, pow2_ceil<N> / 2>::mul(x); }
+	template<typename X> static SIMD_FUNC auto	accum_and(X x)	{ static const int N = num_elements_v<X>; return accum_s<N, pow2_ceil<N> / 2>::And(x); }
+	template<typename X> static SIMD_FUNC auto	accum_or (X x)	{ static const int N = num_elements_v<X>; return accum_s<N, pow2_ceil<N> / 2>::Or (x); }
+	template<typename X> static SIMD_FUNC auto	accum_max(X x)	{ static const int N = num_elements_v<X>; return accum_s<N, pow2_ceil<N> / 2>::max(x); }
+	template<typename X> static SIMD_FUNC auto	accum_min(X x)	{ static const int N = num_elements_v<X>; return accum_s<N, pow2_ceil<N> / 2>::min(x); }
 
 	//-----------------------------------------------------------------------------
 	// fullmul
@@ -1315,15 +1604,15 @@ namespace simd {
 
 #ifdef __SSE__
 #ifdef __SSE4_1__
-	static SIMD_FUNC vec<int64,2>	fullmul(int32x2 x, int32x2 y)		{ return _mm_mul_epi32((int32x4)swizzle<0,0,1,1>(x), (int32x4)swizzle<0,0,1,1>(y)); }
+	static SIMD_FUNC int64x2	fullmul(int32x2 x, int32x2 y)		{ return _mm_mul_epi32((int32x4)swizzle<0,0,1,1>(x), (int32x4)swizzle<0,0,1,1>(y)); }
 #endif
 	static SIMD_FUNC vec<uint64,2>	fullmul(uint32x2 x, uint32x2 y)		{ return _mm_mul_epu32((uint32x4)swizzle<0,0,1,1>(x), (uint32x4)swizzle<0,0,1,1>(y)); }
-#ifdef	__AVX__
-	static SIMD_FUNC vec<int64,4>	fullmul(int32x4 x, int32x4 y)		{ return _mm256_mul_epi32(_mm256_cvtepu32_epi64(x), _mm256_cvtepu32_epi64(y)); }
+#ifdef	__AVX2__
+	static SIMD_FUNC int64x4	fullmul(int32x4 x, int32x4 y)		{ return _mm256_mul_epi32(_mm256_cvtepu32_epi64(x), _mm256_cvtepu32_epi64(y)); }
 	static SIMD_FUNC vec<uint64,4>	fullmul(uint32x4 x, uint32x4 y)		{ return _mm256_mul_epu32(_mm256_cvtepu32_epi64(x), _mm256_cvtepu32_epi64(y)); }
 #endif
 #if defined __AVX512F__
-	static SIMD_FUNC vec<int64,8>	fullmul(int32x8 x, int32x8 y)		{ return _mm512_mul_epi32(_mm512_cvtepu32_epi64(x), _mm512_cvtepu32_epi64(y)); }
+	static SIMD_FUNC int64x8	fullmul(int32x8 x, int32x8 y)		{ return _mm512_mul_epi32(_mm512_cvtepu32_epi64(x), _mm512_cvtepu32_epi64(y)); }
 	static SIMD_FUNC vec<uint64,8>	fullmul(uint32x8 x, uint32x8 y)		{ return _mm512_mul_epu32(_mm512_cvtepu32_epi64(x), _mm512_cvtepu32_epi64(y)); }
 #endif
 #endif
@@ -1338,6 +1627,43 @@ namespace simd {
 	template<typename X, typename Y>	SIMD_FUNC auto	fullmul(X x, Y y)->enable_if_t<is_vec<X>, decltype(fullmul<element_type<X>, num_elements_v<X>>(x, y))>	{
 		return fullmul<element_type<X>, num_elements_v<X>>(x, y);
 	}
+
+	//-----------------------------------------------------------------------------
+	// mulhi
+	//-----------------------------------------------------------------------------
+
+#ifdef __SSE__
+	//static SIMD_FUNC int16x4	mulhi(int16x4  a, int16x8 b)	{ return _mm_mulhi_pi16(a, b); }
+	static SIMD_FUNC int16x8		mulhi(int16x8  a, int16x8 b)	{ return _mm_mulhi_epi16(a, b); }
+	static SIMD_FUNC int16x16		mulhi(int16x16 a, int16x16 b)	{ return _mm256_mulhi_epi16(a, b); }
+
+	//static SIMD_FUNC vec<uint16, 4>	mulhi(vec<uint16, 4>  a, vec<uint16, 8> b)	{ return _mm_mulhi_pu16(a, b); }
+	static SIMD_FUNC vec<uint16, 8>		mulhi(vec<uint16, 8>  a, vec<uint16, 8> b)	{ return _mm_mulhi_epu16(a, b); }
+	static SIMD_FUNC vec<uint16, 16>	mulhi(vec<uint16, 16> a, vec<uint16, 16> b)	{ return _mm256_mulhi_epu16(a, b); }
+
+#if defined __AVX512F__
+	static SIMD_FUNC int16x32		mulhi(int16x32 a, int16x32 b)	{ return _mm512_mulhi_epi16(a, b); }
+	static SIMD_FUNC vec<uint16, 32>	mulhi(vec<uint16, 32> a, vec<uint16, 32> b)	{ return _mm512_mulhi_epu16(a, b); }
+#endif
+#endif
+
+	template<size_t ES> struct mulhi_s {
+		template<typename V> static SIMD_FUNC auto f(V a, V b) { return as<element_type<V>>(fullmul(a, b)).odd; }
+	};
+
+	template<> struct mulhi_s<2>	{
+		template<typename V>	static SIMD_FUNC oversized_t<uint16, num_elements_v<V>, V>	f(V a, V b) {
+			return simd_lo_hi(mulhi(a.lo, b.lo), mulhi(a.hi, b.hi));
+		}
+		template<typename V>	static SIMD_FUNC undersized_t<uint16, num_elements_v<V>, V>	f(V a, V b) {
+			static const int N	= num_elements_v<V>;
+			static const int N2 = pow2_ceil<N + 1>;
+			return shrink<N>(mulhi(grow<N2>(a), grow<N2>(b)));
+		}
+	};
+
+	template<typename V> static SIMD_FUNC enable_if_t<!is_vec<V>, V>	mulhi(V a, V b) { return hi(fullmul(a, b)); }
+	template<typename V> static SIMD_FUNC enable_if_t<is_vec<V>, V>		mulhi(V a, V b) { return mulhi_s<sizeof(element_type<V>)>::f(a, b); }
 
 	//-----------------------------------------------------------------------------
 	// dynamic swizzle
@@ -1362,14 +1688,20 @@ namespace simd {
 //	dynamic_swizzle_index_t<E>	type of indices for element type E
 
 
-#ifdef _SSE__
- #ifdef __SSSE3__
+#ifdef __SSE__
+ #ifdef __AVX2__
 	template<typename E> 		constexpr int	dynamic_swizzle_size 	= sizeof(E) == 1 ? 16 : 8;
 	template<typename I> 		constexpr int	dynamic_swizzle_max 	= num_elements_v<I>;
 	template<typename E> 		using			dynamic_swizzle_index_t	= if_t<sizeof(E) < 4, int8, int32>;
 
 	SIMD_FUNC int8x16 dynamic_swizzle(int8x16 i, int8x16 v) { return _mm_shuffle_epi8(v, i); }
 	SIMD_FUNC int32x8 dynamic_swizzle(int32x8 i, int32x8 v) { return _mm256_permutevar8x32_epi32(v, i); }
+ #elif defined __SSSE3__
+	template<typename E> 		constexpr int	dynamic_swizzle_size 	= 16;
+	template<typename I> 		constexpr int	dynamic_swizzle_max 	= num_elements_v<I>;
+	template<typename E> 		using			dynamic_swizzle_index_t	= int8;
+
+	SIMD_FUNC int8x16 dynamic_swizzle(int8x16 i, int8x16 v) { return _mm_shuffle_epi8(v, i); }
  #else
 	template<typename E> 		constexpr int	dynamic_swizzle_size 	= 16;
 	template<typename I> 		constexpr int	dynamic_swizzle_max 	= 16;
@@ -1433,86 +1765,86 @@ namespace simd {
 	//-----------------------------------------------------------------------------
 
  #ifdef __AVX512F__
-	SIMD_FUNC int8x16	masked_add(int m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm_mask_add_epi8(s, m, a, b); }
-	SIMD_FUNC int8x16	masked_sub(int m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm_mask_sub_epi8(s, m, a, b); }
-	SIMD_FUNC int8x32	masked_add(int m, int8x32  s, int8x32  a, int8x32  b) 	{ return _mm256_mask_add_epi8(s, m, a, b); }
-	SIMD_FUNC int8x32	masked_sub(int m, int8x32  s, int8x32  a, int8x32  b) 	{ return _mm256_mask_sub_epi8(s, m, a, b); }
-	SIMD_FUNC int8x64	masked_add(int m, int8x64  s, int8x64  a, int8x64  b) 	{ return _mm512_mask_add_epi8(s, m, a, b); }
-	SIMD_FUNC int8x64	masked_sub(int m, int8x64  s, int8x64  a, int8x64  b) 	{ return _mm512_mask_sub_epi8(s, m, a, b); }
+	SIMD_FUNC int8x16	masked_add(uint64 m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm_mask_add_epi8(s, m, a, b); }
+	SIMD_FUNC int8x16	masked_sub(uint64 m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm_mask_sub_epi8(s, m, a, b); }
+	SIMD_FUNC int8x32	masked_add(uint64 m, int8x32  s, int8x32  a, int8x32  b) 	{ return _mm256_mask_add_epi8(s, m, a, b); }
+	SIMD_FUNC int8x32	masked_sub(uint64 m, int8x32  s, int8x32  a, int8x32  b) 	{ return _mm256_mask_sub_epi8(s, m, a, b); }
+	SIMD_FUNC int8x64	masked_add(uint64 m, int8x64  s, int8x64  a, int8x64  b) 	{ return _mm512_mask_add_epi8(s, m, a, b); }
+	SIMD_FUNC int8x64	masked_sub(uint64 m, int8x64  s, int8x64  a, int8x64  b) 	{ return _mm512_mask_sub_epi8(s, m, a, b); }
 
-	SIMD_FUNC int16x8  	masked_add(int m, int16x8  s, int16x8  a, int16x8  b) 	{ return _mm_mask_add_epi16(s, m, a, b); }
-	SIMD_FUNC int16x8  	masked_sub(int m, int16x8  s, int16x8  a, int16x8  b) 	{ return _mm_mask_sub_epi16(s, m, a, b); }
-	SIMD_FUNC int16x16 	masked_add(int m, int16x16 s, int16x16 a, int16x16 b) 	{ return _mm256_mask_add_epi16(s, m, a, b); }
-	SIMD_FUNC int16x16 	masked_sub(int m, int16x16 s, int16x16 a, int16x16 b) 	{ return _mm256_mask_sub_epi16(s, m, a, b); }
-	SIMD_FUNC int16x32 	masked_add(int m, int16x32 s, int16x32 a, int16x32 b) 	{ return _mm512_mask_add_epi16(s, m, a, b); }
-	SIMD_FUNC int16x32 	masked_sub(int m, int16x32 s, int16x32 a, int16x32 b) 	{ return _mm512_mask_sub_epi16(s, m, a, b); }
+	SIMD_FUNC int16x8  	masked_add(uint64 m, int16x8  s, int16x8  a, int16x8  b) 	{ return _mm_mask_add_epi16(s, m, a, b); }
+	SIMD_FUNC int16x8  	masked_sub(uint64 m, int16x8  s, int16x8  a, int16x8  b) 	{ return _mm_mask_sub_epi16(s, m, a, b); }
+	SIMD_FUNC int16x16 	masked_add(uint64 m, int16x16 s, int16x16 a, int16x16 b) 	{ return _mm256_mask_add_epi16(s, m, a, b); }
+	SIMD_FUNC int16x16 	masked_sub(uint64 m, int16x16 s, int16x16 a, int16x16 b) 	{ return _mm256_mask_sub_epi16(s, m, a, b); }
+	SIMD_FUNC int16x32 	masked_add(uint64 m, int16x32 s, int16x32 a, int16x32 b) 	{ return _mm512_mask_add_epi16(s, m, a, b); }
+	SIMD_FUNC int16x32 	masked_sub(uint64 m, int16x32 s, int16x32 a, int16x32 b) 	{ return _mm512_mask_sub_epi16(s, m, a, b); }
 
-	SIMD_FUNC int32x4  	masked_add(int m, int32x4  s, int32x4  a, int32x4  b) 	{ return _mm_mask_add_epi32(s, m, a, b); }
-	SIMD_FUNC int32x4  	masked_sub(int m, int32x4  s, int32x4  a, int32x4  b) 	{ return _mm_mask_sub_epi32(s, m, a, b); }
-	SIMD_FUNC int32x4  	masked_mul(int m, int32x4  s, int32x4  a, int32x4  b) 	{ return _mm_mask_mul_epi32(s, m, a, b); }
-	SIMD_FUNC int32x8  	masked_add(int m, int32x8  s, int32x8  a, int32x8  b) 	{ return _mm256_mask_add_epi32(s, m, a, b); }
-	SIMD_FUNC int32x8  	masked_sub(int m, int32x8  s, int32x8  a, int32x8  b) 	{ return _mm256_mask_sub_epi32(s, m, a, b); }
-	SIMD_FUNC int32x8  	masked_mul(int m, int32x8  s, int32x8  a, int32x8  b) 	{ return _mm256_mask_mul_epi32(s, m, a, b); }
-	SIMD_FUNC int32x16 	masked_add(int m, int32x16 s, int32x16 a, int32x16 b) 	{ return _mm512_mask_add_epi32(s, m, a, b); }
-	SIMD_FUNC int32x16 	masked_sub(int m, int32x16 s, int32x16 a, int32x16 b) 	{ return _mm512_mask_sub_epi32(s, m, a, b); }
-	SIMD_FUNC int32x16 	masked_mul(int m, int32x16 s, int32x16 a, int32x16 b) 	{ return _mm512_mask_mul_epi32(s, m, a, b); }
+	SIMD_FUNC int32x4  	masked_add(uint64 m, int32x4  s, int32x4  a, int32x4  b) 	{ return _mm_mask_add_epi32(s, m, a, b); }
+	SIMD_FUNC int32x4  	masked_sub(uint64 m, int32x4  s, int32x4  a, int32x4  b) 	{ return _mm_mask_sub_epi32(s, m, a, b); }
+	SIMD_FUNC int32x4  	masked_mul(uint64 m, int32x4  s, int32x4  a, int32x4  b) 	{ return _mm_mask_mul_epi32(s, m, a, b); }
+	SIMD_FUNC int32x8  	masked_add(uint64 m, int32x8  s, int32x8  a, int32x8  b) 	{ return _mm256_mask_add_epi32(s, m, a, b); }
+	SIMD_FUNC int32x8  	masked_sub(uint64 m, int32x8  s, int32x8  a, int32x8  b) 	{ return _mm256_mask_sub_epi32(s, m, a, b); }
+	SIMD_FUNC int32x8  	masked_mul(uint64 m, int32x8  s, int32x8  a, int32x8  b) 	{ return _mm256_mask_mul_epi32(s, m, a, b); }
+	SIMD_FUNC int32x16 	masked_add(uint64 m, int32x16 s, int32x16 a, int32x16 b) 	{ return _mm512_mask_add_epi32(s, m, a, b); }
+	SIMD_FUNC int32x16 	masked_sub(uint64 m, int32x16 s, int32x16 a, int32x16 b) 	{ return _mm512_mask_sub_epi32(s, m, a, b); }
+	SIMD_FUNC int32x16 	masked_mul(uint64 m, int32x16 s, int32x16 a, int32x16 b) 	{ return _mm512_mask_mul_epi32(s, m, a, b); }
 
-	SIMD_FUNC int64x2  	masked_add(int m, int64x2  s, int64x2  a, int64x2  b) 	{ return _mm_mask_add_epi64(s, m, a, b); }
-	SIMD_FUNC int64x2  	masked_sub(int m, int64x2  s, int64x2  a, int64x2  b) 	{ return _mm_mask_sub_epi64(s, m, a, b); }
-	SIMD_FUNC int64x4  	masked_add(int m, int64x4  s, int64x4  a, int64x4  b) 	{ return _mm256_mask_add_epi64(s, m, a, b); }
-	SIMD_FUNC int64x4  	masked_sub(int m, int64x4  s, int64x4  a, int64x4  b) 	{ return _mm256_mask_sub_epi64(s, m, a, b); }
-	SIMD_FUNC int64x8  	masked_add(int m, int64x8  s, int64x8  a, int64x8  b) 	{ return _mm512_mask_add_epi64(s, m, a, b); }
-	SIMD_FUNC int64x8  	masked_sub(int m, int64x8  s, int64x8  a, int64x8  b) 	{ return _mm512_mask_sub_epi64(s, m, a, b); }
+	SIMD_FUNC int64x2  	masked_add(uint64 m, int64x2  s, int64x2  a, int64x2  b) 	{ return _mm_mask_add_epi64(s, m, a, b); }
+	SIMD_FUNC int64x2  	masked_sub(uint64 m, int64x2  s, int64x2  a, int64x2  b) 	{ return _mm_mask_sub_epi64(s, m, a, b); }
+	SIMD_FUNC int64x4  	masked_add(uint64 m, int64x4  s, int64x4  a, int64x4  b) 	{ return _mm256_mask_add_epi64(s, m, a, b); }
+	SIMD_FUNC int64x4  	masked_sub(uint64 m, int64x4  s, int64x4  a, int64x4  b) 	{ return _mm256_mask_sub_epi64(s, m, a, b); }
+	SIMD_FUNC int64x8  	masked_add(uint64 m, int64x8  s, int64x8  a, int64x8  b) 	{ return _mm512_mask_add_epi64(s, m, a, b); }
+	SIMD_FUNC int64x8  	masked_sub(uint64 m, int64x8  s, int64x8  a, int64x8  b) 	{ return _mm512_mask_sub_epi64(s, m, a, b); }
 
-	SIMD_FUNC floatx4  	masked_add(int m, float4   s, float4   a, float4   b) 	{ return _mm_mask_add_ps(s, m, a, b); }
-	SIMD_FUNC floatx4  	masked_sub(int m, float4   s, float4   a, float4   b) 	{ return _mm_mask_sub_ps(s, m, a, b); }
-	SIMD_FUNC floatx4  	masked_mul(int m, float4   s, float4   a, float4   b) 	{ return _mm_mask_mul_ps(s, m, a, b); }
-	SIMD_FUNC floatx4  	masked_div(int m, float4   s, float4   a, float4   b) 	{ return _mm_mask_div_ps(s, m, a, b); }
-	SIMD_FUNC floatx8  	masked_add(int m, float8   s, float8   a, float8   b) 	{ return _mm256_mask_add_ps(s, m, a, b); }
-	SIMD_FUNC floatx8  	masked_sub(int m, float8   s, float8   a, float8   b) 	{ return _mm256_mask_sub_ps(s, m, a, b); }
-	SIMD_FUNC floatx8  	masked_mul(int m, float8   s, float8   a, float8   b) 	{ return _mm256_mask_mul_ps(s, m, a, b); }
-	SIMD_FUNC floatx8  	masked_div(int m, float8   s, float8   a, float8   b) 	{ return _mm256_mask_div_ps(s, m, a, b); }
-	SIMD_FUNC floatx16 	masked_add(int m, floatx16 s, floatx16 a, floatx16 b) 	{ return _mm512_mask_add_ps(s, m, a, b); }
-	SIMD_FUNC floatx16 	masked_sub(int m, floatx16 s, floatx16 a, floatx16 b) 	{ return _mm512_mask_sub_ps(s, m, a, b); }
-	SIMD_FUNC floatx16 	masked_mul(int m, floatx16 s, floatx16 a, floatx16 b) 	{ return _mm512_mask_mul_ps(s, m, a, b); }
-	SIMD_FUNC floatx16 	masked_div(int m, floatx16 s, floatx16 a, floatx16 b) 	{ return _mm512_mask_div_ps(s, m, a, b); }
+	SIMD_FUNC floatx4  	masked_add(uint64 m, float4   s, float4   a, float4   b) 	{ return _mm_mask_add_ps(s, m, a, b); }
+	SIMD_FUNC floatx4  	masked_sub(uint64 m, float4   s, float4   a, float4   b) 	{ return _mm_mask_sub_ps(s, m, a, b); }
+	SIMD_FUNC floatx4  	masked_mul(uint64 m, float4   s, float4   a, float4   b) 	{ return _mm_mask_mul_ps(s, m, a, b); }
+	SIMD_FUNC floatx4  	masked_div(uint64 m, float4   s, float4   a, float4   b) 	{ return _mm_mask_div_ps(s, m, a, b); }
+	SIMD_FUNC floatx8  	masked_add(uint64 m, float8   s, float8   a, float8   b) 	{ return _mm256_mask_add_ps(s, m, a, b); }
+	SIMD_FUNC floatx8  	masked_sub(uint64 m, float8   s, float8   a, float8   b) 	{ return _mm256_mask_sub_ps(s, m, a, b); }
+	SIMD_FUNC floatx8  	masked_mul(uint64 m, float8   s, float8   a, float8   b) 	{ return _mm256_mask_mul_ps(s, m, a, b); }
+	SIMD_FUNC floatx8  	masked_div(uint64 m, float8   s, float8   a, float8   b) 	{ return _mm256_mask_div_ps(s, m, a, b); }
+	SIMD_FUNC floatx16 	masked_add(uint64 m, floatx16 s, floatx16 a, floatx16 b) 	{ return _mm512_mask_add_ps(s, m, a, b); }
+	SIMD_FUNC floatx16 	masked_sub(uint64 m, floatx16 s, floatx16 a, floatx16 b) 	{ return _mm512_mask_sub_ps(s, m, a, b); }
+	SIMD_FUNC floatx16 	masked_mul(uint64 m, floatx16 s, floatx16 a, floatx16 b) 	{ return _mm512_mask_mul_ps(s, m, a, b); }
+	SIMD_FUNC floatx16 	masked_div(uint64 m, floatx16 s, floatx16 a, floatx16 b) 	{ return _mm512_mask_div_ps(s, m, a, b); }
 
-	SIMD_FUNC double2  	masked_add(int m, double2  s, double2  a, double2  b) 	{ return _mm_mask_add_pd(s, m, a, b); }
-	SIMD_FUNC double2  	masked_sub(int m, double2  s, double2  a, double2  b) 	{ return _mm_mask_sub_pd(s, m, a, b); }
-	SIMD_FUNC double2  	masked_mul(int m, double2  s, double2  a, double2  b) 	{ return _mm_mask_mul_pd(s, m, a, b); }
-	SIMD_FUNC double2  	masked_div(int m, double2  s, double2  a, double2  b) 	{ return _mm_mask_div_pd(s, m, a, b); }
-	SIMD_FUNC double4  	masked_add(int m, double4  s, double4  a, double4  b) 	{ return _mm256_mask_add_pd(s, m, a, b); }
-	SIMD_FUNC double4  	masked_sub(int m, double4  s, double4  a, double4  b) 	{ return _mm256_mask_sub_pd(s, m, a, b); }
-	SIMD_FUNC doublex4 	masked_mul(int m, double4  s, double4  a, double4  b) 	{ return _mm256_mask_mul_pd(s, m, a, b); }
-	SIMD_FUNC doublex4 	masked_div(int m, double4  s, double4  a, double4  b) 	{ return _mm256_mask_div_pd(s, m, a, b); }
-	SIMD_FUNC double8  	masked_add(int m, double8  s, double8  a, double8  b) 	{ return _mm512_mask_add_pd(s, m, a, b); }
-	SIMD_FUNC double8  	masked_sub(int m, double8  s, double8  a, double8  b) 	{ return _mm512_mask_sub_pd(s, m, a, b); }
-	SIMD_FUNC doublex8 	masked_mul(int m, double8  s, double8  a, double8  b) 	{ return _mm512_mask_mul_pd(s, m, a, b); }
-	SIMD_FUNC doublex8 	masked_div(int m, double8  s, double8  a, double8  b) 	{ return _mm512_mask_div_pd(s, m, a, b); }
+	SIMD_FUNC double2  	masked_add(uint64 m, double2  s, double2  a, double2  b) 	{ return _mm_mask_add_pd(s, m, a, b); }
+	SIMD_FUNC double2  	masked_sub(uint64 m, double2  s, double2  a, double2  b) 	{ return _mm_mask_sub_pd(s, m, a, b); }
+	SIMD_FUNC double2  	masked_mul(uint64 m, double2  s, double2  a, double2  b) 	{ return _mm_mask_mul_pd(s, m, a, b); }
+	SIMD_FUNC double2  	masked_div(uint64 m, double2  s, double2  a, double2  b) 	{ return _mm_mask_div_pd(s, m, a, b); }
+	SIMD_FUNC double4  	masked_add(uint64 m, double4  s, double4  a, double4  b) 	{ return _mm256_mask_add_pd(s, m, a, b); }
+	SIMD_FUNC double4  	masked_sub(uint64 m, double4  s, double4  a, double4  b) 	{ return _mm256_mask_sub_pd(s, m, a, b); }
+	SIMD_FUNC doublex4 	masked_mul(uint64 m, double4  s, double4  a, double4  b) 	{ return _mm256_mask_mul_pd(s, m, a, b); }
+	SIMD_FUNC doublex4 	masked_div(uint64 m, double4  s, double4  a, double4  b) 	{ return _mm256_mask_div_pd(s, m, a, b); }
+	SIMD_FUNC double8  	masked_add(uint64 m, double8  s, double8  a, double8  b) 	{ return _mm512_mask_add_pd(s, m, a, b); }
+	SIMD_FUNC double8  	masked_sub(uint64 m, double8  s, double8  a, double8  b) 	{ return _mm512_mask_sub_pd(s, m, a, b); }
+	SIMD_FUNC doublex8 	masked_mul(uint64 m, double8  s, double8  a, double8  b) 	{ return _mm512_mask_mul_pd(s, m, a, b); }
+	SIMD_FUNC doublex8 	masked_div(uint64 m, double8  s, double8  a, double8  b) 	{ return _mm512_mask_div_pd(s, m, a, b); }
 	
-	SIMD_FUNC int8x16	masked_pck(int m, int8x16  s, int8x16  a)	{ return _mm_mask_compress_epi8(s, m, a); }
-	SIMD_FUNC int8x32	masked_pck(int m, int8x32  s, int8x32  a)	{ return _mm256_mask_compress_epi8(s, m, a); }
-	SIMD_FUNC int8x64	masked_pck(int m, int8x64  s, int8x64  a)	{ return _mm512_mask_compress_epi8(s, m, a); }
+	SIMD_FUNC int8x16	masked_pck(uint64 m, int8x16  s, int8x16  a)	{ return _mm_mask_compress_epi8(s, m, a); }
+	SIMD_FUNC int8x32	masked_pck(uint64 m, int8x32  s, int8x32  a)	{ return _mm256_mask_compress_epi8(s, m, a); }
+	SIMD_FUNC int8x64	masked_pck(uint64 m, int8x64  s, int8x64  a)	{ return _mm512_mask_compress_epi8(s, m, a); }
 
-	SIMD_FUNC int16x8  	masked_pck(int m, int16x8  s, int16x8  a)	{ return _mm_mask_compress_epi16(s, m, a); }
-	SIMD_FUNC int16x16 	masked_pck(int m, int16x16 s, int16x16 a)	{ return _mm256_mask_compress_epi16(s, m, a); }
-	SIMD_FUNC int16x32 	masked_pck(int m, int16x32 s, int16x32 a)	{ return _mm512_mask_compress_epi16(s, m, a); }
+	SIMD_FUNC int16x8  	masked_pck(uint64 m, int16x8  s, int16x8  a)	{ return _mm_mask_compress_epi16(s, m, a); }
+	SIMD_FUNC int16x16 	masked_pck(uint64 m, int16x16 s, int16x16 a)	{ return _mm256_mask_compress_epi16(s, m, a); }
+	SIMD_FUNC int16x32 	masked_pck(uint64 m, int16x32 s, int16x32 a)	{ return _mm512_mask_compress_epi16(s, m, a); }
 
-	SIMD_FUNC int32x4  	masked_pck(int m, int32x4  s, int32x4  a)	{ return _mm_mask_compress_epi32(s, m, a); }
-	SIMD_FUNC int32x8  	masked_pck(int m, int32x8  s, int32x8  a)	{ return _mm256_mask_compress_epi32(s, m, a); }
-	SIMD_FUNC int32x16 	masked_pck(int m, int32x16 s, int32x16 a)	{ return _mm512_mask_compress_epi32(s, m, a); }
+	SIMD_FUNC int32x4  	masked_pck(uint64 m, int32x4  s, int32x4  a)	{ return _mm_mask_compress_epi32(s, m, a); }
+	SIMD_FUNC int32x8  	masked_pck(uint64 m, int32x8  s, int32x8  a)	{ return _mm256_mask_compress_epi32(s, m, a); }
+	SIMD_FUNC int32x16 	masked_pck(uint64 m, int32x16 s, int32x16 a)	{ return _mm512_mask_compress_epi32(s, m, a); }
 
-	SIMD_FUNC int64x2  	masked_pck(int m, int64x2  s, int64x2  a)	{ return _mm_mask_compress_epi64(s, m, a); }
-	SIMD_FUNC int64x4  	masked_pck(int m, int64x4  s, int64x4  a)	{ return _mm256_mask_compress_epi64(s, m, a); }
-	SIMD_FUNC int64x8  	masked_pck(int m, int64x8  s, int64x8  a)	{ return _mm512_mask_compress_epi64(s, m, a); }
+	SIMD_FUNC int64x2  	masked_pck(uint64 m, int64x2  s, int64x2  a)	{ return _mm_mask_compress_epi64(s, m, a); }
+	SIMD_FUNC int64x4  	masked_pck(uint64 m, int64x4  s, int64x4  a)	{ return _mm256_mask_compress_epi64(s, m, a); }
+	SIMD_FUNC int64x8  	masked_pck(uint64 m, int64x8  s, int64x8  a)	{ return _mm512_mask_compress_epi64(s, m, a); }
 
-	SIMD_FUNC floatx4  	masked_pck(int m, float4   s, float4   a)	{ return _mm_mask_compress_ps(s, m, a); }
-	SIMD_FUNC floatx8  	masked_pck(int m, float8   s, float8   a)	{ return _mm256_mask_compress_ps(s, m, a); }
-	SIMD_FUNC floatx16 	masked_pck(int m, floatx16 s, floatx16 a)	{ return _mm512_mask_compress_ps(s, m, a); }
+	SIMD_FUNC floatx4  	masked_pck(uint64 m, float4   s, float4   a)	{ return _mm_mask_compress_ps(s, m, a); }
+	SIMD_FUNC floatx8  	masked_pck(uint64 m, float8   s, float8   a)	{ return _mm256_mask_compress_ps(s, m, a); }
+	SIMD_FUNC floatx16 	masked_pck(uint64 m, floatx16 s, floatx16 a)	{ return _mm512_mask_compress_ps(s, m, a); }
 
-	SIMD_FUNC double2  	masked_pck(int m, double2  s, double2  a)	{ return _mm_mask_compress_pd(s, m, a); }
-	SIMD_FUNC doublex4 	masked_pck(int m, double4  s, double4  a)	{ return _mm256_mask_compress_pd(s, m, a); }
-	SIMD_FUNC doublex8 	masked_pck(int m, double8  s, double8  a)	{ return _mm512_mask_compress_pd(s, m, a); }
+	SIMD_FUNC double2  	masked_pck(uint64 m, double2  s, double2  a)	{ return _mm_mask_compress_pd(s, m, a); }
+	SIMD_FUNC doublex4 	masked_pck(uint64 m, double4  s, double4  a)	{ return _mm256_mask_compress_pd(s, m, a); }
+	SIMD_FUNC doublex8 	masked_pck(uint64 m, double8  s, double8  a)	{ return _mm512_mask_compress_pd(s, m, a); }
 	
 #elif defined __AVX2__
 
@@ -1596,7 +1928,7 @@ namespace simd {
 
 #else
 
-	inline vec<int8, 8> _make_indices(uint8 i) {
+	inline int8x8 _make_indices(uint8 i) {
 		static const uint32 table[256] = {
 			0x00000000,0x00000000,0x00000001,0x00000010,0x00000002,0x00000020,0x00000021,0x00000210,	0x00000003,0x00000030,0x00000031,0x00000310,0x00000032,0x00000320,0x00000321,0x00003210,
 			0x00000004,0x00000040,0x00000041,0x00000410,0x00000042,0x00000420,0x00000421,0x00004210,	0x00000043,0x00000430,0x00000431,0x00004310,0x00000432,0x00004320,0x00004321,0x00043210,
@@ -1633,183 +1965,6 @@ namespace simd {
 	template<typename M, typename S, typename A>	SIMD_FUNC auto masked_pck(M m, S s, A a) {
 		return select(bits(count_bits(bit_mask(m))), masked_pck(m, a), s);
 	}
-
-	template<typename E, int N, bool FLT = is_float<E>> struct vmodifier_helper {
-		typedef sint_for_t<E>		I;
-		auto static neg(vec<E, N> t, vec<I,N> n)					{ return as<E>(as<I>(t) ^ n); }
-		auto static abs(vec<E, N> t, vec<I,N> a)					{ return as<E>(as<I>(t) & ~a); }
-		auto static neg_abs(vec<E, N> t, vec<I,N> n, vec<I,N> a)	{ return as<E>((as<I>(t) & ~a) ^ n); }
-		auto static force_neg(vec<E, N> t, vec<I,N> n)				{ return as<E>(as<I>(t) | n); }
-	};
-
-	template<typename E, int N> struct vmodifier_helper<E, N, false> {
-		typedef sint_for_t<E>		I;
-		static vec<E,N> common(vec<E, N> t, vec<I,N> s) {
-			auto m  = s < zero;//> (sizeof(I) * 8 - 1);
-			return as<E>((as<I>(t) ^ m) - m);
-		}
-		auto static neg(vec<E, N> t, vec<I,N> n)					{ return common(t, n); }
-		auto static abs(vec<E, N> t, vec<I,N> a)					{ return common(t, as<I>(t) & a); }
-		auto static neg_abs(vec<E, N> t, vec<I,N> n, vec<I,N> a)	{ return common(t, (as<I>(t) & a) ^ n); }
-		auto static force_neg(vec<E, N> t, vec<I,N> n)				{ return common(t, as<I>(t) & n); }
-	};
-
-	// dispatch on combination of ABS & NEG:
-	// signs = (signs & ~ABS) ^ NEG
-	// ABS = 0:		signs = signs ^ NEG
-	// NEG = 0:		signs = signs & ~ABS
-	// NEG = ABS:	signs = signs | NEG
-
-	template<int ABS, int NEG> struct modifier_helper {
-		template<typename E, int N> auto static f(vec<E, N> t) {
-			return vmodifier_helper<E, N>::neg_abs(t,
-				make_mask<sint_for_t<E>, N, NEG>(),
-				make_mask<sint_for_t<E>, N, ABS>()
-			);
-		}
-	};
-	// |x|	abs
-	template<int ABS> struct modifier_helper<ABS, 0> {
-		template<typename E, int N> auto static f(vec<E, N> t) {
-			return vmodifier_helper<E, N>::abs(t, make_sign_mask<sint_for_t<E>, N, ABS>());
-		}
-	};
-	// -x	negate
-	template<int NEG> struct modifier_helper<0, NEG> {
-		template<typename E, int N> auto static f(vec<E, N> t) {
-			return vmodifier_helper<E, N>::neg(t, make_sign_mask<sint_for_t<E>, N, NEG>());
-		}
-	};
-	// -|x|	make negative
-	template<int NEG> struct modifier_helper<NEG, NEG> {
-		template<typename E, int N> auto static f(vec<E, N> t) {
-			return vmodifier_helper<E, N>::force_neg(t, make_sign_mask<sint_for_t<E>, N, NEG>());
-		}
-	};
-	// nothing
-	template<> struct modifier_helper<0, 0> {
-		template<typename E, int N> constexpr auto static f(vec<E, N> t) { return t; }
-	};
-
-	static struct masked_s {
-		template<typename M, typename T> struct vholder {
-			typedef noref_cv_t<T>		T0;
-			typedef element_type<T0>	E;
-			typedef sint_for_t<E>		I;
-			static const int N =  num_elements_v<T0>;
-			M	m;
-			T	t;
-			constexpr vholder(M &&m, T &&t) : m(forward<M>(m)), t(forward<T>(t)) {}
-			auto		operator-() const 		{ return vmodifier_helper<E, N>::neg(t, make_sign_mask<I, N>(m)); }
-			friend auto abs(const vholder &h) 	{ return vmodifier_helper<E, N>::abs(h.t, make_sign_mask<I, N>(h.m)); }
-			friend auto pack(const vholder &h, const T0 &s = zero) 	{ return masked_pck(h.m, s, h.t); }
-
-			T		operator--() 	const		{ return t = *this - one; }
-			T		operator++() 	const		{ return t = *this + one; }
-			T0		operator--(int) const		{ T0 t0 = t; operator--(); return t0; }
-			T0		operator++(int) const		{ T0 t0 = t; operator++(); return t0; }
-
-			template<typename B> auto	operator+(B b) const { return masked_add(m, t, t, b); }
-			template<typename B> auto	operator-(B b) const { return masked_sub(m, t, t, b); }
-			template<typename B> auto	operator*(B b) const { return masked_mul(m, t, t, b); }
-			template<typename B> auto	operator/(B b) const { return masked_div(m, t, t, b); }
-
-			template<typename B> auto	operator+=(B b) const { return t = *this + b; }
-			template<typename B> auto	operator-=(B b) const { return t = *this - b; }
-			template<typename B> auto	operator*=(B b) const { return t = *this * b; }
-			template<typename B> auto	operator/=(B b) const { return t = *this / b; }
-		};
-
-		template<int ABS, int NEG, typename T> struct modified {
-			typedef noref_cv_t<T>		T0;
-			typedef element_type<T0>	E;
-			typedef sint_for_t<E>		I;
-			static const int N =  num_elements_v<T0>;
-			T	t;
-			constexpr modified(T t) : t(t) {}
-			constexpr operator vec<E,N>() const { return modifier_helper<ABS, NEG>::template f<E, N>(t); }
-			constexpr modified<ABS, (NEG ^ ((1<<N) - 1)) | ABS, T>	operator-() const 		{ return t; }
-			friend constexpr modified<(1 << N)-1, NEG & ~ABS, T> 	abs(const modified &h) 	{ return h.t; }
-		};
-
-		template<int M, typename T> struct holder {
-			typedef noref_cv_t<T>		T0;
-			typedef element_type<T0>	E;
-			typedef sint_for_t<E>		I;
-			static const int N =  num_elements_v<T0>;
-			static constexpr int pack_f(int i) { return nth_set_index(M|(~0u << N), i); }
-			T	t;
-			constexpr holder(T &&t) : t(forward<T>(t)) {}
-
-			constexpr modified<0, M, T>			operator-() const 			{ return t; }
-			friend constexpr modified<M, 0, T> 	abs(const holder &h) 		{ return h.t; }
-//			friend auto pack(const holder &h, vec<E,N> s = zero)	{ return swizzle(meta::apply<meta::make_value_sequence<N>, pack_f>(), h.t, s); }
-
-			T		operator--() 	const	{ return t = *this - one; }
-			T		operator++() 	const	{ return t = *this + one; }
-			T0		operator--(int) const	{ T0 t0 = t; operator--(); return t0; }
-			T0		operator++(int) const	{ T0 t0 = t; operator++(); return t0; }
-
-
-			template<typename B> enable_if_t<!is_vec<B>, T0>	operator+(B b) const { return masked_add(M, t, t, b); }
-			template<typename B> enable_if_t<!is_vec<B>, T0>	operator-(B b) const { return masked_sub(M, t, t, b); }
-			template<typename B> enable_if_t<!is_vec<B>, T0>	operator*(B b) const { return masked_mul(M, t, t, b); }
-			template<typename B> enable_if_t<!is_vec<B>, T0>	operator/(B b) const { return masked_div(M, t, t, b); }
-
-			template<typename B> enable_if_t<is_vec<B> && (bits(num_elements_v<B>) & M), T0>	operator+(B b) const { return masked_add(M, t, t, grow<N>(b)); }
-			template<typename B> enable_if_t<is_vec<B> && (bits(num_elements_v<B>) & M), T0>	operator-(B b) const { return masked_sub(M, t, t, grow<N>(b)); }
-			template<typename B> enable_if_t<is_vec<B> && (bits(num_elements_v<B>) & M), T0>	operator*(B b) const { return masked_mul(M, t, t, grow<N>(b)); }
-			template<typename B> enable_if_t<is_vec<B> && (bits(num_elements_v<B>) & M), T0>	operator/(B b) const { return masked_div(M, t, t, grow<N>(b)); }
-
-			template<typename B> auto	operator+=(B b) const { return t = *this + b; }
-			template<typename B> auto	operator-=(B b) const { return t = *this - b; }
-			template<typename B> auto	operator*=(B b) const { return t = *this * b; }
-			template<typename B> auto	operator/=(B b) const { return t = *this / b; }
-		};
-
-		template<int M, int ABS, int NEG, typename T> struct holder<M, modified<ABS, NEG, T>> {
-			typedef noref_cv_t<T>		T0;
-			typedef element_type<T0>	E;
-			typedef sint_for_t<E>		I;
-			static const int N =  num_elements_v<T0>;
-			T	t;
-			constexpr holder(const modified<ABS, NEG, T> &t) : t(t.t) {}
-			auto	get() const { return modifier_helper<ABS, NEG>::template f<E, N>(t); }
-
-			modified<ABS, (NEG & ~ABS) ^ M, T>		operator-() const 		{ return t; }
-			friend modified<ABS | M, NEG & ~ABS, T> abs(const holder &h) 	{ return h.t; }
-
-			template<typename B> auto	operator+(B b) const { auto t0 = get(); return select(make_mask<I, N, M>(), t0 + b, t0); }
-			template<typename B> auto	operator-(B b) const { auto t0 = get(); return select(make_mask<I, N, M>(), t0 - b, t0); }
-			template<typename B> auto	operator*(B b) const { auto t0 = get(); return select(make_mask<I, N, M>(), t0 * b, t0); }
-			template<typename B> auto	operator/(B b) const { auto t0 = get(); return select(make_mask<I, N, M>(), t0 / b, t0); }
-		};
-
-		template<int M> struct modifier {
-			template<typename T> constexpr holder<M, T>	operator()(T&& t) const { return forward<T>(t); }
-		};
-		modifier< 1>	x;
-		modifier< 2>	y;
-		modifier< 3>	xy;
-		modifier< 4>	z;
-		modifier< 5>	xz;
-		modifier< 6>	yz;
-		modifier< 7>	xyz;
-		modifier< 8>	w;
-		modifier< 9>	xw;
-		modifier<10>	yw;
-		modifier<11>	xyw;
-		modifier<12>	zw;
-		modifier<13>	xzw;
-		modifier<14>	yzw;
-		modifier<15>	xyzw;
-
-		template<typename M, typename T>	constexpr vholder<M, T>	operator()(M&& m, T&& t)			const { return {forward<M>(m), forward<T>(t)}; }
-		template<int M, typename T>			constexpr holder<M, T>	operator()(constant_int<M>, T&& t)	const { return forward<T>(t); }
-	} masked;
-
-	template<int M, typename T>			constexpr auto	maskedi(T&& t)			{ return masked_s::holder<M, T>(forward<T>(t)); }
-	template<typename M, typename T>	constexpr auto	set_sign(T&& t, M&& m)	{ return vmodifier_helper<element_type<T>, num_elements_v<T>>::force_neg(t, m); }
 
 	//-----------------------------------------------------------------------------
 	// saturated ops
@@ -1856,38 +2011,38 @@ namespace simd {
 	SIMD_FUNC uint16x32	saturated_sub(uint16x32	a, uint16x32	b) 	{ return _mm512_subs_epu16(a, b); }
 	SIMD_FUNC uint8x64	saturated_sub(uint8x64	a, uint8x64		b) 	{ return _mm512_subs_epu8 (a, b); }
 
-	SIMD_FUNC int16x32	saturated_add(int m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm_mask_adds_epi16	(s, m, a, b); }
-	SIMD_FUNC int16x32	saturated_add(int m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm256_mask_adds_epi16	(s, m, a, b); }
-	SIMD_FUNC int18x32	saturated_add(int m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm512_mask_adds_epi16	(s, m, a, b); }
-	SIMD_FUNC int8x64	saturated_add(int m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm_mask_adds_epi8		(s, m, a, b); }
-	SIMD_FUNC int8x64	saturated_add(int m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm256_mask_adds_epi8	(s, m, a, b); }
-	SIMD_FUNC int8x64	saturated_add(int m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm512_mask_adds_epi8	(s, m, a, b); }
-	SIMD_FUNC uint16x32	saturated_add(int m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm_mask_adds_epu16	(s, m, a, b); }
-	SIMD_FUNC uint16x32	saturated_add(int m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm256_mask_adds_epu16	(s, m, a, b); }
-	SIMD_FUNC uint16x32	saturated_add(int m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm512_mask_adds_epu16	(s, m, a, b); }
-	SIMD_FUNC uint8x64	saturated_add(int m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm_mask_adds_epu8		(s, m, a, b); }
-	SIMD_FUNC uint8x64	saturated_add(int m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm256_mask_adds_epu8	(s, m, a, b); }
-	SIMD_FUNC uint8x64	saturated_add(int m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm512_mask_adds_epu8	(s, m, a, b); }
-	SIMD_FUNC int16x32	saturated_sub(int m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm_mask_subs_epi16	(s, m, a, b); }
-	SIMD_FUNC int16x32	saturated_sub(int m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm256_mask_subs_epi16	(s, m, a, b); }
-	SIMD_FUNC int18x32	saturated_sub(int m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm512_mask_subs_epi16	(s, m, a, b); }
-	SIMD_FUNC int8x64	saturated_sub(int m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm_mask_subs_epi8		(s, m, a, b); }
-	SIMD_FUNC int8x64	saturated_sub(int m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm256_mask_subs_epi8	(s, m, a, b); }
-	SIMD_FUNC int8x64	saturated_sub(int m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm512_mask_subs_epi8	(s, m, a, b); }
-	SIMD_FUNC uint16x32	saturated_sub(int m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm_mask_subs_epu16	(s, m, a, b); }
-	SIMD_FUNC uint16x32	saturated_sub(int m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm256_mask_subs_epu16	(s, m, a, b); }
-	SIMD_FUNC uint16x32	saturated_sub(int m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm512_mask_subs_epu16	(s, m, a, b); }
-	SIMD_FUNC uint8x64	saturated_sub(int m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm_mask_subs_epu8		(s, m, a, b); }
-	SIMD_FUNC uint8x64	saturated_sub(int m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm256_mask_subs_epu8	(s, m, a, b); }
-	SIMD_FUNC uint8x64	saturated_sub(int m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm512_mask_subs_epu8	(s, m, a, b); }
+	SIMD_FUNC int16x32	masked_saturated_add(uint64 m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm_mask_adds_epi16	(s, m, a, b); }
+	SIMD_FUNC int16x32	masked_saturated_add(uint64 m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm256_mask_adds_epi16	(s, m, a, b); }
+	SIMD_FUNC int18x32	masked_saturated_add(uint64 m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm512_mask_adds_epi16	(s, m, a, b); }
+	SIMD_FUNC int8x64	masked_saturated_add(uint64 m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm_mask_adds_epi8		(s, m, a, b); }
+	SIMD_FUNC int8x64	masked_saturated_add(uint64 m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm256_mask_adds_epi8	(s, m, a, b); }
+	SIMD_FUNC int8x64	masked_saturated_add(uint64 m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm512_mask_adds_epi8	(s, m, a, b); }
+	SIMD_FUNC uint16x32	masked_saturated_add(uint64 m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm_mask_adds_epu16	(s, m, a, b); }
+	SIMD_FUNC uint16x32	masked_saturated_add(uint64 m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm256_mask_adds_epu16	(s, m, a, b); }
+	SIMD_FUNC uint16x32	masked_saturated_add(uint64 m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm512_mask_adds_epu16	(s, m, a, b); }
+	SIMD_FUNC uint8x64	masked_saturated_add(uint64 m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm_mask_adds_epu8		(s, m, a, b); }
+	SIMD_FUNC uint8x64	masked_saturated_add(uint64 m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm256_mask_adds_epu8	(s, m, a, b); }
+	SIMD_FUNC uint8x64	masked_saturated_add(uint64 m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm512_mask_adds_epu8	(s, m, a, b); }
+	SIMD_FUNC int16x32	masked_saturated_sub(uint64 m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm_mask_subs_epi16	(s, m, a, b); }
+	SIMD_FUNC int16x32	masked_saturated_sub(uint64 m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm256_mask_subs_epi16	(s, m, a, b); }
+	SIMD_FUNC int18x32	masked_saturated_sub(uint64 m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm512_mask_subs_epi16	(s, m, a, b); }
+	SIMD_FUNC int8x64	masked_saturated_sub(uint64 m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm_mask_subs_epi8		(s, m, a, b); }
+	SIMD_FUNC int8x64	masked_saturated_sub(uint64 m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm256_mask_subs_epi8	(s, m, a, b); }
+	SIMD_FUNC int8x64	masked_saturated_sub(uint64 m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm512_mask_subs_epi8	(s, m, a, b); }
+	SIMD_FUNC uint16x32	masked_saturated_sub(uint64 m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm_mask_subs_epu16	(s, m, a, b); }
+	SIMD_FUNC uint16x32	masked_saturated_sub(uint64 m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm256_mask_subs_epu16	(s, m, a, b); }
+	SIMD_FUNC uint16x32	masked_saturated_sub(uint64 m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm512_mask_subs_epu16	(s, m, a, b); }
+	SIMD_FUNC uint8x64	masked_saturated_sub(uint64 m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm_mask_subs_epu8		(s, m, a, b); }
+	SIMD_FUNC uint8x64	masked_saturated_sub(uint64 m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm256_mask_subs_epu8	(s, m, a, b); }
+	SIMD_FUNC uint8x64	masked_saturated_sub(uint64 m, int8x16  s, int8x16  a, int8x16  b) 	{ return _mm512_mask_subs_epu8	(s, m, a, b); }
 #endif
 #endif
 #endif
 #elif defined __ARM_NEON__
 #endif
 
-template<typename A, typename B> 	SIMD_FUNC auto saturated_add(A a, B b);
-template<typename A, typename B> 	SIMD_FUNC auto saturated_sub(A a, B b);
+	template<typename A, typename B> 	SIMD_FUNC auto saturated_add(A a, B b);
+	template<typename A, typename B> 	SIMD_FUNC auto saturated_sub(A a, B b);
 
 #if defined __ARM_NEON__ || defined __SSE4_1__
 
@@ -1914,20 +2069,312 @@ template<typename A, typename B> 	SIMD_FUNC auto saturated_sub(A a, B b);
 		return to_sat<E>(fullmul(a, b));
 	}
 
-	template<typename E, int N, typename M> SIMD_FUNC vec<E, N> saturated_add(M m, vec<E,N> s, vec<E,N> a, vec<E,N> b)	{ return select(m, saturated_add(a, b), s); }
-	template<typename E, int N, typename M> SIMD_FUNC vec<E, N> saturated_sub(M m, vec<E,N> s, vec<E,N> a, vec<E,N> b)	{ return select(m, saturated_sub(a, b), s); }
-	template<typename E, int N, typename M> SIMD_FUNC vec<E, N> saturated_mul(M m, vec<E,N> s, vec<E,N> a, vec<E,N> b)	{ return select(m, saturated_mul(a, b), s); }
+	template<typename E, int N, typename M> SIMD_FUNC vec<E, N> masked_saturated_add(M m, vec<E,N> s, vec<E,N> a, vec<E,N> b)	{ return select(m, saturated_add(a, b), s); }
+	template<typename E, int N, typename M> SIMD_FUNC vec<E, N> masked_saturated_sub(M m, vec<E,N> s, vec<E,N> a, vec<E,N> b)	{ return select(m, saturated_sub(a, b), s); }
+	template<typename E, int N, typename M> SIMD_FUNC vec<E, N> masked_saturated_mul(M m, vec<E,N> s, vec<E,N> a, vec<E,N> b)	{ return select(m, saturated_mul(a, b), s); }
 
-	template<typename M, typename S, typename A, typename B> SIMD_FUNC auto saturated_add(M m, S s, A a, B b)	{ return saturated_add<element_type<S>, num_elements_v<S>>(m, s, a, b); }
-	template<typename M, typename S, typename A, typename B> SIMD_FUNC auto saturated_sub(M m, S s, A a, B b)	{ return saturated_sub<element_type<S>, num_elements_v<S>>(m, s, a, b); }
-	template<typename M, typename S, typename A, typename B> SIMD_FUNC auto saturated_mul(M m, S s, A a, B b)	{ return saturated_mul<element_type<S>, num_elements_v<S>>(m, s, a, b); }
+	template<typename M, typename S, typename A, typename B> SIMD_FUNC auto masked_saturated_add(M m, S s, A a, B b)	{ return masked_saturated_add<element_type<S>, num_elements_v<S>>(m, s, a, b); }
+	template<typename M, typename S, typename A, typename B> SIMD_FUNC auto masked_saturated_sub(M m, S s, A a, B b)	{ return masked_saturated_sub<element_type<S>, num_elements_v<S>>(m, s, a, b); }
+	template<typename M, typename S, typename A, typename B> SIMD_FUNC auto masked_saturated_mul(M m, S s, A a, B b)	{ return masked_saturated_mul<element_type<S>, num_elements_v<S>>(m, s, a, b); }
 
-	static struct saturated_s {
-		template<typename T> struct holder0 {
+	//-----------------------------------------------------------------------------
+	// fixed mask ops
+	//-----------------------------------------------------------------------------
+
+	template<int M, int N> struct fixed_s0	{
+		template<typename V, typename B> static auto add(const V& s, const V &a, const B &b)				{ return masked_add(M, s, a, b); }
+		template<typename V, typename B> static auto sub(const V& s, const V &a, const B &b)				{ return masked_add(M, s, a, b); }
+		template<typename V, typename B> static auto mul(const V& s, const V &a, const B &b)				{ return masked_add(M, s, a, b); }
+		template<typename V, typename B> static auto div(const V& s, const V &a, const B &b)				{ return masked_add(M, s, a, b); }
+		template<typename V> static void store(const V& t, element_type<V>* p)								{ masked_store(M, t, p); }
+		template<int S, typename V, typename I>	static void scatter(const V& t, element_type<V>* p, I i)	{ masked_scatter<S>(M, t, p, i); }
+		template<int S, typename V, typename I>	static auto gather(const V& t, element_type<V>* p, I i)		{ return masked_gather<S>(M, zero, t, p, i); }
+	};
+	template<int M> struct fixed_s0<M, M>	{
+		template<typename V> static auto add(const V& s, const V &a, const V &b)							{ return a + b; }
+		template<typename V> static auto sub(const V& s, const V &a, const V &b)							{ return a - b; }
+		template<typename V> static auto mul(const V& s, const V &a, const V &b)							{ return a * b; }
+		template<typename V> static auto div(const V& s, const V &a, const V &b)							{ return a / b; }
+		template<typename V> static void store(const V& t, element_type<V>* p)								{ store_vec(t, p); }
+		template<int S, typename V, typename I> static void scatter(const V& t, element_type<V>* p, I i)	{ scatter<S>(t, p, i); }
+		template<int S, typename V, typename I> static auto gather(const V& t, element_type<V>* p, I i)		{ return gather<S>(t, p, i); }
+	};
+	
+	template<typename V, int M, typename=void> struct fixed_s1 : fixed_s0<M, (1 << num_elements_v<V>) - 1> {};
+
+	template<typename V> struct fixed_s1<V, 0> {
+		template<typename B> static auto add(const V& s, const V&, const B&)	{ return s; }
+		template<typename B> static auto sub(const V& s, const V&, const B&)	{ return s; }
+		template<typename B> static auto mul(const V& s, const V&, const B&)	{ return s; }
+		template<typename B> static auto div(const V& s, const V&, const B&)	{ return s; }
+		static void store(const V& t, element_type<V>* p)	{}
+		template<int S, typename I> static void scatter(const V& t, element_type<V>* p, I i)	{}
+		template<int S, typename I> static auto gather(const V& t, element_type<V>* p, I i)	{ return vec<element_type<V>, num_elements_v<V>>{}; }
+	};
+
+	template<typename V, int M> struct fixed_s1<V, M, enable_if_t<M !=0 && (sizeof(V) * 8 > max_register_bits)>> {
+		static const int N = num_elements_v<V>, N0 = pow2_ceil<N> / 2;
+		typedef element_type<V>	E;
+
+		static const int M0 = M & ((1 << N0) - 1), M1 = M >> N0;
+		typedef vec<E, N0>		V0;
+		typedef vec<E, N - N0>	V1;
+
+		static auto add(const V& s, const V &a, const V &b)	{ return concat(fixed_s1<V0, M0>::add(shrink<N0>(s), shrink<N0>(a), shrink<N0>(b)), fixed_s1<V1, M1>::add(shrink_top<N - N0>(s), shrink_top<N - N0>(a), shrink_top<N - N0>(b))); }
+		static auto sub(const V& s, const V &a, const V &b)	{ return concat(fixed_s1<V0, M0>::sub(shrink<N0>(s), shrink<N0>(a), shrink<N0>(b)), fixed_s1<V1, M1>::sub(shrink_top<N - N0>(s), shrink_top<N - N0>(a), shrink_top<N - N0>(b))); }
+		static auto mul(const V& s, const V &a, const V &b)	{ return concat(fixed_s1<V0, M0>::mul(shrink<N0>(s), shrink<N0>(a), shrink<N0>(b)), fixed_s1<V1, M1>::mul(shrink_top<N - N0>(s), shrink_top<N - N0>(a), shrink_top<N - N0>(b))); }
+		static auto div(const V& s, const V &a, const V &b)	{ return concat(fixed_s1<V0, M0>::div(shrink<N0>(s), shrink<N0>(a), shrink<N0>(b)), fixed_s1<V1, M1>::div(shrink_top<N - N0>(s), shrink_top<N - N0>(a), shrink_top<N - N0>(b))); }
+
+		static auto add(const V& s, const V &a, E b)		{ return concat(fixed_s1<V0, M0>::add(shrink<N0>(s), shrink<N0>(a), b), fixed_s1<V1, M1>::add(shrink_top<N - N0>(s), shrink_top<N - N0>(a), b)); }
+		static auto sub(const V& s, const V &a, E b)		{ return concat(fixed_s1<V0, M0>::sub(shrink<N0>(s), shrink<N0>(a), b), fixed_s1<V1, M1>::sub(shrink_top<N - N0>(s), shrink_top<N - N0>(a), b)); }
+		static auto mul(const V& s, const V &a, E b)		{ return concat(fixed_s1<V0, M0>::mul(shrink<N0>(s), shrink<N0>(a), b), fixed_s1<V1, M1>::mul(shrink_top<N - N0>(s), shrink_top<N - N0>(a), b)); }
+		static auto div(const V& s, const V &a, E b)		{ return concat(fixed_s1<V0, M0>::div(shrink<N0>(s), shrink<N0>(a), b), fixed_s1<V1, M1>::div(shrink_top<N - N0>(s), shrink_top<N - N0>(a), b)); }
+
+		static void store(const V& v, E* p)					{ fixed_s1<V0, M0>::store(shrink<N0>(v), p); fixed_s1<V1, M1>::store(shrink_top<N - N0>(v), p + N0); }
+		template<int S, typename I> static void scatter(const V& v, E* p, I i)		{ fixed_s1<V0, M0>::scatter<S>(shrink<N0>(v), p, shrink<N0>(i)); fixed_s1<V1, M1>::scatter<S>(shrink_top<N - N0>(v), pshrink_top<N - N0>(i)); }
+		template<int S, typename I> static void gather(const V& v, const E* p, I i)	{ return concat(fixed_s1<V0, M0>::gather<S>(shrink<N0>(v), p, shrink<N0>(i)), fixed_s1<V1, M1>::gather<S>(shrink_top<N - N0>(v), p, shrink_top<N - N0>(i)); }
+	};
+
+	template<int M, typename V, typename B> force_inline auto masked_add(const V& s, const V &a, const B &b)				{ return fixed_s1<V,M>::add(s, a, b); }
+	template<int M, typename V, typename B> force_inline auto masked_sub(const V& s, const V &a, const B &b)				{ return fixed_s1<V,M>::sub(s, a, b); }
+	template<int M, typename V, typename B> force_inline auto masked_mul(const V& s, const V &a, const B &b)				{ return fixed_s1<V,M>::mul(s, a, b); }
+	template<int M, typename V, typename B> force_inline auto masked_div(const V& s, const V &a, const B &b)				{ return fixed_s1<V,M>::div(s, a, b); }
+	template<int M, typename V>				force_inline void masked_store(const V& v, element_type<V>* p)					{ fixed_s1<V, M>::store(v, p); }
+	template<int M, int S, typename V, typename I> force_inline void masked_scatter(const V& v, element_type<V>* p, I indices)		{ fixed_s1<V, M>::scatter<S>(v, p, indices); }
+	template<int M, int S, typename V, typename I> force_inline auto masked_gather(const V& v, const element_type<V>* p, I indices)	{ return fixed_s1<V, M>::gather<S>(v, p, indices); }
+
+	//-----------------------------------------------------------------------------
+	// masked_s
+	//-----------------------------------------------------------------------------
+
+	template<typename E, int N, bool FLT = is_float<E>> struct vmodifier_helper {
+		typedef bool_for_t<E>		I;
+		auto static neg_abs_clr(vec<E, N> t, vec<I,N> n, vec<I,N> a, vec<I,N> c) {
+			return as<E>((as<I>(t) & ~(a | c)) ^ n);
+		}
+		auto static neg_abs(vec<E, N> t, vec<I,N> n, vec<I,N> a)	{ return as<E>((as<I>(t) & ~a) ^ n); }
+		auto static neg(vec<E, N> t, vec<I,N> n)					{ return as<E>(as<I>(t) ^ n); }
+		auto static abs(vec<E, N> t, vec<I,N> a)					{ return as<E>(as<I>(t) & ~a); }
+		auto static force_neg(vec<E, N> t, vec<I,N> n)				{ return as<E>(as<I>(t) | n); }
+		auto static clear(vec<E, N> t, vec<I,N> m)					{ return as<E>(as<I>(t) & ~m); }
+	};
+
+	template<typename E, int N> struct vmodifier_helper<E, N, false> {
+		typedef bool_for_t<E>		I;
+		static vec<E,N> common(vec<E, N> t, vec<I,N> s) {
+			auto m  = s < zero;
+			return as<E>((as<I>(t) ^ m) - m);
+		}
+		auto static neg_abs_clr(vec<E, N> t, vec<I,N> n, vec<I,N> a, vec<I,N> c) {
+			auto m  = ((as<I>(t) & a) ^ n) < zero;
+			return as<E>(((as<I>(t) ^ m) - m) & ~c);
+		}
+		auto static neg_abs(vec<E, N> t, vec<I,N> n, vec<I,N> a)	{ return common(t, (as<I>(t) & a) ^ n); }
+		auto static neg(vec<E, N> t, vec<I,N> n)					{ return common(t, n); }
+		auto static abs(vec<E, N> t, vec<I,N> a)					{ return common(t, as<I>(t) & a); }
+		auto static force_neg(vec<E, N> t, vec<I,N> n)				{ return common(t, as<I>(t) & n); }
+		auto static clear(vec<E, N> t, vec<I,N> m)					{ return as<E>(as<I>(t) & ~m); }
+	};
+
+	// dispatch on combination of ABS & NE:
+	// signs = (signs & ~ABS) ^ NEG
+	// ABS = 0:		signs = signs ^ NEG
+	// NEG = 0:		signs = signs & ~ABS
+	// NEG = ABS:	signs = signs | NEG
+
+	template<int ABS, int NEG, int CLR> struct modifier_helper {
+		template<typename E, int N> auto static f(vec<E, N> t) {
+			return vmodifier_helper<E, N>::neg_abs_clr(t,
+				make_sign_mask<bool_for_t<E>, N, NEG>(),
+				make_sign_mask<sint_for_t<E>, N, ABS>(),
+				make_mask<sint_for_t<E>, N, CLR>()
+			);
+		}
+	};
+
+	template<int ABS, int NEG> struct modifier_helper<ABS, NEG, 0> {
+		template<typename E, int N> auto static f(vec<E, N> t) {
+			return vmodifier_helper<E, N>::neg_abs(t,
+				make_sign_mask<sint_for_t<E>, N, NEG>(),
+				make_sign_mask<sint_for_t<E>, N, ABS>()
+			);
+		}
+	};
+	// |x|	abs
+	template<int ABS> struct modifier_helper<ABS, 0, 0> {
+		template<typename E, int N> auto static f(vec<E, N> t) {
+			return vmodifier_helper<E, N>::abs(t, make_sign_mask<sint_for_t<E>, N, ABS>());
+		}
+	};
+	// -x	negate
+	template<int NEG> struct modifier_helper<0, NEG, 0> {
+		template<typename E, int N> auto static f(vec<E, N> t) {
+			return vmodifier_helper<E, N>::neg(t, make_sign_mask<sint_for_t<E>, N, NEG>());
+		}
+	};
+	// -|x|	make negative
+	template<int NEG> struct modifier_helper<NEG, NEG, 0> {
+		template<typename E, int N> auto static f(vec<E, N> t) {
+			return vmodifier_helper<E, N>::force_neg(t, make_sign_mask<sint_for_t<E>, N, NEG>());
+		}
+	};
+	// clear
+	template<int CLR> struct modifier_helper<0, 0, CLR> {
+		template<typename E, int N> auto static f(vec<E, N> t) {
+			return vmodifier_helper<E, N>::clear(t, make_mask<sint_for_t<E>, N, CLR>());
+		}
+	};
+	// nothing
+	template<> struct modifier_helper<0, 0, 0> {
+		template<typename E, int N> constexpr auto static f(vec<E, N> t) { return t; }
+	};
+
+	static struct masked_s {
+		template<typename M, typename T> struct vholder {
 			typedef noref_cv_t<T>		T0;
 			typedef element_type<T0>	E;
 			typedef sint_for_t<E>		I;
 			static const int N =  num_elements_v<T0>;
+			M	m;
+			T	t;
+			constexpr vholder(M &&m, T &&t) : m(forward<M>(m)), t(forward<T>(t)) {}
+			auto		operator-() const 		{ return vmodifier_helper<E, N>::neg(t, make_sign_mask<I, N>(m)); }
+			friend auto abs(const vholder &h) 	{ return vmodifier_helper<E, N>::abs(h.t, make_sign_mask<I, N>(h.m)); }
+			friend auto clear(const vholder &h) { return vmodifier_helper<E, N>::clear(h.t, make_mask<I, N>(h.m)); }
+			friend auto pack(const vholder &h, const T0 &s = zero) 	{ return masked_pck(h.m, s, h.t); }
+			friend void load(vholder &b, const E *p) 	{ masked_load(h.m, h.t, p); }
+			friend void store(const vholder &h, E *p) 	{ masked_store(h.m, h.t, p); }
+			template<int S, typename I> friend void	scatter(const vholder &h, void *p, I indices)	{ return masked_scatter<S>(h.m, h.t, p, indices); }
+
+			T		operator--() 	const		{ return t = *this - one; }
+			T		operator++() 	const		{ return t = *this + one; }
+			T0		operator--(int) const		{ T0 t0 = t; operator--(); return t0; }
+			T0		operator++(int) const		{ T0 t0 = t; operator++(); return t0; }
+
+			template<typename B> auto	operator+(B b) const { return masked_add(m, t, t, b); }
+			template<typename B> auto	operator-(B b) const { return masked_sub(m, t, t, b); }
+			template<typename B> auto	operator*(B b) const { return masked_mul(m, t, t, b); }
+			template<typename B> auto	operator/(B b) const { return masked_div(m, t, t, b); }
+
+			template<typename B> auto	operator+=(B b) const { return t = *this + b; }
+			template<typename B> auto	operator-=(B b) const { return t = *this - b; }
+			template<typename B> auto	operator*=(B b) const { return t = *this * b; }
+			template<typename B> auto	operator/=(B b) const { return t = *this / b; }
+			
+			template<typename B> auto	operator=(B b)	const { return t = select(m, b, t); }
+		};
+
+		template<int ABS, int NEG, int CLR, typename T> struct modified {
+			typedef noref_cv_t<T>		T0;
+			typedef element_type<T0>	E;
+			typedef sint_for_t<E>		I;
+			static const int N =  num_elements_v<T0>;
+			T	t;
+			constexpr modified(T t) : t(t) {}
+			constexpr operator vec<E,N>() const { return modifier_helper<ABS, NEG, CLR>::template f<E, N>(t); }
+			constexpr modified<ABS, (NEG ^ ((1<<N) - 1)) | ABS, CLR, T>	operator-() const 			{ return t; }
+			friend constexpr modified<(1 << N)-1, NEG & ~ABS, CLR, T> 	abs(const modified &h) 		{ return h.t; }
+			friend constexpr modified<ABS, NEG, (1<<N) - 1, T> 			clear(const modified &h)	{ return h.t; }
+		};
+
+		template<int M, typename T> struct holder {
+			typedef noref_cv_t<T>		T0;
+			typedef element_type<T0>	E;
+			typedef sint_for_t<E>		I;
+			static const int N =  num_elements_v<T0>;
+			static constexpr int pack_f(int i) { return nth_set_index(M|(~0u << N), i); }
+			T	t;
+			constexpr holder(T &&t) : t(forward<T>(t)) {}
+
+			constexpr modified<0, M, 0, T>			operator-() const 			{ return t; }
+			friend constexpr modified<M, 0, 0, T> 	abs(const holder &h) 		{ return h.t; }
+			friend constexpr modified<0, 0, M, T> 	clear(const holder &h) 		{ return h.t; }
+//			friend auto pack(const holder &h, vec<E,N> s = zero)	{ return swizzle(meta::apply<meta::make_value_sequence<N>, pack_f>(), h.t, s); }
+			friend void load(holder &t, const E *p);// 	{ load_vec_mask<(t, p); }
+			friend void store(const holder &t, E *p) 	{ masked_store<M>(t.t, p); }
+
+			T		operator--() 	const	{ return t = *this - one; }
+			T		operator++() 	const	{ return t = *this + one; }
+			T0		operator--(int) const	{ T0 t0 = t; operator--(); return t0; }
+			T0		operator++(int) const	{ T0 t0 = t; operator++(); return t0; }
+
+			template<typename B> enable_if_t<!is_vec<B>, T0>	operator+(B b) const { return masked_add<M>(t, t, b); }
+			template<typename B> enable_if_t<!is_vec<B>, T0>	operator-(B b) const { return masked_sub<M>(t, t, b); }
+			template<typename B> enable_if_t<!is_vec<B>, T0>	operator*(B b) const { return masked_mul<M>(t, t, b); }
+			template<typename B> enable_if_t<!is_vec<B>, T0>	operator/(B b) const { return masked_div<M>(t, t, b); }
+
+			template<typename B> enable_if_t<is_vec<B> && (bits(num_elements_v<B>) & M), T0>	operator+(B b) const { return masked_add<M>(t, t, grow<N>(b)); }
+			template<typename B> enable_if_t<is_vec<B> && (bits(num_elements_v<B>) & M), T0>	operator-(B b) const { return masked_sub<M>(t, t, grow<N>(b)); }
+			template<typename B> enable_if_t<is_vec<B> && (bits(num_elements_v<B>) & M), T0>	operator*(B b) const { return masked_mul<M>(t, t, grow<N>(b)); }
+			template<typename B> enable_if_t<is_vec<B> && (bits(num_elements_v<B>) & M), T0>	operator/(B b) const { return masked_div<M>(t, t, grow<N>(b)); }
+
+			template<typename B> auto	operator+=(B b) const { return t = *this + b; }
+			template<typename B> auto	operator-=(B b) const { return t = *this - b; }
+			template<typename B> auto	operator*=(B b) const { return t = *this * b; }
+			template<typename B> auto	operator/=(B b) const { return t = *this / b; }
+
+			template<typename B> auto	operator=(B b)	const { return t = select(M, b, t); }
+		};
+
+		template<int M, int ABS, int NEG, int CLR, typename T> struct holder<M, modified<ABS, NEG, CLR, T>> {
+			typedef noref_cv_t<T>		T0;
+			typedef element_type<T0>	E;
+			typedef sint_for_t<E>		I;
+			static const int N =  num_elements_v<T0>;
+			T	t;
+			constexpr holder(const modified<ABS, NEG, CLR, T> &t) : t(t.t) {}
+			auto	get() const { return modifier_helper<ABS, NEG, CLR>::template f<E, N>(t); }
+
+			constexpr modified<ABS, (NEG & ~ABS) ^ (M & ~CLR), CLR, T>		operator-() const 		{ return t; }
+			friend constexpr modified<ABS | (M & ~CLR), NEG & ~ABS, CLR, T>	abs(const holder &h) 	{ return h.t; }
+			friend constexpr modified<ABS & ~M, NEG & ~M, M, T> 			clear(const holder &h)	{ return h.t; }
+			template<int S, typename I> friend void	scatter(const holder &h, void *p, I indices)	{ return masked_scatter<S,M>(t, p, indices); }
+
+			template<typename B> auto	operator+(B b) const { auto t0 = get(); return select(make_mask<I, N, M>(), t0 + b, t0); }
+			template<typename B> auto	operator-(B b) const { auto t0 = get(); return select(make_mask<I, N, M>(), t0 - b, t0); }
+			template<typename B> auto	operator*(B b) const { auto t0 = get(); return select(make_mask<I, N, M>(), t0 * b, t0); }
+			template<typename B> auto	operator/(B b) const { auto t0 = get(); return select(make_mask<I, N, M>(), t0 / b, t0); }
+		};
+
+		template<int M> struct modifier {
+			template<typename T> constexpr holder<M, T>	operator()(T&& t)		const { return forward<T>(t); }
+		};
+		modifier< 1>	x;
+		modifier< 2>	y;
+		modifier< 3>	xy;
+		modifier< 4>	z;
+		modifier< 5>	xz;
+		modifier< 6>	yz;
+		modifier< 7>	xyz;
+		modifier< 8>	w;
+		modifier< 9>	xw;
+		modifier<10>	yw;
+		modifier<11>	xyw;
+		modifier<12>	zw;
+		modifier<13>	xzw;
+		modifier<14>	yzw;
+		modifier<15>	xyzw;
+		
+		template<int...I>	static constexpr modifier<meta::make_bit_mask<I...>> mask = {};
+
+		template<typename M, typename T>	constexpr vholder<M, T>	operator()(M&& m, T&& t)			const { return {forward<M>(m), forward<T>(t)}; }
+		template<int M, typename T>			constexpr holder<M, T>	operator()(constant_int<M>, T&& t)	const { return forward<T>(t); }
+	} masked;
+
+	template<int M, typename T>			constexpr auto	maskedi(T&& t)			{ return masked_s::holder<M, T>(forward<T>(t)); }
+	template<typename M, typename T>	constexpr auto	set_sign(T&& t, M&& m)	{ return vmodifier_helper<element_type<T>, num_elements_v<T>>::force_neg(t, m); }
+	template<int M, typename T>			constexpr vec<element_type<T>, count_bits_v<M>>	maski(const T& t)		{ return swizzle(meta::make_bit_list<M>, t); }
+
+	template<int M, typename T>			constexpr int 	num_elements_v<masked_s::holder<M, T>>	= num_elements_v<T>;
+	template<typename M, typename T>	constexpr int 	num_elements_v<masked_s::vholder<M, T>>	= num_elements_v<T>;
+
+	//-----------------------------------------------------------------------------
+	// saturated_s
+	//-----------------------------------------------------------------------------
+
+	static struct saturated_s {
+		template<typename T> struct holder0 {
+			typedef noref_cv_t<T>		T0;
 			T	t;
 
 			constexpr holder0(T &&t) : t(forward<T>(t)) {}
@@ -1947,10 +2394,7 @@ template<typename A, typename B> 	SIMD_FUNC auto saturated_sub(A a, B b);
 
 		template<int M, typename T> struct holder {
 			typedef noref_cv_t<T>		T0;
-			typedef element_type<T0>	E;
-			typedef sint_for_t<E>		I;
-			static const int N =  num_elements_v<T0>;
-			static constexpr int pack_f(int i) { return nth_set_index(M|(~0u << N), i); }
+			static constexpr int pack_f(int i) { return nth_set_index(M|(~0u << num_elements_v<T0>), i); }
 			T	t;
 
 			constexpr holder(T &&t) : t(forward<T>(t)) {}
@@ -1959,13 +2403,13 @@ template<typename A, typename B> 	SIMD_FUNC auto saturated_sub(A a, B b);
 			T0		operator--(int) const	{ T0 t0 = t; operator--(); return t0; }
 			T0		operator++(int) const	{ T0 t0 = t; operator++(); return t0; }
 
-			template<typename B> enable_if_t<!is_vec<B>, T0>	operator+(B b) const { return saturated_add(M, t + b, t, b); }
-			template<typename B> enable_if_t<!is_vec<B>, T0>	operator-(B b) const { return saturated_sub(M, t - b, t, b); }
-			template<typename B> enable_if_t<!is_vec<B>, T0>	operator*(B b) const { return saturated_mul(M, t * b, t, b); }
+			template<typename B> enable_if_t<!is_vec<B>, T0>	operator+(B b) const { return masked_saturated_add(M, t + b, t, b); }
+			template<typename B> enable_if_t<!is_vec<B>, T0>	operator-(B b) const { return masked_saturated_sub(M, t - b, t, b); }
+			template<typename B> enable_if_t<!is_vec<B>, T0>	operator*(B b) const { return masked_saturated_mul(M, t * b, t, b); }
 
-			template<typename B> enable_if_t<is_vec<B> && (bits(num_elements_v<B>) & M), T0>	operator+(B b) const { return saturated_add(M, t + grow<N>(b), t, grow<N>(b)); }
-			template<typename B> enable_if_t<is_vec<B> && (bits(num_elements_v<B>) & M), T0>	operator-(B b) const { return saturated_sub(M, t - grow<N>(b), t, grow<N>(b)); }
-			template<typename B> enable_if_t<is_vec<B> && (bits(num_elements_v<B>) & M), T0>	operator*(B b) const { return saturated_mul(M, t * grow<N>(b), t, grow<N>(b)); }
+			template<typename B> enable_if_t<is_vec<B> && (bits(num_elements_v<B>) & M), T0>	operator+(B b) const { return masked_saturated_add(M, t + grow<N>(b), t, grow<N>(b)); }
+			template<typename B> enable_if_t<is_vec<B> && (bits(num_elements_v<B>) & M), T0>	operator-(B b) const { return masked_saturated_sub(M, t - grow<N>(b), t, grow<N>(b)); }
+			template<typename B> enable_if_t<is_vec<B> && (bits(num_elements_v<B>) & M), T0>	operator*(B b) const { return masked_saturated_mul(M, t * grow<N>(b), t, grow<N>(b)); }
 
 			template<typename B> auto	operator+=(B b) const { return t = *this + b; }
 			template<typename B> auto	operator-=(B b) const { return t = *this - b; }
@@ -1975,9 +2419,6 @@ template<typename A, typename B> 	SIMD_FUNC auto saturated_sub(A a, B b);
 
 		template<typename M, typename T> struct vholder {
 			typedef noref_cv_t<T>		T0;
-			typedef element_type<T0>	E;
-			typedef sint_for_t<E>		I;
-			static const int N =  num_elements_v<T0>;
 			M	m;
 			T	t;
 
@@ -1987,9 +2428,9 @@ template<typename A, typename B> 	SIMD_FUNC auto saturated_sub(A a, B b);
 			T0		operator--(int) const		{ T0 t0 = t; operator--(); return t0; }
 			T0		operator++(int) const		{ T0 t0 = t; operator++(); return t0; }
 
-			template<typename B> auto	operator+(B b) const { return saturated_add(m, t + b, t, b); }
-			template<typename B> auto	operator-(B b) const { return saturated_sub(m, t - b, t, b); }
-			template<typename B> auto	operator*(B b) const { return saturated_mul(m, t * b, t, b); }
+			template<typename B> auto	operator+(B b) const { return masked_saturated_add(m, t + b, t, b); }
+			template<typename B> auto	operator-(B b) const { return masked_saturated_sub(m, t - b, t, b); }
+			template<typename B> auto	operator*(B b) const { return masked_saturated_mul(m, t * b, t, b); }
 
 			template<typename B> auto	operator+=(B b) const { return t = *this + b; }
 			template<typename B> auto	operator-=(B b) const { return t = *this - b; }
@@ -2070,11 +2511,21 @@ template<typename A, typename B> 	SIMD_FUNC auto saturated_sub(A a, B b);
 		return copysign(select(lt_half, R, R + pi / two), x);
 	}
 
+	template<int N> no_inline vec<float, N> acos_fast(vec<float, N> x) {
+		auto	absx	= abs(x);
+		auto	res		= (-0.156583f * absx + pi * half) * sqrt(1 - absx);
+		return select(x < zero ? pi - res, res);
+	}
+
 	template<int N> SIMD_FUNC vec<float, N> _atan(vec<float, N> x) {
 		auto	x2 = square(x);
 		auto	hi = horner(x2, 0.1065626393f,	-0.0752896400f, 0.0429096138f, -0.0161657367f, 0.0028662257f);
 		auto	lo = horner(x2, one,			-0.3333314528f, 0.1999355085f, -0.1420889944f);
 		return (lo + hi * square(square(x2))) * x;
+	}
+
+	template<int N> SIMD_FUNC vec<float, N> _atan_fast(vec<float, N> x) {
+		return x * (-0.1784f * abs(x) - 0.0663f * x * x + 1.0301f);
 	}
 
 	//	double
@@ -2177,7 +2628,7 @@ template<typename A, typename B> 	SIMD_FUNC auto saturated_sub(A a, B b);
 
 	template<typename E, int N> SIMD_FUNC auto atan(vec<E, N> x) {
 		auto			gt_one	= abs(x) > one;
-		auto			bias	= copysign(to<E>(gt_one & to<iso::sint_for_t<E>>(vec<E, N>(pi / two))), x);
+		auto			bias	= copysign(to<E>(gt_one & to<sint_for_t<E>>(vec<E, N>(pi / two))), x);
 		return _atan<N>(select(gt_one, -reciprocal(x), x)) + bias;
 	}
 	template<typename X>		SIMD_FUNC auto atan(X x)			{ return atan<element_type<X>, num_elements_v<X>>(x); }
@@ -2185,7 +2636,7 @@ template<typename A, typename B> 	SIMD_FUNC auto saturated_sub(A a, B b);
 	template<typename E, int N> no_inline vec<E, N> atan2(vec<E, N> y, vec<E, N> x) {
 		auto	y_gt_x	= abs(y) > abs(x);
 		auto	bias	= copysign(select(y_gt_x,
-			to<E>(to<iso::sint_for_t<E>>(vec<E, N>(pi)) & (x < 0)),
+			to<E>(to<sint_for_t<E>>(vec<E, N>(pi)) & (x < 0)),
 			vec<E, N>(pi / two)
 			), y);
 		auto	res		= _atan<N>(select(y_gt_x, y, x) / select(y_gt_x, x, -y)) + bias;

@@ -126,7 +126,7 @@ Disassembler::State *Disassembler6502::Disassemble(const memory_block &block, ui
 		buffer_accum<1024>	ba("%04x ", offset);
 		for (int i = 0; i < nb; i++)
 			ba.format("%02x ", p[i]);
-		ba.putc(' ', (4 - nb) * 3);
+		ba << repeat(' ', (4 - nb) * 3);
 
 		if (o.mnemonic == 0) {
 			ba << "unknown opcode";
@@ -137,7 +137,7 @@ Disassembler::State *Disassembler6502::Disassemble(const memory_block &block, ui
 		}
 
 		p += nb;
-		state->lines.push_back((const char*)ba);
+		state->lines.push_back(ba);
 	}
 	return state;
 }

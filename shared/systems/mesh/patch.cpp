@@ -635,31 +635,24 @@ void PatchDrawer::Draw(const bezier_patch &patch
 		ctx.SetWorldMatrix(float3x4(mat), u * 3);
 	}
 #endif
-
 }
 
-namespace iso {
-template<> VertexElements GetVE<PatchDrawer::Vertex>() {
-	static VertexElement ve[] = {
-		VertexElement(0,	0,				USAGE_TEXMATRIX,7),
-		VertexElement(0,	0,				USAGE_BLENDINDICES),
-		MakeVE<array_vec<uint16,3>>	(0,	USAGE_POSITION,	0, 1),
-		MakeVE<array_vec<uint16,3>>	(0,	USAGE_NORMAL,	0, 1),
-		MakeVE<uint8[2]>				(0,	USAGE_TEXCOORD,	7)
-	};
-	return ve;
+template<> static const VertexElements ve<PatchDrawer::Vertex> = (const VertexElement[]) {
+	VertexElement(0,	0,				USAGE_TEXMATRIX,7),
+	VertexElement(0,	0,				USAGE_BLENDINDICES),
+	MakeVE<array_vec<uint16,3>>	(0,	USAGE_POSITION,	0, 1),
+	MakeVE<array_vec<uint16,3>>	(0,	USAGE_NORMAL,	0, 1),
+	MakeVE<uint8[2]>				(0,	USAGE_TEXCOORD,	7)
 };
-template<> VertexElements GetVE<PatchDrawer::SeamVertex>() {
-	static VertexElement ve[] = {
-		VertexElement(0,	0,		USAGE_TEXMATRIX,	7),
-		VertexElement(0,	0,		USAGE_BLENDINDICES),
-		MakeVE<float3p>(0,			USAGE_POSITION,		0, 1),
-		MakeVE<float3p>(0,			USAGE_NORMAL,		0, 1),
-		MakeVE<float2p>(0,			USAGE_TEXCOORD,		7, 1)
-	};
-	return ve;
+
+template<> static const VertexElements ve<PatchDrawer::SeamVertex> = (const VertexElement[]) {
+	VertexElement(0,	0,		USAGE_TEXMATRIX,	7),
+	VertexElement(0,	0,		USAGE_BLENDINDICES),
+	MakeVE<float3p>(0,			USAGE_POSITION,		0, 1),
+	MakeVE<float3p>(0,			USAGE_NORMAL,		0, 1),
+	MakeVE<float2p>(0,			USAGE_TEXCOORD,		7, 1)
 };
-}
+
 #else
 
 extern PatchDrawer	patchdrawer;
@@ -688,7 +681,7 @@ bezier_spline GetEdge(const bezier_patch &patch, int i) {
 	}
 }
 float Curviness(const bezier_spline &s) {
-	float3	line	= s.c3.xyz - s.c0.xyz;
+	float3	line	= s[3].xyz - s[0].xyz;
 //	float3	edge0	= s.c1.xyz - s.c0.xyz;
 //	float3	edge1	= s.c3.xyz - s.c2.xyz;
 //	float x0 = abs(len(cross(line, edge0)) / len(line) / len(edge0));
@@ -718,7 +711,7 @@ void TesselationInfo::Init(PatchModel3 *model) {
 			for (int j = 0; j < 16; j++)
 				patch.cp(j) = concat(p[j], one);
 
-			spheres[pi]			= sphere::small((position3*)&patch, 16);
+			spheres[pi]			= sphere::bound_quick((position3(&)[16])patch);
 			curvy[pi * 2 + 0]	= max(Curviness(patch.row(0)), Curviness(patch.row(3)));
 			curvy[pi * 2 + 1]	= max(Curviness(patch.col(0)), Curviness(patch.col(3)));
 
@@ -864,7 +857,7 @@ RenderPatchModel3::RenderPatchModel3(PatchModel3 *_model) : model(_model) {
 		VertexElement		ve[256], *pve = ve;
 		for (auto e : comp->Components()) {
 			const ISO::TypeArray *a			= (const ISO::TypeArray*)e.type.get();
-			USAGE2	usage(comp->GetID(i));
+			USAGE2	usage(comp->GetID(i).get_crc32());
 
 			if (usage == USAGE_POSITION) {
 				*pve++ = VertexElement(offset, GetComponentType<float[3]>(), usage, i);
@@ -879,10 +872,12 @@ RenderPatchModel3::RenderPatchModel3(PatchModel3 *_model) : model(_model) {
 		}
 		rsp.patches.Init(rsp.npatches * offset * 16);
 		char	*source	= b[0];
-		char	*buffer	= (char*)rsp.patches.Begin();
+		//char	*buffer	= (char*)rsp.patches.Begin();
+		auto	data	= rsp.patches.WriteData();
+		char	*buffer	= data;
 		for (auto e : comp->Components()) {
 			const ISO::TypeArray *a			= (const ISO::TypeArray*)e.type.get();
-			USAGE2	usage(comp->GetID(i));
+			USAGE2	usage(comp->GetID(i).get_crc32());
 
 			if (usage == USAGE_POSITION) {
 				for (int i = 0; i < rsp.npatches; i++)
@@ -895,7 +890,7 @@ RenderPatchModel3::RenderPatchModel3(PatchModel3 *_model) : model(_model) {
 			}
 		}
 		rsp.patch_size	= offset;
-		rsp.patches.End();
+		//rsp.patches.End();
 
 		for (int i = 0, nt = subpatch.technique->Count(); i < nt; i++) {
 			pass	*pass = (*subpatch.technique)[i];

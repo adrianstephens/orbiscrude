@@ -30,6 +30,7 @@ define {
 	Paths = struct {
 		path[]		elf_path
 		path[]		sdb_path
+		path[]		source_path
 		path[]		plugin_path
 		filename	custom_types
 	} {}

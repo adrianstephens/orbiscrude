@@ -69,7 +69,7 @@ class ViewSample : public Window<ViewSample>, public WindowTimer<ViewSample> {
 		Invalidate(Rect(SampleToClient(cursor) - 1, 0, 2, h));
 	}
 public:
-	LRESULT Proc(UINT message, WPARAM wParam, LPARAM lParam);
+	LRESULT Proc(MSG_ID message, WPARAM wParam, LPARAM lParam);
 	void	Paint(const Rect &dirty);
 
 	ViewSample(const WindowPos &wpos, ISO_ptr_machine<void> p, ToolBarControl _toolbar) : toolbar(_toolbar), sb(0), xscale(0), pos(0,0), tip_on(false), cursor(0) {
@@ -80,7 +80,7 @@ public:
 	}
 };
 
-LRESULT ViewSample::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+LRESULT ViewSample::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 		case WM_CREATE:
 			tooltip.Create(*this, NULL, POPUP);// | TTS_NOPREFIX | TTS_ALWAYSTIP);
@@ -94,7 +94,7 @@ LRESULT ViewSample::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 				xscale = float(size.x) / sm->Length();
 			yscale	= float(size.y) / ((sm->Channels() + 1) * 65536);
 #ifdef D2D_H
-			if (target.Resize(size))
+			if (!target.Resize(size))
 				target.DeInit();
 #endif
 			Invalidate();
@@ -146,7 +146,7 @@ LRESULT ViewSample::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 				TrackMouseEvent(&tme);
 				tooltip.Activate(*this, tip_on = true);
 			}
-			tooltip.Track(GetMousePos() + Point(15, 15));
+			tooltip.Track();
 			break;
 		}
 
@@ -348,7 +348,7 @@ class EditorSample : public Editor {
 			|| type->Is("SampleBuffer");
 	}
 	virtual Control Create(MainWindow &main, const WindowPos &wpos, const ISO_ptr_machine<void> &p) {
-		ToolBarControl	tb(main, NULL, Control::CHILD | ToolBarControl::NODIVIDER | ToolBarControl::NORESIZE | ToolBarControl::FLAT | ToolBarControl::TRNSPARENT | ToolBarControl::TOOLTIPS);
+		ToolBarControl	tb(main, none, Control::CHILD | ToolBarControl::NODIVIDER | ToolBarControl::NORESIZE | ToolBarControl::FLAT | ToolBarControl::TRNSPARENT | ToolBarControl::TOOLTIPS);
 		tb.Init(GetLocalInstance(), IDR_TOOLBAR_SAMPLE);
 		main.AddToolbar(tb);
 		return *new ViewSample(wpos, FileHandler::ExpandExternals(p), tb);

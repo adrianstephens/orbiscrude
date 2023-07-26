@@ -5,7 +5,7 @@
 #include "events.h"
 #include "thread.h"
 #include "base/atomic.h"
-#include "allocators/allocator.h"
+#include "utilities.h"
 
 #ifdef PLAT_PS4
 #define MAX_JOB_THREADS	5
@@ -54,16 +54,13 @@ public:
 #endif
 
 class JobQueue : protected lf_array_queue_list<job, 256> {
-	Semaphore	semaphore;
+	Semaphore	semaphore	= 0;
 
 public:
-	JobQueue() : semaphore(0) {
-	}
 	void	put(job &&j) {
 		lf_array_queue_list<job, 256>::put(move(j));
 		semaphore.unlock();
 	}
-
 	int operator()() {
 		for (job j;;) {
 			semaphore.lock();
@@ -102,29 +99,25 @@ public:
 //-----------------------------------------------------------------------------
 struct atomic_countdown : Event {
 	atomic<int>		n;
-	atomic_countdown(int _n) :  n(_n) {}
+	atomic_countdown(int n) : Event(false, n == 0), n(n) {}
 	void	signal() {
 		if (--n == 0)
 			Event::signal();
 	}
 };
 
-template<class I, class F> void parallel_for(JobQueue &q, I i, I end, F f) {
-	auto		n	= end - i;
+template<class I, class F> void parallel_for(JobQueue &q, I i, I end, F &&f) {
+	auto		n	= distance(i, end);
 	atomic_countdown	cd(n - 1);
 
-	auto	j		= [i, &f, &cd]() {};
-//	auto	*jobs	= alloc_auto(decltype(j), n - 1);
-	malloc_block	jobmem(sizeof(j) * (n - 1));
-	auto	*jobs	= (decltype(j)*)jobmem;
-	auto	*jend	= jobs + n - 1;
+	auto&	alloc	= thread_temp_allocator;
+	auto	free	= alloc.get_restorer();
 
-	while (jobs < jend) {
-		q.put(create((void*)jobs, [i, &f, &cd]() {
+	while (--n) {
+		q.put(alloc.make([i, &f, &cd]() {
 			f(*i);
 			cd.signal();
 		}));
-		++jobs;
 		++i;
 	}
 
@@ -133,8 +126,8 @@ template<class I, class F> void parallel_for(JobQueue &q, I i, I end, F f) {
 	cd.wait();
 }
 
-template<class I, class F> void parallel_for_block(JobQueue &q, I i, I end, F f, int nt) {
-	auto	n		= end - i;
+template<class I, class F> void parallel_for_block(JobQueue &q, I i, I end, F &&f, int nt) {
+	auto	n		= distance(i, end);
 	if (nt > n)
 		nt = int(n);
 
@@ -146,31 +139,30 @@ template<class I, class F> void parallel_for_block(JobQueue &q, I i, I end, F f,
 
 	I		a		= i;
 	I		b		= i;
-	auto	j		= [a, b, &f, &cd]() {};
-	auto	*jobs	= alloc_auto(decltype(j), nt - 1);
-	auto	*jend	= jobs + nt - 1;
 
-	while (jobs < jend) {
+	auto&	alloc	= thread_temp_allocator;
+	auto	free	= alloc.get_restorer();
+
+	for (int n = nt; --n;) {
 		b += d;
 		if ((e += m) >= 0) {
 			++b;
 			e -= nt;
 		}
-		q.put(create((void*)jobs, [a, b, &f, &cd]() {
+		q.put(alloc.make([a, b, &f, &cd]() {
 			for (I i = a; i != b; ++i)
 				f(*i);
 			cd.signal();
 		}));
 		a = b;
-		++jobs;
 	}
 
+	ISO_ASSERT(a < end);
 	// do last one on current thread
 	while (a != end) {
 		f(*a);
 		++a;
 	}
-
 	cd.wait();
 }
 
@@ -204,7 +196,8 @@ class ConcurrentJobs : public JobQueue {
 		}
 	};
 
-	unique_ptr<JobThread>	*threads;
+//	unique_ptr<JobThread>	*threads;
+	Thread	**threads;
 	malloc_block		lambda_memory;
 	circular_allocator2	lambda_allocator;
 
@@ -222,9 +215,17 @@ public:
 		return !!threads;
 	}
 	void	Init(int num, int stack_size = THREAD_STACK_DEFAULT, ThreadPriority priority = ThreadPriority::DEFAULT) {
+	#if 1
+		threads = new Thread*[num];
+		for (int i = 0; i < num; i++)
+			threads[i] = RunThread([this]() {
+				return (*this)();
+			}, stack_size, priority);
+	#else
 		threads = new unique_ptr<JobThread>[num];
 		for (int i = 0; i < num; i++)
 			threads[i] = make_unique<JobThread>(this, stack_size, priority);
+	#endif
 	}
 
 	template<class T> void add(T *t) {
@@ -243,28 +244,47 @@ public:
 	}
 };
 
-template<class I, class F> void parallel_for(I i, I end, F f) {
-	parallel_for(ConcurrentJobs::Get(), i, end, f);
+template<class I, class F> void parallel_for(I i, I end, F &&f) {
+	parallel_for(ConcurrentJobs::Get(), i, end, forward<F>(f));
 }
 
-template<class C, class F> void parallel_for(JobQueue &q, C &&c, F f) {
-	parallel_for(q, begin(c), end(c), f);
+template<class C, class F> void parallel_for(JobQueue &q, C &&c, F &&f) {
+	parallel_for(q, begin(c), end(c), forward<F>(f));
 }
 
-template<class C, class F> void parallel_for(C &c, F f) {
-	parallel_for(begin(c), end(c), f);
+template<class C, class F> void parallel_for(C &&c, F &&f) {
+	parallel_for(begin(c), end(c), forward<F>(f));
 }
 
-template<class I, class F> void parallel_for_block(I i, I end, F f, int nt = 64) {
-	parallel_for_block(ConcurrentJobs::Get(), i, end, f, nt);
+template<class I, class F> void parallel_for_block(I i, I end, F &&f, int nt = 64) {
+	parallel_for_block(ConcurrentJobs::Get(), i, end, forward<F>(f), nt);
 }
 
-template<class C, class F> void parallel_for_block(JobQueue &q, C &&c, F f, int nt = 64) {
-	parallel_for_block(q, begin(c), end(c), f, nt);
+template<class C, class F> void parallel_for_block(JobQueue &q, C &&c, F &&f, int nt = 64) {
+	parallel_for_block(q, begin(c), end(c), forward<F>(f), nt);
 }
 
-template<class C, class F> void parallel_for_block(C &&c, F f, int nt = 64) {
-	parallel_for_block(begin(c), end(c), f, nt);
+template<class C, class F> void parallel_for_block(C &&c, F &&f, int nt = 64) {
+	parallel_for_block(begin(c), end(c), forward<F>(f), nt);
+}
+
+
+template<class C, class F> void maybe_parallel_for(bool parallel, C &&c, F &&f) {
+	if (parallel) {
+		parallel_for(begin(c), end(c), forward<F>(f));
+	} else {
+		for(auto &&i : c)
+			f(i);
+	}
+}
+
+template<class C, class F> void maybe_parallel_for_block(bool parallel, C &&c, F &&f, int nt = 64) {
+	if (parallel) {
+		parallel_for_block(begin(c), end(c), forward<F>(f), nt);
+	} else {
+		for(auto &&i : c)
+			f(i);
+	}
 }
 
 } // namespace iso

@@ -1,6 +1,7 @@
 #include "deflate.h"
 #include "hashes/simple.h"
 #include "base/algorithm.h"
+#include "base/bits.h"
 #include "vlc.h"
 
 using namespace iso;
@@ -454,7 +455,7 @@ uint8 *deflate_decoder::process(uint8* dst, uint8 *dst_end, istream_ref file, TR
 
 			mode = BLOCK;
 		} else {
-			dst = process1(vlc, dst, dst_end, external_window(dst0 - offset, window));
+			dst = process1(vlc, dst, dst_end, external_window(dst0/* - offset*/, window));
 		}
 	}
 
@@ -549,7 +550,7 @@ uint8 *deflate_decoder::process(uint8* dst, uint8 *dst_end, istream_ref file, TR
 				return dst;
 		}
 
-		dst = process1(vlc, dst, dst_end, external_window(dst0 - offset, window));
+		dst = process1(vlc, dst, dst_end, external_window(dst0/* - offset*/, window));
 	}
 
 	vlc0 = vlc.get_state();
@@ -559,7 +560,7 @@ uint8 *deflate_decoder::process(uint8* dst, uint8 *dst_end, istream_ref file, TR
 
 	// copy wsize or less output bytes into the circular window
 	if (written && (mode > BLOCK || !last))
-		extend_window(window, written, 1 << wbits);
+		add_to_window(window, dst0, written, 1 << wbits);
 
 	return dst;
 }
@@ -1418,8 +1419,8 @@ uint8 *zlib_decoder::process(uint8* dst, uint8 *dst_end, reader_intf file, TRANS
 		auto	vlc = make_vlc_in(copy(file), vlc0);
 		vlc.align(8);
 
-		uint32	adler1 = file.get<uint32be>();//vlc.get<uint32be>();
-		mode	= adler1 == adler ? DONE : BAD;
+		uint32	adler1;
+		mode	= !file.read(adler1) || adler1 == adler ? DONE : BAD;
 	}
 
 	return dst;

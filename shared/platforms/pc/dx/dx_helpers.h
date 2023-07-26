@@ -10,7 +10,7 @@ namespace iso {
 
 struct sized_data {
 	const void	*p;
-	sized_data(const void *_p) : p(_p) {}
+	sized_data(const void *p) : p(p) {}
 	uint32		length()			const { return p ? ((uint32*)p)[-1] & 0x7fffffff : 0; }
 	operator const_memory_block()	const { return const_memory_block(p, length()); }
 	operator const void*()			const { return p; }
@@ -308,8 +308,9 @@ template<typename T> struct DXwrapperKeep : _DXwrapperKeep {
 
 // wrap an ISO_ptr<ISO_openarray> - keep original data
 template<int BITS> struct _DXwrapperOpenArray : _DXwrapperKeep<BITS> {
-	operator sized_data()	const	{ return raw(); }
-	const void	*raw()		const	{ const void *p = _DXwrapperKeep<BITS>::raw(); return p ? *(typename PtrType<void, BITS>::type*)p : 0; }
+	const void	*raw()				const	{ const void *p = _DXwrapperKeep<BITS>::raw(); return p ? *(typename PtrType<void, BITS>::type*)p : 0; }
+	operator sized_data()			const	{ return raw(); }
+	operator const_memory_block()	const	{ return operator sized_data(); }
 };
 
 } // namespace iso

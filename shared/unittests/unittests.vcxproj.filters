@@ -5,7 +5,6 @@
     <ClCompile Include="test_hash.cpp" />
     <ClCompile Include="..\systems\conversion\environment_maps.cpp" />
     <ClCompile Include="..\common\iso\iso.cpp" />
-    <ClCompile Include="..\common\maths\lp.cpp" />
     <ClCompile Include="..\common\allocators\tlsf.cpp">
       <Filter>common</Filter>
     </ClCompile>
@@ -52,6 +51,7 @@
     <ClCompile Include="..\common\maths\svd.cpp">
       <Filter>common\maths</Filter>
     </ClCompile>
+    <ClCompile Include="test_tree.cpp" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="common">

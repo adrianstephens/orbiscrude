@@ -133,11 +133,11 @@ class ViewBrowser : public Window<ViewBrowser>, public com_list<
 	void	ManageAnchorsEventSink(bool advise);
 
 public:
-	LRESULT Proc(UINT message, WPARAM wParam, LPARAM lParam);
+	LRESULT Proc(MSG_ID message, WPARAM wParam, LPARAM lParam);
 	ViewBrowser(const WindowPos &pos, const char *url);
 };
 
-LRESULT ViewBrowser::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+LRESULT ViewBrowser::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 		case WM_SIZE:
 			if (wb) {

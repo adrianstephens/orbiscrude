@@ -16,11 +16,6 @@ namespace iso {
 #undef IF_SCALAR
 #define IF_SCALAR(T,R)	enable_if_t<!is_mat<T> && num_elements_v<T> == 1, R>
 
-struct curve_vertex {
-	float	x, y;
-	uint32	flags;
-};
-
 enum PLANE {
 	PLANE_MINUS_X	= 0,
 	PLANE_PLUS_X	= 1,
@@ -34,11 +29,15 @@ template<int A> static constexpr PLANE PLANE_MINUS	= PLANE(A * 2 + 0);
 template<int A> static constexpr PLANE PLANE_PLUS	= PLANE(A * 2 + 1);
 
 enum CORNER {
+	//1d
+	CORNER_M	= 0,
+	CORNER_P	= 1,
+	//2d
 	CORNER_MM	= 0,
 	CORNER_PM	= 1,
 	CORNER_MP	= 2,
 	CORNER_PP	= 3,
-
+	//3d
 	CORNER_MMM	= 0,
 	CORNER_PMM	= 1,
 	CORNER_MPM	= 2,
@@ -70,15 +69,16 @@ inline bool test_winding(WINDING_RULE r, int n) {
 
 enum SIGN {NEG = 3, ZERO = 0, POS = 1};
 
-inline SIGN get_sign1(float x)			{ return x < 0 ? NEG : SIGN(x > 0); }
-inline SIGN operator-(SIGN s)			{ return SIGN(-(int)s & 3); }
-inline SIGN operator*(SIGN a, SIGN b)	{ return SIGN(((int)a * (int)b) & 3); }
+constexpr SIGN get_sign1(float x)					{ return x < 0 ? NEG : SIGN(x > 0); }
+constexpr SIGN get_sign1(float x, float epsilon)	{ return x < -epsilon ? NEG : SIGN(x > epsilon); }
+constexpr SIGN operator-(SIGN s)					{ return SIGN(-(int)s & 3); }
+constexpr SIGN operator*(SIGN a, SIGN b)			{ return SIGN(((int)a * (int)b) & 3); }
 
-inline CORNER clockwise(int i)			{ return CORNER(i ^ (i >> 1)); }
-inline CORNER counter_clockwise(int i)	{ return CORNER(i ^ (i >> 1) ^ 1); }
+constexpr CORNER clockwise(int i)			{ return CORNER(i ^ (i >> 1)); }
+constexpr CORNER counter_clockwise(int i)	{ return CORNER(i ^ (i >> 1) ^ 1); }
 
-template<int N> inline auto corners() 	{ return int_range(CORNER(1 << N)); }
-template<int N> inline auto planes() 	{ return int_range(PLANE(2 * N)); }
+template<int N> inline auto corners() 		{ return int_range(CORNER(1 << N)); }
+template<int N> inline auto planes() 		{ return int_range(PLANE(2 * N)); }
 
 inline auto corners2_cw() {
 	static const CORNER c[] = {CORNER_MM, CORNER_PM, CORNER_PP, CORNER_MP };
@@ -153,25 +153,20 @@ template<typename S> auto	any_point(const S &s)	{ return s.centre(); }
 // generators
 //-----------------------------------------------------------------------------
 
-template<typename X, typename Y> auto generate2(X x, Y y) {
-	return [x, y](int k, int n) { return float2{x(k, n), y(k, n)}; };
-}
-template<typename X, typename Y, typename Z> auto generate3(X x, Y y, Z z) {
-	return [x, y, z](int k, int n) { return float3{x(k, n), y(k, n), z(k, n)}; };
-}
+template<typename X, typename Y>				auto generate(X x, Y y)			{ return [x, y](int k, int n) { return float2{x(k, n), y(k, n)}; };}
+template<typename X, typename Y, typename Z>	auto generate(X x, Y y, Z z)	{ return [x, y, z](int k, int n) { return float3{x(k, n), y(k, n), z(k, n)}; };}
 
 inline float			linear(int k, int n)	{ return (k + half) / n; }
 inline auto				halton(int base)		{ return [base](int k, int n) { return corput(base, k); }; }
 template<int B1> float	halton(int k, int n)	{ return corput<B1>(k); }
 
-inline auto				hammersley2(int b1)					{ return generate2(linear, halton(b1)); }
-inline auto				halton2(int b1, int b2)				{ return generate2(halton(b1), halton(b2)); }
+inline auto				hammersley2(int b1)					{ return generate(linear, halton(b1)); }
+inline auto				halton2(int b1, int b2)				{ return generate(halton(b1), halton(b2)); }
 template<int B1> inline auto hammersley2(int k, int n)		{ return float2{linear(k, n), corput<B1>(k)}; }
 template<int B1, int B2> inline auto halton2(int k, int n)	{ return float2{corput<B1>(k), corput<B2>(k)}; }
 
-
-inline auto				hammersley3(int b1, int b2)					{ return generate3(linear, halton(b1), halton(b2)); }
-inline auto				halton3(int b1, int b2, int b3)				{ return generate3(halton(b1), halton(b2), halton(b3)); }
+inline auto				hammersley3(int b1, int b2)					{ return generate(linear, halton(b1), halton(b2)); }
+inline auto				halton3(int b1, int b2, int b3)				{ return generate(halton(b1), halton(b2), halton(b3)); }
 template<int B1, int B2> inline auto hammersley3(int k, int n)		{ return float3{linear(k, n), corput<B1>(k), corput<B2>(k)}; }
 template<int B1, int B2, int B3> inline auto halton3(int k, int n)	{ return float3{corput<B1>(k), corput<B2>(k), corput<B3>(k)}; }
 
@@ -187,15 +182,21 @@ template<typename T, typename G> auto generate_perimeter(const T &shape, G&& gen
 }
 
 // 2d or 3d interior
+#if 0
 template<typename S> struct interior_optimised_s {
 	const S	&shape;
 	interior_optimised_s(const S &shape) : shape(shape) {}
-	template<typename T> auto	operator()(T t) { return  uniform_interior(shape, t); };
+	template<typename T> auto	operator()(T t) { return uniform_interior(shape, t); };
 };
 template<typename T> auto interior_optimised(const T &shape) {
 	return interior_optimised_s<T>(shape);
-	//return [&shape](param(float2) t) { return uniform_interior(shape, t); };
 }
+#else
+template<typename T> auto interior_optimised(const T &shape) {
+	return [&shape](auto t) { return uniform_interior(shape, t); };
+}
+#endif
+
 template<typename T, typename G, typename R> void generate_interior(const T &shape, G&& generator, R result, uint32 n) {
 	auto&&	interior = interior_optimised(shape);
 	for (uint32 k = 0; k < n; k++)
@@ -261,15 +262,6 @@ struct spherical_coord : spherical_dir {
 //-----------------------------------------------------------------------------
 // ray
 //-----------------------------------------------------------------------------
-
-template<typename T> class normalised {
-	T	t;
-public:
-	normalised(const T &t) : t(normalise(t)) {}
-	operator const T&()	const { return t; }
-};
-
-template<typename T> auto	normalise(const normalised<T> &r) { return r; }
 
 template<typename E> force_inline float2x3	ray_matrix(pos<E,2> p, vec<E, 2> d)			{ return float2x3(perp(d), d, p.v); }
 template<typename E> force_inline float3x4	ray_matrix(pos<E,3> p, vec<E, 3> d)			{ return translate(p) * transpose(look_along_z(d)); }
@@ -339,39 +331,6 @@ template<typename E> auto	operator&(const ray<E,2> &r1, const ray<E,2> &r2)	{
 }
 
 //-----------------------------------------------------------------------------
-// line (but 2d uses n_plane)
-//-----------------------------------------------------------------------------
-
-template<typename E, int N> class line : public ray<E, N> {
-	typedef ray<E, N> B;
-public:
-	using B::B;
-	line(line<E, N - 1> b) : B(pos<E,N>(b.pt0()), vec<E,N>(b.dir(b)))	{}
-};
-
-template<typename E, int N> class normalised<line<E, N>> : public normalised<ray<E, N>> {
-	typedef normalised<ray<E, N>>	B;
-public:
-	using B::B;
-};
-
-// compute the line parameters of the two closest points
-template<typename E, int N> vec<E, 2> closest_params(const line<E, N> &r1, const line<E, N> &r2) {
-	auto	w = r1.p - r2.p;
-	auto	a = dot(r1.d, r1.d);
-	auto	b = dot(r1.d, r2.d);
-	auto	c = dot(r2.d, r2.d);
-	auto	d = dot(r1.d, w);
-	auto	e = dot(r2.d, w);
-	auto	D = a * c - b * b;
-
-	if (D < epsilon)	// if the lines are almost parallel use the largest denominator
-		return {zero, b > c ? d / b : e / c};
-	return vec<E, 2>{b * e - c * d, a * e - b * d} / D;
-}
-
-
-//-----------------------------------------------------------------------------
 // n_plane
 //-----------------------------------------------------------------------------
 
@@ -388,9 +347,12 @@ public:
 	explicit 		n_plane(V v)						: v(v)	{}
 	explicit 		n_plane(PLANE i) 					: v(concat(select(1<<(i>>1), D(E(i & 1) * two - one), zero), -one)) {}
 	explicit 		n_plane(decltype(infinity))			: v(axis_s<N>()) {}
-	force_inline 	n_plane(D normal, const float dist)	: v(concat(normal, -dist))	{}
+	force_inline 	n_plane(D normal, float dist)		: v(concat(normal, -dist))	{}
 	force_inline 	n_plane(D normal, P pos)			: v(concat(normal, -dot(pos.v, normal))) {}
 	template<int A> n_plane(const axis_s<A> &a)			: v(a)	{}
+	//template<typename A, typename...P> n_plane(const negated<A> &a, P...p)	: n_plane(-a.t, p...)	{}
+	template<typename A> n_plane(const negated<A> &a)	: v(-V(a.t))	{}
+	template<typename A> n_plane(const negated<A> &a, float dist)	: n_plane(-D(a.t), dist)	{}
 
 	n_plane(P p0, P p1, P p2)	: n_plane(cross(p1 - p0, p2 - p0), p0) {}	// 3d only
 	n_plane(P p0, P p1)			: n_plane(perp(p1 - p0), p0) {}				// 2d only
@@ -413,18 +375,17 @@ public:
 	bool				ray_check(ray<E, N> r, float &t, D *normal)	const;
 	bool				approx_on(P v, float tol = ISO_TOLERANCE)	const	{ return approx_equal(dot(normal(), v), unnormalised_dist(), tol); }
 
-	friend const V&		as_vec(const n_plane &p)							{ return p.v;	}
-
-	friend bool			coplanar(paramT(n_plane) a, paramT(n_plane) b)						{ return colinear(a.normal(), b.normal()); }
+	friend const V&		as_vec(const n_plane &p)											{ return p.v;	}
+	friend bool			coplanar(param(n_plane) a, param(n_plane) b)						{ return colinear(a.normal(), b.normal()); }
 	friend bool			approx_equal(const n_plane &a, const n_plane &b, float tol = ISO_TOLERANCE)	{ return approx_equal(a.v * rotate(b.v), rotate(a.v) * b.v, tol); }
 
-//	friend n_plane		operator*(const float3x4 &m, paramT(n_plane) p)						{ return translate(get_trans(m)) * (get_rot(m) * p); }
+//	friend n_plane		operator*(const float3x4 &m, param(n_plane) p)						{ return translate(get_trans(m)) * (get_rot(m) * p); }
 //	friend n_plane		operator/(param(n_plane) p, const float3x4 &m)						{ return p / translate(get_trans(m)); }//ERROR / get_rot(m); }
 	friend bool			operator==(const n_plane &a, const n_plane &b)						{ return all(a.v * rotate(b.v) == b.v * rotate(a.v)); }
-	template<typename M> friend IF_MAT(M, n_plane) operator*(const M &m, paramT(n_plane) p)	{ return n_plane(cofactors(m) * p.v); }
-	template<typename M> friend IF_MAT(M, n_plane) operator/(paramT(n_plane) p, const M &m)	{ return n_plane(transpose(m) * p.v); }
-	friend n_plane		operator*(const translate_s<E, N> &m, paramT(n_plane) p)			{ return n_plane(concat(p.normal(), p.unnormalised_dist(P(-m.t)))); }
-	friend n_plane		operator/(paramT(n_plane) p, const translate_s<E,N> &m)				{ return n_plane(concat(p.normal(), p.unnormalised_dist(m.t))); }
+	template<typename M> friend IF_MAT(M, n_plane) operator*(const M &m, param(n_plane) p)	{ return n_plane(cofactors(m) * p.v); }
+	template<typename M> friend IF_MAT(M, n_plane) operator/(param(n_plane) p, const M &m)	{ return n_plane(transpose(m) * p.v); }
+	friend n_plane		operator*(const translate_s<E, N> &m, param(n_plane) p)				{ return n_plane(concat(p.normal(), p.unnormalised_dist(P(-m.t)))); }
+	friend n_plane		operator/(param(n_plane) p, const translate_s<E,N> &m)				{ return n_plane(concat(p.normal(), p.unnormalised_dist(m.t))); }
 };
 
 template<typename D, typename X> n_plane<element_type<D>, num_elements_v<D>> make_plane(D n, X x) { return {n, x}; }
@@ -484,16 +445,21 @@ template<typename E, int N> class normalised<n_plane<E,N>> : public n_plane<E, N
 	using D = normalised<typename B::D>;
 	using B::v;
 	static V _normalise(V v) {
-		auto	d = len2(v.xyz);
+		auto	d = len2(shrink<N>(v));
 		return d ? v * rsqrt(d) : v;
 	}
 public:
-	using B::B;
-	force_inline 	normalised(B b)							: B(_normalise(as_vec(b))) {}
-//	force_inline 	normalised(D normal, const float dist)	: B(normalise(normal), dist) {}
-//	force_inline 	normalised(D normal, P pos)				: B(normalise(normal), pos)	{}
-	force_inline 	normalised(D normal, const float dist)	: B(normal, dist) {}
+//	using B::B;
+	force_inline 	normalised() {}
+	explicit 		normalised(V v)							: B(v * rlen(shrink<N>(v))) {}
+	explicit 		normalised(PLANE i) 					: B(i)				{}
+	force_inline 	normalised(B b)							: normalised(as_vec(b)) {}
+	force_inline 	normalised(D normal, const float dist)	: B(normal, dist)	{}
 	force_inline 	normalised(D normal, P pos)				: B(normal, pos)	{}
+	template<int A> normalised(const axis_s<A> &a)			: B(a)				{}
+	template<typename A> normalised(const negated<A> &a)	: B(-V(a.t))		{}
+	template<typename A> normalised(const negated<A> &a, float dist)	: B(-a.t, dist)	{}
+
 	normalised(P p0, P p1, P p2)	: B(normalise(cross(p1 - p0, p2 - p0)), p0) {}	// 3d only
 	normalised(P p0, P p1)			: B(normalise(perp(p1 - p0)), p0) {}			// 2d only
 
@@ -503,8 +469,8 @@ public:
 	force_inline E		dist(V p)			const	{ return B::unnormalised_dist(p); }
 	force_inline P		project(P p)		const	{ return p - B::normal() * dist(p); }
 
-	friend normalised	bisector(paramT(normalised) a, paramT(normalised) b)	{ return normalised(a.v - b.v); }
-	friend P			operator&(const ray<E,N> &a, paramT(normalised) b)		{ return a.p - a.d * b.dist(a.p) / dot(a.d, b.normal()); }
+	friend normalised	bisector(param(normalised) a, param(normalised) b)	{ return normalised(a.v - b.v); }
+	friend P			operator&(const ray<E,N> &a, param(normalised) b)	{ return a.p - a.d * b.dist(a.p) / dot(a.d, b.normal()); }
 };
 
 template<typename E, int N> normalised<n_plane<E,N>>	normalise(const n_plane<E,N> &r) { return r; }
@@ -528,8 +494,42 @@ template<PLANE P> struct unit_plane {
 	template<typename E, int N> friend auto	operator&(const ray<E,N> &a, const unit_plane&)	{ return a.from_parametric((sign::f(one) - a.p.v[P / 2]) / a.d[P / 2]); }
 };
 
+//-----------------------------------------------------------------------------
+// line : ray, except 2d which uses n_plane
+//-----------------------------------------------------------------------------
+
+template<typename E, int N> class line : public ray<E, N> {
+	typedef ray<E, N> B;
+public:
+	using B::B;
+	line(line<E, N - 1> b) : B(pos<E,N>(b.pt0()), vec<E,N>(b.dir(b)))	{}
+};
+
+template<typename E, int N> class normalised<line<E, N>> : public normalised<ray<E, N>> {
+	typedef normalised<ray<E, N>>	B;
+public:
+	using B::B;
+	operator const line<E,N>&() const { return *(const line<E,N>*)this; }
+};
+
+// compute the line parameters of the two closest points
+template<typename E, int N> vec<E, 2> closest_params(const line<E, N> &r1, const line<E, N> &r2) {
+	auto	w = r1.p - r2.p;
+	auto	a = dot(r1.d, r1.d);
+	auto	b = dot(r1.d, r2.d);
+	auto	c = dot(r2.d, r2.d);
+	auto	d = dot(r1.d, w);
+	auto	e = dot(r2.d, w);
+	auto	D = a * c - b * b;
+
+	if (D < epsilon)	// if the lines are almost parallel use the largest denominator
+		return {zero, b > c ? d / b : e / c};
+	return vec<E, 2>{b * e - c * d, a * e - b * d} / D;
+}
+
+
 //http://geomalgorithms.com/a05-_intersect-1.html
-template<typename E> line<E,3>		operator&(const normalised<n_plane<E,3>> &a, const normalised<n_plane<E,3>> &b) {
+template<typename E> line<E,3> operator&(const normalised<n_plane<E,3>> &a, const normalised<n_plane<E,3>> &b) {
 	auto	d	= cross(a.normal(), b.normal());
 	return {pos<E,3>(cross(d, a.normal() * b.dist() - b.normal() * a.dist()) / dot(d, d)), d};
 }
@@ -545,14 +545,15 @@ template<typename E> class line<E, 2> : public n_plane<E, 2> {
 	typedef n_plane<E, 2> B;
 public:
 	using B::B;
-	vec<E,2>	dir()						const	{ return perp(B::normal()); }
+	auto	dir()	const	{ return perp(B::normal()); }
 };
 
 template<typename E> class normalised<line<E, 2>> : public normalised<n_plane<E, 2>> {
 	typedef normalised<n_plane<E, 2>>	B;
 public:
 	using B::B;
-	vec<E,2>	dir()						const	{ return perp(B::normal()); }
+	auto	dir()	const	{ return perp(B::normal()); }
+	operator const line<E,2>&() const { return *(const line<E,2>*)this; }
 };
 
 //template<typename E> auto	operator&(const normalised<n_plane<E,3>> &a, const axis_s<2>&)	{ return normalised<line<E,2>>(as_vec(a).xyw); }
@@ -615,10 +616,13 @@ public:
 
 	static n_sphere			through(P a, P b);
 	static n_sphere			through(P a, P b, P c);
-	static n_sphere			through(P a, P b, P c, P d);				//3d only
-	static n_sphere			small(const P *p, uint32 n);
-	static bool				through_contains(P p, P q, P r, P t);		//2d only
-	static bool				through_contains(P p, P q, P r, P s, P t);	//3d only
+	static n_sphere			through(P a, P b, P c, P d);				//N >= 3
+	template<typename C> static n_sphere through(const C &p);
+	template<typename C> static n_sphere bound_quick(const C &p);
+	template<typename C> static n_sphere bound_ritter(const C &p);
+	static n_sphere			through(initializer_list<P> pos)	{ return through(make_rangec(pos)); }
+	static bool				through_contains(P p, P q, P r, P t);		//N == 2
+	static bool				through_contains(P p, P q, P r, P s, P t);	//N == 3
 
 	force_inline P			centre()				const	{ return P(shrink<N>(v)); }
 	force_inline E			radius2()				const	{ return v[N]; }
@@ -627,6 +631,7 @@ public:
 	auto					get_box()				const;
 	force_inline const n_sphere& circumscribe()		const	{ return *this; }
 	force_inline const n_sphere& inscribe()			const	{ return *this; }
+	template<typename C> n_sphere grow(const C &c)	const;
 
 	n_sphere				operator| (P p)			const;
 	n_sphere				operator| (n_sphere b)	const;
@@ -636,7 +641,7 @@ public:
 	force_inline M			matrix()				const	{ return translate(centre()) * scale(radius()); }
 	force_inline M			inv_matrix()			const	{ return scale(reciprocal(radius())) * translate(P(-v.xyz)); }
 
-	bool					contains(P pos)			const	{ return len2(pos - centre()) < radius2(); }
+	bool					contains(P pos)			const	{ return len2(pos - centre()) <= radius2(); }
 	bool					ray_check(const ray<E,N> &r, float &t, D *normal)	const { return n_sphere_check_ray<E, N>(r.p - centre(), r.d, t, normal, radius2()); }
 	E						ray_closest(const ray<E,N> &r)						const { return n_sphere_ray_closest<E, N>(r.p - centre(), r.d, radius2()); }
 
@@ -650,6 +655,7 @@ public:
 	friend float			dist(n_sphere s, n_plane<E, N> p)			{ return p.dist(s.centre()) - s.radius(); }
 	friend float			dist(n_sphere s, P p)						{ return len(p - s.centre()) - s.radius(); }
 	friend float			dist(n_sphere s, ray<E, N> r)				{ return max(r.dist(s.centre()) - s.radius(), zero); }
+	friend const V&			as_vec(const n_sphere &p)					{ return p.v;	}
 };
 
 template<typename E> force_inline E	area(const n_sphere<E, 2> &c)			{ return c.radius2() * pi; }
@@ -660,24 +666,21 @@ template<typename E, int N> n_sphere<E, N> n_sphere<E, N>::through(P a, P b) {
 	auto	r	= (b - a) * half;
 	return with_r2(a + r, len2(r));
 }
-#if 0
+
 template<typename E, int N> n_sphere<E, N> n_sphere<E, N>::through(P a, P b, P c) {
 	auto	x	= b - a;
 	auto	y	= c - a;
 	auto	t	= cross(x, y);
+#if 0
 	float2	r	= (x * len2(y) - y * len2(x)) / (t * two);
 	return with_r2(a + perp(r), len2(r));
-}
-#endif
-template<typename E, int N> n_sphere<E, N> n_sphere<E, N>::through(P a, P b, P c) {
-	auto	x	= b - a;
-	auto	y	= c - a;
-	auto	t	= cross(x, y);
+#else
 	auto	r	= (cross(t, x) * len2(y) + cross(y, t) * len2(x)) / (len2(t) * 2);
 	return with_r2(a + r, len2(r));
+#endif
 }
 
-//N==3 only
+//N >= 3 only
 template<typename E, int N> n_sphere<E, N> n_sphere<E, N>::through(P a, P b, P c, P d) {
 	auto	x	= b - a;
 	auto	y	= c - a;
@@ -687,12 +690,80 @@ template<typename E, int N> n_sphere<E, N> n_sphere<E, N>::through(P a, P b, P c
 	return with_r2(a + r, len2(r));
 }
 
-template<typename E, int N> n_sphere<E, N> n_sphere<E, N>::small(const P *p, uint32 n) {
-	P		c	= centroid(p, p + n);
-	E		r2	= 0;
-	for (uint32 i = 0; i < n; i++)
-		r2 = max(r2, len2(c - p[i]));
-	return n_sphere<E, N>::with_r2(c, r2);
+template<typename E, int N> template<typename C> n_sphere<E, N> n_sphere<E, N>::through(const C &p) {
+	auto	n = num_elements(p);
+	ISO_ASSERT(n <= N + 1);
+
+	if (n == 0)
+		return none;
+
+	D		v[N];
+	P		p0	= p[0];
+	P		c	= p0;
+	E		r2	= zero;
+
+	int		j	= 0;
+	for (P i : slice(p, 1)) {
+		auto	vt	= i - p0;
+		for (int k = 0; k < j; ++k)
+			vt -= dot(v[k], vt) * v[k] / len2(v[k]);
+
+		auto	z = len2(vt) * 2;
+		if (z < square(epsilon) * r2)
+			continue;
+
+		v[j]	= vt;
+
+		// update sphere
+		auto e	= len2(i - c) - r2;
+		auto f	= e / z;
+		c	+= f * vt;
+		r2	+= e * f * half;
+		++j;
+	}
+
+	return with_r2(c, r2);
+}
+
+template<typename E, int N> template<typename C> n_sphere<E, N> n_sphere<E, N>::bound_quick(const C &p) {
+	P		c	= centroid(p);
+	E		r2	= zero;
+	for (P i : p)
+		r2 = max(r2, len2(c - i));
+	return with_r2(c, r2);
+}
+
+// An Efficient Bounding Sphere, Jack Ritter, "Graphics Gems", Academic Press, 1990
+template<typename E, int N> template<typename C> n_sphere<E, N> n_sphere<E, N>::bound_ritter(const C &p) {
+	// Find the min & max points indices along each axis
+	vec<uint32,N>	min_axisi	= zero, max_axisi	= min_axisi;
+	vec<E,N>		min_axisv	= p[0], max_axisv	= min_axisv;
+
+	uint32	i = 1;
+	for (vec<E,N> v : slice(p, 1)) {
+		auto	min_mask = v < min_axisv;
+		auto	max_mask = v > max_axisv;
+		min_axisi	= select(min_mask, i, min_axisi);
+		max_axisi	= select(max_mask, i, max_axisi);
+		min_axisv	= select(min_mask, v, min_axisv);
+		max_axisv	= select(max_mask, v, max_axisv);
+		++i;
+	}
+
+	// Find axis with maximum span
+	E		maxd2	= 0;
+	uint32	axis	= 0;
+
+	for (uint32 i = 0; i < N; ++i) {
+		auto d2 = len2(p[max_axisi[i]] - p[min_axisi[i]]);
+		if (d2 > maxd2) {
+			maxd2	= d2;
+			axis	= i;
+		}
+	}
+
+	// Calculate an initial starting centre point & radius, then grow
+	return with_r2((p[min_axisi[axis]] + p[max_axisi[axis]]) * half, maxd2 * quarter).grow(p);
 }
 
 //N==2 only
@@ -703,7 +774,7 @@ template<typename E, int N> bool n_sphere<E, N>::through_contains(P p, P q, P r,
 	return float2x2(float4{
 		cross(qp, tp), dot(tp, t - q),
 		cross(qp, rp), dot(rp, r - q)
-	}).det() < 0;
+	}).det() < zero;
 }
 
 //N==3 only
@@ -717,13 +788,44 @@ template<typename E, int N> bool n_sphere<E, N>::through_contains(P p, P q, P r,
 		concat(rt, len2(rt)),
 		concat(qt, len2(qt)),
 		concat(st, len2(st))
-	).det() < 0;
+	).det() < zero;
+}
+
+// Add points to sphere expanding radius & recalculating centre point as necessary
+template<typename E, int N> template<typename C> n_sphere<E, N> n_sphere<E, N>::grow(const C &p) const {
+	auto	c	= centre();
+	auto	r2	= radius2();
+	auto	r	= sqrt(r2);
+	for (P i : p) {
+		auto	d2	= len2(i - c);
+		if (d2 > r2) {
+			auto	d	= sqrt(d2);
+			r	= (r + d) * half;
+			r2	= square(r);
+			c	= lerp(i, c, r / d);
+		}
+	}
+	return with_r2(c, r2);
 }
 
 template<typename E, int N> n_sphere<E, N> n_sphere<E, N>::operator|(P p) const {
-	if (empty())
+#if 1
+	auto	r2	= radius2();
+	if (r2 < zero)
 		return {p, zero};
 
+	auto	c	= centre();
+	auto	d2	= len2(p - c);
+	if (d2 > r2) {
+		auto	d	= sqrt(d2);
+		auto	r	= (sqrt(r2) + d) * half;
+		r2	= square(r);
+		c	= lerp(p, c, r / d);
+	}
+	return with_r2(c, r2);
+#else
+	if (empty())
+		return {p, zero};
 	if (contains(p))
 		return *this;
 
@@ -731,6 +833,7 @@ template<typename E, int N> n_sphere<E, N> n_sphere<E, N>::operator|(P p) const 
 	auto	d	= len(v);
 	auto	r	= radius();
 	return {centre() + v * ((d - r) / d * half), (d + r) * half};
+#endif
 }
 
 template<typename E, int N> n_sphere<E, N> n_sphere<E, N>::operator|(n_sphere b) const {
@@ -774,6 +877,8 @@ public:
 
 	force_inline M			matrix()			const	{ return translate(B::centre()) * scale(B::half_extent()); }
 	force_inline M			inv_matrix()		const	{ return scale(reciprocal(B::half_extent())) * translate(-B::centre()); }
+	force_inline M			from_0_1()			const	{ return translate(B::a) * scale(B::extent()); }
+	force_inline M			to_0_1()			const	{ return scale(reciprocal(B::extent())) * translate(-B::a); }
 	force_inline const aabb& get_box()			const	{ return *this; }
 
 	bool				ray_check(const ray<E,N> &r)						const;
@@ -781,6 +886,7 @@ public:
 	E					ray_closest(const ray<E,N> &r)						const;
 	P					support(D d)										const { return P(select(d < zero, B::a, B::b)); }
 	P					closest(P p)			const	{ return P(clamp(p, B::a, B::b)); }
+	P					from_parametric(D t)	const	{ return lerp(a, b, t); }
 
 	bool				clip(P &p1, P &p2)		const;
 
@@ -798,11 +904,11 @@ public:
 };
 
 
-template<typename E, int N> aabb<E, N>	as_aabb(const interval<pos<E, N>> &i)	{ return i; }
-template<typename T> auto				as_aabb(const interval<T> &i)			{ return aabb<element_type<T>, num_elements_v<T>>(i); }
+template<typename E, int N> aabb<E, N>		as_aabb(const interval<pos<E, N>> &i)	{ return i; }
+template<typename T> auto					as_aabb(const interval<T> &i)			{ return aabb<element_type<T>, num_elements_v<T>>(i); }
 
-template<typename E> force_inline	E	area(const aabb<E,2> &a)	{ return reduce_mul(a.extent()); }
-template<typename E> force_inline	E	volume(const aabb<E,3> &a)	{ return reduce_mul(a.extent()); }
+template<typename E> force_inline	E		area(const aabb<E,2> &a)			{ return reduce_mul(a.extent()); }
+template<typename E> force_inline	E		volume(const aabb<E,3> &a)			{ return reduce_mul(a.extent()); }
 
 template<typename E> force_inline vec<E,3>	abs_cross(vec<E,3> x, vec<E,3> y)	{ return (x.zxy * y + x * y.zxy).zxy; }
 template<typename E> force_inline E			abs_cross(vec<E,2> x, vec<E,2> y)	{ return reduce_add(x * y.yx); }
@@ -851,7 +957,7 @@ template<typename E, int N> E aabb<E, N>::ray_closest(const ray<E,N> &r) const {
 }
 
 template<typename E, int N> bool aabb<E, N>::clip(P &p1, P &p2) const {
-	if (any(min(p1, p2) > B::b) || any(max(p1, p2) < B::a))			//entirely outside box
+	if (any(min(p1, p2) > B::b) || any(max(p1, p2) < B::a))	//entirely outside box
 		return false;
 
 	auto	d	= p2 - p1;
@@ -917,7 +1023,7 @@ public:
 	static n_sphere<E,N>	inscribe()					{ return one; }
 	static n_sphere<E,N>	circumscribe()				{ return sqrt<N>; }
 
-	friend P				uniform_interior(const unit_aabb&, D t)		{ return uniform_interior(t); }
+	friend P uniform_interior(const unit_aabb&, D t)	{ return uniform_interior(t); }
 };
 
 template<typename E> auto clip_test_helper(vec<E, 2> v) { return v.y + v.x; }
@@ -951,7 +1057,7 @@ template<typename E, int N> int unit_aabb<E, N>::clip_test(P a, P b, vec<E,2> &t
 }
 
 template<typename E, int N> int unit_aabb<E, N>::clip_test(homo<E,N> a, homo<E,N> b, vec<E,2> &t) {
-	if (any(a.real > a.scale & b.real >  b.scale) ||  any(a.real < -a.scale & b.real < -b.scale))
+	if (any(a.real > a.scale & b.real > b.scale) || any(a.real < -a.scale & b.real < -b.scale))
 		return -1;
 
 	auto	d	= a.v - b.v;
@@ -1114,6 +1220,7 @@ public:
 	force_inline bool		contains(P p)				const	{ return all(abs(parametric(p)) <= one);	}
 	force_inline P			corner(CORNER i)			const	{ return matrix() * P(select((int)i, D(one), D(-one))); }
 	force_inline auto		plane(PLANE i)				const	{ return matrix() * normalised<n_plane<E, N>>(i); }
+	auto					corners()					const	{ return transformc(iso::corners<N>(), [this](CORNER i)	{ return corner(i); }); }
 
 	bool					ray_check(const ray<E,N> &r)						const	{ return unit_aabb<E, N>::ray_check(get(inv_matrix()) * r); }
 	bool					ray_check(const ray<E,N> &r, float &t, D *normal)	const;
@@ -1195,8 +1302,8 @@ public:
 	force_inline n_sphere<E,N>	inscribe()		const	{ return {B::centre(), reduce_min(B::half_extent())}; }
 	force_inline obb&			right()					{ B::right(); return *this; }
 
-	friend B 	fullmul(const M &m, const obb &b)			{ return B(m * b.matrix()); }
-	friend obb 	operator*(const M &m, const obb &b)			{ return obb(m * b.matrix()); }
+	friend B 	fullmul(const M &m, const obb &b)		{ return B(m * b.matrix()); }
+	friend obb 	operator*(const M &m, const obb &b)		{ return obb(m * b.matrix()); }
 };
 
 template<typename E> force_inline	E	area(const obb<E,2> &a)		{ return a.det(); }
@@ -1222,17 +1329,31 @@ template<typename E, int N> auto operator*(const mat<E, N+1,N+1> &m, const obb<E
 // generic functions
 //-----------------------------------------------------------------------------
 
+template<typename V> inline bool colinear(V p1, V p2, element_type<V> epsilon) {
+	return dot(p1, p2) * rsqrt(len2(p1) * len2(p2)) > one - epsilon;
+}
+template<typename E, int N> inline bool colinear(vec<E, N> p1, vec<E, N> p2) {
+	return colinear(p1, p2, epsilon);
+}
+template<typename E> inline bool colinear(vec<E, 2> p1, vec<E, 2> p2) {
+	return cross(p1, p2) == zero;
+}
+template<typename E> inline bool colinear(vec<E, 3> p1, vec<E, 3> p2) {
+	return all(cross(p1, p2) == zero);
+}
+template<typename V> inline bool colinear(V p1, V p2) {
+	return colinear<element_type<V>, num_elements_v<V>>(p1, p2);
+}
+template<typename E, int N> inline bool colinear(pos<E, N> p1, pos<E, N> p2, pos<E, N> p3) {
+	return colinear(p1 - p3, p2 - p3);
+}
+template<typename E, int N> inline bool colinear(pos<E, N> p1, pos<E, N> p2, pos<E, N> p3, E epsilon) {
+	return colinear(p1 - p3, p2 - p3, epsilon);
+}
+
 //dist between shape and point
 template<typename S, typename E, int N>		auto	dist(const S &s, const pos<E, N> &p)->decltype(len(s.closest(p)-p)) {
 	return len(s.closest(p) - p);
-}
-
-//dist between shape and ray
-template<typename S, typename E, int N>		auto	dist(const S &s, const ray<E, N> &r) {
-	auto	dp	= normalise(perp(r.d));
-	if (dot(dp, anypoint(s) - r.p) > 0)
-		dp = -dp;
-	return max(dot(-dp, s.support(dp)), zero);
 }
 
 //dist between shape and ray
@@ -1247,53 +1368,6 @@ template<typename S, typename E, int N>		auto	dist(const S &s, const ray<E, N> &
 template<typename T> auto	circumscribe(const T &t)	{ return t.circumscribe(); }
 template<typename T> auto	inscribe(const T &t)		{ return t.inscribe(); }
 
-//-----------------------------------------------------------------------------
-//
-//						2D
-//
-//-----------------------------------------------------------------------------
-
-typedef ray<float, 2>			ray2;
-typedef n_sphere<float, 2>		circle;
-typedef unit_n_sphere<float, 2>	unit_circle_t;
-typedef normalised<line<float, 2>>	line2;
-typedef aabb<float, 2>			rectangle;
-typedef unit_aabb<float, 2>		unit_rect_t;
-typedef obb<float, 2>			obb2;
-
-extern const unit_circle_t		unit_circle;
-extern const unit_rect_t		unit_rect;
-
-template<typename T> float		area(const T &t)	{ return t.area(); }
-
-template<typename T, typename = decltype(declval<T>().plane(PLANE_MINUS_X))> auto get_planes(const T &t) {
-	return transformc(planes<3>(), [t](PLANE i) { return t.plane(i); });
-}
-
-template<typename S> float	dist(const S &s, param(ray2) r, position2 *pos = nullptr) {
-	auto	t	= s.ray_closest(r);
-	auto	p1	= r.from_parametric(t);
-	if (pos)
-		*pos = p1;
-	return dist(s, p1);
-}
-
-inline bool colinear(param(float2) p1, param(float2) p2) {
-	return cross(p1, p2) == zero;
-}
-inline bool colinear(param(position2) p1, param(position2) p2, param(position2) p3) {
-	return colinear(p1 - p3, p2 - p3);
-}
-inline bool colinear(param(float2) p1, param(float2) p2, float epsilon) {
-	return square(cross(p1, p2)) <= len2(p1) * len2(p2) * square(epsilon);
-}
-inline bool colinear(param(position2) p1, param(position2) p2, param(position2) p3, float epsilon) {
-	return colinear(p1 - p3, p2 - p3, epsilon);
-}
-
-float2		solve_line(param(float2) pt0, param(float2) pt1);	// solves y = mx + b for line to intersect two points
-position2	intersect_lines(param(position2) pos0, param(float2) dir0, param(position2) pos1, param(float2) dir1);
-
 template<typename T> auto segment_distance2(T a, T b, T p) {
 	auto	d	= b - a;
 	auto	dl	= len2(d);
@@ -1304,6 +1378,51 @@ template<typename T> auto segment_distance2(T a, T b, T p) {
 template<typename T> auto segment_distance(T a, T b, T p) {
 	return sqrt(segment_distance2(a, b, p));
 }
+
+//-----------------------------------------------------------------------------
+//
+//						2D
+//
+//-----------------------------------------------------------------------------
+
+typedef ray<float, 2>				ray2;
+typedef n_sphere<float, 2>			circle;
+typedef unit_n_sphere<float, 2>		unit_circle_t;
+typedef normalised<line<float, 2>>	line2;
+typedef aabb<float, 2>				rectangle;
+typedef unit_aabb<float, 2>			unit_rect_t;
+typedef obb<float, 2>				obb2;
+typedef n_parallelotope<float, 2>	parallelogram;
+
+extern const unit_circle_t		unit_circle;
+extern const unit_rect_t		unit_rect;
+
+template<typename T> float		area(const T &t)	{ return t.area(); }
+
+template<typename T, typename = decltype(declval<T>().plane(PLANE_MINUS_X))> auto get_planes(const T &t) {
+	return transformc(planes<3>(), [t](PLANE i) { return t.plane(i); });
+}
+
+//dist between shape and ray
+template<typename S, typename E>	auto	dist(const S &s, const ray<E, 2> &r) {
+	auto	dp	= normalise(perp(r.d));
+	if (dot(dp, anypoint(s) - r.p) > 0)
+		dp = -dp;
+	return max(dot(-dp, s.support(dp)), zero);
+}
+
+/*template<typename S> float	dist(const S& s, param(ray2) r, position2* pos = nullptr) {
+	auto	t	= s.ray_closest(r);
+	auto	p1	= r.from_parametric(t);
+	if (pos)
+		*pos = p1;
+	return dist(s, p1);
+}
+*/
+
+float2		solve_line(param(float2) pt0, param(float2) pt1);	// solves y = mx + b for line to intersect two points
+position2	intersect_lines(param(position2) pos0, param(float2) dir0, param(position2) pos1, param(float2) dir1);
+
 
 // compute signed area of triangle (a,b,c)
 //inline auto signed_area(param(position2) a, param(position2) b, param(position2) c) {
@@ -1342,10 +1461,6 @@ template<typename E> pos<E,2> uniform_perimeter(const aabb<E, 2> &r, E t) {
 }
 
 //-----------------------------------------------------------------------------
-// ray2
-//-----------------------------------------------------------------------------
-
-//-----------------------------------------------------------------------------
 // line2	- 2d analog of plane
 //-----------------------------------------------------------------------------
 
@@ -1370,7 +1485,6 @@ public:
 		SIGN	orientation;
 		bool	empty;
 		bool	degenerate;
-		info(TYPE _type, SIGN _orientation, bool _none, bool _degenerate) : type(_type), orientation(_orientation), empty(_none), degenerate(_degenerate) {}
 	};
 
 	static void		two_linepairs(conic &c1, conic &c2, const position2 &p1, const position2 &p2, const position2 &p3, const position2 &p4);
@@ -1382,36 +1496,49 @@ public:
 	static conic ellipse_through(const position2 &p1, const position2 &p2, const position2 &p3);
 	static conic ellipse_through(const position2 &p1, const position2 &p2, const position2 &p3, const position2 &p4);
 	static conic line_pair(const position2 &p1, const position2 &p2, const position2 &p3, const position2 &p4);
-	static conic line_pair(const line2 &p1, const line2 &p2);
-	static conic line(const line2 &p1);
+	static conic line_pair(const line<float, 2> &p1, const line<float, 2> &p2);
+	static conic line(const line<float, 2> &p1);
 	static conic from_matrix(const float3x3 &m);
 
-	static conic unit_circle() { return  conic(float3{one, one, -one}, zero); }
+	static conic standard_line()			{ return conic(float3{1, 0, 0}); }
+	static conic standard_parabola()		{ return conic(float3{1, 0, 0}, float3{0, 1, 0}); }
+	static conic standard_parallel_lines()	{ return conic(float3{1, 0, -1}); }
+	static conic standard_point()			{ return conic(float3{1, 1, 0}); }
+	static conic standard_circle()			{ return conic(float3{1, 1, -1}); }
+	static conic standard_line_pair()		{ return conic(float3{1, -1, 0}); }
+	static conic standard_hyperbola()		{ return conic(float3{1, -1, -1}); }
 
 	conic() {}
-	conic(const _triangular<float, 3> &m) : symmetrical3(m)	{}
-	conic(float3 d, float3 o)	: symmetrical3(d, o)	{}
-	explicit conic(const circle &c)		: symmetrical3(c.matrix() * conic::unit_circle()) {}
-
+	conic(const _triangular<float, 3> &m)		: symmetrical3(m)		{}
+	explicit conic(float3 d, float3 o = zero)	: symmetrical3(d, o)	{}
+	auto&		as_matrix()						const	{ return *(const symmetrical3*)this; }
 	float		det2x2()						const	{ return swizzle<0,1>(*(symmetrical3*)this).det(); }
 
 	info		analyse()						const;
+	info		analyse(float2x3 &m)			const;
 	float		evaluate(param(position2) p)	const	{ return dot(p.v * p.v, d.xy) + two * (dot(p.v, o.zy) + o.x * p.v.x * p.v.y) + d.z; }
+	auto		tangent(position2 p)			const	{ return iso::line<float, 2>(as_matrix() * p); }
+	//float2		grad(param(position2) v)		const	{ return (*this * v).xy; }
 	position2	centre()						const	{ return position2(cofactors(*this).column<2>()); }
-	position2	centre(conic &x)				const	{ position2 c = centre(); x = conic(concat(d.xy, evaluate(c)), float3{o.x,zero,zero}); return c; }
 	float		area()							const	{ auto t = det2x2(); return pi * det() / t * rsqrt(t); }
 	auto		centre_form(position2 &c)		const	{ c = centre(); auto q = translate(-c) * *this; return swizzle<0,1>(q) / -q.d.z; }
 	bool		is_circle()						const	{ return d.x == d.y && o.x == zero; }
 	bool		is_ellipse()					const	{ return det2x2() > zero; }
 	void		flip()									{ d = -d; o = -o; }
 
-	bool		ray_check(param(ray2) r, float &t, vector2 *normal);
-	rectangle	get_box()						const;
+	rectangle	get_box()						const	{ return rectangle::with_centre(centre(), sqrt(-d.yx * det()) / det2x2()); }
 	float2x3	get_tangents()					const;
 
 	position2	support(param(float2) v)		const;
+	position2	closest(param(position2) p)		const;
+	bool		ray_check(param(ray2) r, float &t, vector2 *normal) const;
 
-	interval<float>	operator&(const axis_s<0>&)	const	{ float2 t = float2{-o.z, sqrt(square(o.z) - d.x * d.z)} / d.x; return interval<float>(t.x - t.y, t.x + t.y); }
+	interval<float>	operator&(const axis_s<0>&)	const	{
+		if (abs(d.x) * 1000 < abs(o.z))
+			return interval<float>(d.z / o.z * -half);
+		float2 t = float2{-o.z, sqrt(square(o.z) - d.x * d.z)} / d.x;
+		return interval<float>(t.x - t.y, t.x + t.y);
+	}
 	interval<float>	operator&(const axis_s<1>&)	const	{ float2 t = float2{-o.y, sqrt(square(o.y) - d.y * d.z)} / d.y; return interval<float>(t.x - t.y, t.x + t.y); }
 	interval<float>	operator&(param(line2) p)	const	{ return (*this / from_x_axis(p)) & x_axis; }
 
@@ -1420,11 +1547,14 @@ public:
 	friend conic operator-(const conic &a, const conic &b)	{ return a._sub(b); }
 	template<typename T> friend IF_SCALAR(T, conic) operator*(param(conic) a, const T &b)	{ return a._smul(b); }
 	template<typename T> friend IF_SCALAR(T, conic) operator*(const T &a, param(conic) b)	{ return b._smul(a); }
+	template<typename T> friend IF_SCALAR(T, conic) operator/(param(conic) a, const T &b)	{ return a._smul(1.f / b); }
 
-//	template<typename M> conic operator/(const M &m) const	{ return mul_mulT(transpose(m), *this); }
-	template<typename M> friend conic operator*(const inverse_s<M> &m, const conic &c)	{ return mul_mulT(transpose(m.m), (const symmetrical3&)c); }
+	template<typename M> friend conic operator*(const inverse_s<M> &m, const conic &c)	{ return mul_mulT(transpose(inverse(m)), (const symmetrical3&)c); }
 	template<typename M> friend IF_MAT(M, conic) operator*(const M &m, const conic &c)	{ return mul_mulT(cofactors(m), (const symmetrical3&)c); }
+	template<typename M> friend conic operator*(const transpose_s<M> &m, const conic &c){ return mul_mulT(cofactors(m), (const symmetrical3&)c); }
 };
+
+int	intersection(const conic &a, const conic &b, position2 *results);
 
 //-----------------------------------------------------------------------------
 // circle
@@ -1480,7 +1610,7 @@ public:
 	force_inline rectangle	get_box()					const	{ return rectangle::with_centre(centre(), sqrt(square(major()) + square(minor()))); }
 
 	ellipse&				operator*=(param(float2x3) m)	{ return *this = ellipse(m * matrix()); }
-	operator conic()	const { return matrix() * conic::unit_circle(); }
+	operator conic()	const { return matrix() * conic::standard_circle(); }
 
 	//friend ellipse operator+(param(ellipse) a, param(ellipse) b);	//minkowski sum
 	//friend ellipse operator-(param(ellipse) a, param(ellipse) b);	//minkowski difference
@@ -1504,17 +1634,16 @@ public:
 	) {}
 
 	force_inline position2	centre()				const	{ return position2(z); }
-	force_inline float		area()					const	{ return xx * yy * pi;	}
+	force_inline float		area()					const	{ return x.x * y.y * pi;	}
 	bool					contains(param(position2) pos)	const	{ return len2(float2(pos / matrix())) < one; }
 	force_inline float2x3	matrix()				const	{ return *this; }
 	force_inline auto		inv_matrix()			const	{ return inverse(matrix()); }
+	operator conic()	const { return matrix() * conic::standard_circle(); }
 };
 
 //-----------------------------------------------------------------------------
 // parallelogram
 //-----------------------------------------------------------------------------
-
-typedef n_parallelotope<float, 2> parallelogram;
 
 template<typename E> pos<E,2> uniform_concentric(const n_parallelotope<E, 2> &p, float2 t) {
 	float2 u = t * two - one;
@@ -1551,7 +1680,7 @@ template<typename E> auto perimeter_optimised(const obb<E, 2> &shape) {
 // triangle
 //-----------------------------------------------------------------------------
 
-class triangle : float2x3 {
+class triangle : protected float2x3 {
 public:
 	triangle()	{}
 	triangle(param(position2) a, param(position2) b, param(position2) c) : float2x3(b - a, c - a, a)	{}
@@ -1568,7 +1697,7 @@ public:
 	float		perimeter()							const	{ return len(x) + len(y) + len(y - x);			}
 	const float2x3&	matrix()						const	{ return *this; }
 	auto		inv_matrix()						const	{ return inverse(matrix()); }
-	array<position2, 3>	corners()			const	{ return { position2(z), position2(z + x), position2(z + y) }; }
+	array<position2, 3>	corners()					const	{ return { position2(z), position2(z + x), position2(z + y) }; }
 
 	void		flip()										{ swap(x, y); }
 
@@ -1612,7 +1741,7 @@ public:
 	force_inline static float		perimeter()							{ return two + sqrt2; }
 	force_inline static _identity	matrix()							{ return _identity(); }
 	force_inline static _identity	inv_matrix()						{ return _identity(); }
-	force_inline static const array<position2, 3>&	corners()	{ return _corners; }
+	force_inline static const array<position2, 3>&	corners()			{ return _corners; }
 	force_inline static const position2&	corner(uint8 i)				{ return _corners[i]; }
 
 	static bool			ray_check(param(ray2) r, float &t, vector2 *normal);
@@ -1651,15 +1780,33 @@ public:
 	float2		extent()							const	{ float4 a = min(p01, p23), b = max(p01, p23); return max(b.xy, b.zw) - min(a.xy, a.zw); }
 	position2	corner(CORNER i)					const	{ return get(((const packed<position2>*)this)[i]);	}
 	position2	operator[](int i)					const	{ return get(((const packed<position2>*)this)[i]);	}
+	triangle	tri012()							const	{ return {pt0(), pt1(), pt2()}; }
+	triangle	tri321()							const	{ return {pt3(), pt2(), pt1()}; }
+
+	float2		parametric(param(position2) p)		const	{
+		float2	r	= tri012().parametric(p);
+		return r.x + r.y <= one
+			?	r
+			:	one - tri321().parametric(p);
+		//float2	diag	= pt1() - pt2();
+		//return cross(p - pt2(), diag) * cross(pt0() - pt2(), diag) > zero
+		//	? tri012().parametric(p)
+		//	: one - tri321().parametric(p);;
+	}
+	position2	from_parametric(param(float2) p)	const {
+		return p.x + p.y <= one
+			? tri012().from_parametric(p)
+			: tri321().from_parametric(one - p);
+	}
 
 	bool		contains(param(position2) pos)		const	{ return unit_rect.contains(inv_matrix() * pos); }
 	position2	centre()							const;
 	float4		barycentric(param(float2) p)		const;
 	float3x3	inv_matrix()						const;
 	float3x3	matrix()							const;
-	rectangle	get_box()							const	{ float4 a = min(p01, p23), b = max(p01, p23); return rectangle(position2(min(a.xy, a.zw)), position2(max(b.xy, b.zw))); }
-	array<position2, 4>	corners()			const	{ return { position2(p01.xy), position2(p01.zw), position2(p23.xy), position2(p23.zw) }; }
-	array<position2, 4>	corners_cw()		const	{ return { position2(p01.xy), position2(p01.zw), position2(p23.zw), position2(p23.xy) }; }
+	rectangle	get_box()							const	{ float4 a = min(p01, p23), b = max(p01, p23); return {position2(min(a.xy, a.zw)), position2(max(b.xy, b.zw))}; }
+	array<position2, 4>	corners()					const	{ return { pt0(), pt1(), pt2(), pt3() }; }
+	array<position2, 4>	corners_cw()				const	{ return { pt0(), pt1(), pt3(), pt2() }; }
 
 	position2	closest(param(position2) p)			const;
 	position2	support(param(float2) v)			const;
@@ -1667,7 +1814,7 @@ public:
 	bool		ray_check(param(ray2) r, float &t, vector2 *normal) const;
 	float		ray_closest(param(ray2) d)			const;
 
-	force_inline void operator*=(param(float2x3) m)								{ *this = m * *this; }
+	force_inline void	operator*=(param(float2x3) m)							{ *this = m * *this; }
 
 	friend quadrilateral operator*(param(float2x3) m, param(quadrilateral) b)	{ return quadrilateral(m * b.pt0(), m * b.pt1(), m * b.pt2(), m * b.pt3()); }
 	friend position2	uniform_interior(const quadrilateral &s, param(float2) t);
@@ -1768,14 +1915,15 @@ struct quedge2 {
 //
 //-----------------------------------------------------------------------------
 
-typedef ray<float, 3>			ray3;
-typedef n_sphere<float, 3>		sphere;
-typedef unit_n_sphere<float, 3>	unit_sphere_t;
+typedef ray<float, 3>				ray3;
+typedef n_sphere<float, 3>			sphere;
+typedef unit_n_sphere<float, 3>		unit_sphere_t;
 typedef normalised<n_plane<float, 3>>	plane;
-typedef aabb<float, 3>			cuboid;
-typedef unit_aabb<float, 3>		unit_cube_t;
-typedef obb<float, 3>			obb3;
-typedef line<float, 3>			line3;
+typedef aabb<float, 3>				cuboid;
+typedef unit_aabb<float, 3>			unit_cube_t;
+typedef obb<float, 3>				obb3;
+typedef line<float, 3>				line3;
+typedef n_parallelotope<float, 3>	parallelepiped;
 
 
 extern const unit_sphere_t		unit_sphere;
@@ -1795,19 +1943,6 @@ template<typename T, typename E> force_inline	bool	is_visible(const T &t, const 
 template<typename T, typename E> force_inline	bool	is_within(const T &t, const mat<E, 4,4> &m)		{ return unit_cube_is_within(m * t.matrix()); }
 template<typename T, typename E> force_inline	uint32	visibility_flags(const T &t, const mat<E, 4,4> &m, uint32 flags)	{ return flags ? unit_cube_visibility_flags(m * t.matrix(), flags) : 0; }
 template<typename T> force_inline				auto	volume(const T &t)	{ return t.volume(); }
-
-inline bool colinear(param(float3) p1, param(float3) p2) {
-	return all(cross(p1, p2) == zero);
-}
-inline bool colinear(param(position3) p1, param(position3) p2, param(position3) p3) {
-	return colinear(p1 - p3, p2 - p3);
-}
-inline bool colinear(param(float3) p1, param(float3) p2, float epsilon) {
-	return float(dot(p1, p2) * rsqrt(len2(p1) * len2(p2))) > 1 - epsilon;
-}
-inline bool colinear(param(position3) p1, param(position3) p2, param(position3) p3, float epsilon) {
-	return colinear(p1 - p3, p2 - p3, epsilon);
-}
 
 // compute signed volume of tetrahedron (a,b,c,origin)
 inline auto triple_product(param(float3) a, param(float3) b, param(float3) c) {
@@ -1875,22 +2010,22 @@ public:
 		SIGN	orientation;
 		bool	empty;
 		bool	degenerate;
-		info(TYPE _type, SIGN _orientation, bool _none, bool _degenerate) : type(_type), orientation(_orientation), empty(_none), degenerate(_degenerate) {}
+		//info(TYPE type, SIGN orientation, bool empty, bool degenerate) : type(type), orientation(orientation), empty(empty), degenerate(degenerate) {}
 	};
 
-	static quadric unit_sphere()		{ return quadric(float4{1,  1,  1, -1}); }
-	static quadric unit_paraboloid()	{ return quadric(float4{1,  1,  0,  0}, float3{0, 0, -1}); }
-	static quadric unit_saddle()		{ return quadric(float4{1, -1,  0,  0}, float3{0, 0, -1}); }
-	static quadric unit_hyperboloid1()	{ return quadric(float4{1,  1, -1,  1}); }
-	static quadric unit_hyperboloid2()	{ return quadric(float4{1,  1, -1, -1}); }
+	static quadric standard_sphere()		{ return quadric(float4{1,  1,  1, -1}); }
+	static quadric standard_paraboloid()	{ return quadric(float4{1,  1,  0,  0}, float3{0, 0, -1}); }
+	static quadric standard_saddle()		{ return quadric(float4{1, -1,  0,  0}, float3{0, 0, -1}); }
+	static quadric standard_hyperboloid1()	{ return quadric(float4{1,  1, -1,  1}); }
+	static quadric standard_hyperboloid2()	{ return quadric(float4{1,  1, -1, -1}); }
 
 	//degenerates
-	static quadric unit_cylinder()		{ return quadric(float4{1,  1,  0, -1}); }
-	static quadric unit_cone()			{ return quadric(float4{1,  1, -1,  0}); }
-	static quadric unit_hyperbola()		{ return quadric(float4{1, -1,  0,  1}); }
-	static quadric unit_parabola()		{ return quadric(float4{1,  0,  0,  0}, zero, float3{0, 1, 0}); }
-	static quadric xy_plane()			{ return quadric(zero, float3{0, 0, 1}); }
-	static quadric z_axis()				{ return quadric(float4{1, 1, 0, 0}); }
+	static quadric standard_cylinder()		{ return quadric(float4{1,  1,  0, -1}); }
+	static quadric standard_cone()			{ return quadric(float4{1,  1, -1,  0}); }
+	static quadric standard_hyperbola()		{ return quadric(float4{1, -1,  0,  1}); }
+	static quadric standard_parabola()		{ return quadric(float4{1,  0,  0,  0}, zero, float3{0, 1, 0}); }
+	static quadric xy_plane()				{ return quadric(zero, float3{0, 0, 1}); }
+	static quadric z_axis()					{ return quadric(float4{1, 1, 0, 0}); }
 
 	static quadric plane_pair(const iso::plane &p1, const iso::plane &p2);
 	static quadric plane(const iso::plane &p1);
@@ -1905,18 +2040,21 @@ public:
 
 	quadric() {}
 	quadric(const _triangular<float, 4> &m) : symmetrical4(m)	{}
+	explicit quadric(float4 d, float3 o1 = zero, float3 o2 = zero) : symmetrical4(d, o1, o2)	{}
+	const symmetrical4&		as_matrix()			const	{ return *this; }
 
-	explicit quadric(const unit_sphere_t&)	: quadric(unit_sphere()) {}
-	explicit quadric(const sphere &s)		: quadric(s.matrix() * unit_sphere()) {}
-	explicit quadric(const class ellipsoid &e);
-
-	force_inline quadric(float4 d, float3 o1 = zero, float3 o2 = zero) : symmetrical4(d, o1, o2)	{}
+	//explicit quadric(const unit_sphere_t&)	: quadric(unit_sphere()) {}
+	//explicit quadric(const sphere &s)		: quadric(s.matrix() * unit_sphere()) {}
+	//explicit quadric(const class ellipsoid &e);
 
 	info		analyse()						const;
-	//	float		evaluate(param(float4) p)		const	{ return dot(p, float4x4(*this) * p); }
-	//	float		evaluate(param(position3) p)	const	{ return evaluate(float4(p)); }
+	info		analyse(float3x4 &m)			const;
+	//float		evaluate(param(float4) p)		const	{ return dot(p, float4x4(*this) * p); }
+	//float		evaluate(param(position3) p)	const	{ return evaluate(float4(p)); }
 	float		evaluate(param(float4) p)		const	{ auto d3 = diagonal<1>().d; return dot(p * p, D::d) + two * (dot(concat(o.zy, d3.z), p.xyz * p.w) + dot(concat(d3.xy, o.x), p.xyz * p.yzx)); }
 	float		evaluate(param(position3) p)	const	{ auto d3 = diagonal<1>().d; return dot(p.v * p.v, D::d.xyz) + two * (dot(concat(o.zy, d3.z), p.v) + dot(concat(d3.xy, o.x), p.v.xyz * p.v.yzx)) + D::d.w; }
+	//float3		grad(param(position3) v)		const	{ return (*this * v).xyz; }
+	auto		tangent(position3 p)			const	{ return iso::n_plane<float, 3>(as_matrix() * p); }
 
 	float4		centre4()						const	{ return cofactors(*this).column<3>(); }
 	position3	centre()						const	{ return position3(centre4()); }
@@ -2075,8 +2213,6 @@ template<typename E> bool is_within(const n_sphere<E,3> &s, const mat<E,4,4> &m)
 // ellipsoid
 //-----------------------------------------------------------------------------
 
-class quadric;
-
 class ellipsoid {
 	position3	c;
 	float3		a1;
@@ -2116,6 +2252,8 @@ public:
 	position3				support(param(float3) v)		const;
 
 	void					operator*=(param(float3x4) m)	{ *this = ellipsoid(m * matrix()); }
+	operator quadric()	const { return matrix() * quadric::standard_sphere(); }
+
 	friend ellipsoid		operator*(param(float3x4) m, param(ellipsoid) b)	{ return ellipsoid(m * b.matrix()); }
 	friend float			dist(param(ellipsoid) e, param(plane) p);
 	friend position3		uniform_surface(const ellipsoid &s, float2 t)	{ return s.matrix() * unit_sphere_uniform_surface<float>(t); }
@@ -2123,7 +2261,7 @@ public:
 };
 
 inline ellipsoid		fullmul(param(float3x4) m, param(sphere) b) { return ellipsoid(m * b.matrix()); }
-inline quadric::quadric(const ellipsoid &e)	: quadric(e.matrix() * unit_sphere()) {}
+//inline quadric::quadric(const ellipsoid &e)	: quadric(e.matrix() * unit_sphere()) {}
 
 inline bool is_visible(const ellipsoid &e, param(float4x4) m)	{ return unit_sphere_is_visible(m * e.inv_matrix()); }
 inline bool is_within(const ellipsoid &e, param(float4x4) m)	{ return unit_sphere_is_within(m * e.inv_matrix()); }
@@ -2139,7 +2277,7 @@ template<typename S> struct plane_shape : S {
 	static position2 plane_shape_param(const float3x4 &m, param(position3) p) { return position2((m * p).v.xy); }
 
 	plane_shape() {}
-	plane_shape(param(iso::plane) p, paramT(S) s) : S(s), pl(p) {}
+	plane_shape(param(iso::plane) p, param(S) s) : S(s), pl(p) {}
 	template<typename...PP> plane_shape(param(position3) pos, param(vector3) norm, PP... pp) : pl(norm, pos) {
 		new(this) S(position2((to_xy_plane(pl) * pos).v.xy), pp...);
 	}
@@ -2218,7 +2356,7 @@ template<typename S> float plane_shape<S>::ray_closest(param(position3) p, param
 	float3		r = p / m;
 	return r.z;
 }
-template<typename S> float dist(paramT(plane_shape<S>) s, param(plane) p)	{
+template<typename S> float dist(param(plane_shape<S>) s, param(plane) p)	{
 	return dist(s.shape(), to_xy_plane(s.pl) * (p & s.plane()));
 }
 
@@ -2387,6 +2525,35 @@ public:
 };
 
 //-----------------------------------------------------------------------------
+// quadrilateral3
+//-----------------------------------------------------------------------------
+
+class quadrilateral3 {
+public:
+	position3	p[4];
+	quadrilateral3(param(position3) p0, param(position3) p1, param(position3) p2, param(position3) p3) : p{p0, p1, p2, p3} {}
+	quadrilateral3(const quadrilateral &q2, float z = 0) : quadrilateral3(position3(q2.pt0(), z), position3(q2.pt1(), z), position3(q2.pt2(), z), position3(q2.pt3(), z)) {}
+	float		area()					const	{ return tri012().area() + tri321().area(); }
+	float		perimeter()				const	{ return len(p[0] - p[1]) + len(p[1] - p[2]) + len(p[2] - p[3]) + len(p[3] - p[0]);	}
+	position3	corner(CORNER i)		const	{ return p[i];	}
+	position3	operator[](int i)		const	{ return p[i];	}
+	cuboid		get_box()				const	{ return {min(p[0], p[1], p[2], p[3]), max(p[0], p[1], p[2], p[3])}; }
+	array<position2, 4>	corners()		const	{ return p; }
+	array<position2, 4>	corners_cw()	const	{ return {p[0], p[1], p[3], p[2]}; }
+	triangle3	tri012()				const	{ return {p[0], p[1], p[2]}; }
+	triangle3	tri321()				const	{ return {p[3], p[2], p[1]}; }
+
+	position3	from_parametric(param(float2) p)	const {
+		return p.x + p.y <= one
+			? tri012().from_parametric(p)
+			: tri321().from_parametric(one - p);
+	}
+
+	friend position3	uniform_interior(const quadrilateral3 &s, param(float2) t);
+	friend position3	uniform_perimeter(const quadrilateral3 &s, float x);
+};
+
+//-----------------------------------------------------------------------------
 // tetrahedron
 //-----------------------------------------------------------------------------
 
@@ -2454,7 +2621,6 @@ bool is_within(const tetrahedron &t, param(float4x4) m);
 // parallelepiped
 //-----------------------------------------------------------------------------
 
-typedef n_parallelotope<float, 3> parallelepiped;
 template<> position3 parallelepiped::closest(position3 p) const;
 
 template<typename E> inline parallelogram3	get_face(const n_parallelotope<E, 3> &p, PLANE i) {
@@ -2483,10 +2649,61 @@ template<typename E> pos<E,3> uniform_surface(const n_parallelotope<E, 3> &s, ve
 	return s.matrix() * t2;
 }
 
+//-----------------------------------------------------------------------------
+// general 8 points - consists of 5 tetrahedra
+// sold equivalent of quadrilateral
+//-----------------------------------------------------------------------------
 
-//-----------------------------------------------------------------------------
-// obb3
-//-----------------------------------------------------------------------------
+class polytope8 {
+public:
+	position3	p[8];
+	polytope8(
+		param(position3) p0, param(position3) p1, param(position3) p2, param(position3) p3,
+		param(position3) p4, param(position3) p5, param(position3) p6, param(position3) p7
+	) : p{p0, p1, p2, p3, p4, p5, p6, p7} {}
+	
+	polytope8(const parallelepiped &q) : polytope8(
+		q.corner(CORNER_MMM),
+		q.corner(CORNER_PMM),
+		q.corner(CORNER_MPM),
+		q.corner(CORNER_PPM),
+		q.corner(CORNER_MMP),
+		q.corner(CORNER_PMP),
+		q.corner(CORNER_MPP),
+		q.corner(CORNER_PPP)
+	) {}
+
+	position3	corner(CORNER i)	const	{ return p[i];	}
+	position3	operator[](int i)	const	{ return p[i];	}
+	cuboid		get_box()			const	{ return {min(p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7]), max(p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7])}; }
+
+	tetrahedron	tet0124()			const	{ return {p[0], p[1], p[2], p[4]}; }
+	tetrahedron	tet3217()			const	{ return {p[3], p[2], p[1], p[5]}; }
+	tetrahedron	tet5471()			const	{ return {p[5], p[4], p[7], p[1]}; }
+	tetrahedron	tet6742()			const	{ return {p[6], p[7], p[4], p[2]}; }
+	//middle
+	tetrahedron	tet1247()			const	{ return {p[1], p[2], p[4], p[7]}; }
+
+	position3	from_parametric(param(float3) p) const {
+		auto	t = reduce_add(p);
+		if (t <= one)
+			return tet0124().from_parametric(p);
+		if (t >= two)
+			return tet3217().from_parametric(one - p);
+
+		float3	p2	= {one - p.x, p.y, one - p.z};
+		t = reduce_add(p2);
+		if (t <= one)
+			return tet5471().from_parametric(p2);
+		if (t >= two)
+			return tet6742().from_parametric(one - p2);
+		
+		return tet1247().from_parametric(one - p - p.yzx);
+	}
+
+	friend position3	uniform_interior(const polytope8 &s, param(float2) t);
+	friend position3	uniform_surface(const polytope8 &s, float x);
+};
 
 //-----------------------------------------------------------------------------
 // baseclass for cylinder, cone, capsule
@@ -2531,7 +2748,7 @@ public:
 	position3				support(param(float3) v)		const;
 	bool					contains(param(position3) p)	const;
 
-	operator quadric() const { return matrix() * quadric::unit_cylinder(); }
+	operator quadric() const { return matrix() * quadric::standard_cylinder(); }
 
 	friend float			dist(param(cylinder) c, param(plane) p) {
 		float	dz	= abs(dot(p.normal(), c.dir()));
@@ -2582,7 +2799,7 @@ public:
 
 	operator quadric() const {
 		float3x4	m = translate(apex()) * look_along_z(dir()) * scale(concat(float2(radius()), len(dir()) * two));
-		return m * quadric::unit_cone();
+		return m * quadric::standard_cone();
 	}
 
 	friend float			dist(param(cone) c, param(plane) p) {
@@ -2677,7 +2894,7 @@ struct sphere_visibility {
 		return a.xyz - a.w;
 	}
 
-	sphere_visibility(const float4x4 &_matrix) : matrix(_matrix) {
+	sphere_visibility(const float4x4 &matrix) : matrix(matrix) {
 		cull3	= sqrt(
 			square(matrix.x.xyz + matrix.x.w)
 		+	square(matrix.y.xyz + matrix.y.w)

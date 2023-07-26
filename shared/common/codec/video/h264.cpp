@@ -1,6 +1,7 @@
 #include "stream.h"
 #include "base/bits.h"
 #include "codec/vlc.h"
+#include "codec/cabac.h"
 
 using namespace iso;
 /*

@@ -68,7 +68,7 @@ win::Bitmap PreMultiplyAlpha(const win::Bitmap &bm) {
 
 Bitmap app::LoadPNG(win::ID id) {
 	Resource		r(id, "PNG");
-	ISO_ptr<bitmap>	p	= FileHandler::Get("PNG")->Read(0, lvalue(memory_reader(r)));
+	ISO_ptr<bitmap>	p	= FileHandler::Get("PNG")->Read(none, lvalue(memory_reader(r)));
 	Point			size(p->Width(), p->Height());
 
 	void	*data;
@@ -83,7 +83,7 @@ GetURLPWDialog::GetURLPWDialog(HWND hWndParent, const char *_url, const char *_u
 	ret = Modal(hWndParent, IDD_OPENURL_PW);
 }
 
-LRESULT	GetURLPWDialog::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+LRESULT	GetURLPWDialog::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 		case WM_INITDIALOG: {
 			Item(IDC_URL).SetText(url);
@@ -149,7 +149,7 @@ struct FileDevice : DeviceT<FileDevice>, DeviceCreateT<FileDevice> {
 		if (GetOpen(main, fn, "Open File", s)) {
 #endif
 		#ifdef PLAT_PC
-			//IsoEditor::Cast(main)->AddRecent(fn);
+			IsoEditor::Cast(main)->AddRecent(fn);
 		#endif
 			Busy bee;
 			tag	id = fn.name();
@@ -245,11 +245,11 @@ struct SnippetsDevice : DeviceT<SnippetsDevice>, MenuCallbackT<SnippetsDevice> {
 			}
 			DeviceAdd	add(m, id);
 
-			add("Edit...", new_lambda<DeviceCreate>([this](const Control &c) {
-				return (ISO_ptr<void>)GetRegistry("Snippets", reg);
+			add("Edit...", new_lambda<DeviceCreate>([this](const Control &c)->ISO_ptr_machine<void> {
+				return (ISO_ptr_machine<void>)GetRegistry("Snippets", reg);
 			}));
 
-			add("Add...", new_lambda<DeviceCreate>([this](const Control &c) {
+			add("Add...", new_lambda<DeviceCreate>([this](const Control &c)->ISO_ptr_machine<void> {
 				fixed_string<1024>	value;
 				if (GetValueDialog(c, value)) {
 					auto	v	= reg.value();

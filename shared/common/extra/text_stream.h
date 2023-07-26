@@ -12,6 +12,11 @@ namespace iso {
 //	helpers
 //-----------------------------------------------------------------------------
 
+template<typename R> int skip_whitespace(R &r, int c) {
+	while (is_whitespace(c) && (c = r.getc()) != -1);
+	return c;
+}
+
 template<typename R> int skip_whitespace(R &r) {
 	int	c;
 	while ((c = r.getc()) != -1 && is_whitespace(c));

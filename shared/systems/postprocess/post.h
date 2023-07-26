@@ -119,9 +119,9 @@ public:
 	void			GenerateMips(Texture &tex, int mips);
 };
 
-template<> VertexElements GetVE<PostEffects::vertex_col>();
-template<> VertexElements GetVE<PostEffects::vertex_tex>();
-template<> VertexElements GetVE<PostEffects::vertex_tex_col>();
+//template<> VertexElements GetVE<PostEffects::vertex_col>();
+//template<> VertexElements GetVE<PostEffects::vertex_tex>();
+//template<> VertexElements GetVE<PostEffects::vertex_tex_col>();
 
 }//namespace iso
 

@@ -16,6 +16,25 @@ struct GenerateConsts {
 	}
 };// generateconsts;
 
+
+#ifdef USE_VEC
+
+vec<int16,16> swizzle_0_8_4_12_2_10_6_14_1_9_5_13_3_11_7_15(const vec<int16,16> &x) {
+	return swizzle<0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15>(x);
+};
+vec<int, 8> swizzle_7_6_5_4_3_2_1_0(const vec<int, 8>& x) {
+	return swizzle<7,6,5,4,3,2,1,0>(x);
+}
+
+vec<int16, 8> swizzle_0_1_2_3_9_10_13_14(const vec<int16, 16>& x) {
+	return swizzle<0,1,2,3,9,10,13,14>(x);
+}
+
+vec<int, 8> swizzle_1_0_3_2_7_6_5_4(const vec<int, 8>& x) {
+	return swizzle<1,0,3,2,7,6,5,4>(x);
+}
+#endif
+
 //-----------------------------------------------------------------------------
 
 #if 0

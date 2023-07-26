@@ -32,12 +32,12 @@ uint64 hash(const Type *type) {
 
 class BinaryData_writer {
 	filename				fn;
-	ostream_ref	file;
-	uint32					offset;
+	ostream_ref				file;
+	uint64					offset;
 	iso::flags<BIN_FLAGS>	flags;
 
-	hash_map<const Type*, uint32>	types;
-	hash_map<void*, pair<WeakPtr<void>, uint32> >	pointers;
+	hash_map<const Type*, uint32>					types;
+	hash_map<void*, pair<WeakPtr<void>, uint32>>	pointers;
 
 	bool		ExpandUser(const TypeUser *user) const {
 		return flags.test(BIN_WRITEALLTYPES)
@@ -48,11 +48,14 @@ class BinaryData_writer {
 	template<typename T> void DumpEnums(const TypeEnumT<T> *type);
 	void		DumpType(FileValue &Value, const Type *type);
 	uint32		DumpType(const Type *type);
+	void		DumpTypes(const Browser &b);
 	void		DumpData(const Browser &b, bool big, bool flip);
 	Browser2	GetVirtual(const Browser &b) const;
 public:
-	BinaryData_writer(const char *_fn, ostream_ref _file, uint32 _flags = 0) : fn(_fn), file(_file), flags(_flags) { fn.cleanup(); }
-	void		Dump(ptr<void> p);
+	BinaryData_writer(const char *fn, ostream_ref file, uint32 flags = 0) : fn(fn), file(file), flags(flags) {
+		this->fn.cleanup();
+	}
+	void		Dump(ptr_machine<void> p);
 };
 
 Browser2 BinaryData_writer::GetVirtual(const Browser &b) const {
@@ -75,16 +78,24 @@ Browser2 BinaryData_writer::GetVirtual(const Browser &b) const {
 	return Browser2();
 }
 
-void BinaryData_writer::Dump(ptr<void> p) {
+void BinaryData_writer::Dump(ptr_machine<void> p) {
 	FILE_HEADER	header;
 	streamptr	here	= file.tell();
+
+	if (p.Flags() & Value::EXTERNAL)
+		p = FileHandler::ReadExternal(p);
 
 	Browser2	b(p);
 	if (b.GetType() == VIRTUAL)
 		b = GetVirtual(b);
 
-	offset = uint32(here) + sizeof(header) + GetSize(b.GetTypeDef());
+
+	offset	= here + sizeof(header) + GetSize(b.GetTypeDef());
+
 	DumpType(header, b.GetTypeDef());
+	//dump all referenced types (so they're near start of file)
+	DumpTypes(b);
+
 	file.seek(sizeof(header));
 
 	bool	big = flags.test(BIN_BIGENDIAN);
@@ -104,7 +115,7 @@ template<typename T> void BinaryData_writer::DumpEnums(const TypeEnumT<T> *type)
 	bool	crc_ids = !!(type->flags & type->CRCIDS);
 	int		n		= type->size();
 
-	offset		+= (uint32)type->calc_size(n) + 4;
+	offset		+= type->calc_size(n) + 4;
 
 	for (auto &x : *type) {
 		if (!crc_ids && flags.test(BIN_STRINGIDS)) {
@@ -113,7 +124,7 @@ template<typename T> void BinaryData_writer::DumpEnums(const TypeEnumT<T> *type)
 			file.seek(offset);
 			file.writebuff(x.id.get_tag(), len);
 			file.seek(here);
-			(uint32le&)x.id	= offset;
+			(uint32le&)x.id		= offset;
 			offset	+= len;
 		} else {
 			(uint32le&)x.id	= x.id.get_crc(crc_ids);
@@ -133,7 +144,7 @@ uint32 BinaryData_writer::DumpType(const Type *type) {
 	if (uint32 loc = types[type])
 		return loc;
 
-	offset	= (offset + 3) & ~3;
+	offset	= (offset + 3) & ~3ull;
 	uint32		ret		= offset;
 	streamptr	here	= file.tell();
 	file.seek(offset);
@@ -156,18 +167,18 @@ uint32 BinaryData_writer::DumpType(const Type *type) {
 				break;
 			}
 			type2.flags &= ~TypeInt::ENUM;
-			fallthrough
+			//fallthrough
 		case FLOAT:
 		case STRING:
 		case VIRTUAL:
 			file.write(type2);
-			offset = uint32(file.tell());
+			offset = file.tell();
 			break;
 
 		case COMPOSITE: {
 			TypeComposite	&comp	= *(TypeComposite*)type;
 			bool			crc_ids	= !!(type->flags & TypeComposite::CRCIDS);
-			offset += (uint32)comp.calc_size(comp.Count());
+			offset	+= comp.calc_size(comp.Count());
 			if (!flags.test(BIN_STRINGIDS))
 				type2.flags |= TypeComposite::CRCIDS;
 			file.write(type2);
@@ -258,6 +269,24 @@ void BinaryData_writer::DumpType(FileValue &Value, const Type *type) {
 	}
 }
 
+void BinaryData_writer::DumpTypes(const Browser &_b) {
+	if (Browser b = _b.SkipUser()) {
+		const Type	*type	= b.GetTypeDef();
+		if (type->GetType() == REFERENCE) {
+			Browser				b2	= *b;
+			ptr_machine<void>	p	= b2;
+			if (p) {
+				if (!((TypeReference*)type)->subtype && !p.HasCRCType()) {
+					auto subtype = p.GetType();
+					if (subtype && (subtype->GetType() != USER || ExpandUser((const TypeUser*)subtype)))
+						DumpType(subtype);
+				}
+			}
+		}
+	}
+}
+
+
 void BinaryData_writer::DumpData(const Browser &_b, bool big, bool flip) {
 	Browser		b		= _b.SkipUser();
 	if (!b)
@@ -293,10 +322,10 @@ void BinaryData_writer::DumpData(const Browser &_b, bool big, bool flip) {
 					file.write(uint32le(offset));
 				}
 				TypeString	*stype	= (TypeString*)type;
-				streamptr	here = file.tell();
+				streamptr	here	= file.tell();
 				file.seek(offset);
 				file.writebuff(s, (stype->len(s) + 1) << stype->log2_char_size());
-				offset = (uint32)file.tell();
+				offset = file.tell();
 				file.seek(here);
 
 			} else {
@@ -332,7 +361,11 @@ void BinaryData_writer::DumpData(const Browser &_b, bool big, bool flip) {
 			TypeOpenArray	*array = (TypeOpenArray*)type;
 			if (int count = b.Count()) {
 				offset = align(offset + 4, max(array->SubAlignment(), 4u));
-				file.write(uint32le(offset));
+				if (array->Is64Bit())
+					file.write(uint64le(offset));
+				else
+					file.write(uint32le(offset));
+
 				streamptr	start	= offset;
 				streamptr	here	= file.tell();
 				file.seek(offset - 4);
@@ -348,14 +381,17 @@ void BinaryData_writer::DumpData(const Browser &_b, bool big, bool flip) {
 				}
 				file.seek(here);
 			} else {
-				file.write(0);
+				if (array->Is64Bit())
+					file.write(uint64(0));
+				else
+					file.write(uint32(0));
 			}
 			break;
 		}
 		case REFERENCE: {
 			Browser				b2	= *b;
 			ptr_machine<void>	p	= b2;
-			uint32		location = 0;
+			uint64				location = 0;
 			if (p) {
 				const Type	*subtype0	= ((TypeReference*)type)->subtype;
 				const Type	*subtype	= subtype0;
@@ -396,7 +432,7 @@ void BinaryData_writer::DumpData(const Browser &_b, bool big, bool flip) {
 								Value.id	= offset;
 								offset		+= len;
 							} else {
-								crc32		c = id2;
+								crc32		c = id2.get_crc32();
 								Value.flags	|= Value::CRCID;
 								Value.id	= c;
 							}
@@ -416,11 +452,11 @@ void BinaryData_writer::DumpData(const Browser &_b, bool big, bool flip) {
 								f = f.relative_to(fn);
 
 							uint32	size	= f.size32() + 1;
-							offset			= location + sizeof(Value) + size;
+							offset	= location + sizeof(Value) + size;
 							file.write(Value);
 							file.writebuff(f, size);
 						} else {
-							offset = location + sizeof(Value) + GetSize(p.GetType());
+							offset	= location + sizeof(Value) + GetSize(p.GetType());
 							file.write(Value);
 							DumpData(Browser(p), big, flip);
 						}
@@ -442,7 +478,7 @@ size_t BinaryData::Write(ostream_ref file) const {
 	return ram_total ? file.writebuff(ram_buffer, ram_total) : 0;
 }
 
-bool BinaryData::Write(const ptr<void> &p, ostream_ref file, const char *fn, uint32 flags) {
+bool BinaryData::Write(const ptr_machine<void> &p, ostream_ref file, const char *fn, uint32 flags) {
 	if (file.exists()) {
 		BinaryData_writer(fn, file, flags).Dump(p);
 		return Write(file) == ram_total;
@@ -660,7 +696,7 @@ ptr_machine<void> BinaryData_fixer::FixPtr(Value *value) {
 			crc32 crc = crc32((uint32le&)value->type);
 			if (TypeUser *user = user_types.Find(tag2(crc))) {
 				value->type = user;
-				value->flags &= ~Value::CRCTYPE;
+				value->flags -= Value::CRCTYPE;
 			} else {
 				(crc32&)value->type = crc;
 				ISO_TRACEF("can't find type with crc=0x%08X\n", (uint32)crc);
@@ -701,7 +737,7 @@ ptr_machine<void> BinaryData_fixer::FixPtr(Value *value) {
 
 			if (value->flags & Value::ISBIGENDIAN) {
 #ifndef ISO_BIGENDIAN
-				value->flags &= ~Value::ISBIGENDIAN;
+				value->flags -= Value::ISBIGENDIAN;
 #endif
 				Fixer<bigendian_types>	f(this);
 				f.FixData(type, value + 1);
@@ -778,11 +814,11 @@ template<typename T> bool Fixer<T>::FixData(const Type *type, void *data) {
 			} else {
 				if (uint32 offset = *(uint32le*)data) {
 					void	*s = (char*)fixer->start + offset;
+					type->WritePtr(data, s);
 					if (offset & 3) {
 						needs_dupe = true;
-						s = ((TypeString*)type)->dup(s);
+					//	s = ((TypeString*)type)->dup(s);
 					}
-					new(data) ptr_type<char, 32>::type((char*)s);
 				}
 			}
 			return true;
@@ -809,8 +845,8 @@ template<typename T> bool Fixer<T>::FixData(const Type *type, void *data) {
 			return true;
 		}
 		case OPENARRAY:
-			if (uint32 o = *(uint32*)data) {
-				uint8			*d		= fixer->start + (uint32le&)o;
+			if (uint64 o = type->Is64Bit() ? *(uint64le*)data : *(uint32le*)data) {
+				uint8			*d		= fixer->start + o;
 				TypeOpenArray	*a		= (TypeOpenArray*)type;
 				OpenArrayHead	*h		= OpenArrayHead::Get(d);
 				iso::uint32		c		= endian(GetCount(h), false);
@@ -883,9 +919,9 @@ template<typename T> bool Fixer<T>::FixData(const Type *type, void *data) {
 }
 
 Value *BinaryData2::_ReadRaw(istream_ref file, vallocator &allocator, uint32 &phys_size, void *&phys_ram, bool directread) {
-	uint32		total	= (uint32)file.length();
+	uint64		total	= file.length();
 	FILE_HEADER	header	= file.get();
-	uint32		length	= !header.user ? total : (uint32)(uint32le&)header.user;
+	uint64		length	= (total >> 32) || !header.user ? total : (uint32)(uint32le&)header.user;
 	uint8		*buffer	= (uint8*)allocator.alloc(length);
 
 	if (file.readbuff(buffer + sizeof(FILE_HEADER), length - sizeof(FILE_HEADER)) != length - sizeof(FILE_HEADER)) {

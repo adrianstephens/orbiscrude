@@ -5,7 +5,10 @@
 #include "swizzle.h"
 
 namespace iso {
+
 	// need to explicitly add functions that are also in iso
+	using simd::to;
+
 	using simd::min;
 	using simd::max;
 	using simd::abs;
@@ -48,6 +51,9 @@ namespace iso {
 	
 	using simd::min_component_index;
 	using simd::max_component_index;
+
+	using simd::load;
+	using simd::store;
 }
 
 #include "soft_float.h"
@@ -57,34 +63,10 @@ namespace iso {
 namespace iso {
 using namespace simd;
 
+template<typename V> struct container_iterator<V, enable_if_t<is_vec<V>>> : T_type<element_type<V>*> {};
 template<typename T, int N> static constexpr bool has_N = num_elements_v<T> == N;
+
 template<typename E, int N, int M>	class mat;
-
-template<typename T, typename=void> struct load_s;
-
-template<typename T, typename E, int N> struct load_memcpy_s {
-	force_inline static void load(T &t, const E *p) { memcpy(&t, p, sizeof(E) * N); }
-	force_inline static void store(T t, E *p) 		{ memcpy(p, &t, sizeof(E) * N); }
-};
-
-template<typename V, typename I> inline void store(const V &v, I p) 	{ load_s<V>::store(v, p); }
-template<typename V, typename I> SIMD_FUNC V load(V &v, I p) 			{ load_s<V>::load(v, p); return v; }
-template<typename V, typename I> SIMD_FUNC V load(I p) 					{ V v; load_s<V>::load(v, p); return v; }
-
-template<int N, typename E> vec<E, N>	load(const E *p) {
-	return load<vec<E,N>>(p);
-}
-
-template<typename T> struct load_s<T, enable_if_t<is_simd<T>>> {
-	typedef element_type<T>	E;
-	force_inline static void load(T &t, const E *p) 	{ load_vec(t, p); }
-	force_inline static void store(const T &t, E *p) 	{ store_vec(t, p); }
-};
-
-template<typename T> struct load_s<T, enable_if_t<is_builtin_num<T>>> {
-	force_inline static void load(T &t, const T *p) 	{ t = *p; }
-	force_inline static void store(const T &t, T *p) 	{ *p = t; }
-};
 
 //-----------------------------------------------------------------------------
 //	generic soft perm
@@ -173,6 +155,7 @@ template<typename B, int N, typename V, typename P> struct soft_vec : B, swizzle
 	template<typename T> force_inline auto		operator- (T b)	const	{ return (unp)*this -  get(b); }
 	template<typename T> force_inline auto		operator* (T b)	const	{ return (unp)*this *  get(b); }
 	template<typename T> force_inline auto		operator/ (T b)	const	{ return (unp)*this /  get(b); }
+
 	template<typename T, typename P1 = P, typename=enable_if_t<is_int<P1>>> force_inline auto	operator& (T b)		const { return (unp)*this & b; }
 	template<typename T, typename P1 = P, typename=enable_if_t<is_int<P1>>> force_inline auto	operator| (T b)		const { return (unp)*this | b; }
 	template<typename T, typename P1 = P, typename=enable_if_t<is_int<P1>>> force_inline auto	operator^ (T b)		const { return (unp)*this ^ b; }
@@ -184,6 +167,7 @@ template<typename B, int N, typename V, typename P> struct soft_vec : B, swizzle
 	template<typename T> force_inline soft_vec&	operator-= (T b)		{ return *this = *this - b; }
 	template<typename T> force_inline soft_vec&	operator*= (T b)		{ return *this = *this * b; }
 	template<typename T> force_inline soft_vec&	operator/= (T b)		{ return *this = *this / b; }
+
 	template<typename T, typename P1 = P, typename=enable_if_t<is_int<P1>>> force_inline auto&	operator&= (T b)	{ return *this = *this & b; }
 	template<typename T, typename P1 = P, typename=enable_if_t<is_int<P1>>> force_inline auto&	operator|= (T b)	{ return *this = *this | b; }
 	template<typename T, typename P1 = P, typename=enable_if_t<is_int<P1>>> force_inline auto&	operator^= (T b)	{ return *this = *this ^ b; }
@@ -201,6 +185,8 @@ template<typename B, int N, typename V, typename P> struct soft_vec : B, swizzle
 	template<typename E> friend force_inline vec<E,N> to(const soft_vec &p) { return p._get<E>(meta::make_value_sequence<N>()); }
 };
 
+template<typename B, int N, typename V, typename P> constexpr bool use_constants<soft_vec<B, N, V, P>> = false;
+
 template<typename B, int N, typename V, typename P> constexpr int num_elements_v<soft_vec<B, N, V, P>> = N;
 template<typename B, int N, typename V, typename P, int A> constexpr int num_elements_v<aligned<soft_vec<B, N, V, P>, A>> = N;
 //template<typename K, typename B, int N, typename V, typename P> struct constant_cast<K, soft_vec<B, N, V, P> >	{ static const soft_vec<B, N, V, P> f() { return K::template as<P>(); } };
@@ -212,14 +198,17 @@ template<typename B, int N, typename V, typename P, int A> constexpr int num_ele
 template<typename X, int N> struct array_vec_base {
 	auto&	operator[](int i)			{ return ((X*)this)[i]; }
 	auto&	operator[](int i)	const	{ return ((X*)this)[i]; }
-	auto	begin()				const	{ return (X*)this; }
-	auto	end()				const	{ return (X*)this + N; }
+//	auto	begin()				const	{ return (X*)this; }
+//	auto	end()				const	{ return (X*)this + N; }
 };
 template<typename X, int N> using array_vec = soft_vec<array_vec_base<X, N>, N, space_for<X[N]>, promoted_type<X>>;
 template<typename V, typename P, int I, typename X, int N> struct perm_maker2<array_vec_base<X, N>, V, P, I> { using type = offset_type_t<X, I * sizeof(X)>; };
 
 template<typename X, int N> struct T_swap_endian_type<array_vec<X, N> >	{ typedef array_vec<typename T_swap_endian_type<X>::type, N> type; };
-template<typename X, int N> struct load_s<array_vec<X, N>> : load_memcpy_s<array_vec<X, N>, X, N> {};
+//template<typename X, int N> struct load_s<array_vec<X, N>> : load_memcpy_s<array_vec<X, N>, X, N> {};
+
+template<typename E, int N, typename I>	SIMD_FUNC	void	load(array_vec<E,N> &v, I p)		{ memcpy(&v, p, sizeof(v)); }
+template<typename E, int N, typename I>	inline		void	store(const array_vec<E,N> &v, I p)	{ memcpy(p, &v, sizeof(v)); }
 
 //-----------------------------------------------------------------------------
 //	field_vec
@@ -339,6 +328,25 @@ template<typename T> static constexpr bool is_mat	= false;
 #define IF_NOTMAT(M,R)	iso::enable_if_t<!iso::is_mat<M>, R>
 
 //-----------------------------------------------------------------------------
+// normalised
+//-----------------------------------------------------------------------------
+
+template<typename T> class normalised {
+	T	t;
+public:
+	constexpr normalised(const T &t, bool)	: t(t) {}
+	constexpr normalised(const T &t);
+	constexpr operator const T&()	const { return t; }
+};
+
+template<typename T> auto	normalise(const normalised<T> &r) { return r; }
+
+template<typename T> constexpr int num_elements_v<normalised<T>>	= num_elements_v<T>;
+namespace simd {
+template<typename T> struct element_type_s<normalised<T>>		: element_type_s<T> {};
+}
+
+//-----------------------------------------------------------------------------
 //	axis
 //-----------------------------------------------------------------------------
 
@@ -347,16 +355,12 @@ template<int A>	struct axis_s {
 	force_inline	operator float2()	const	{ return v.xy; }
 	force_inline	operator float3()	const	{ return v.xyz; }
 	force_inline	operator float4()	const	{ return v; }
+	force_inline	operator normalised<float2>()	const	{ return {v.xy, true}; }
+	force_inline	operator normalised<float3>()	const	{ return {v.xyz, true}; }
+	force_inline	operator normalised<float4>()	const	{ return {v, true}; }
 };
 
-template<int A>	struct neg_axis_s {
-	force_inline	operator float2()	const	{ return -axis_s<A>::v.xy; }
-	force_inline	operator float3()	const	{ return -axis_s<A>::v.xyz; }
-	force_inline	operator float4()	const	{ return -axis_s<A>::v; }
-};
-
-template<int A> force_inline	neg_axis_s<A>	operator-(const axis_s<A>&)		{ return neg_axis_s<A>(); }
-template<int A> force_inline	axis_s<A>		operator-(const neg_axis_s<A>&)	{ return axis_s<A>(); }
+template<int A> force_inline	negated<axis_s<A>>	operator-(const axis_s<A> &a)			{ return a; }
 
 template<int A> const float4 axis_s<A>::v = {A == 0, A == 1, A == 2, A == 3};
 
@@ -370,7 +374,7 @@ extern axis_s<3> w_axis;
 //-----------------------------------------------------------------------------
 
 template<typename T> auto plus_minus(T t)			{ return concat(t, -t); }
-template<typename T> auto plus_minus(T t, int i)	{ return select(!!(i & 1), -t, t); }
+template<typename T> auto plus_minus(T t, bool neg)	{ return select(neg, -t, t); }
 template<typename T> auto barycentric(T t)			{ return concat(t, one - reduce_add(t)); }
 
 template<typename T, typename E, int N, int...I> T	from_barycentric(const T *p, vec<E, N> lambdas, meta::value_list<int, I...>) {
@@ -393,8 +397,8 @@ template<typename X, int N>				struct dot_s<X, N, X, N>	{ static auto f(vec<X,N>
 template<typename X, typename Y>	force_inline auto		dot(X x, Y y)		{ return dot_s<element_type<X>, num_elements_v<X>, element_type<Y>, num_elements_v<Y>>::f(x, y); }
 #endif
 
-template<int A, typename T> inline auto dot(const T &t, const axis_s<A>&)		{ return t[A]; }
-template<int A, typename T> inline auto dot(const T &t, const neg_axis_s<A>&)	{ return -t[A]; }
+template<int A, typename T>			inline auto dot(const T &t, const axis_s<A>&)		{ return t[A]; }
+template<typename X, typename Y>	inline auto dot(const X &x, const negated<Y> &y)	{ return -dot(x, y.t); }
 
 template<typename X, typename Y>	force_inline IF_VEC(Y)	project(const X &x, const Y &y)			{ return y * (dot(x, y) / dot(y, y)); }
 template<typename X, typename Y>	force_inline IF_VEC(Y)	project_unit(const X &x, const Y &y)	{ return y * dot(x, y); }
@@ -424,23 +428,15 @@ template<typename E>				force_inline E			cross(vec<E,2> x, vec<E,2> y)	{ return 
 template<typename E>				force_inline E			cross(vec<E,2> x, axis_s<0>)	{ return -x.y; }
 template<typename E>				force_inline E			cross(vec<E,2> x, axis_s<1>)	{ return x.x; }
 template<typename X>				force_inline auto		cross(X x, X y)					{ return cross<element_type<X>>(x, y); }
-template<typename X, int A>			force_inline auto		cross(X x, axis_s<A> y)			{ return cross<element_type<X>>(x, y); }
+//template<typename X, int A>			force_inline auto		cross(X x, axis_s<A> y)			{ return cross<element_type<X>>(x, y); }
 template<typename X, int A>			force_inline auto		cross(axis_s<A> y, X x)			{ return -cross<element_type<X>>(x, y); }
-template<typename X, int A>			force_inline auto		cross(X x, neg_axis_s<A> y)		{ return -cross<element_type<X>>(x, -y); }
-template<typename X, int A>			force_inline auto		cross(neg_axis_s<A> y, X x)		{ return cross<element_type<X>>(x, -y); }
+template<typename X, typename Y>	force_inline auto		cross(X x, negated<Y> y)		{ return cross(y.t, x); }
+template<typename X, typename Y>	force_inline auto		cross(negated<X> x, Y y)		{ return cross(y, x.t); }
 
-#if 1
 template<typename E>				force_inline auto		perp(const vec<E,3> &v)			{ return cross(rotate(vec<E,3>(x_axis), -min_component_index(abs(v))), v); }
-#else 
-// based on Duff - requires  v is normal
-template<typename E> inline vec<E,3> perp(const vec<E,3> &v) {
-	auto s = copysign(1.f, v.z);
-	auto a = -1 / (s + v.z);
-	return {v.x * v.y * a, s + a * square(v.y), -v.y};
-}
-#endif
 template<typename X>				force_inline auto		perp(const X &v)				{ return perp<element_type<X>>(v); }
 
+template<typename T> constexpr normalised<T>::normalised(const T &t)		: t(normalise(t)) {}
 
 template<typename E>	inline vec<E, 2> to_octohedral(const vec<E, 3>& v) {
 	auto	v1 = v / reduce_add(abs(v));
@@ -467,93 +463,33 @@ template<typename E, int N> inline bool find_scalar_multiple(const vec<E,N> &a, 
 	return all(d == e | d != d);
 }
 
+// based on Duff - requires  v is normal
+template<typename E> inline normalised<vec<E,3>> perp(const normalised<vec<E,3>> &vn) {
+	vec<E,3>	v = vn;
+	auto s = copysign(1.f, v.z);
+	auto a = -v.y / (s + v.z);
+	return {vec<E,3>{v.x * a, s + v.y * a, -v.y}, true};
+}
+
 //-----------------------------------------------------------------------------
 //	sort
 //-----------------------------------------------------------------------------
-
-#if 0
-template<typename T> inline auto sort(vec<T, 2> v) {
-	auto	t = v.yx;
-	return swizzle<0, 2>(min(v, t), max(t, v));
-}
-template<typename T> inline vec<T, 3> sort(vec<T, 3> v) {
-	auto	minxy	= min(v.x, v.y);
-	auto	maxxy	= max(v.x, v.y);
-	return {min(minxy, v.z), max(minxy, min(maxxy, v.z)), max(maxxy, v.z)};
-}
-template<typename E> inline vec<E,4> sort(vec<E,4> v) {
-	auto	min1_2 = min(v.xz, v.yw);
-	auto	max1_2 = max(v.xz, v.yw);
-
-	E	maxmin = max(min1_2.x, min1_2.y);
-	E	minmax = min(max1_2.x, max1_2.y);
-
-	return {
-		min(min1_2.x, min1_2.y),
-		min(maxmin, minmax),
-		max(minmax, maxmin),
-		max(max1_2.x, max1_2.y)
-	};
-}
-
-template<typename E> inline vec<E,5> sort(vec<E,5> v) {
-//TBD
-	return v;
-}
-
-template<typename V> inline enable_if_t<is_vec<V>, V> sort(V v) { return sort<element_type<V>>(v); }
-
-#elif 0
-
-template<int I, int N, typename T> struct swiz_imp;
-template<int I, int N, int...J> struct swiz_imp<I, N, meta::value_list<int, J...>> { typedef meta::value_list<int, ((J ^ I) < N ? J ^ I : J)...> type; };
-
-template<int N, int I, int X> struct bitonic_vec {
-	typedef	typename swiz_imp<I, N, meta::make_value_sequence<N>>::type swiz;
-//	typedef	meta::clamp<0, N, decltype(meta::make_value_sequence<N>() ^ meta::num<I>())>	swiz;
-	typedef	decltype(-(
-			!(meta::make_value_sequence<N>() & meta::num<I>())
-		^	!(meta::make_value_sequence<N>() & meta::num<X>())
-		))	flips;
-
-	template<typename E> static force_inline vec<E, N> merge(vec<E, N> v) {
-		auto	v2 	= swizzle(swiz(), v);
-		return bitonic_vec<N, I / 2, X>::template merge<E>(select((v < v2) ^ to<sint_for_t<E>>(flips()), v, v2));
-	}
-	template<typename E> static force_inline vec<E, N> sort(vec<E, N> v) {
-		return merge<E>(bitonic_vec<N, I / 2, X / 2>::template sort<E>(v));
-	}
-};
-
-template<int N, int X> struct bitonic_vec<N, 0, X> {
-	template<typename E> static force_inline vec<E, N> merge(vec<E, N> v)	{ return v; }
-	template<typename E> static force_inline vec<E, N> sort(vec<E, N> v)	{ return v; }
-};
-
-template<typename V> inline enable_if_t<is_vec<V>, V> sort(V v) {
-	static const int N = pow2_ceil<num_elements_v<V>>;
-	return bitonic_vec<num_elements_v<V>, N / 2, N>::template sort<element_type<V>>(v);
-}
-#else
 
 template<int N, int S, int D> struct bitonic_types {
 	static const int M = (S > 0 ? N : pow2_ceil<N>) / 2;
 	typedef bitonic_types<M, 		S - 1, D - 1>	A;
 	typedef bitonic_types<N - M, 	S - 1, D - 1>	B;
-	typedef decltype(meta::concat(typename A::swiz(), typename B::swiz() + meta::num<M>()))			swiz;
-	typedef decltype(meta::concat(typename A::flip() ^ meta::num<(S > 0)>(), typename B::flip()))	flip;
+	typedef decltype(concat(typename A::swiz(), typename B::swiz() + meta::int_constant<M>()))			swiz;
+	typedef decltype(concat(typename A::flip() ^ meta::int_constant<(S > 0)>(), typename B::flip()))	flip;
 };
 
 template<int N, int S> struct bitonic_types<N, S, 0> {
 	static const int M = pow2_ceil<N> / 2;
 	static constexpr int swizfunc(int i)	{ return i < N - M ? i + M : i < M ? i : i - M; }
 	static constexpr int flipfunc(int i)	{ return i >= M; }
-	typedef meta::apply<meta::make_value_sequence<N>, swizfunc>	swiz;
-	typedef meta::apply<meta::make_value_sequence<N>, flipfunc>	flip;
-//	typedef meta::apply<meta::make_value_sequence<N>, [](int i) { return i < N - M ? i + M : i < M ? i : i - M; }>	swiz;
-//	typedef meta::apply<meta::make_value_sequence<N>, [](int i) { return i >= M; }>									flip;
-//	typedef VL_APPLY(meta::make_value_sequence<N>, swizfunc)	swiz;
-//	typedef VL_APPLY(meta::make_value_sequence<N>, flipfunc)	flip;
+
+	typedef typename meta::make_value_sequence<N>::template apply<swizfunc>	swiz;
+	typedef typename meta::make_value_sequence<N>::template apply<flipfunc>	flip;
 };
 
 template<typename V, int...S, int...F> static force_inline V bitonic_merge(V v, meta::value_list<int, S...>, meta::value_list<int, F...>) {
@@ -583,8 +519,6 @@ template<int N, int S> struct bitonic_sorter<N, S, false> {
 template<typename V> inline enable_if_t<is_vec<V>, vec<element_type<V>, num_elements_v<V>>> sort(V v) {
 	return bitonic_sorter<num_elements_v<V>, 0>::template sort<element_type<V>>(v);
 }
-
-#endif
 
 template<typename E> inline int32x2 rank_sort(vec<E,2> x) {
 	int		is	= x.y > x.x;
@@ -620,7 +554,7 @@ inline uint32	flat_index(uint32x4 i, uint32x3 n)	{ return i.x + n.x * (i.y  + n.
 //-----------------------------------------------------------------------------
 
 template<typename E, int N1, int N2> struct to_pos {
-	template<typename T> static const T&	f(const T &t)	{ return t; }
+	template<typename T> static constexpr const T&	f(const T &t)	{ return t; }
 };
 
 template<typename E, int N> class pos {
@@ -628,7 +562,7 @@ template<typename E, int N> class pos {
 public:
 	V		v;
 	force_inline pos()	{}
-	force_inline explicit pos(param_t<V> b)						: v(b) {}
+	constexpr explicit pos(param_t<V> b)						: v(b) {}
 	template<typename K> explicit pos(const iso::constant<K>&)	: v(K::template as<E>()) {}
 	force_inline explicit pos(const vec<E, N+1> &a)				: v(simd::shrink<N>(a) / a[N]) {}
 	force_inline explicit pos(const pos<E, N-1> &a)				: v(simd::grow<N>(a.v))	{}
@@ -645,9 +579,9 @@ public:
 	template<typename M> IF_MAT(M, pos) operator*=(const M &m)			{ v = m * *this; return *this; }
 	template<typename M> IF_MAT(M, pos) operator/=(const M &m)			{ v = inverse(m) * *this; return *this; }
 
-	operator vec<E,N+1>()	const	{ return to<E>(v, one); }
-//	explicit operator V()	const	{ return v; }
-	operator V()			const	{ return v; }
+	operator vec<E,N+1>()		const	{ return to<E>(v, one); }
+	operator V()				const	{ return v; }
+	E	operator[](intptr_t i)	const	{ return v[i]; }
 
 	friend	pos	operator+(const pos &a, const V &b)		{ return pos(a.v + b); }
 	friend	pos	operator-(const pos &a, const V &b)		{ return pos(a.v - b); }
@@ -686,9 +620,9 @@ template<typename E, int N> constexpr int num_elements_v<pos<E,N>> = N;
 template<typename E, int N> force_inline	pos<E,N - 1>	project(vec<E,N> a)		{ return pos<E, N - 1>(a); }
 template<typename A>		force_inline	auto			project(A a)			{ return project<element_type<A>, num_elements_v<A>>(a); }
 
-template<typename E> struct to_pos<E, 4,3>	{ template<typename T> static auto f(const T &t) { return project(t); } };
-template<typename E> struct to_pos<E, 3,2>	{ template<typename T> static auto f(const T &t) { return project(t); } };
-template<typename E> struct to_pos<E, 2,3>	{ template<typename T> static auto f(const T &t) { return vec<E,3>(t, zero); } };
+template<typename E> struct to_pos<E, 4,3>	{ template<typename T> static constexpr auto f(const T &t) { return project(t); } };
+template<typename E> struct to_pos<E, 3,2>	{ template<typename T> static constexpr auto f(const T &t) { return project(t); } };
+template<typename E> struct to_pos<E, 2,3>	{ template<typename T> static constexpr auto f(const T &t) { return vec<E,3>(t, zero); } };
 
 template<typename E> inline auto area(const interval<pos<E,2>> &i) {
 	return reduce_mul(i.b - i.a);
@@ -698,10 +632,6 @@ template<typename E> inline auto volume(const interval<pos<E,3>> &i) {
 	return reduce_mul(i.b - i.a);
 }
 
-//template<typename T, typename E, int N> inline auto to(const pos<E,N> p) {
-//	return pos<T,N>(p);
-//}
-
 typedef pos<float,2>	position2;
 typedef pos<float,3>	position3;
 typedef vec<float, 2>	vector2;
@@ -709,7 +639,7 @@ typedef vec<float, 3>	vector3;
 typedef vec<float, 4>	vector4;
 
 namespace simd {
-	template<typename E, int N> struct element_type_s<pos<E, N>>	{ typedef E type; };
+	template<typename E, int N> struct element_type_s<pos<E, N>>	: T_type<E> {};
 }
 //-----------------------------------------------------------------------------
 //	homo - homogeneous coordinate
@@ -740,8 +670,9 @@ public:
 //	friend homo operator-(homo a, P b)		{ return a.v - concat(b.v * a.scale, zero); }
 	friend bool approx_equal(homo a, homo b, E tol = ISO_TOLERANCE) { return approx_equal(b.real * a.scale, a.real * b.scale, tol); }
 	template<typename T>	friend homo	lerp(homo a, homo b, T t)	{ return lerp(a.v, b.v, t); }
-
 };
+
+template<typename V>  auto as_homo(V v) { return homo<element_type<V>, num_elements_v<V> - 1>(v); }
 
 typedef homo<float,2>	homo2;
 typedef homo<float,3>	homo3;
@@ -756,6 +687,8 @@ template<typename E, int N>			class upper;
 template<typename E, int N>			class lower;
 template<typename E, int N>			class symmetrical;
 template<typename E, int N>			class skew_symmetrical;
+
+template<typename E, int N, int M>	constexpr int	num_elements_v<mat<E,N,M>> = M;
 
 template<typename E, int N, int M>	static constexpr bool is_mat<mat<E,N,M>>			= true;
 template<typename E, int N>			static constexpr bool is_mat<upper<E,N>>			= true;
@@ -813,7 +746,11 @@ template<typename T> struct transpose_s {
 	typedef noref_t<T> T2;
 	explicit transpose_s(T &&t)			: m(forward<T>(t)) {}
 	operator	T2()	const			{ return get_transpose(m); }
+	auto		column(int i)	const	{ return m.row(i); }
+	auto		row(int i)		const	{ return m.column(i); }
 	friend auto	get(const transpose_s &t) { return get_transpose(t.m); }
+	friend int	max_component_index(const transpose_s &a)	{ return max_component_index(a.m); }//needs to be flipped?
+
 };
 template<typename T> struct inverse_s	{
 	const T m;
@@ -839,12 +776,14 @@ template<typename T> force_inline auto	inverse(T &&m)									{ return inverse_s
 template<typename T> force_inline auto	transpose(T &&m)								{ return transpose_s<T>(forward<T>(m)); }
 template<typename T> force_inline auto	inverse(inverse_s<T> &&i)						{ return i.m; }
 template<typename T> force_inline auto	inverse(transpose_s<T> &&m)						{ return inverse_s<transpose_s<T>>(m); }
+template<typename T> force_inline auto	inverse(inverse_s<transpose_s<T>> &&i)			{ return transpose(i.m); }
 template<typename T> force_inline auto	transpose(transpose_s<T> &&i)					{ return i.m; }
 template<typename T> force_inline auto	transpose(inverse_s<T> &&i)						{ return inverse(transpose(i.m)); }
 template<typename T> force_inline auto	transpose(inverse_s<transpose_s<T>> &&i)		{ return inverse(i.m); }
 
 template<typename T> force_inline auto	inverse(const inverse_s<T> &i)					{ return i.m; }
 template<typename T> force_inline auto	inverse(const transpose_s<T> &m)				{ return inverse_s<transpose_s<T>>(m); }
+template<typename T> force_inline auto	inverse(const inverse_s<transpose_s<T>> &i)		{ return transpose(i.m); }
 template<typename T> force_inline auto	transpose(const transpose_s<T> &i)				{ return i.m; }
 template<typename T> force_inline auto	transpose(const inverse_s<T> &i)				{ return inverse(transpose(i.m)); }
 template<typename T> force_inline auto	transpose(const inverse_s<transpose_s<T>> &i)	{ return inverse(i.m); }
@@ -878,6 +817,8 @@ template<typename A, typename B> force_inline decltype(declval<IF_MAT(B,B)>() * 
 template<typename T> auto get_inverse_transpose(const T &t) {
 	return transpose(get_inverse(t));
 }
+
+template<typename T> force_inline auto	cofactors(const transpose_s<T> &m)			{ return transpose(cofactors(m.m)); }
 
 template<typename M, typename I> inline void store(const transpose_s<M> &v, I p) 	{ store(get(v), p); }
 
@@ -917,7 +858,7 @@ public:
 	force_inline vec<E,N>		row(int i)			const	{ return column_helper<0, N - 1>::f(*this, i); }
 	force_inline E				operator[](int i)	const	{ return d[i]; }
 
-	template<int...I> friend auto	swizzle(const diagonal &m)				{ return diagonal<E, sizeof...(I)>(swizzle<I...>(m.d)); }
+	template<int...I> friend auto	swizzle(const diagonal &m)	{ return diagonal<E, sizeof...(I)>(swizzle<I...>(m.d)); }
 };
 
 template<typename E> class diagonal<E, 1> {
@@ -936,7 +877,7 @@ public:
 	force_inline E				row(int i)			const	{ return d; }
 	force_inline E				operator[](int i)	const	{ return d; }
 
-	template<int...I> friend auto	swizzle(const diagonal &m)				{ return m; }
+	template<int...I> friend auto	swizzle(const diagonal &m)	{ return m; }
 };
 
 template<typename E, int N, typename B> enable_if_t<is_num<B>, diagonal<E,N>> operator*(const diagonal<E,N> &a, const B &b)	{ return diagonal<E,N>(a.d * b); }
@@ -947,13 +888,12 @@ template<typename E, int N> auto	operator-(const diagonal<E,N> &a, const diagona
 template<typename E, int N> auto&	transpose(const diagonal<E,N> &m)							{ return m; }
 template<typename E, int N> auto&&	transpose(diagonal<E,N> &&m)								{ return (diagonal<E,N>&&)m; }
 template<typename E, int N> auto	get_inverse(const diagonal<E,N> &m)							{ return diagonal<E,N>(reciprocal(m.d)); }
-template<typename E, int N> auto&	eigenvalues(const diagonal<E,N> &m)							{ return m.d; }
 
 template<typename M, typename V, size_t... I>	M 	_scale(const M &a, const V &b, index_list<I...>)			{ return {a.column(I) * b...}; }
 template<typename M, typename V, size_t... I>	M 	_pre_scale(const M &a, const V &b, index_list<I...>) 		{ return {a.column(I) * b[I]...}; }
 
-template<typename E>		force_inline mat<E,2,2>	operator*(const diagonal<E,2> &a, const mat<E,2,2> &b)		{ return mat<E,2,2>(b.v * a.d.xyxy); }
-template<typename E>		force_inline mat<E,2,2>	operator*(const mat<E,2,2> &a, const diagonal<E,2> &b)		{ return mat<E,2,2>(a.v * b.d.xxyy); }
+template<typename E>		force_inline mat<E,2,2>	operator*(const diagonal<E,2> &a, const mat<E,2,2> &b)		{ return mat<E,2,2>(b.v() * a.d.xyxy); }
+template<typename E>		force_inline mat<E,2,2>	operator*(const mat<E,2,2> &a, const diagonal<E,2> &b)		{ return mat<E,2,2>(a.v() * b.d.xxyy); }
 template<typename E, int N> force_inline mat<E,N,N>	operator*(const diagonal<E,N> &a, const mat<E,N,N> &b)		{ return _scale(b, a.d, meta::make_index_list<N>()); }
 template<typename E, int N> force_inline mat<E,N,N>	operator*(const mat<E,N,N> &a, const diagonal<E,N> &b)		{ return _pre_scale(a, b.d, meta::make_index_list<N>()); }
 template<typename E, int N> force_inline auto		operator*(const diagonal<E,N> &a, vec<E,N> b)				{ return a.d * b; }
@@ -1004,10 +944,9 @@ public:
 	template<int O> auto&		diagonal()			const	{ return static_cast<const iso::diagonal<E, N - O>&>(*this); }
 	template<int O> auto&		diagonal()					{ return static_cast<iso::diagonal<E, N - O>&>(*this); }
 	template<int...I> auto		swizzled_diag()		const	{ return swizzle<I...>(d); }
-	const _triangular<E, N-1>&	sub_triangluar()	const	{ return *this; }
+	const _triangular<E, N-1>&	sub_triangular()	const	{ return *this; }
 
 	friend int		max_component_index(const _triangular &a)	{ return max_component_index(a._flat()); }
-	friend vec<E,N>	eigenvalues(const _triangular &m)			{ return m.d.d; }
 };
 
 template<typename E> class _triangular<E, 2> {
@@ -1062,7 +1001,6 @@ public:
 	force_inline E			trace()			const	{ return o.x + o.y; }
 
 	friend int		max_component_index(const _triangular &a)	{ return max_component_index(a._flat()); }
-	friend vec<E,2>	eigenvalues(const _triangular &m)			{ return m.o.xy; }
 };
 
 template<typename E> class _triangular<E, 1> : public diagonal<E,1> {};
@@ -1191,20 +1129,23 @@ public:
 	friend symmetrical&&		transpose(symmetrical &&a)								{ return (symmetrical&&)a; }
 	friend symmetrical			get_inverse(const symmetrical &a)						{ return ~a * reciprocal(a.det()); }
 	friend symmetrical			abs(const symmetrical &a)								{ return a._abs(); }
-	friend vec<E,N>				eigenvalues(const symmetrical &m)						{ get_eigenvalues(m); }
 	template<int...I> friend symmetrical<E, sizeof...(I)> swizzle(const symmetrical &m)	{ return m.template _swizzle<I...>(); }
 
 	friend mat<E,N,N>	operator*(const symmetrical &a, const mat<E,N,N> &b)	{ return mat<E,N,N>(a) * b; }
 	friend mat<E,N,N>	operator*(const mat<E,N,N> &a, const symmetrical &b)	{ return a * mat<E,N,N>(b); }
-	//friend mat<E,N,N>	operator*(const symmetrical &a, const symmetrical &b)	{ return mat<E,N,N>(a) * mat<E,N,N>(b); }
+	friend mat<E,N,N>	operator*(const symmetrical &a, const symmetrical &b)	{ return mat<E,N,N>(a) * mat<E,N,N>(b); }
 	friend mat<E,N,N>	operator*(const diagonal<E,N> &a, const symmetrical &b)	{ return a * mat<E,N,N>(b); }
-	friend vec<E,N>		operator*(const symmetrical &a, vec<E,N> b) {
-		return a.diagonal<0>() * b
-			+ extend_left<N>(lower<E, N-1>(a.sub_triangluar())  * shrink<N-1>(b))
-			+ extend_right<N>(upper<E, N-1>(a.sub_triangluar()) * shrink<N-1>(rotate<1>(b)));
-	}
 };
 
+template<typename E, int N> vec<E,N>	operator*(const symmetrical<E,N> &a, vec<E,N> b) {
+	return a.diagonal<0>() * b
+		+ extend_left<N>(lower<E, N-1>(a.sub_triangular())  * shrink<N-1>(b))
+		+ extend_right<N>(upper<E, N-1>(a.sub_triangular()) * shrink<N-1>(rotate<1>(b)));
+}
+
+template<typename E>		vec<E,2>	operator*(const symmetrical<E,2> &a, vec<E,2> b) {
+	return a.o.xy * b + a.o.z * b;
+}
 
 template<typename E, int N> class skew_symmetrical : public _triangular<E, N - 1> {
 	typedef _triangular<E, N - 1> B;
@@ -1231,7 +1172,6 @@ public:
 	friend skew_symmetrical			get_transpose(const skew_symmetrical &a)						{ return -a; }
 	friend skew_symmetrical			get_inverse(const skew_symmetrical &a)							{ return ~a * reciprocal(a.det()); }
 	friend symmetrical<E,N>			abs(const skew_symmetrical &a)									{ return a._abs(); }
-	friend vec<E,N>					eigenvalues(const skew_symmetrical &m)							{ get_eigenvalues(m); }
 	template<int...I> friend skew_symmetrical<E, sizeof...(I)> swizzle(const skew_symmetrical &m)	{ return m.template _swizzle<I...>(); }
 };
 
@@ -1321,36 +1261,8 @@ public:
 	vec<E,M>		row(int i)			const	{ return r; }
 };
 
-template<typename E> class mat_base<E, 2, 2> {
-	typedef vec<E,4>	V;
-protected:
-	mat_base	_abs()					const { return abs(v); }
-	mat_base	_neg()					const { return -v; }
-	mat_base	_add(const mat_base &b)	const { return v + b.v; }
-	mat_base	_sub(const mat_base &b)	const { return v - b.v; }
-	template<typename B> mat_base	_smul(const B &b) const { return v * b; }
-
-public:
-	union {
-		V		v;
-		struct { vec<E,2> x, y; };
-		struct { E xx, xy, yx, yy; };
-	};
-	force_inline mat_base()						{}
-	constexpr mat_base(V v)						: v(v) {}
-	constexpr mat_base(const _zero&)			: v(zero) {}
-	constexpr mat_base(const _identity&)		: v{1, 0, 0, 1} {}
-	constexpr mat_base(vec<E,2> x, vec<E,2> y) 	: x(x), y(y) {}
-	force_inline mat_base& operator=(const mat_base &b)	{ v = b.v; return *this; }
-
-	const vec<E,2>&	column(int i)		const	{ return (&x)[i]; }
-	const vec<E,2>&	operator[](int i)	const	{ return (&x)[i]; }
-	vec<E,2>&		operator[](int i)			{ return (&x)[i]; }
-	vec<E,2>		row(int i)			const	{ return {x[i], y[i]}; }
-};
-
-
 template<typename E, int N> class mat_base<E,N,2, enable_if_t<(N > 1)>> {
+	typedef vec<E, N * 2>	V;
 protected:
 	mat_base	_abs()					const { return {abs(x), abs(y)}; }
 	mat_base	_neg()					const { return {-x, -y}; }
@@ -1366,6 +1278,8 @@ public:
 	constexpr mat_base(const _zero&)						: x(zero), y(zero) {}
 	constexpr explicit mat_base(const mat_base<E,N-1,2> &m, vec<E,2> y = zero) : x(concat(m.x,y.x)), y(concat(m.y,y.y)) {}
 	constexpr mat_base(vec<E,N> x, vec<E,N> y)				: x(x), y(y) {}
+	constexpr mat_base(V v)									: x(v.lo), y(v.hi) {}
+	V				v()	const { return concat(x, y); }
 
 	template<int I> const vec<E,N>&	column()	const	{ return (&x)[I]; }
 	template<int I> vec<E,N>&		column()			{ return (&x)[I]; }
@@ -1399,6 +1313,7 @@ public:
 	constexpr explicit mat_base(const B &b)					: B(b), z(z_axis) {}
 	constexpr explicit mat_base(const mat_base<E,N-1,2> &m)	: B(concat(m.x, zero), concat(m.y, zero)), z(concat(vec<E,N-1>(zero), one))	{}
 	constexpr explicit mat_base(const mat_base<E,N-1,3> &m, vec<E,3> z = z_axis) : B(concat(m.x, z.x), concat(m.y, z.y)), z(concat(m.z, z.z)) {}
+//	explicit mat_base(const mat_base<E,N-1,3> &m, vec<E,3> z = z_axis) {}
 	constexpr mat_base(vec<E,N> x, vec<E,N> y, vec<E,N> z)	: B(x, y), z(z)	{}
 
 	vec<E, 3>		row(int i)			const	{ return {x[i], y[i], z[i]}; }
@@ -1484,9 +1399,14 @@ public:
 	template<typename T> IF_SCALAR(T,mat) operator*(const T &b)	const	{ return B::_smul(b); }
 	template<typename T> IF_SCALAR(T,mat) operator/(const T &b)	const	{ return B::_smul(reciprocal(b)); }
 
-	E	det()		const	{ return get_det(get_square_s<(N < M)>::f(*this)); }
+	E				det()			const	{ return get_det(get_square_s<(N < M)>::f(*this)); }
+	auto			diagonal()		const	{ return _get_diagonal<0, E>(*this, meta::make_value_sequence<min(N, M)>()); }
+	template<int O> auto diagonal()	const	{ return _get_diagonal<O, E>(*this, meta::make_value_sequence<min(N - max(O, 0), M - min(O, 0))>()); }
+
 	friend auto flatten(const mat &m)	{ return m._flat(); }
 };
+
+template<typename E, int N, int M> int	max_component_index(const mat<E,N,M> &m)	{ return max_component_index(flatten(m)); }
 
 // square
 
@@ -1513,7 +1433,7 @@ public:
 	template<typename T> IF_SCALAR(T,mat) operator/(const T &b)	const { return B::_smul(reciprocal(b)); }
 
 	vec<E, N>		diagonal()		const	{ return _get_diagonal<0, E>(*this, meta::make_value_sequence<N>()); }
-	template<int O> auto diagonal()	const	{ return _get_diagonal<O, E>(*this, meta::make_value_sequence<N - meta::abs<O>>()); }
+	template<int O> auto diagonal()	const	{ return _get_diagonal<O, E>(*this, meta::make_value_sequence<N - meta::abs_v<O>>()); }
 	force_inline E	trace()			const	{ return reduce_add(diagonal()); }
 	E				det()			const	{ return get_det(*this); }
 
@@ -1574,12 +1494,12 @@ template<typename M> auto	make_sym(const transpose_s<M> &m) 	{ return make_sym(m
 
 template<typename E, int N, int M, typename I, typename=void> struct load_mat_s {
 	typedef mat<E, N, M>	T;
-	template<int...J> static void	f2(T &t, I p, meta::value_list<int, J...>) 		{ discard(iso::load(t[J], p[J])...); }
+	template<int...J> static void	f2(T &t, I p, meta::value_list<int, J...>) 		{ discard((iso::load(t[J], p[J]), 0)...); }
 	static void	f(T &t, I p)		{ f2(t, p, meta::make_value_sequence<M>()); }
 };
-template<typename E, int N, int M> struct load_mat_s<E, N, M, const E(*)[N], enable_if_t<sizeof(vec<E,N>)==sizeof(E)*N>> {
-	static void	f(mat<E, N, M> &t, const E (*p)[N]) { load((vec<E, N * M>&)t, p[0]); }
-};
+//template<typename E, int N, int M> struct load_mat_s<E, N, M, const E(*)[N], enable_if_t<sizeof(vec<E,N>)==sizeof(E)*N>> {
+//	static void	f(mat<E, N, M> &t, const E (*p)[N]) { load((vec<E, N * M>&)t, p[0]); }
+//};
 template<typename E, int N, int M> struct load_mat_s<E, N, M, E(*)[N]> : load_mat_s<E, N, M, const E(*)[N]> {};
 
 template<typename E, int N, int M, typename I, typename=void> struct store_mat_s {
@@ -1593,10 +1513,13 @@ template<typename E, int N, int M> struct store_mat_s<E, N, M, E(*)[N], enable_i
 template<typename E, int N, int M> struct store_mat_s<E, N, M, E(*)[N], enable_if_t<sizeof(vec<E,N>)!=sizeof(E)*N>> {
 	static void	f(const mat<E, N, M> &t, E (*p)[N])	{ store(flatten(t), p[0]); }
 };
-template<typename E, int N, int M> struct load_s<mat<E, N, M>> {
-	template<typename I> static void	load(mat<E, N, M> &t, I p)			{ load_mat_s<E, N, M, I>::f(t, p); }
-	template<typename I> static void	store(const mat<E, N, M> &t, I p)	{ store_mat_s<E, N, M, I>::f(t, p); }
-};
+template<typename E, int N, int M, typename I>	inline	void	load(mat<E, N, M> &m, I p)			{ load_mat_s<E, N, M, I>::f(m, p); }
+template<typename E, int N, int M, typename I>	inline	void	store(const mat<E, N, M> &m, I p)	{ store_mat_s<E, N, M, I>::f(m, p); }
+
+//template<typename E, int N, int M> struct load_s<mat<E, N, M>> {
+//	template<typename I> static void	load(mat<E, N, M> &t, I p)			{ load_mat_s<E, N, M, I>::f(t, p); }
+//	template<typename I> static void	store(const mat<E, N, M> &t, I p)	{ store_mat_s<E, N, M, I>::f(t, p); }
+//};
 
 template<typename T> struct load_transpose_s;
 
@@ -1624,7 +1547,7 @@ template<typename E, int N, int M> struct load_transpose_s<mat<E,N,M>> {
 	template<typename I, int...C, int...R> static T load_cols(I p, meta::value_list<int, C...>, meta::value_list<int, R...>) {
 		auto	indices = to<int>((&p[R][0] - &p[0][0])...);
 		T	t;
-		discard((t[C] = load_gather(p[0] + C, indices))...);
+		discard((t[C] = gather(p[0] + C, indices))...);
 		return t;
 	}
 	template<typename I> static T load(I p) {
@@ -1639,6 +1562,13 @@ template<typename E, int N, int M> struct load_transpose_s<mat<E,N,M>> {
 
 template<typename M, typename I> M load_transpose(I p) {
 	return load_transpose_s<M>::load(p);
+}
+
+template<typename T, typename F, int N>	vec<T, N> to(const mat<F, N, 1> &m) {
+	return to<T>(m.x);
+}
+template<typename T, typename F, int N, int M>	mat<T, N, M> to(const mat<F, N, M> &m) {
+	return {to<T>((const mat<F, N, M - 1>&)m), to<T>(m[M - 1])};
 }
 
 //-------------------------------------
@@ -1666,6 +1596,9 @@ template<typename E, int N> force_inline 		auto	operator*(const mat<E, N, N + 1>
 template<typename E, int N> force_inline 		auto	operator*(const mat<E, N, N> &a, pos<E, N> b) {
 	return pos<E,N>(a * b.v);
 }
+template<typename E, int N, int M, int A>  enable_if_t<(A <= M), vec<E, N>> operator*(const mat<E, N, M> &m, const axis_s<A>&)  {
+	return m[A];
+}
 
 //-------------------------------------
 // general M * M
@@ -1677,6 +1610,14 @@ template<typename E, int N, typename M, int C, int D, size_t... I> auto _mul(con
 template<typename E, int A, int B, int C> mat<E, B, C> operator*(const mat<E, B, A> &a, const mat<E, A, C> &b) {
 	return _mul<E, B>(a, b, meta::make_index_list<C>());
 }
+
+template<typename E, int A, int B, int C> mat<E, B, C> operator*(const mat<E, B, A+1> &a, const mat<E, A, C> &b) {
+	return {_mul<E, B>(a, b, meta::make_index_list<C>()), a[A]};
+//	auto r = _mul<E, B>(a, b, meta::make_index_list<C>());
+//	r[A] += a[A];
+//	return r;
+}
+
 // (N,N+1) x (N,N+1)
 template<typename E, int N> mat<E, N, N+1> operator*(const mat<E, N, N+1> &a, const mat<E, N, N+1> &b) {
 	auto r = _mul<E, N>(a, b, meta::make_index_list<N+1>());
@@ -1773,7 +1714,7 @@ template<int RN> struct transpose_helper<RN, 1> {
 };
 
 template<> struct transpose_helper<2, 2> {
-	template<typename E, int N, int R0> static force_inline mat<E, 2, 2> f(const vec<E, N> *m) { return mat<E, 2, 2>(swizzle<R0, R0+N, R0+1, R0+N+1>(m[0], m[1])); }
+	template<typename E, int N, int R0> static force_inline mat<E,2,2> f(const vec<E, N> *m) { return mat<E,2,2>(swizzle<R0, R0+N, R0+1, R0+N+1>(m[0], m[1])); }
 };
 template<typename E, int N, int M> force_inline mat<E, M, N> get_transpose(const mat<E, N, M> &m) {
 	return transpose_helper<N, M>::template f<E, N, 0>(&m[0]);
@@ -1831,6 +1772,14 @@ template<typename E, int N>auto					get_eigenvector(const symmetrical<E,N> &m, E
 	return a.column(max_component_index(abs(a)));
 }
 
+template<int X, typename E, int N, int M> mat<E, N, M + X> extend_right_by(const mat<E, N, M>& m) {
+	return mat<E, N, M + X>(m);
+}
+template<int X, typename E, int N, int M> mat<E, N, M + X> extend_left_by(const mat<E, N, M>& m) {
+	return mat<E, N, M + X>(m);
+}
+
+
 //-------------------------------------
 //	2D	matrices
 //-------------------------------------
@@ -1843,13 +1792,13 @@ typedef mat<float,2,2>			float2x2;
 typedef mat<float,2,3>			float2x3;
 typedef mat<float,3,2>			float3x2;
 
-template<typename E> E						get_det(const mat<E,2,2> &m)			{ return diff(m.v.xz * m.v.wy); }
+template<typename E> E						get_det(const mat<E,2,2> &m)			{ return diff(m.v().xz * m.v().wy); }
 template<typename E> E						get_det(const symmetrical<E,2> &m)		{ return diff(m.o.xz * m.o.yz); }
 
-template<typename E> symmetrical<E,2>		make_sym(const mat<E,2,2> &m)			{ return _triangular<E,2>(m.v.xwz); }
+template<typename E> symmetrical<E,2>		make_sym(const mat<E,2,2> &m)			{ return _triangular<E,2>(m.v().xwz); }
 template<typename E> _triangular<E,2>		get_adjoint(const _triangular<E,2> &m)	{ return _triangular<E,2>(-masked.z(m.o.yxz)); }
 template<typename E> symmetrical<E,2>		get_adjoint(const symmetrical<E,2> &m)	{ return get_adjoint((const _triangular<E,2>&)m); }
-template<typename E> mat<E,2,2>				cofactors(const mat<E,2,2> &m)			{ return (vec<E,4>)-masked.yz(m.v.wzyx); }
+template<typename E> mat<E,2,2>				cofactors(const mat<E,2,2> &m)			{ return (vec<E,4>)-masked.yz(m.v().wzyx); }
 
 template<typename E> mat<E,3,3> cofactors(const mat<E,2,3> &m) {
 	mat<E,2,2> c = cofactors(get_rot(m));
@@ -1862,13 +1811,12 @@ template<typename E> mat<E,3,3> cofactors(const mat<E,2,3> &m) {
 
 template<typename E> symmetrical<E,2>		outer_product(vec<E,2> v)				{ return v.xyx * v.xyy; }
 
-template<typename E> force_inline E				get_euler(const mat<E,2,2> &m)		{ return atan2(m.v.yx); }
-template<typename E> force_inline E				get_euler(const mat<E,2,3> &m)		{ return atan2(m.v.yx); }
+template<typename E> force_inline E				get_euler(const mat<E,2,2> &m)		{ return atan2(m.x.yx); }
+template<typename E> force_inline E				get_euler(const mat<E,2,3> &m)		{ return atan2(m.x.yx); }
 //template<typename E> force_inline mat<E,2,2>	get_transpose(const mat<E,2,2> &m)	{ return mat<E,2,2>(m.v.xzyw); }
 
 template<typename E> force_inline auto			get_transpose(const mat<E,2,3> &m)	{ return transpose((mat<E,3,3>)m); }
 template<typename E> force_inline mat<E,2,3>	get_inverse(const mat<E,2,3> &m)	{ mat<E,2,2> r = get_inverse(get_rot(m)); return {r, r * -m.z}; }
-
 
 //-------------------------------------
 //	3D	matrices
@@ -2269,14 +2217,28 @@ template<typename E> quaternion diagonalise(const symmetrical<E,3> &A) {
 // rotations
 //-----------------------------------------------------------------------------
 
-inline float2 sincos_twice(const float2 &sc) {
-	return (sc.xx + sc.yx) * (sc.xy - float2{sc.y, zero});
+template<typename E> E angle_between(vec<E,2> a, vec<E,2> b) {
+	return atan2(cross(a, b), dot(a, b));
 }
 
-inline float2 sincos_half(const float2 &sc) {
-	float2 h = sqrt(float2{iso::half, -iso::half} * (float2{one, -one} + sc.x));
+template<typename E> auto sincos_twice(vec<E,2> sc) {
+	return (sc.xx + sc.yx) * (sc.xy - concat(sc.y, zero));
+}
+
+template<typename E> auto sincos_half(vec<E,2> sc) {
+	auto h = sqrt(plus_minus<E>(half) * (plus_minus<E>(one) + sc.x));
 	h.y = copysign(h.y, sc.y);
 	return h;
+}
+
+// returns point on unit circle where |M.v| is largest
+template<typename E> vec<E,2> max_circle_point(const mat<E, 2, 2> &m) {
+	if (auto d = dot(m.x, m.y)) {
+		auto	t		= square(m.v());
+		auto	sc2		= normalise(concat(t.x + t.y - t.z - t.w, dot(m.x, m.y) * two));
+		return sincos_half<E>(clamp(sc2, -one, one));
+	}
+	return {1, 0};
 }
 
 force_inline float2x2 _rotate2D(float2 sc) {
@@ -2435,25 +2397,26 @@ template<int A, typename T> struct rotate_in_axis {
 	template<typename E> force_inline operator	quat<E>()		const	{ return (vec<E,4>)swizzle<E,A==0?2:0, A==1?2:0, A==2?2:0, 1>(zero, sincos(t * -half)); }
 	template<typename E> force_inline operator	mat<E, 3, 3>()	const	{ return axis_mat_s<A>::template f<E>(sincos(t)); }
 	template<typename E> force_inline operator	rotvec<E>()		const	{ return rotvec<E>(swizzle<E, A==0, A==1, A==2>(zero, sin(t))); }
-	force_inline friend	log_rotation log(const rotate_in_axis &a)		{ return log_rotation(swizzle<float, A==0, A==1, A==2>(zero,  a.t * -half)); }
+	friend	log_rotation		log(const rotate_in_axis &a)			{ return log_rotation(swizzle<float, A==0, A==1, A==2>(zero,  a.t * -half)); }
+	friend rotate_in_axis<A,T>	get_inverse(const rotate_in_axis &m)	{ return -m.t; }
 };
 
 template<typename T> force_inline rotate_in_axis<0,T>	rotate_in_x(const T &t) { return t; }
 template<typename T> force_inline rotate_in_axis<1,T>	rotate_in_y(const T &t) { return t; }
 template<typename T> force_inline rotate_in_axis<2,T>	rotate_in_z(const T &t) { return t; }
 
-template<typename T> force_inline quaternion	_rotate_axis(param_t<float3> axis, const T &sc)	{ return quaternion(axis * sc.y, sc.x); }
-template<typename T> force_inline quaternion	rotate_axis(param_t<float3> axis, const T &t)	{ return _rotate_axis(axis, simd::sincos(t * -half)); }
+template<int A, typename T> force_inline rotate_in_axis<A,T>	rotate_axis(axis_s<A>, const T &t)				{ return t; }
+template<typename A, typename T> force_inline auto				rotate_axis(const negated<A> &a, const T &t)	{ return rotate_axis(a.t, -t); }
+template<typename T>		force_inline quaternion				_rotate_axis(param_t<float3> axis, const T &sc)	{ return quaternion(axis * sc.y, sc.x); }
+//template<typename T>		force_inline quaternion				rotate_axis(param_t<float3> axis, const T &t)	{ return _rotate_axis(axis, simd::sincos(t * -half)); }
 
-template<int A, typename T> force_inline rotate_in_axis<A,T> get_inverse(const rotate_in_axis<A,T> &m) { return rotate_in_axis<A,T>(-m.t); }
-
-force_inline quaternion		operator*(const rotation_vector &a, const rotation_vector &b)	{ return a.operator quaternion() * b.operator quaternion(); }
-force_inline quaternion		operator*(param_t<quaternion> a, const rotation_vector &b)		{ return a * b.operator quaternion(); }
-force_inline quaternion		operator*(const rotation_vector &a, param_t<quaternion> b)		{ return a.operator quaternion() * b; }
+force_inline								quaternion		operator*(const rotation_vector &a, const rotation_vector &b)	{ return a.operator quaternion() * b.operator quaternion(); }
+force_inline								quaternion		operator*(param_t<quaternion> a, const rotation_vector &b)		{ return a * b.operator quaternion(); }
+force_inline								quaternion		operator*(const rotation_vector &a, param_t<quaternion> b)		{ return a.operator quaternion() * b; }
 template<int A, typename T>	force_inline	quaternion		operator*(const rotate_in_axis<A,T> &a, const rotation_vector &b)	{ return a * b.operator quaternion(); }
 template<int A, typename T> force_inline	quaternion		operator*(const rotation_vector &a, const rotate_in_axis<A,T> &b)	{ return a.operator quaternion() * b; }
 
-template<int A, typename T1, typename T2>			force_inline	rotate_in_axis<A,T1>	operator*(const rotate_in_axis<A,T1> &a, const rotate_in_axis<A,T2> &b)		{ return rotate_in_axis<A,T1>(a.t + b.t); }
+template<int A, typename T1, typename T2>			force_inline	rotate_in_axis<A,T1>	operator*(const rotate_in_axis<A,T1> &a, const rotate_in_axis<A,T2> &b)		{ return a.t + b.t; }
 template<int A1, int A2, typename T1, typename T2>	force_inline	quaternion				operator*(const rotate_in_axis<A1,T1> &a, const rotate_in_axis<A2,T2> &b)	{ return a.operator quaternion() * b.operator quaternion(); }
 template<typename E, int A, typename T> force_inline vec<E,3>		operator*(const rotate_in_axis<A,T> &a, vec<E,3> b)				{ return axis_s<A>::rot(b, sincos(a.t)); }
 template<typename E, int A, typename T> force_inline pos<E,3>		operator*(const rotate_in_axis<A,T> &a, pos<E,3> b)				{ return axis_s<A>::rot(b, sincos(a.t)); }
@@ -2949,13 +2912,13 @@ template<typename E> mat<E,4,4>	parallel_projection_rect(vec<E,3> xyz0, vec<E,3>
 	return mat<E,4,4>(r2.xwww, r2.wyww, r2.wwzw, concat((xyz0 + xyz1) * r2.xyz * -half, one));
 }
 
-template<typename E> mat<E,4,4> parallel_projection_rect(vec<E,2> xy0, vec<E,2> xy1, E z0, E z1) {
+template<typename E> mat<E,4,4> parallel_projection_rect(vec<E,2> xy0, vec<E,2> xy1, E z0 = -one, E z1 = one) {
 	return parallel_projection_rect<E>(concat(xy0, z0), concat(xy1, z1));
 }
 template<typename E> mat<E,4,4> parallel_projection_rect(E x0, E x1, E y0, E y1, E z0, E z1) {
 	return parallel_projection_rect<E>(vec<E,3>{x0, y0, z0}, vec<E,3>{x1, y1, z1});
 }
-template<typename E> mat<E,4,4> parallel_projection_fov(vec<E,4> fov, E scale, E z0, E z1) {
+template<typename E> mat<E,4,4> parallel_projection_fov(vec<E,4> fov, E scale, E z0 = -one, E z1 = one) {
 	return parallel_projection_rect<E>(concat(fov.xy * -scale, z0), concat(fov.zw * scale, z1));
 }
 template<typename E> mat<E,4,4> projection_set_farz(mat<E,4,4> m, E z) {
@@ -3098,6 +3061,28 @@ template<typename E, int N, int M> no_inline void LQ(const mat<E,M,N> &A, lower<
 	mat<E,M,M> L2;
 	LQ(A, L2, Q);
 	L = get_lower(L2);
+}
+
+template<typename T> bool thomas_algorithm(const float* a, const float* b, const float* c, T* d, size_t num) {
+	temp_array<float>	cc(num);
+
+	// Forward sweep
+	ISO_ASSERT(abs(b[0]) > abs(c[0]));
+	cc[0] = c[0] / b[0];
+	d[0] /= b[0];
+
+	for (int i = 1; i < num; i++) {
+		ISO_ASSERT(abs(b[i]) > abs(a[i]) + abs(c[i]));
+		float	m = 1 / (b[i] - a[i] * cc[i - 1]);
+		cc[i]	= c[i] * m;
+		d[i]	= (d[i] - a[i] * d[i - 1]) * m;
+	}
+
+	// Back substitution
+	for (int i = num - 1; i > 0; i--)
+		d[i - 1] -= cc[i - 1] * d[i];
+
+	return true;
 }
 
 //-----------------------------------------------------------------------------

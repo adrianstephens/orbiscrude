@@ -4,7 +4,6 @@
 #include "extra/FAT.h"
 #include "base/algorithm.h"
 #include "vm.h"
-#include "stream.h"
 
 using namespace iso;
 
@@ -38,16 +37,16 @@ struct FATholder {
 
 struct FATmeta : FAT::Entry {
 	static DateTime	get_date(Date d) {
-		return DateTime::Days(JulianDate::Days(d.year + 1980, d.month, d.day));
+		return DateTime::Day(JulianDate::Days(d.year + 1980, d.month, d.day));
 	}
-	static DateTime	get_time(Time t) {
-		return DateTime::Hours(t.hours) + DateTime::Mins(t.mins) + DateTime::Secs(t.seconds2 * 2);
+	static Duration	get_time(Time t) {
+		return Duration::Hours(t.hours) + Duration::Mins(t.mins) + Duration::Secs(t.seconds2 * 2);
 	}
 
 	FATmeta(const Entry &e) : Entry(e) {}
 
 	uint32			FirstCluster()	const { return FstClusLO | (FstClusHI << 16); }
-	DateTime		Creation()		const { return get_date(CrtDate) + get_time(CrtTime) + DateTime::Secs(CrtTimeTenth / 10.f);	}
+	DateTime		Creation()		const { return get_date(CrtDate) + get_time(CrtTime) + Duration::Secs(CrtTimeTenth / 10.f);	}
 	DateTime		LastAccess()	const { return get_date(LstAccDate); }
 	DateTime		Write()			const { return get_date(WrtDate) + get_time(WrtTime); }
 };
@@ -152,7 +151,7 @@ struct FATdata {
 struct FATfile_contents : FATdata, ISO::VirtualDefaults {
 	FATfile_contents(const FATholder &fat, int32 first, uint32 length) : FATdata(fat, first, length) {}
 	uint32			Count()			const { return uint32(clusters.size());	}
-	ISO::Browser2	Index(int i)	const { return ISO::MakePtr(0, (*this)[i]);	}
+	ISO::Browser2	Index(int i)	const { return ISO::MakePtr(none, (*this)[i]);	}
 };
 ISO_DEFUSERVIRTX(FATfile_contents, "BigBin");
 

@@ -12,7 +12,7 @@ bool OpenExplorer(const filename &fn) {
 	return SUCCEEDED(SHOpenFolderAndSelectItems(ILCreateFromPathA(fn), 0, 0, 0));
 }
 
-int GetOpen(HWND hWnd, filename &fn, const char *title, const char *filter) {
+int GetOpen(HWND hWnd, filename &fn, text title, string_ref filter) {
 	OPENFILENAMEA	ofn;
 
 	clear(ofn);
@@ -28,7 +28,7 @@ int GetOpen(HWND hWnd, filename &fn, const char *title, const char *filter) {
 	return GetOpenFileNameA(&ofn) ? ofn.nFilterIndex : 0;
 }
 
-int GetSave(HWND hWnd, filename &fn, const char *title, const char *filter) {
+int GetSave(HWND hWnd, filename &fn, text title, string_ref filter) {
 	OPENFILENAMEA	ofn;
 	const char		*defext = fn.ext_ptr();
 
@@ -48,7 +48,7 @@ int GetSave(HWND hWnd, filename &fn, const char *title, const char *filter) {
 	ofn.lpstrTitle			= title;
 	ofn.Flags				= OFN_EXPLORER | OFN_HIDEREADONLY | OFN_NOVALIDATE;
 	ofn.lpstrDefExt			= defext;
-//	ofn.lpfnHook = [](HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
+//	ofn.lpfnHook = [](HWND hWnd, MSG_ID message, WPARAM wParam, LPARAM lParam) {
 //		return UINT_PTR(0);
 //	};
 
@@ -58,7 +58,7 @@ int GetSave(HWND hWnd, filename &fn, const char *title, const char *filter) {
 bool GetDirectory(HWND hWnd, filename &fn, const char *title) {
 	struct browser {
 		const char *dir;
-		int operator()(HWND hwnd, UINT message, LPARAM lParam) {
+		int operator()(HWND hwnd, MSG_ID message, LPARAM lParam) {
 			if (message == BFFM_INITIALIZED) {
 				SendMessage(hwnd, BFFM_SETSELECTION, TRUE, (LPARAM)dir);
 			}
@@ -77,7 +77,7 @@ bool GetDirectory(HWND hWnd, filename &fn, const char *title) {
 			fn,
 			title,
 			/*BIF_NEWDIALOGSTYLE |*/ BIF_RETURNONLYFSDIRS,
-			(BFFCALLBACK)stdcall_callback_function_end<int(HWND,UINT,LPARAM)>(&b),
+			(BFFCALLBACK)stdcall_callback_function_end<int(HWND,MSG_ID,LPARAM)>(&b),
 			(LPARAM)&b,
 			0
 		};

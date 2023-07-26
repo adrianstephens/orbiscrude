@@ -30,25 +30,19 @@ inline float	sqrt(int128 i)			{ return sqrt(float(i)); }
 inline float	sqrt(uint128 i)			{ return sqrt(float(i)); }
 #endif
 
-template<typename T> constexpr T sqrtNR(T x, T curr, T prev) {
-	return curr == prev ? curr : sqrtNR(x, (curr + x / curr) * half, curr);
-}
-template<typename T> constexpr T constexpr_sqrt(T x) {
-	return sqrtNR<T>(x, x, zero);
-}
-
-//fused a*b + c*d
-template<typename T> inline T fmma(T a, T b, T c, T d) {
-	T	w = c * d;
-	return fma(a, b, w) + fma(c, d, -w);
-}
-
 //-----------------------------------------------------------------------------
 //	constants
 //-----------------------------------------------------------------------------
 
-template<typename N>				struct __sqrt	{ template<typename R> static constexpr R as() { return constexpr_sqrt(N::template as<R>()); } };
-template<typename N, typename B>	struct __log	{ template<typename R> static inline 	R as() { static R r = log(constant<N>()) / log(constant<B>()); return r; } };
+template<typename T> constexpr T sqrtNR(T x, identity_t<T> curr, identity_t<T> prev)	{ return curr == prev ? curr : sqrtNR(x, (curr + x / curr) * half, curr); }
+template<typename T> constexpr T constexpr_sqrt(T x)			{ return sqrtNR(x, x, zero); }
+
+//template<typename N>				struct __sqrt	{ template<typename R> static constexpr R as() { return constexpr_sqrt(N::template as<R>()); } };
+//template<typename N, typename B>	struct __log	{ template<typename R> static inline 	R as() { static R r = log(constant<N>()) / log(constant<B>()); return r; } };
+
+template<typename N>				template<typename R> static constexpr R __sqrt<N>::as() { return constexpr_sqrt(N::template as<R>()); }
+template<typename N, typename B>	template<typename R> static R __log<N,B>::as() { static R r = log(constant<N>()) / log(constant<B>()); return r; }
+
 
 //template<>	struct __sqrt<_maximum>	{ template<typename R> static constexpr R as() { return float_components<R>(0, 3 << (float_components<R>::E - 2), 0).f(); } };
 //template<>	struct __sqrt<_minimum>	{ template<typename R> static constexpr R as() { return float_components<R>(0, 1 << (float_components<R>::E - 2), 0).f(); } };
@@ -57,8 +51,8 @@ template<typename N, typename B>	struct __log	{ template<typename R> static inli
 
 template<> template<typename R> constexpr R	__sqrt<__int<2> >::as()		{ return R(1.4142135623730950488); }
 template<> template<typename R> constexpr R	__sqrt<__int<3> >::as()		{ return R(1.7320508075688772935); }
-template<> template<typename R> R			__log<__int<2>, __e>::as()	{ return R(0.6931471805599453094); }
-template<> template<typename F> constexpr F	__neg<_infinity>::as()		{ return force_cast<F>(float_components<F>::neg_inf()); }
+template<> template<typename R> inline R	__log<__int<2>, __e>::as()	{ return R(0.6931471805599453094); }
+template<> template<typename F> constexpr F	__neg<_infinity>::as()		{ return force_cast<F>(float_components<F>::inf(true)); }
 template<typename N> struct __log<N, N>		: _one {};
 
 //-----------------------------------------------------------------------------
@@ -92,7 +86,7 @@ template<uint32 N, typename T> constexpr auto pow(T v)	{ return pow_s<N>::f(v); 
 //	deferred derivatives
 //-----------------------------------------------------------------------------
 
-template<int I, typename D> struct op_param_d : deferred_mixin<op_param_d<I, D>> {
+template<int I, typename D> struct op_param_d {
 	D	d;
 	op_param_d(const D &d) : d(d) {}
 };
@@ -129,34 +123,42 @@ template<typename A, typename B, typename D> auto deriv(const deferred<op_div, A
 //	is_square
 //-----------------------------------------------------------------------------
 
-extern bool check_square_mod128(uint32 a);
-extern bool check_square_mod3_5_7(uint32 a);
+constexpr bool check_square_mod128(uint32 a) {
+	return a & 64
+		? bit(a&63) & 0b11111101'11111101'11111101'11101101'11111101'11111101'11111101'11101100
+		: bit(a&63)	& 0b11111101'11111101'11111101'11101101'11111101'11111100'11111101'11101100;
 
-inline bool check_square_mod11_13_17_19_23_29_31(uint32 c) {
+}
+constexpr bool check_square_mod3_5_7(uint32 a) {
+	return a & 64
+		? bit(a&63) & 0b000000000000000'111100111111101'111100110101111'111101111101110
+		: bit(a)	& 0b111111110101101'111110110111110'111101110111100'111110111101100;
+}
+
+constexpr bool check_square_mod11_13_17_19_23_29_31(uint32 c) {
 	return !(
-		(bit(c % 11) & 0x5C4)
-	||  (bit(c % 13) & 0x9E4)
-	||  (bit(c % 17) & 0x5CE8)
-	||  (bit(c % 19) & 0x4F50C)
-	||  (bit(c % 23) & 0x7ACCA0)
-	||  (bit(c % 29) & 0xC2EDD0C)
-	||  (bit(c % 31) & 0x6DE2B848)
+		(bit(c % 11) & 0b010111000100)						//0x5C4
+	||  (bit(c % 13) & 0b100111100100)						//0x9E4
+	||  (bit(c % 17) & 0b0101110011101000)					//0x5CE8
+	||  (bit(c % 19) & 0b01001111010100001100)				//0x4F50C
+	||  (bit(c % 23) & 0b011110101100110010100000)			//0x7ACCA0
+	||  (bit(c % 29) & 0b1100001011101101110100001100)		//0xC2EDD0C
+	||  (bit(c % 31) & 0b01101101111000101011100001001000)	//0x6DE2B848
 	);
 }
 
-template<typename T> bool check_square_mod11_13_17_19_23_29_31(T a) {
+template<typename T> constexpr bool check_square_mod11_13_17_19_23_29_31(T a) {
 	return check_square_mod11_13_17_19_23_29_31(uint32(a %  uint32(11 * 13 * 17 * 19 * 23 * 29 * 31)));
 }
 
 template<typename T> bool is_square(T a) {
-	if (!a)
-		return true;
-
-	return !get_sign(a)
-		&& check_square_mod128(a & 127)
+	return !a
+	|| (!get_sign(a)
+		&& check_square_mod128(a)
 		&& check_square_mod3_5_7(a % uint32(3 * 5 * 7))
 		&& check_square_mod11_13_17_19_23_29_31(a)
-		&& a == square(sqrt(a));
+		&& a == square(sqrt(a))
+	);
 }
 
 
@@ -164,7 +166,7 @@ template<typename T> bool is_square(T a) {
 //	rational
 //-----------------------------------------------------------------------------
 
-template<typename T> T gcd(T a, T b) {
+template<typename T> T gcd(T a, identity_t<T> b) {
 	if (a > b)
 		swap(a, b);
 	if (!a)
@@ -237,15 +239,15 @@ template<typename T> struct rational {
 		return rational(n, d);
 	}
 	template<typename F> static rational from_float(F f, F epsilon, int max_iter) {
-		F		f0	= frac(abs(f)), z = f0;
-		T		d0	= 0, d = 1, n = 0;
+		F	f0	= frac(abs(f)), z = f0;
+		T	d0	= 0, d = 1, n = 0;
 
 		for (int i = 0; i < max_iter && abs(F(n) / F(d) - f0) > epsilon; i++) {
 			z 	= one / frac(z);
 			T	t = d * T(z) + d0;
 			d0	= d;
 			d	= t;
-			n 	= T(f0 * F(d) + 0.5);
+			n 	= T(f0 * F(d) + half);
 		}
 
 		n += T(abs(f)) * d;
@@ -253,35 +255,48 @@ template<typename T> struct rational {
 	}
 
 	rational() {}
-	template<typename T1,enable_if_t<is_signed<T1>, bool> = true>	rational(T1 n, T1 d) : n(d < 0 ? -n : n), d(abs(d)) {}
-	template<typename T1,enable_if_t<!is_signed<T1>, bool> = true>	rational(T1 n, T1 d) : n(n), d(d) {}
-	explicit rational(T n) : n(n), d(1) {}
+	template<typename T1, enable_if_t< is_signed<T1>, bool> = true>	constexpr rational(T1 n, T1 d) : n(d < 0 ? -n : n), d(abs(d)) {}
+	template<typename T1, enable_if_t<!is_signed<T1>, bool> = true>	constexpr rational(T1 n, T1 d) : n(n), d(d) {}
+	template<typename T1> constexpr rational(const rational<T1>& r) : n(r.n), d(r.d) {}
+	explicit constexpr rational(T n)	: n(n), d(1) {}
+	explicit constexpr rational(T&& n)	: n(move(n)), d(1) {}
 
 	operator	float()	const	{ return float(n) / d;	}
 
-	template<typename B>	friend rational	operator+(const rational &a, const rational<B> &b)	{ return rational(a.n * b.d + b.n * a.d, a.d * b.d); }
-	template<typename B>	friend rational	operator-(const rational &a, const rational<B> &b)	{ return rational(a.n * b.d - b.n * a.d, a.d * b.d); }
-	template<typename B>	friend rational	operator*(const rational &a, const rational<B> &b)	{ return rational(a.n * b.n, a.d * b.d); }
-	template<typename B>	friend rational	operator/(const rational &a, const rational<B> &b)	{ return rational(a.n * b.d, a.d * b.n); }
-	template<typename B>	friend rational	operator+(const rational &a, const B &b)			{ return rational(a.n + b * a.d, a.d); }
-	template<typename B>	friend rational	operator-(const rational &a, const B &b)			{ return rational(a.n - b * a.d, a.d); }
-	template<typename B>	friend rational	operator*(const rational &a, const B &b)			{ return rational(a.n * b, a.d); }
-	template<typename B>	friend rational	operator/(const rational &a, const B &b)			{ return rational(a.n, a.d * b); }
+	template<typename B>	friend constexpr rational operator+(const rational &a, const rational<B> &b)	{ return {a.n * b.d + b.n * a.d, a.d * b.d}; }
+	template<typename B>	friend constexpr rational operator-(const rational &a, const rational<B> &b)	{ return {a.n * b.d - b.n * a.d, a.d * b.d}; }
+	template<typename B>	friend constexpr rational operator*(const rational &a, const rational<B> &b)	{ return {a.n * b.n, a.d * b.d}; }
+	template<typename B>	friend constexpr rational operator/(const rational &a, const rational<B> &b)	{ return {a.n * b.d, a.d * b.n}; }
+	template<typename B>	friend constexpr rational operator+(const rational &a, const B &b)				{ return {a.n + b * a.d, a.d}; }
+	template<typename B>	friend constexpr rational operator-(const rational &a, const B &b)				{ return {a.n - b * a.d, a.d}; }
+	template<typename B>	friend constexpr rational operator*(const rational &a, const B &b)				{ return {a.n * b, a.d}; }
+	template<typename B>	friend constexpr rational operator/(const rational &a, const B &b)				{ return {a.n, a.d * b}; }
 
-	friend rational reciprocal(const rational &r)						{ return rational(r.d, r.n); }
-	friend rational sfrac(const rational<T> &r)							{ return rational(r.n % r.d, r.d); }
-	friend T		trunc(const rational<T> &r)							{ return r.n / r.d;	}
-	friend T		round(const rational<T> &r)							{ return (r.n + r.d / 2) / r.d;	}
-	friend rational mod(const rational<T> &a, const rational<T> &b)		{ return a - b * trunc(a / b); }
+	friend constexpr rational	reciprocal(const rational &r)					{ return {r.d, r.n}; }
+	friend constexpr rational	sfrac(const rational<T> &r)						{ return {r.n % r.d, r.d}; }
+	friend constexpr T			trunc(const rational<T> &r)						{ return r.n / r.d;	}
+	friend constexpr T			round(const rational<T> &r)						{ return (r.n + r.d / 2) / r.d;	}
+	friend constexpr rational	mod(const rational<T> &a, const rational<T> &b)	{ return a - b * trunc(a / b); }
 };
+
+template<typename T> auto make_rational(T&& t) { return rational<noref_t<T>>(forward<T>(t)); }
+
+template<typename T>	struct T_swap_endian_type<rational<T>>		: T_type<rational<swap_endian_t<T>>> {};
 
 //-----------------------------------------------------------------------------
 //	float functions
 //-----------------------------------------------------------------------------
 
+//fused a*b + c*d
+template<typename T> inline T fmma(T a, T b, T c, T d) {
+	T	w = c * d;
+	return fma(a, b, w) + fma(c, d, -w);
+}
+
 template<typename A, typename B> constexpr enable_if_t<!has_int_ops<A>, A>	div_round(A a, B b)			{ return round(a / b); }
 template<typename A, typename B> constexpr enable_if_t<!has_int_ops<A>, A>	div_round_down(A a, B b)	{ return floor(a / b); }
 template<typename A, typename B> constexpr enable_if_t<!has_int_ops<A>, A>	div_round_up(A a, B b)		{ return ceil(a / b); }
+template<typename T> constexpr enable_if_t<is_num<T>, T>					round(const T &v)			{ return floor(v + half); }
 
 //constexpr float		select(bool b, float t, float f)	{ return b ? t : f;	}
 //constexpr double	select(bool b, double t, double f)	{ return b ? t : f;	}
@@ -295,10 +310,9 @@ template<typename T> inline T tanh(const T &x) { T ex = exp(x * two); return (ex
 template<typename T> inline T sigmoid(const T &x)	{ return reciprocal(one + exp(-x)); }
 template<typename T> inline T softplus(const T &x)	{ return log(one + exp(x)); }
 
-template<typename B>				inline float wrap(float a, const B &b)				{ return a - floor(a / b) * b;		}
-template<typename B, typename C>	inline float wrap(float a, const B &b, const C &c)	{ return wrap(a - b, c - b) + b;	}
+template<typename B>				constexpr float wrap(float a, const B &b)				{ return a - floor(a / b) * b;		}
+template<typename B, typename C>	constexpr float wrap(float a, const B &b, const C &c)	{ return wrap(a - b, c - b) + b;	}
 
-template<typename T> force_inline enable_if_t<is_num<T>, T> round(const T &v)	{ return floor(v + half); }
 
 template<typename T>		force_inline bool is_inf(const T &f)	{ return get_components(f).is_inf(); }
 template<typename T>		force_inline bool is_nan(const T &f)	{ return any(f != f); }
@@ -338,8 +352,19 @@ double	erfc(double x);
 // lerps, etc
 //-----------------------------------------------------------------------------
 
-template<typename X, typename Y, typename T>				force_inline auto	lerp(const X &x, const Y &y, const T &t) { return x + (y - x) * t; }
-template<typename X, typename Y, typename Z, typename T>	force_inline auto	bilerp(const X &x, const Y &y, const Z &z, const T &t) { return x + (y - x) * t.x + (z - x) * t.y; }
+template<typename X, typename Y, typename T> force_inline auto	lerp(const X &x, const Y &y, const T &t) {
+	return x + (y - x) * t;
+}
+template<typename X, typename Y> force_inline auto	lerp(const X &x, const Y &y, decltype(half)) {
+	return (x + y) * half;
+}
+template<typename X, typename Y, typename Z, typename T> force_inline auto	bilerp(const X &x, const Y &y, const Z &z, const T &t) {
+	return x + (y - x) * t.x + (z - x) * t.y;
+}
+template<typename X, typename Y, typename Z, typename W, typename T> force_inline auto	bilerp(const X &x, const Y &y, const Z &z, const W &w, const T &t) {
+	return lerp(lerp(x, y, t.x), lerp(z, w, t.x), t.y);
+}
+
 template<typename T> force_inline int			lerp(int x, int y, const T &t)							{ return int(lerp(float(x), float(y), t) + 0.5f); }
 template<typename T> force_inline int			bilerp(int x, int y, int z, const T &t)					{ return int(bilerp(float(x), float(y), float(z), t) + 0.5f); }
 
@@ -373,62 +398,38 @@ namespace careful {
 	template<typename X, typename Y> constexpr	X rhypot(X x, Y y)		{ return rhypot_imp1(abs(x), abs(y)); }
 }
 
-template<typename T> inline T sin_cos(T x)		{ return sqrt((one - x) * (one + x)); }
+template<typename T> constexpr auto sin_cos(T x)		{ return sqrt((one - x) * (one + x)); }
 
 // sin(a+b) = sin(a)cos(b)+cos(a)sin(b)
-template<typename T> inline T sin_add(T sina, T sinb) {
-	return sina * sqrt((one - sinb) * (one + sinb)) + sqrt((one - sina) * (one + sina)) * sinb;
-}
+template<typename A, typename B> constexpr auto sin_add(A sina, B sinb) { return sina * sqrt((one - sinb) * (one + sinb)) + sqrt((one - sina) * (one + sina)) * sinb; }
 // sin(a-b) = sin(a)cos(b)-cos(a)sin(b)
-template<typename T> inline T sin_sub(T sina, T sinb) {
-	return sina * sqrt((one - sinb) * (one + sinb)) - sqrt((one - sina) * (one + sina)) * sinb;
-}
+template<typename A, typename B> constexpr auto sin_sub(A sina, B sinb) { return sina * sqrt((one - sinb) * (one + sinb)) - sqrt((one - sina) * (one + sina)) * sinb; }
 // cos(a+b) = cos(a)cos(b)-sin(a)sin(b)
-template<typename T> inline T cos_add(T cosa, T cosb) {
-	return cosa * cosb - sqrt((one - cosa) * (one + cosa) * (one - cosb) * (one + cosb));
-}
+template<typename A, typename B> constexpr auto cos_add(A cosa, B cosb) { return cosa * cosb - sqrt((one - cosa) * (one + cosa) * (one - cosb) * (one + cosb)); }
 // cos(a-b) = cos(a)cos(b)+sin(a)sin(b)
-template<typename T> inline T cos_sub(T cosa, T cosb) {
-	return cosa * cosb + sqrt((one - cosa) * (one + cosa) * (one - cosb) * (one + cosb));
-}
+template<typename A, typename B> constexpr auto cos_sub(A cosa, B cosb) { return cosa * cosb + sqrt((one - cosa) * (one + cosa) * (one - cosb) * (one + cosb)); }
 
 // double angle formulae
 // sin(2a) = 2sin(a)cos(a)
-template<typename T> inline T sin_twice(T sina) {
-	return sina * sqrt((one - sina) * (one + sina)) * two;
-}
+template<typename T> constexpr auto sin_twice(T sina) { return sina * sqrt((one - sina) * (one + sina)) * two;}
 // cos(2a) = 2cos2(a)-1
-template<typename T> inline T cos_twice(T cosa) {
-	return square(cosa) * two - one;
-}
+template<typename T> constexpr auto cos_twice(T cosa) { return square(cosa) * two - one;}
 // tan(2a) = 2tan(a)/(1 - tan2(a))
-template<typename T> inline T tan_twice(T tana) {
-	return 2 * tana / ((one - tana) * (one + tana));
-}
+template<typename T> constexpr auto tan_twice(T tana) { return 2 * tana / ((one - tana) * (one + tana)); }
 
 // half angle forumlae
 // sin(a/2) = +-sqrt((1-cosa)/2)
-template<typename T> inline auto sin_half(T sina) {
-	return sqrt((one - sqrt((one - sina) * (one + sina))) * half);
-}
+template<typename T> constexpr auto sin_half(T sina) { return sqrt((one - sqrt((one - sina) * (one + sina))) * half); }
 // cos(a/2) = +-sqrt((1+cosa)/2)
-template<typename T> inline auto cos_half(T cosa) {
-	return sqrt((one + cosa) * half);
-}
+template<typename T> constexpr auto cos_half(T cosa) { return sqrt((one + cosa) * half); }
 
 // triple angle formulae
-// sin(3a) = 3 sin(a) - 4 sin3(a)
-template<typename T> inline T sin_triple(T sina) {
-	return sina * 3 - cube(sina) * 4;
-}
-// cos(3a) = -3 cos(a) + 4 cos3(a)
-template<typename T> inline T cos_triple(T cosa) {
-	return cosa * -3 + cube(cosa) * 4;
-}
-// tan(3a) = (3 tan(a) - tan3(a)) / (1 - 3 tan2(a))
-template<typename T> inline T tan_triple(T tana) {
-	return (tana * 3 - cube(tana)) / (one - square(tana) * 3);
-}
+// sin(3a) = 3sin(a) - 4sin^3(a)
+template<typename T> constexpr auto sin_triple(T sina) { return sina * 3 - cube(sina) * 4; }
+// cos(3a) = -3cos(a) + 4cos^3(a)
+template<typename T> constexpr auto cos_triple(T cosa) { return cosa * -3 + cube(cosa) * 4; }
+// tan(3a) = (3tan(a) - tan^3(a)) / (1 - 3tan^2(a))
+template<typename T> constexpr auto tan_triple(T tana) { return (tana * 3 - cube(tana)) / (one - square(tana) * 3); }
 
 //-----------------------------------------------------------------------------
 //	constant trig
@@ -437,35 +438,73 @@ template<typename T> inline T tan_triple(T tana) {
 template<typename T> constexpr auto	degrees(const T &t)		{ return t * (pi / 180_k); }
 template<typename T> constexpr auto	to_degrees(const T &t)	{ return t * (180_k / pi); }
 
-force_inline	auto	cos(_zero)					{ return  one; 		}
-force_inline	auto	cos(decltype( pi))			{ return -one; 		}
-force_inline	auto	cos(decltype(-pi))			{ return -one; 		}
-force_inline	auto	cos(decltype( pi/two))		{ return  zero; 	}
-force_inline	auto	cos(decltype(-pi/two))		{ return  zero; 	}
-force_inline	auto	cos(decltype( pi/four))		{ return  rsqrt2;	}
-force_inline	auto	cos(decltype(-pi/four))		{ return -rsqrt2; 	}
-force_inline	auto	cos(decltype( pi/8_k))		{ return  cos_half(cos(pi/four));	}
+constexpr auto	cos(_zero)					{ return  one; 		}
+constexpr auto	cos(decltype( pi))			{ return -one; 		}
+constexpr auto	cos(decltype(-pi))			{ return -one; 		}
+constexpr auto	cos(decltype( pi/two))		{ return  zero; 	}
+constexpr auto	cos(decltype(-pi/two))		{ return  zero; 	}
+constexpr auto	cos(decltype( pi/four))		{ return  rsqrt2;	}
+constexpr auto	cos(decltype(-pi/four))		{ return -rsqrt2; 	}
+constexpr auto	cos(decltype( pi/8_k))		{ return  cos_half(cos(pi/four));	}
 
-force_inline	auto	sin(_zero)					{ return  zero; 	}
-force_inline	auto	sin(decltype( pi))			{ return  zero; 	}
-force_inline	auto	sin(decltype(-pi))			{ return  zero; 	}
-force_inline	auto	sin(decltype( pi/two))		{ return  one; 		}
-force_inline	auto	sin(decltype(-pi/two))		{ return -one; 		}
-force_inline	auto	sin(decltype( pi/four))		{ return  rsqrt2; 	}
-force_inline	auto	sin(decltype(-pi/four))		{ return  rsqrt2; 	}
-force_inline	auto	sin(decltype( pi/8_k))		{ return  sin_half(sin(pi/four));	}
+constexpr auto	sin(_zero)					{ return  zero; 	}
+constexpr auto	sin(decltype( pi))			{ return  zero; 	}
+constexpr auto	sin(decltype(-pi))			{ return  zero; 	}
+constexpr auto	sin(decltype( pi/two))		{ return  one; 		}
+constexpr auto	sin(decltype(-pi/two))		{ return -one; 		}
+constexpr auto	sin(decltype( pi/four))		{ return  rsqrt2; 	}
+constexpr auto	sin(decltype(-pi/four))		{ return  rsqrt2; 	}
+constexpr auto	sin(decltype( pi/8_k))		{ return  sin_half(sin(pi/four));	}
 
-template<typename X> force_inline	auto	tan(constant<X> x)		{ return sin(x) / cos(x); }
-template<typename X> force_inline	auto	sincos(constant<X> x)	{ return make_pair(cos(x), sin(x)); }
+// N/D * pi/2
+template<int N, int D, typename=void> struct sin_helper_s;
+template<int N, int D> struct sin_helper_s<N, D, enable_if_t<N == D>>				{ static constexpr auto f() { return one; } };
+template<int N, int D> struct sin_helper_s<N, D, enable_if_t<(N * 2 <= D)>>			{ static constexpr auto f() { return sin_half(sin_helper_s<N * 2, D>::f()); } };
+template<int N, int D> struct sin_helper_s<N, D, enable_if_t<(N < D && N * 2 > D)>> { static constexpr auto f() { return sin_add(one, sin_half(sin_helper_s<N * 2 - D, D>::f())); } };
+
+template<int N, int D, int Q = N / D> struct sin_helper0_s;
+template<int N, int D> struct sin_helper0_s<N, D, 0> : sin_helper_s<N, D> {};
+template<int N, int D> struct sin_helper0_s<N, D, 1> { static constexpr auto f() { return sin_helper_s<2 * D - N, D>::f(); } };
+template<int N, int D> struct sin_helper0_s<N, D, 2> { static constexpr auto f() { return -sin_helper_s<N - 2 * D, D>::f(); } };
+template<int N, int D> struct sin_helper0_s<N, D, 3> { static constexpr auto f() { return -sin_helper_s<4 * D - N, D>::f(); } };
+
+template<int N, int D> constexpr auto	sin(constant<__mul<__pi, __div<__int<N>, __int<D>>>>) {
+	return sin_helper0_s<N % (D * 2) * 2, D>::f();
+}
+template<typename X> constexpr auto	cos(constant<X> x)		{ return sin(x + pi * half); }
+template<typename X> constexpr auto	tan(constant<X> x)		{ return sin(x) / cos(x); }
+template<typename X> constexpr auto	sincos(constant<X> x)	{ return make_pair(cos(x), sin(x)); }
 
 //-----------------------------------------------------------------------------
 //	complex
 //-----------------------------------------------------------------------------
 
+template<typename T> struct imaginary;
+template<typename T> struct complex;
+template<typename R, typename I> struct best_complex					: T_type<R> {};
+template<typename R, typename I> struct best_complex<constant<R>, I>	: T_type<I> {};
+
+template<typename T>				constexpr imaginary<T>	make_imaginary(const T &t)				{ return imaginary<T>(t); }
+template<typename R>				constexpr complex<R>	make_complex(const R &r)				{ return {r, zero}; }
+template<typename R, typename I>	constexpr complex<typename best_complex<R,I>::type>	make_complex(const R &r, const I &i)	{ return {r, i}; }
+
 template<typename T> struct imaginary {
 	T	i;
+
 	imaginary()									{}
 	explicit constexpr imaginary(T i) : i(i)	{}
+
+	constexpr auto operator~()	const	{ return make_imaginary(-i);}
+	constexpr auto operator-()	const	{ return make_imaginary(-i);}
+
+	friend	auto	exp(const imaginary &a)		{ T c, s; sincos(a.i, &s, &c); return complex<T>(c, s); }
+	friend	auto	ln(const imaginary &a)		{ return complex<T>(ln(a.mag()), pi / two); }
+	friend	auto	sin(const imaginary &a)		{ T e = exp(a.i), re = reciprocal(e); return make_imaginary((e - re) * half); }
+	friend	auto	cos(const imaginary &a)		{ T e = exp(a.i), re = reciprocal(e); return (e + re) * half; }
+	friend	auto	tan(const imaginary &a)		{ T e = exp(a.i), re = reciprocal(e); return make_imaginary((e - re) / (e + re)); }
+	friend	auto	sinh(const imaginary &a)	{ return make_imaginary(sin(a.i)); }
+	friend	auto	tanh(const imaginary &a)	{ return tan(a.i); }
+	friend	auto	cosh(const imaginary &a)	{ T c, s; sincos(a.i, &s, &c); return make_complex<T>(c, s); }
 };
 
 template<typename T> struct complex {
@@ -478,6 +517,8 @@ template<typename T> struct complex {
 	constexpr T	mag2()			const	{ return square(r) + square(i); }
 	constexpr T	mag()			const	{ return sqrt(mag2()); }
 	constexpr T	arg()			const	{ return atan2(i, r); }
+	constexpr auto operator~()	const	{ return make_complex(r, -i); }
+	constexpr auto operator-()	const	{ return make_complex(-r, -i);}
 
 	template<typename B>	complex& operator+=(const complex<B> &b)	{ r += b.r; i += b.i; return *this; }
 	template<typename B>	complex& operator-=(const complex<B> &b)	{ r += b.r; i -= b.i; return *this; }
@@ -487,6 +528,15 @@ template<typename T> struct complex {
 	template<typename B>	complex& operator-=(const B &b)				{ r -= b; return *this; }
 	template<typename B>	complex& operator*=(const B &b)				{ r *= b; i *= b; return *this; }
 	template<typename B>	complex& operator/=(const B &b)				{ r /= b; i /= b; return *this; }
+
+	friend auto		ln(const complex &a)	{ return make_complex(ln(a.mag()), a.arg()); }
+	friend auto		exp(const complex &a)	{ T c, s, e = exp(a.r); sincos(a.i, &s, &c); return make_complex(c * e, s * e); }
+	friend auto		sin(const complex &a)	{ T c, s, e = exp(a.i), re = reciprocal(e); sincos(a.r, &s, &c); return make_complex(s * (e + re) * half,  c * (e - re) * half); }
+	friend auto		cos(const complex &a)	{ T c, s, e = exp(a.i), re = reciprocal(e); sincos(a.r, &s, &c); return make_complex(c * (e + re) * half, -s * (e - re) * half); }
+	friend auto		tan(const complex &a)	{ T c, s, e = exp(a.i), re = reciprocal(e); sincos(a.r, &s, &c); return make_complex(s * (e + re),  c * (e - re)) / complex<T>(c * (e + re), -s * (e - re)); }
+	friend auto		sinh(const complex &a)	{ T c, s, e = exp(a.r), re = reciprocal(e); sincos(a.i, &s, &c); return make_complex((e - re) * c * half, (e + re) * s * half); }
+	friend auto		cosh(const complex &a)	{ T c, s, e = exp(a.r), re = reciprocal(e); sincos(a.i, &s, &c); return make_complex((e + re) * c * half, (e + re) * s * half); }
+	friend auto		tanh(const complex &a)	{ T c, s, e = exp(a.r), re = reciprocal(e); sincos(a.i, &s, &c); return make_complex(s * (e + re),  c * (e - re)) / complex<T>(c * (e + re), -s * (e - re)); }
 };
 
 typedef imaginary<_one> _i;
@@ -494,13 +544,6 @@ extern _i	i;
 
 constexpr _i	sqrt(decltype(-one))	{ return i; }
 constexpr _i	rsqrt(decltype(-one))	{ return i; }
-
-template<typename R, typename I> struct best_complex					{ typedef R type; };
-template<typename R, typename I> struct best_complex<constant<R>, I>	{ typedef I type; };
-
-template<typename T>				constexpr auto	make_imaginary(const T &t)				{ return imaginary<T>(t); }
-template<typename R, typename I>	constexpr auto	make_complex(const R &r, const I &i)	{ return complex<typename best_complex<R,I>::type>(r, i); }
-template<typename R>				constexpr auto	make_complex(const R &r)				{ return complex<R>(r, zero); }
 
 template<typename T> bool approx_equal(const complex<T> &a, const complex<T> &b, T tol = ISO_TOLERANCE) {
 	return approx_equal(a.r, b.r, tol) && approx_equal(a.i, b.i, tol);
@@ -516,8 +559,6 @@ template<typename A, typename B>	constexpr auto operator!=(const complex<A> &a, 
 template<typename A, typename B>	constexpr auto operator!=(const imaginary<A> &a, const complex<B> &b)	{ return b.i != zero || a.i != b.i;}
 template<typename A, typename B>	constexpr auto operator!=(const complex<A> &a, const complex<B> &b)		{ return a.r != b.r  || a.i != b.i;}
 
-template<typename A>				constexpr auto operator~(const imaginary<A> &a)							{ return make_imaginary(-a.i);}
-template<typename A>				constexpr auto operator-(const imaginary<A> &a)							{ return make_imaginary(-a.i);}
 template<typename A, typename B>	constexpr auto operator+(const imaginary<A> &a, const imaginary<B> &b)	{ return make_imaginary(a.i + b.i);}
 template<typename A, typename B>	constexpr auto operator-(const imaginary<A> &a, const imaginary<B> &b)	{ return make_imaginary(a.i - b.i);}
 template<typename A, typename B>	constexpr auto operator*(const imaginary<A> &a, const imaginary<B> &b)	{ return -a.i * b.i;}
@@ -531,8 +572,6 @@ template<typename A, typename B>	constexpr auto operator-(const A &a, const imag
 template<typename A, typename B>	constexpr auto operator*(const A &a, const imaginary<B> &b)				{ return make_imaginary(a * b.i); }
 template<typename A, typename B>	constexpr auto operator/(const A &a, const imaginary<B> &b)				{ return make_imaginary(-a / b.i); }
 
-template<typename A>				constexpr auto operator~(const complex<A> &a)							{ return make_complex(a.r, -a.i); }
-template<typename A, typename B>	constexpr auto operator-(const complex<A> &a)							{ return make_complex(-a.r, - a.i);}
 template<typename A, typename B>	constexpr auto operator+(const complex<A> &a, const complex<B> &b)		{ return make_complex(a.r + b.r, a.i + b.i);}
 template<typename A, typename B>	constexpr auto operator-(const complex<A> &a, const complex<B> &b)		{ return make_complex(a.r - b.r, a.i - b.i);}
 template<typename A, typename B>	constexpr auto operator*(const complex<A> &a, const complex<B> &b)		{ return make_complex(a.r * b.r - a.i * b.i, a.r * b.i + a.i * b.r);}
@@ -549,24 +588,6 @@ template<typename A, typename B>	constexpr auto operator+(const complex<A> &a, c
 template<typename A, typename B>	constexpr auto operator-(const complex<A> &a, const B &b)				{ return make_complex(a.r - b, a.i); }
 template<typename A, typename B>	constexpr auto operator*(const complex<A> &a, const B &b)				{ return make_complex(a.r * b, a.i * b); }
 template<typename A, typename B>	constexpr auto operator/(const complex<A> &a, const B &b)				{ return make_complex(a.r / b, a.i / b); }
-
-template<typename T>	auto	exp(const imaginary<T> &a)	{ T c, s; sincos(a.i, &s, &c); return complex<T>(c, s); }
-template<typename T>	auto	ln(const imaginary<T> &a)	{ return complex<T>(ln(a.mag()), pi / two); }
-template<typename T>	auto	sin(const imaginary<T> &a)	{ T e = exp(a.i), re = reciprocal(e); return make_imaginary((e - re) * half); }
-template<typename T>	auto	cos(const imaginary<T> &a)	{ T e = exp(a.i), re = reciprocal(e); return (e + re) * half; }
-template<typename T>	auto	tan(const imaginary<T> &a)	{ T e = exp(a.i), re = reciprocal(e); return make_imaginary((e - re) / (e + re)); }
-template<typename T>	auto	sinh(const imaginary<T> &a)	{ return make_imaginary(sin(a.i)); }
-template<typename T>	auto	tanh(const imaginary<T> &a)	{ return tan(a.i); }
-template<typename T>	auto	cosh(const imaginary<T> &a)	{ T c, s; sincos(a.i, &s, &c); return complex<T>(c, s); }
-
-template<typename T>	auto	ln(const complex<T> &a)		{ return complex<T>(ln(a.mag()), a.arg()); }
-template<typename T>	auto	exp(const complex<T> &a)	{ T c, s, e = exp(a.r); sincos(a.i, &s, &c); return complex<T>(c * e, s * e); }
-template<typename T>	auto	sin(const complex<T> &a)	{ T c, s, e = exp(a.i), re = reciprocal(e); sincos(a.r, &s, &c); return complex<T>(s * (e + re) * half,  c * (e - re) * half); }
-template<typename T>	auto	cos(const complex<T> &a)	{ T c, s, e = exp(a.i), re = reciprocal(e); sincos(a.r, &s, &c); return complex<T>(c * (e + re) * half, -s * (e - re) * half); }
-template<typename T>	auto	tan(const complex<T> &a)	{ T c, s, e = exp(a.i), re = reciprocal(e); sincos(a.r, &s, &c); return complex<T>(s * (e + re),  c * (e - re)) / complex<T>(c * (e + re), -s * (e - re)); }
-template<typename T>	auto	sinh(const complex<T> &a)	{ T c, s, e = exp(a.r), re = reciprocal(e); sincos(a.i, &s, &c); return complex<T>((e - re) * c * half, (e + re) * s * half); }
-template<typename T>	auto	cosh(const complex<T> &a)	{ T c, s, e = exp(a.r), re = reciprocal(e); sincos(a.i, &s, &c); return complex<T>((e + re) * c * half, (e + re) * s * half); }
-template<typename T>	auto	tanh(const complex<T> &a)	{ T c, s, e = exp(a.r), re = reciprocal(e); sincos(a.i, &s, &c); return complex<T>(s * (e + re),  c * (e - re)) / complex<T>(c * (e + re), -s * (e - re)); }
 
 //-----------------------------------------------------------------------------
 //	misc
@@ -652,6 +673,125 @@ template<typename X, typename F> auto gss(X x0, X x3, X threshold, F&& func) {
 // defined in defs.cpp
 extern const uint16 primes[2048];
 
-}	//namespace iso
+//-----------------------------------------------------------------------------
+// fast approximations
+//-----------------------------------------------------------------------------
+
+// Michal Drobot - @MichalDrobot	hello@drobot.org
+// Presented publicly part of a course: Low Level Optimizations for AMD GCN (available @ http://michaldrobot.com/publications/)
+
+inline auto	asint(float f)	{ return reinterpret_cast<int&>(f); }
+inline auto	asfloat(int f)	{ return reinterpret_cast<float&>(i); }
+
+// RSQRT
+// Derived from batch testing (Should be improved)
+#define IEEE_INT_RSQRT_CONST_NR0			0x5f3759df
+#define IEEE_INT_RSQRT_CONST_NR1			0x5F375A86 
+#define IEEE_INT_RSQRT_CONST_NR2			0x5F375A86  
+#define IEEE_INT_RSQRT_CONST_NR0_SNORM		0x5F341A43	//for [0,1]
+#define IEEE_INT_RSQRT_CONST_NR0_1000		0x5F33E79F	//for [0,1000]
+
+inline float rsqrt_approx(float x, const int k) {
+	return asfloat(k - (asint(x) >> 1));
+}
+inline float rsqrt_nr(float half_x, float rcp_x) {
+	return rcp_x * (-half_x * (rcp_x * rcp_x) + 1.5f);
+}
+// Using 0 Newton Raphson iterations	-	2 ALU	- Relative error : ~3.4% over full
+inline float rsqrt_nr0(float x) {
+	return rsqrt_approx(x, IEEE_INT_RSQRT_CONST_NR0);
+}
+// Using 1 Newton Raphson iterations	-	6 ALU	- Relative error : ~0.2% over full
+inline float rsqrt_nr1(float x) {
+	float  half_x = 0.5f * x;
+	return rsqrt_nr(half_x, rsqrt_approx(x, IEEE_INT_RSQRT_CONST_NR1));
+}
+// Using 2 Newton Raphson iterations	-	9 ALU	- Relative error : ~4.6e-004%  over full
+inline float rsqrt_nr2(float x) {
+	float  half_x = 0.5f * x;
+	return rsqrt_nr(half_x, rsqrt_nr(half_x, rsqrt_approx(x, IEEE_INT_RSQRT_CONST_NR2)));
+}
+
+// SQRT
+// Derived from batch testing
+#define IEEE_INT_SQRT_CONST_NR0				0x1FBD1DF5   
+#define IEEE_INT_SQRT_CONST_NR0_SNORM		0x1FBD1DF5	//for [0,1]
+#define IEEE_INT_SQRT_CONST_NR0_1000		0x1FBD22DF	//for [0,1000]
+
+inline float sqrt_approx(float x, const int k) {
+	return asfloat(k + (asint(x) >> 1));
+}
+// Using 0 Newton Raphson iterations	- 	1 ALU	- Relative error : < 0.7% over full
+inline float sqrt_nr0(float x) {
+	return sqrt_approx(x, IEEE_INT_SQRT_CONST_NR0);
+}
+// Using rsqrt_nr1						-	6 ALU	- Relative error : ~0.2% over full
+inline float sqrt_nr1(float x) {
+	return x * rsqrt_nr1(x);
+}
+// Using rsqrt_nr2						-	9 ALU	- Relative error : ~4.6e-004%  over full
+inline float sqrt_nr2(float x) {
+	return x * rsqrt_nr2(x);
+}
+
+// RCP
+// Derived from batch testing (Should be improved)
+#define IEEE_INT_RCP_CONST_NR0				0x7EF311C2  
+#define IEEE_INT_RCP_CONST_NR1				0x7EF311C3 
+#define IEEE_INT_RCP_CONST_NR2				0x7EF312AC  
+#define IEEE_INT_RCP_CONST_NR0_SNORM		0x7EEF370B	//for [0,1]
+#define IEEE_INT_RCP_CONST_NR0_1000			0x7EF3210C	//for [0,1000]  
+
+inline float rcp_approx(float x, const int k) {
+	return asfloat(k - asint(x));
+}
+inline float rcp_nr(float x, float rcp_x) {
+	return rcp_x * (-rcp_x * x + 2);
+}
+// Using 0 Newton Raphson iterations	-	1 ALU	- Relative error : < 0.4% over full
+inline float rcp_nr0(float x) {
+	return rcp_approx(x, IEEE_INT_RCP_CONST_NR0);
+}
+// Using 1 Newton Raphson iterations	-	3 ALU	- Relative error : < 0.02% over full
+inline float rcp_nr1(float x) {
+	return rcp_nr(x, rcp_approx(x, IEEE_INT_RCP_CONST_NR1));
+}
+// Using 2 Newton Raphson iterations	-	5 ALU	- Relative error : < 5.0e-005%  over full
+inline float rcp_nr2(float x) {
+	return rcp_nr(x, rcp_nr(x, rcp_approx(x, IEEE_INT_RCP_CONST_NR2)));
+}
+
+// max absolute error 9e-3
+inline float acos_fast(float x) {
+	float absx	= abs(x);
+	float res	= horner(absx, pi * half, -0.156583f) * sqrt(1 - absx);
+	return x >= 0 ? res : pi - res;
+}
+inline float asin_fast(float x) {
+	return pi * half - acos_fast(x);
+}
+
+// 4th order polynomial approximation	- max absolute error 7e-5
+inline float acos_fast4(float x) {
+	float absx	= abs(x);
+	float res	= horner(absx, 1.5707288f, -0.2121144f, 0.0742610f, -0.0187293f) * sqrt(1 - absx);
+	return x >= 0 ? res : pi - res;
+}
+inline float asin_fast4(float x) {
+	return pi * half - acos_fast4(x);
+}
+
+// 4th order hyperbolical approximation	- max absolute error 7e-5
+inline float _atan_fast4(float x) {
+	return x * (-0.1784f * abs(x) - 0.0663f * x * x + 1.0301f);
+}
+inline float atan_fast4(float x) {
+	if (abs(x) < 1)
+		return _atan_fast4(x);
+	return copysign(pi * half, x) - _atan_fast4(1 / x);
+}
+
+
+}  // namespace iso
 
 #endif	// MATHS_H

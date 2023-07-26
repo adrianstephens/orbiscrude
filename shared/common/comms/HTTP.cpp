@@ -22,21 +22,21 @@ uint16 URLcomponents0::DefaultPort(const char *scheme) {
 char *URLcomponents0::Parse(const char *s, const char *end, char *d) {
 	const char	*colon;
 
-	if ((colon = string_find(s, ':', end)) && (end - colon > 6 || !string_check(colon + 1, char_set::digit, end))) {
+	if ((colon = string_find(s, end, ':')) && (end - colon > 6 || !string_check(colon + 1, char_set::digit, end))) {
 		memcpy(scheme = d, s, colon - s);
 		d += colon - s;
 		*d++ = 0;
 		s = colon + 1;
 	}
 
-	const char *query	= string_find(s, '?', end);
-	const char *hash	= string_find(query ? query : s, '#', end);
+	const char *query	= string_find(s, end, '?');
+	const char *hash	= string_find(query ? query : s, end, '#');
 	const char *end_path = query ? query : hash ? hash : end;
 
 	if (s[0] == '/' && s[1] == '/') {
 		s += 2;
-		if (const char *at = string_find(s, '@', end_path)) {
-			if (colon = string_find(s, ':', at)) {
+		if (const char *at = string_find(s, end_path, '@')) {
+			if (colon = string_find(s, at, ':')) {
 				memcpy(username = d, s, colon - s);
 				d	+= colon - s;
 				*d++ = 0;
@@ -50,11 +50,11 @@ char *URLcomponents0::Parse(const char *s, const char *end, char *d) {
 			s	= at + 1;
 		}
 
-		const char *slash = string_find(s, '/', end_path);
+		const char *slash = string_find(s, end_path, '/');
 		if (!slash)
 			slash = end_path;
 
-		if (colon = string_find(s, ':', slash)) {
+		if (colon = string_find(s, slash, ':')) {
 			auto	pe = get_num_base<10>(colon + 1, port);
 			ISO_ASSERT(pe == slash);
 			memcpy(host = d, s, colon - s);
@@ -499,6 +499,7 @@ ostream_ptr HTTP::PutSecure(const char *object, const char *headers) {
 	return ostream_ptr(new SSL_ostream2(*this, object, headers));
 }
 istream_ptr HTTP::Get(const char *object, const char *headers) {
+	socket_init();
 	return is_secure() ? GetSecure(object, headers) : istream_ptr(new socket_input(Request("GET", object, headers)));
 }
 ostream_ptr HTTP::Put(const char *object, const char *headers) {
@@ -508,9 +509,11 @@ ostream_ptr HTTP::Put(const char *object, const char *headers) {
 #else
 
 istream_ptr HTTP::Get(const char *object, const char *headers) {
+	socket_init();
 	return new socket_input(Request("GET", object, headers));
 }
 ostream_ptr HTTP::Put(const char *object, const char *headers) {
+	socket_init();
 	return new socket_output(Request("PUT", object, headers));
 }
 

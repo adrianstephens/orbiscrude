@@ -1,7 +1,7 @@
 #include "viewtree.h"
 #include "main.h"
 #include "windows\d2d.h"
-#include "utilities.h"
+#include "extra/random.h"
 
 using namespace app;
 
@@ -205,7 +205,7 @@ class ViewGED : public Window<ViewGED> {
 	void	Paint(const Rect &r);
 	void	Update(float dt);
 public:
-	LRESULT Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+	LRESULT Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 		switch (message) {
 			case WM_CREATE:
 				d2d.Init(hWnd, GetClientRect().Size());
@@ -213,7 +213,7 @@ public:
 				break;
 
 			case WM_SIZE: {
-				if (d2d.Resize(Point(lParam)))
+				if (!d2d.Resize(Point(lParam)))
 					d2d.DeInit();
 				Invalidate();
 				break;

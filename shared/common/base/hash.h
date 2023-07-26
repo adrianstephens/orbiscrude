@@ -13,6 +13,7 @@ namespace iso {
 //	hash_key
 //-----------------------------------------------------------------------------
 iso_export uint32 string_hash(const char *s);
+iso_export uint32 string_hash(const wchar_t *s);
 
 template<typename T, int N> struct xor_together	{ static inline T f(const T *p) { return xor_together<T, N/2>::f(p) ^ xor_together<T, (N + 1)/2>::f(p + N/2); } };
 template<typename T> struct xor_together<T, 1>	{ static inline T f(const T *p) { return *p; } };
@@ -28,6 +29,7 @@ template<typename T>	auto hash(T *t)				{ return (uintptr_t)t / alignof(T); }
 inline					auto hash(void *t)			{ return (uintptr_t)t; }
 inline					auto hash(const void *t)	{ return (uintptr_t)t; }
 inline					auto hash(const char *t)	{ return string_hash(t); }
+inline					auto hash(const wchar_t *t)	{ return string_hash(t); }
 
 
 template<typename T> struct hash_type : T_type<decltype(hash(declval<T>()))> {};
@@ -69,36 +71,45 @@ template<typename H> struct hash_helpers {
 		return i;
 	}
 
-	class iterator {
+	class raw_iterator {
 	protected:
 		const H		*b, *e, *i;
 		void		next()	{ i = next_valid(b, e, i + 1); }
 		void		prev()	{ i = prev_valid(b, i - 1); }
 	public:
-		iterator(const H *b, const H *e)				: b(b), e(e), i(e) {}
-		iterator(const H *b, const H *e, const H *i)	: b(b), e(e), i(next_valid(b, e, i)) {}
-		H			hash()					const	{ return *i; }
-		const H*	get()					const	{ return i; }
-		bool operator==(const iterator &b)	const 	{ return i == b.i; }
-		bool operator!=(const iterator &b)	const	{ return i != b.i; }
-		iterator&	operator++()					{ next(); return *this; }
-		iterator&	operator--()					{ prev(); return *this; }
-		iterator&	operator+=(uint32 i)			{ while (i--) next(); return *this; }
-		iterator	operator+(uint32 i)		const	{ return iterator(*this) += i; }
+		raw_iterator(const H *b, const H *e)				: b(b), e(e), i(e) {}
+		raw_iterator(const H *b, const H *e, const H *i)	: b(b), e(e), i(next_valid(b, e, i)) {}
+		H			hash()						const	{ return *i; }
+//		const H*	get()						const	{ return i; }
+		const H*	get_raw()					const	{ return i; }
+		size_t		index()						const	{ return i - b; }
+		bool operator==(const raw_iterator &b)	const 	{ return i == b.i; }
+		bool operator!=(const raw_iterator &b)	const	{ return i != b.i; }
+		raw_iterator&	operator++()					{ next(); return *this; }
+		raw_iterator&	operator--()					{ prev(); return *this; }
+		raw_iterator&	operator+=(uint32 i)			{ while (i--) next(); return *this; }
+		raw_iterator	operator+(uint32 i)		const	{ return iterator(*this) += i; }
 	};
 
-	template<typename T> struct iteratorT : iterator {
-		iteratorT(const iterator &i) : iterator(i) {}
-		iteratorT&	operator++()					{ iterator::next(); return *this; }
-		iteratorT&	operator--()					{ iterator::prev(); return *this; }
-		iteratorT&	operator+=(uint32 i)			{ iterator::operator+=(i); return *this; }
-		iteratorT	operator+(uint32 i)		const	{ return iterator::operator+(i); }
-		T*			get()					const	{ return (T*)this->e + (this->i - this->b); }
-		T&			operator*()				const	{ return *get(); }
-		T*			operator->()			const	{ return get(); }
+	template<typename T> struct iteratorT : raw_iterator {
+		iteratorT(const raw_iterator &i) : raw_iterator(i) {}
+		iteratorT&		operator++()					{ raw_iterator::next(); return *this; }
+		iteratorT&		operator--()					{ raw_iterator::prev(); return *this; }
+		T*				operator++(int)					{ auto i = get(); raw_iterator::next(); return i; }
+		T*				operator--(int)					{ auto i = get(); raw_iterator::prev(); return i; }
+		iteratorT&		operator+=(uint32 i)			{ raw_iterator::operator+=(i); return *this; }
+		iteratorT		operator+(uint32 i)		const	{ return iterator::operator+(i); }
+		T*				get()					const	{ return (T*)this->e + (this->i - this->b); }
+		T&				operator*()				const	{ return *get(); }
+		T*				operator->()			const	{ return get(); }
 	};
 
-	// returns entry where key is, or 0
+	static void	reset(H *b, uint32 n) {
+		for (int i = 0; i < n; i++)
+			b[i] = UNUSED(i);
+	}
+
+	// returns entry where key is, or nullptr
 	static const H *check(H h, const H *b, uint32 mask) {
 		ISO_ON_DEBUG(++hash_get_count);
 		for (H k = h; ; ++k) {
@@ -107,16 +118,10 @@ template<typename H> struct hash_helpers {
 			if (*p == h)
 				return p;
 			if (*p == UNUSED(i))
-				return 0;
+				return nullptr;
 			ISO_ON_DEBUG(++hash_get_misses);
 		}
 	}
-
-	static void	reset(H *b, uint32 n) {
-		for (int i = 0; i < n; i++)
-			b[i] = UNUSED(i);
-	}
-
 	static int check_index(int i, H *b, size_t max) {
 		return i >= 0 && i < max && IS_USED(i, b[i]) ? i : -1;
 	}
@@ -171,7 +176,7 @@ template<typename H> struct hash_access<H, false> : hash_helpers<H> {
 	hash_access() : curr_size(0) {}
 	bool			empty()				const	{ return curr_size == 0; }
 	uint32			size()				const	{ return curr_size;	}
-	uint32			potential_size()	const	{ return curr_size;	}
+	uint32			potential_size()	const	{ return curr_size + 1;	}
 };
 
 template<typename H> int hash_access<H, false>::mark_unused(H *h, H *b, uint32 mask) {
@@ -309,17 +314,18 @@ template<typename H> int hash_access<H, true>::mark_unused(H *h, H *b, uint32 ma
 template<typename H, bool MT, int HASH_SIZE> class hash_static : public hash_access<H, MT> {
 	typedef	hash_access<H, MT>	B;
 protected:
+	using typename B::raw_iterator;
 	H			hashes[HASH_SIZE];
 
 	const H*	check0(H h) const {
-		return B::check(h, hashes, HASH_SIZE - 1);
+		return B::access(), B::check(h, hashes, HASH_SIZE - 1);
 	}
 
 	template<typename L> auto put0(H h, L&& lambda) {
 		return B::put(h, hashes, HASH_SIZE - 1, forward<L>(lambda));
 	}
 
-	H*	remove0(H *p) {
+	H*	remove_raw(H *p) {
 		H	h	= *p;
 		if (IS_USED(p - hashes, h) && B::quick_remove(p, h, hashes)) {
 			B::mark_unused(p, hashes, HASH_SIZE - 1);
@@ -328,9 +334,16 @@ protected:
 		return nullptr;
 	}
 
-	H*	remove0(H h) {
+public:
+	void			clear()				{ B::reset(hashes, HASH_SIZE); B::curr_size = 0; }
+	bool			count(H h)	const	{ return !!check0(h); }
+	raw_iterator	begin()		const	{ return iterator(hashes, hashes + HASH_SIZE, hashes); }
+	raw_iterator	end()		const	{ return iterator(hashes, hashes + HASH_SIZE); }
+	raw_iterator	find(H h)	const	{ H *p = check0(h); return p ? raw_iterator(hashes, hashes + HASH_SIZE, p) : end(); }
+//	void			remove(raw_iterator &i) { B::remove_raw(i.get()); ++i; }
+	H*				remove(H h) {
 		auto	a = B::access();
-		if (auto p = uconst(check0(h))) {
+		if (auto p = unconst(check0(h))) {
 			if (B::quick_remove(p, h, hashes)) {
 				B::mark_unused(p, hashes, HASH_SIZE - 1);
 				return p;
@@ -338,26 +351,21 @@ protected:
 		}
 		return nullptr;
 	}
-public:
-	using typename B::iterator;
-	void		clear()				{ B::reset(hashes, HASH_SIZE); B::curr_size = 0; }
-	bool		count(H h)	const	{ return !!check0(h); }
-	iterator	begin()		const	{ return iterator(hashes, hashes + HASH_SIZE, hashes); }
-	iterator	end()		const	{ return iterator(hashes, hashes + HASH_SIZE); }
-	iterator	find(H h)	const	{ H *p = check0(h); return p ? iterator(hashes, hashes + HASH_SIZE, p) : end(); }
 };
 
 //	static<T>
 
-template<typename H, typename T, bool MT, int HASH_SIZE> class hash_storage : hash_static<H, MT, HASH_SIZE> {
+template<typename H, typename T, bool MT, int HASH_SIZE> class hash_storage : public hash_static<H, MT, HASH_SIZE> {
 	typedef	hash_static<H, MT, HASH_SIZE> B;
 	T			values[HASH_SIZE];
-
-	T*			getval(const H *h)			{ return values + (h - B::hashes); }
-	const T*	getval(const H *h)	const	{ return values + (h - B::hashes); }
+protected:
+	T*			to_val(const H *h)				{ return h ? values + (h - B::hashes) : nullptr; }
+	const T*	to_val(const H *h)		const	{ return h ? values + (h - B::hashes) : nullptr; }
+	const H*	from_val(const T *t)	const	{ return t ? B::hashes + (t - values) : nullptr; }
 public:
 	using iterator			= typename B::template iteratorT<T>;
 	using const_iterator	= typename B::template iteratorT<const T>;
+//	using B::remove;
 
 	hash_storage(int = 8)	{ B::reset(B::hashes, HASH_SIZE); }
 
@@ -367,39 +375,24 @@ public:
 	T*	by_index(int i) const {
 		return B::check_index(i, B::hashes, HASH_SIZE) >= 0 ? values + i : nullptr;
 	}
-	const T* check(H h) const {
-		if (auto p = (B::access(), check0(h)))
-			return getval(p);
-		return 0;
-	}
-	T*	remove(H h) {
-		if (auto p = B::remove0(h))
-			return getval(p);
-		return nullptr;
-	}
-	// single-threaded only!
-	T*	remove(T *t) {
-		int	i = t - values;
-		return i >= 0 && i < HASH_SIZE && B::remove0(B::hashes + i) ? t : nullptr;
-	}
 	optional<const T&>	get(H h) const {
-		if (auto p = check(h))
-			return *p;
+		if (auto p = B::check0(h))
+			return *to_val(p);
 		return none;
 	}
 	optional<T&>		get(H h) {
-		if (auto p = check(h))
-			return *unconst(p);
+		if (auto p = B::check0(h))
+			return *to_val(p);
 		return none;
 	}
 	T&					put(H h) {
-		return B::access(), *getval(B::put0(h, [](H *p, bool) {
+		return B::access(), *to_val(B::put0(h, [](H *p, bool) {
 			return p;
 		}));
 	}
 	template<typename U> T& put(const H h, U &&u) {
 		return B::access(), *B::put0(h, [this, &u](H *p, bool) {
-			auto r = getval(p); *r = forward<U>(u); return r;
+			auto r = to_val(p); *r = forward<U>(u); return r;
 		});
 	}
 	const_iterator	begin()		const	{ return B::begin(); }
@@ -417,12 +410,6 @@ template<typename H, bool MT, int HASH_SIZE> class hash_storage<H, void, MT, HAS
 public:
 	hash_storage(int = 8)	{ B::reset(B::hashes, HASH_SIZE); }
 
-	bool	check(H h) const {
-		return !!(B::access(), B::check0(h));
-	}
-	bool	remove(H h) {
-		return !!B::remove0(h);
-	}
 	void	put(H h) {
 		B::put0(h, [this](H *p, bool) {});
 	}
@@ -435,11 +422,12 @@ public:
 template<typename H, bool MT> class hash_dynamic : public hash_access<H, MT> {
 	typedef	hash_access<H, MT>	B;
 protected:
+	using typename B::raw_iterator;
 	decltype(B::curr_size)	max_size, num_free;
 	H		*hashes;
 
 	const H* check0(H h) const {
-		return B::check(h, hashes, max_size - 1);
+		return B::access(), B::check(h, hashes, max_size - 1);
 	}
 
 	template<typename L> auto put0(H h, L&& lambda) {
@@ -447,7 +435,7 @@ protected:
 	}
 	
 	// single-threaded only!
-	H*	safe_remove(H *p) {
+	H* remove_raw(H *p) {
 		H	h	= *p;
 		if (B::IS_USED(p - hashes, h) && B::quick_remove(p, h, hashes)) {
 			num_free += 1 - B::mark_unused(p, hashes, max_size - 1);
@@ -455,16 +443,7 @@ protected:
 		}
 		return nullptr;
 	}
-	H*	safe_remove(H h) {
-		auto	a = B::access();
-		if (auto *p = unconst(check0(h))) {
-			if (B::quick_remove(p, h, hashes)) {
-				num_free += 1 - B::mark_unused(p, hashes, max_size - 1);
-				return p;
-			}
-		}
-		return nullptr;
-	}
+
 	void create_entries(uint32 n, size_t entry_size) {
 		num_free	= 0;
 		max_size	= 1 << log2_ceil(n);
@@ -473,7 +452,7 @@ protected:
 	}
 
 	bool maybe_expand() {
-		if (B::potential_size() * 2 > max_size) {
+		if (B::potential_size() * 2 > max_size || num_free >= max_size / 2) {
 			do {
 				if (B::try_exclusive())
 					return true;
@@ -484,12 +463,22 @@ protected:
 	~hash_dynamic()			{ free(hashes); }
 
 public:
-	using typename B::iterator;
-	void		clear()				{ B::reset(hashes, max_size); B::curr_size = 0; }
-	bool		count(H h)	const	{ return !!check0(h); }
-	iterator	begin()		const	{ return {hashes, hashes + max_size, hashes}; }
-	iterator	end()		const	{ return {hashes, hashes + max_size}; }
-	iterator	find(H h)	const	{ auto p = check0(h); return p ? iterator(hashes, hashes + max_size, p) : end(); }
+	void			clear()				{ B::reset(hashes, max_size); B::curr_size = 0; }
+	bool			count(H h)	const	{ return !!check0(h); }
+	raw_iterator	begin()		const	{ return {hashes, hashes + max_size, hashes}; }
+	raw_iterator	end()		const	{ return {hashes, hashes + max_size}; }
+	raw_iterator	find(H h)	const	{ auto p = check0(h); return p ? raw_iterator(hashes, hashes + max_size, p) : end(); }
+//	void			remove(raw_iterator &i) { destruct(*remove_raw(unconst(i.get()))); ++i; }
+	H*				remove(H h) {
+		auto	a = B::access();
+		if (auto *p = unconst(check0(h))) {
+			if (B::quick_remove(p, h, hashes)) {
+				num_free += 1 - B::mark_unused(p, hashes, max_size - 1);
+				return p;
+			}
+		}
+		return nullptr;
+	}
 };
 
 //-------------------------------------
@@ -499,8 +488,10 @@ public:
 template<typename H, typename T, bool MT> class hash_storage<H, T, MT, 0> : public hash_dynamic<H, MT> {
 protected:
 	typedef hash_dynamic<H, MT>	B;
-	T*	values()			const		{ return (T*)(void*)(this->hashes + this->max_size); }
-	T*	getval(const H *h)	const		{ return h ? values() + (h - this->hashes) : nullptr; }
+
+	T*			values()				const	{ return (T*)(void*)(B::hashes + B::max_size); }
+	T*			to_val(const H *h)		const	{ return h ? values() + (h - this->hashes) : nullptr; }
+	const H*	from_val(const T *t)	const	{ return t ? B::hashes + (t - values()) : nullptr; }
 
 	void erase_entries() {
 		T	*v = values();
@@ -514,13 +505,13 @@ protected:
 		for (int i = 0; i < max_size2; i++) {
 			H	h = hashes2[i];
 			if (B::IS_USED(i, h))
-				B::put0(h, [this, v = v2[i]](H *p, bool) { new(getval(p)) T(v); });
+				B::put0(h, [this, v = v2[i]](H *p, bool) { new(to_val(p)) T(v); });
 		}
 	}
 	void resize(uint32 newsize);
 
 public:
-	using B::hashes; using B::max_size; using B::curr_size; using B::num_free;
+	using B::hashes; using B::max_size;
 	using iterator			= typename B::template iteratorT<T>;
 	using const_iterator	= typename B::template iteratorT<const T>;
 
@@ -552,38 +543,18 @@ public:
 	void	clear()	{
 		erase_entries(); B::clear();
 	}
-	
 	int index_of(const T *t) const {
 		return B::check_index(t - values(), hashes, max_size);
+	}
+	int index_of(const T &t) const {
+		return index_of(&t);
 	}
 	T*	by_index(int i) const {
 		return B::check_index(i, hashes, max_size) ? values() + i : nullptr;
 	}
-
-	T*	check(H h) const {
-		if (auto p = (B::access(), B::check0(h)))
-			return getval(p);
-		return nullptr;
-	}
-	T*	remove(H h) {
-		if (B::num_free >= B::max_size / 2 && B::try_exclusive()) {
-			resize(B::potential_size() * 2);
-			B::release_exclusive();
-		}
-		return getval(B::safe_remove(h));
-	}
-
-	// single-threaded only!
-	T*	remove(T *t) {
-		if (B::num_free >= B::max_size / 2)
-			resize(B::potential_size() * 2);
-		int	i = t - values();
-		return i >= 0 && i < max_size && B::safe_remove(hashes + i) ? t : nullptr;
-	}
-
 	optional<T&>	get(H h) const {
-		if (auto t = check(h))
-			return *t;
+		if (auto p = B::check0(h))
+			return *to_val(p);
 		return none;
 	}
 	T&	put(H h) {
@@ -593,7 +564,7 @@ public:
 			B::release_exclusive();
 		}
 		T	*p = (B::access(), B::put0(h, [this](H *p, bool alloc) {
-			auto	v = getval(p);
+			auto	v = to_val(p);
 			if (alloc)
 				new(v) T();
 			return v;
@@ -601,18 +572,18 @@ public:
 		B::sub_pending();
 		return *p;
 	}
-	template<typename U> T& put(H h, U &&u) {
+	template<typename... U> T& put(H h, U&&...u) {
 		B::add_pending();
 		if (B::maybe_expand()) {
 			resize(B::potential_size() * 2);
 			B::release_exclusive();
 		}
-		T	*p = (B::access(), B::put0(h, [this, &u](H *p, bool alloc) {
-			auto	v = getval(p);
+		T	*p = (B::access(), B::put0(h, [this, &u...](H *p, bool alloc) {
+			auto	v = to_val(p);
 			if (alloc)
-				new(v) T(forward<U>(u));
+				new(v) T(forward<U>(u)...);
 			else
-				*v = forward<U>(u);
+				*v = T(forward<U>(u)...);
 			return v;
 		}));
 		B::sub_pending();
@@ -625,6 +596,9 @@ public:
 	iterator		begin()				{ return B::begin(); }
 	iterator		end()				{ return B::end(); }
 	iterator		find(H h)			{ return B::find(h); }
+
+	using B::remove;
+	void			remove(iterator &i) { destruct(*to_val(remove_raw(unconst(i.get_raw())))); ++i; }
 };
 
 template<typename H, typename T, bool MT> void hash_storage<H, T, MT, 0>::resize(uint32 newsize) {
@@ -633,7 +607,7 @@ template<typename H, typename T, bool MT> void hash_storage<H, T, MT, 0>::resize
 	for (uint32 i = 0; i < max_size; i++) {
 		auto h = hashes[i];
 		if (B::IS_USED(i, h))
-			new_map.put0(h, [&new_map, &v = vals[i]](H *p, bool) { new(new_map.getval(p)) T(move(v)); });
+			new_map.put0(h, [&new_map, &v = vals[i]](H *p, bool) { new(new_map.to_val(p)) T(move(v)); });
 	}
 	ISO_ASSERT(new_map.size() == B::size());
 	swap(max_size, new_map.max_size);
@@ -659,8 +633,6 @@ template<typename H, bool MT> class hash_storage<H, void, MT, 0> : public hash_d
 	void resize(uint32 newsize);
 
 public:
-	typedef typename B::iterator	iterator, const_iterator;
-
 	hash_storage(int n = 8)	{ B::create_entries(n, 0); }
 
 	hash_storage(const hash_storage &b) {
@@ -684,17 +656,6 @@ public:
 	hash_storage& operator=(hash_storage &&b) {
 		raw_swap(*this, b);
 		return *this;
-	}
-
-	bool	check(H h) const {
-		return !!(B::access(), B::check0(h));
-	}
-	bool	remove(H h) {
-		if (B::num_free >= B::max_size / 2 && B::try_exclusive()) {
-			resize(B::curr_size);
-			B::release_exclusive();
-		}
-		return !!B::safe_remove(h);
 	}
 	void	put(H h) {
 		if (B::maybe_expand()) {
@@ -728,12 +689,25 @@ template<typename K, typename T, bool MT = false, int HASH_BITS = 0> class hash_
 	typedef hash_t<K>						H;
 	typedef hash_map0<H,T,MT,HASH_BITS>		B;
 public:
-	hash_map(int init = 8)			: B(init)	{}
-	hash_map(initializer_list<pair<K, T>> vals)	{ for (auto &i : vals) put(i.a, i.b); }
+	hash_map(int init = 8)						: B(init)				{}
+	hash_map(initializer_list<pair<K, T>> vals)	: B(vals.size() * 2)	{ for (auto &i : vals) put(i.a, i.b); }
+//	using B::remove;
 
-	auto			check(const K &key) const			{ return B::check(hashk<K>(key)); }
-	T*				remove(const K &key)				{ return B::remove(hashk<K>(key)); }
-	T*				remove(T *t)						{ return B::remove(t);	}
+	auto			check(const K &key) const			{ return B::to_val(B::check0(hashk<K>(key))); }
+	T*				remove(const K &key)				{ return B::to_val(B::remove(hashk<K>(key))); }
+	//bool			remove(const K &key) {
+	//	if (auto t = B::to_val(B::remove(hashk<K>(key)))) {
+	//		destruct(*t);
+	//		return true;
+	//	}
+	//	return false;
+	//}
+	optional<T>		remove_value(const K &key) {
+		if (auto t = B::to_val(B::remove(hashk<K>(key))))
+			return move(*t);
+		return none;
+	}
+	bool			remove(T *t)						{ return !!B::remove_raw(B::from_val(t)); }
 	auto			get(const K &k)		const			{ return B::get(hashk<K>(k)); }
 	auto&			put(const K &k)						{ return B::put(hashk<K>(k)); }
 	template<typename U> auto& put(const K &k, U &&u)	{ return B::put(hashk<K>(k), forward<U>(u)); }
@@ -757,15 +731,16 @@ template<typename K, typename T, bool MT = false, int HASH_BITS = 0> class hash_
 	using B::max_size; using B::curr_size; using B::num_free;
 
 	static const pair<K,T>	*as_pair(const T *t) {
-		return (const pair<K,T>*)T_get_enclosing<pair_helper<K,T>>(t, &pair<K,T>::b);
+		return (const pair<K,T>*)T_get_enclosing(t, &pair<K,T>::b);
 	}
 public:
-	hash_map_with_key(int init = 8)							: B(init)			{}
-	hash_map_with_key(initializer_list<pair<K, T>> vals)	: B(vals.size())	{ for (auto &i : vals) put(i.a, i.b); }
+	hash_map_with_key(int init = 8)							: B(init)				{}
+	hash_map_with_key(initializer_list<pair<K, T>> vals)	: B(vals.size() * 2)	{ for (auto &i : vals) put(i.a, i.b); }
+	using B::remove;
 
-	T* check(const K &k) const {
-		if (auto *e = B::check(hashk<K>(k)))
-			return &e->b;
+	T*	check(const K &k) const {
+		if (auto *h = B::check0(hashk<K>(k)))
+			return &B::to_val(h)->b;
 		return 0;
 	}
 	int index_of(const T *t) const {
@@ -781,20 +756,21 @@ public:
 		return none;
 	}
 	T*	remove(const K &key) {
-		if (auto *e = B::remove(hashk<K>(key)))
-			return &e->b;
+		if (auto *h = B::remove(hashk<K>(key)))
+			return &B::to_val(h)->b;
 		return 0;
 	}
-	T*	remove(T *t) {
-		if (auto *e = B::remove(unconst(as_pair(t))))
-			return t;
-		return 0;
+	optional<T>		remove_value(const K &key) {
+		if (auto t = B::to_val(B::remove(hashk<K>(key))))
+			return move(t->b);
+		return none;
+	}
+	bool	remove(T *t) {
+		return !!B::remove_raw(unconst(B::from_val(as_pair(t))));
 	}
 	optional<T&>	get(const K &k) const {
-		if (auto *e = B::check(hashk<K>(k))) {
-			ISO_ASSERT(e->a == k);
-			return e->b;
-		}
+		if (auto *t = check(k))
+			return *t;
 		return none;
 	}
 	template<typename K1> T&	put(K1 &&k) {
@@ -802,22 +778,22 @@ public:
 			B::resize(max_size * 2);
 
 		return B::put0(hashk<K>(k), [this, &k](H *p, bool alloc) {
-			auto *v	= B::getval(p);
+			auto *v	= B::to_val(p);
 			if (alloc)
 				new(v) P(forward<K1>(k));
 			return v;
 		})->b;
 	}
-	template<typename K1, typename T1> T&	put(K1 &&k, T1 &&t) {
+	template<typename K1, typename...U> T&	put(K1 &&k, U&&...u) {
 		if (B::curr_size >= B::max_size / 2)
 			resize(B::max_size * 2);
 
-		return B::put0(hashk<K>(forward<K1>(k)), [this, &k, &t](H *p, bool alloc) {
-			auto *v	= getval(p);
+		return B::put0(hashk<K>(forward<K1>(k)), [&,this](H *p, bool alloc) {
+			auto *v	= to_val(p);
 			if (alloc)
-				new(v) P(forward<K1>(k), forward<T1>(t));
+				new(v) P(forward<K1>(k), T(forward<U>(u)...));
 			else
-				v->b = forward<T1>(t);
+				v->b = T(forward<U>(u)...);
 			return v;
 		})->b;
 	}
@@ -842,44 +818,38 @@ protected:
 
 	bool check_all(const hash_set0 &b) const	{
 		for (auto i = B::begin(), e = B::end(); i != e; ++i) {
-			if (!b.check(i.hash()))
+			if (!b.count(i.hash()))
 				return false;
 		}
 		return true;
 	}
-	void intersect(const hash_set0 &b) {
-		for (auto i = B::begin(), e = B::end(); i != e; ++i) {
-			if (!b.check(i.hash()))
-				B::safe_remove(unconst(i.hash()));
-		}
-	}
-	void difference(const hash_set0 &b) {
-		for (auto i = B::begin(), e = B::end(); i != e; ++i) {
-			if (b.check(i.hash()))
-				B::safe_remove(unconst(i.hash()));
-		}
-	}
-	void onion(const hash_set0 &b) {
-		for (auto i = b.begin(), e = b.end(); i != e; ++i)
-			B::put(i.hash(), *i);
-	}
-	void exclusive(const hash_set0 &b) {
-		for (auto i = b.begin(), e = b.end(); i != e; ++i) {
-			auto	k = i.hash();
-			if (auto j = B::check(k))
-				B::safe_remove(j);
+
+	template<typename T2, bool MT2, int HASH_BITS2> void intersect(const hash_set0<H, T2, MT2, HASH_BITS2> &b) {
+		for (auto i = B::begin(), e = B::end(); i != e;) {
+			if (!b.count(i.hash()))
+				B::remove(i);
 			else
-				B::put(k, *i);
+				++i;
+		}
+	}
+	template<typename T2, bool MT2, int HASH_BITS2> void difference(const hash_set0<H, T2, MT2, HASH_BITS2> &b) {
+		for (auto i = B::begin(), e = B::end(); i != e;) {
+			if (b.count(i.hash()))
+				B::remove(i);
+			else
+				++i;
 		}
 	}
 public:
 	hash_set0(int init = 8)		: B(init)		{}
+	bool	count(H h)					const	{ return !!B::check0(h); }
 
 	bool operator==(const hash_set0 &b)	const	{ return B::size() == b.size() && check_all(b); }
 	bool operator< (const hash_set0 &b)	const	{ return B::size() <  b.size() && check_all(b); }
-	bool operator<=(const hash_set0 &b)	const	{ return B::size() <= b.size() && check_all(b); }
-	bool operator> (const hash_set0 &b)	const	{ return b <  *this; }
-	bool operator>=(const hash_set0 &b)	const	{ return b <= *this; }
+	bool operator!=(const hash_set0 &b)	const	{ return !(*this == b); }
+	bool operator> (const hash_set0& b) const	{ return b < *this; }
+	bool operator<=(const hash_set0& b) const	{ return !(*this > b); }
+	bool operator>=(const hash_set0& b) const	{ return !(*this < b); }
 };
 
 //-------------------------------------
@@ -889,31 +859,47 @@ public:
 template<typename K, bool MT = false, int HASH_BITS = 0> class hash_set : public hash_set0<hash_t<K>, void, MT, HASH_BITS> {
 	typedef hash_t<K>			H;
 	typedef hash_set0<H, void, MT, HASH_BITS>	B;
+
+	void onion(const hash_set &b) {
+		for (auto i = b.begin(), e = b.end(); i != e; ++i)
+			B::put(i.hash());
+	}
+	void exclusive(const hash_set &b) {
+		for (auto i = b.begin(), e = b.end(); i != e; ++i) {
+			if (auto j = B::check0(i.hash()))
+				B::remove_raw(unconst(j));
+			else
+				B::put(i.hash());
+		}
+	}
 public:
-	hash_set(int init = 8)				: B(init)		{}
-	hash_set(initializer_list<K> keys)	: B(keys.size()) { for (auto &i : keys) insert(i); }
+	hash_set(int init = 8)				: B(init)				{}
+	hash_set(initializer_list<K> keys)	: B(keys.size() * 2)	{ for (auto &i : keys) insert(i); }
 
-	bool		count(const K &key) const			{ return !!B::check(hashk<K>(key)); }
-	void		insert(const K &key)				{ B::put(hashk<K>(key)); }
-	void		insert(initializer_list<K> keys)	{ for (auto &i : keys) insert(i); }
-	bool		remove(const K &key)				{ return !!B::remove(hashk<K>(key)); }
-	bool		check_insert(const K &key)			{ H h = hashk<K>(key); return B::check(h) || (B::put(h), false); }
-	template<typename I> void insert(I a, I b)		{ while (a != b) insert(*a++); }
-	template<typename I> void remove(I a, I b)		{ while (a != b) remove(*a++); }
+	bool		count(const K &key) const				{ return B::count(hashk<K>(key)); }
+	void		insert(const K &key)					{ B::put(hashk<K>(key)); }
+	void		insert(initializer_list<K> keys)		{ for (auto &i : keys) insert(i); }
+	bool		remove(const K &key)					{ return !!B::remove(hashk<K>(key)); }
+	bool		check_insert(const K &key)				{ H h = hashk<K>(key); return B::check0(h) || (B::put(h), false); }
+	template<typename I> void insert(I a, I b)			{ while (a != b) insert(*a++); }
+	template<typename I> void remove(I a, I b)			{ while (a != b) remove(*a++); }
 
-	_not<hash_set>	operator~() const				{ return *this; }
-	auto& operator&=(const hash_set &b)				{ B::intersect(b); return *this; }
-	auto& operator&=(const _not<hash_set> &b)		{ B::difference(b.t); return *this; }
-	auto& operator|=(const hash_set &b)				{ B::onion(b); return *this; }
-	auto& operator^=(const hash_set &b)				{ B::exclusive(b); return *this; }
-	auto& operator*=(const hash_set &b)				{ return operator&=(b); }
-	auto& operator+=(const hash_set &b)				{ return operator|=(b); }
-	auto& operator-=(const hash_set &b)				{ return operator&=(~b); }
+	_not<hash_set>	operator~() const					{ return *this; }
+	template<typename K2, bool MT2, int HASH_BITS2> auto& operator&=(const hash_set0<H, K2, MT2, HASH_BITS2> &b) { B::intersect(b); return *this; }
+	template<typename K2, bool MT2, int HASH_BITS2> auto& operator-=(const hash_set0<H, K2, MT2, HASH_BITS2> &b) { B::difference(b); return *this; }
+	auto& operator|=(const hash_set &b)					{ onion(b); return *this; }
+	auto& operator^=(const hash_set &b)					{ exclusive(b); return *this; }
 
-	friend auto operator&(const hash_set &a, const hash_set &b)			{ hash_set t(a); t &= b; return t; }
-	friend auto operator&(const hash_set &a, const _not<hash_set> &b)	{ hash_set t(a); t &= b; return t; }
-	friend auto operator|(const hash_set &a, const hash_set &b)			{ hash_set t(a); t &= b; return t; }
-	friend auto operator^(const hash_set &a, const hash_set &b)			{ hash_set t(a); t ^= b; return t; }
+	template<typename X> auto&		operator*=(const X &b)				{ return operator&=(b); }
+	template<typename X> auto&		operator+=(const X &b)				{ return operator|=(b); }
+
+	template<typename X> friend auto operator&(hash_set a, const X &b)	{ return a &= b; }
+	template<typename X> friend auto operator|(hash_set a, const X &b)	{ return a |= b; }
+	template<typename X> friend auto operator^(hash_set a, const X &b)	{ return a ^= b; }
+	template<typename X> friend auto operator-(hash_set a, const X &b)	{ return a -= b; }
+	template<typename X> friend auto operator*(hash_set a, const X &b)	{ return a *= b; }
+	template<typename X> friend auto operator+(hash_set a, const X &b)	{ return a += b; }
+
 	friend void swap(hash_set &a, hash_set &b)	{ raw_swap(a, b); }
 };
 
@@ -928,33 +914,50 @@ template<typename K> struct _not<hash_set<K> > {
 //-------------------------------------
 
 template<typename K, bool MT = false, int HASH_BITS = 0> class hash_set_with_key : public hash_set0<hash_t<K>, K, MT, HASH_BITS> {
-	typedef hash_set0<hash_t<K>, K, MT, HASH_BITS>	B;
+	typedef hash_t<K>			H;
+	typedef hash_set0<H, K, MT, HASH_BITS>	B;
+
+	void onion(const hash_set_with_key &b) {
+		for (auto i = b.begin(), e = b.end(); i != e; ++i)
+			B::put(i.hash(), *i);
+	}
+	void exclusive(const hash_set_with_key &b) {
+		for (auto i = b.begin(), e = b.end(); i != e; ++i) {
+			if (auto j = B::check0(i.hash()))
+				B::remove_raw(unconst(j));
+			else
+				B::put(i.hash(), *i);
+		}
+	}
 public:
-	hash_set_with_key(int init = 8)				: B(init)		{}
-	hash_set_with_key(initializer_list<K> keys)	: B(keys.size()) { for (auto &i : keys) insert(i); }
+	hash_set_with_key(int init = 8)				: B(init)				{}
+	hash_set_with_key(initializer_list<K> keys)	: B(keys.size() * 2)	{ for (auto &i : keys) insert(i); }
 
 	auto		find(const K &key) const				{ return B::find(hashk<K>(key)); }
-	bool		count(const K &key) const				{ return !!B::check(hashk<K>(key)); }
+	bool		count(const K &key) const				{ return !!B::check0(hashk<K>(key)); }
 	void		insert(const K &key)					{ B::put(hashk<K>(key), key); }
 	void		insert(initializer_list<K> keys)		{ for (auto &i : keys) insert(i); }
 	bool		remove(const K &key)					{ return !!B::remove(hashk<K>(key)); }
-	bool		check_insert(const K &key)				{ auto h = hashk<K>(key); return B::check(h) || (B::put(h, key), false); }
+	bool		check_insert(const K &key)				{ auto h = hashk<K>(key); return B::check0(h) || (B::put(h, key), false); }
 	template<typename I> void insert(I a, I b)			{ while (a != b) insert(*a++); }
 	template<typename I> void remove(I a, I b)			{ while (a != b) remove(*a++); }
 
 	_not<hash_set_with_key>	operator~() const			{ return *this; }
-	auto& operator&=(const hash_set_with_key &b)		{ B::intersect(b); return *this; }
-	auto& operator&=(const _not<hash_set_with_key> &b)	{ B::difference(b.t); return *this; }
-	auto& operator|=(const hash_set_with_key &b)		{ B::onion(b); return *this; }
-	auto& operator^=(const hash_set_with_key &b)		{ B::exclusive(b); return *this; }
-	auto& operator*=(const hash_set_with_key &b)		{ return operator&=(b); }
-	auto& operator+=(const hash_set_with_key &b)		{ return operator|=(b); }
-	auto& operator-=(const hash_set_with_key &b)		{ return operator&=(~b); }
+	template<typename K2, bool MT2, int HASH_BITS2> auto& operator&=(const hash_set0<H, K2, MT2, HASH_BITS2> &b) { B::intersect(b); return *this; }
+	template<typename K2, bool MT2, int HASH_BITS2> auto& operator-=(const hash_set0<H, K2, MT2, HASH_BITS2> &b) { B::difference(b); return *this; }
+	auto& operator|=(const hash_set_with_key &b)		{ onion(b); return *this; }
+	auto& operator^=(const hash_set_with_key &b)		{ exclusive(b); return *this; }
 
-	friend auto operator&(const hash_set_with_key &a, const hash_set_with_key &b)			{ hash_set_with_key t(a); t &= b; return t; }
-	friend auto operator&(const hash_set_with_key &a, const _not<hash_set_with_key> &b)		{ hash_set_with_key t(a); t &= b; return t; }
-	friend auto operator|(const hash_set_with_key &a, const hash_set_with_key &b)			{ hash_set_with_key t(a); t &= b; return t; }
-	friend auto operator^(const hash_set_with_key &a, const hash_set_with_key &b)			{ hash_set_with_key t(a); t ^= b; return t; }
+	template<typename X> auto&		operator*=(const X &b)				{ return operator&=(b); }
+	template<typename X> auto&		operator+=(const X &b)				{ return operator|=(b); }
+
+	template<typename X> friend auto operator&(hash_set_with_key a, const X &b)	{ return a &= b; }
+	template<typename X> friend auto operator|(hash_set_with_key a, const X &b)	{ return a |= b; }
+	template<typename X> friend auto operator^(hash_set_with_key a, const X &b)	{ return a ^= b; }
+	template<typename X> friend auto operator-(hash_set_with_key a, const X &b)	{ return a -= b; }
+	template<typename X> friend auto operator*(hash_set_with_key a, const X &b)	{ return a *= b; }
+	template<typename X> friend auto operator+(hash_set_with_key a, const X &b)	{ return a += b; }
+
 	friend void swap(hash_set_with_key &a, hash_set_with_key &b)	{ raw_swap(a, b); }
 };
 
@@ -974,8 +977,7 @@ protected:
 
 	bool check_all(const hash_multiset0 &b) const	{
 		for (auto i = B::begin(), e = B::end(); i != e; ++i) {
-			T	*x = b.check(i.key());
-			if (!x || *x < *i)
+			if (count(i.key()) < *i)
 				return false;
 		}
 		return true;
@@ -985,41 +987,40 @@ protected:
 			B::put(i.hash(), *i);
 	}
 	void sub(const hash_multiset0 &b) {
-		for (auto i = B::begin(), e = B::end(); i != e; ++i) {
-			H	k = i.hash();
-			if (T *x = b.check(k)) {
-				if (*i <= *x)
-					B::safe_remove(i.get());
-				else
-					*i -= *x;
-			}
+		for (auto i = B::begin(), e = B::end(); i != e;) {
+			auto	c = b.count(i.hash()));
+			if (*i <= c)
+				B::remove(i);
+			else
+				*i++ -= c;
 		}
 	}
 	void min(const hash_multiset0 &b) {
-		for (auto i = B::begin(), e = B::end(); i != e; ++i) {
-			if (T *x = b.check(i.hash()))
-				i->min(*x);
+		for (auto i = B::begin(), e = B::end(); i != e;) {
+			if (auto c = b.count(i.hash()))
+				i++->min(c);
 			else
-				B::safe_remove(i.get());
+				B::remove(i);
 		}
 	}
 	void max(const hash_multiset0 &b) {
 		for (auto i = b.begin(), e = b.end(); i != e; ++i) {
-			if (T *x = B::check(i.hash()))
-				x->max(*i);
+			if (auto h = B::check0(i.hash()))
+				B::to_val(h)->max(*i);
 			else
 				B::put(i.hash(), *i);
 		}
 	}
 public:
 	uint32		count(H key) const {
-		T *x = B::check(key);
-		return x ? *x : 0;
+		if (auto h = B::check0(key))
+			return *B::to_val(h);
+		return 0;
 	}
 	bool		remove(H key) {
-		if (T *x = B::check(key)) {
-			if (--*x == 0)
-				B::remove(x);
+		if (auto h = B::check0(key)) {
+			if (--*B::to_val(h) == 0)
+				B::remove(h);
 			return true;
 		}
 		return false;
@@ -1040,6 +1041,7 @@ public:
 
 struct count_entry {
 	uint32	count	= 0;
+	void	operator=(const count_entry &v) 	{ count += v; }
 	operator uint32() const			{ return count; }
 	uint32	operator++()			{ return ++count; }
 	uint32	operator--()			{ return --count; }
@@ -1058,16 +1060,17 @@ template<typename K, bool MT = false, int HASH_BITS = 0> class hash_multiset : p
 public:
 	uint32		insert(const K &key)			{ return B::put(hashk<K>(key))++; }
 	uint32		count(const K &key) const		{ return B::count(hashk<K>(key)); }
-	bool		remove(const K &key)			{ return B::remove(hashk<K>(key)); }
+	bool		remove(const K &key)			{ return !!B::remove(hashk<K>(key)); }
 
 	auto& operator+=(const hash_multiset &b) { B::add(b); return *this; }
 	auto& operator-=(const hash_multiset &b) { B::sub(b); return *this; }
 	auto& operator*=(const hash_multiset &b) { B::min(b); return *this; }
 	auto& operator|=(const hash_multiset &b) { B::max(b); return *this; }
 
-	friend auto operator+(const hash_multiset &a, const hash_multiset &b)	{ auto t = a; t += b; return t; }
-	friend auto operator-(const hash_multiset &a, const hash_multiset &b)	{ auto t = a; t -= b; return t; }
-	friend auto operator*(const hash_multiset &a, const hash_multiset &b)	{ auto t = a; t *= b; return t; }
+	friend auto operator+(hash_multiset a, const hash_multiset &b)	{ return a += b; }
+	friend auto operator-(hash_multiset a, const hash_multiset &b)	{ return a -= b; }
+	friend auto operator*(hash_multiset a, const hash_multiset &b)	{ return a *= b; }
+	friend auto operator|(hash_multiset a, const hash_multiset &b)	{ return a |= b; }
 };
 
 //-------------------------------------
@@ -1094,18 +1097,19 @@ public:
 	iterator	begin()	const	{ return B::begin(); }
 	iterator	end()	const	{ return B::end(); }
 
-	uint32		insert(const K &key)			{ return B::put(hashk<K>(key))++; }
+	uint32		insert(const K &key)			{ return B::put(hashk<K>(key), key)++; }
 	uint32		count(const K &key) const		{ return B::count(hashk<K>(key)); }
-	bool		remove(const K &key)			{ return B::remove(hashk<K>(key)); }
+	bool		remove(const K &key)			{ return !!B::remove(hashk<K>(key)); }
 
 	auto& operator+=(const hash_multiset_with_key &b) { B::add(b); return *this; }
 	auto& operator-=(const hash_multiset_with_key &b) { B::sub(b); return *this; }
 	auto& operator*=(const hash_multiset_with_key &b) { B::min(b); return *this; }
 	auto& operator|=(const hash_multiset_with_key &b) { B::max(b); return *this; }
 
-	friend auto operator+(const hash_multiset_with_key &a, const hash_multiset_with_key &b)	{ auto t = a; t += b; return t; }
-	friend auto operator-(const hash_multiset_with_key &a, const hash_multiset_with_key &b)	{ auto t = a; t -= b; return t; }
-	friend auto operator*(const hash_multiset_with_key &a, const hash_multiset_with_key &b)	{ auto t = a; t *= b; return t; }
+	friend auto operator+(hash_multiset_with_key a, const hash_multiset_with_key &b)	{ return a += b; }
+	friend auto operator-(hash_multiset_with_key a, const hash_multiset_with_key &b)	{ return a -= b; }
+	friend auto operator*(hash_multiset_with_key a, const hash_multiset_with_key &b)	{ return a *= b; }
+	friend auto operator|(hash_multiset_with_key a, const hash_multiset_with_key &b)	{ return a |= b; }
 };
 
 //-----------------------------------------------------------------------------
@@ -1184,12 +1188,7 @@ public:
 
 template<typename T, int N = 8> struct small_set : public small_set_base<T> {
 	space_for<T[N]>	space;
-
 	small_set()	: small_set_base<T>(N) {}
-#ifdef USE_RVALUE_REFS
-	//	small_set(const small_set &b)	= default;
-	//	small_set(small_set &&b)		= default;
-#endif
 };
 
 

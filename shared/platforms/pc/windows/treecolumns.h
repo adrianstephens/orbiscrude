@@ -95,7 +95,7 @@ public:
 
 //	static HBRUSH		get_class_background()	{ return GetSysColorBrush(COLOR_WINDOW); }
 						TreeColumnControl();
-	LRESULT				Proc(UINT message, WPARAM wParam, LPARAM lParam);
+	LRESULT				Proc(MSG_ID message, WPARAM wParam, LPARAM lParam);
 
 	HeaderControl&		GetHeaderControl()			{ return header; }
 	TreeControl&		GetTreeControl()			{ return tree;	}

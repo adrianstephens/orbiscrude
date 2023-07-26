@@ -1014,7 +1014,7 @@ void iso::LHA::encode_lzhuf(istream_ref ifile, ostream_ref ofile, size_t size, M
 
 		switch (method) {
 			case METHOD_LZHUFF1:
-				slide.encode(lvalue(LHAencoder1(ofile)), lvalue(istream_offset(ifile, size)));
+				slide.encode(lvalue(LHAencoder1(ofile)), lvalue(istream_offset(copy(ifile), size)));
 				break;
 	//		case METHOD_LZHUFF2:
 	//			slide.encode(LHAencoder2(ofile), ifile, size);
@@ -1026,7 +1026,7 @@ void iso::LHA::encode_lzhuf(istream_ref ifile, ostream_ref ofile, size_t size, M
 			case METHOD_LZHUFF5:
 			case METHOD_LZHUFF6:
 			case METHOD_LZHUFF7:
-				slide.encode(lvalue(LHAencoder4567(ofile)), lvalue(istream_offset(ifile, size)));
+				slide.encode(lvalue(LHAencoder4567(ofile)), lvalue(istream_offset(copy(ifile), size)));
 				break;
 	//		case METHOD_LARC:
 	//		case METHOD_LARC5:

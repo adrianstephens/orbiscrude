@@ -137,9 +137,9 @@ public:
 		};
 		Time() : u(0) {}
 		Time(Date d, TimeOfDay t) : sec_2(int(t.Sec() / 2)), min(t.Min()), hour(t.Hour()), day(d.day), month(d.month), year1980(d.year - 1980) {}
-		Time(DateTime dt) : Time(dt.Days(), dt.TimeOfDay()) {}
+		Time(DateTime dt) : Time(Date(dt.Day()), TimeOfDay(dt.TimeOfDay())) {}
 		operator DateTime() const {
-			return DateTime::Days(Date::Days(year1980 + 1980, month - 1, day)) + DateTime::Hours(hour) + DateTime::Mins(min) + DateTime::Secs(sec_2 * 2);
+			return DateTime::Day(Date::Days(year1980 + 1980, month - 1, day)) + Duration::Hours(hour) + Duration::Mins(min) + Duration::Secs(sec_2 * 2);
 		}
 	};
 	struct common {
@@ -513,7 +513,7 @@ bool LzHeader::read(istream_ref file) {
 					ext0_unix	unix;
 					if (file2.read(unix)) {
 						unix_minor_ver	= unix.minor_ver;
-						last_modified	= DateTime::FromUnixTime(DateTime::Secs(unix.last_modified));
+						last_modified	= DateTime::FromUnixTime(Duration::Secs(unix.last_modified));
 						unix_mode		= unix.mode;
 						unix_ids.gid	= unix.gid;
 						unix_ids.uid	= unix.uid;

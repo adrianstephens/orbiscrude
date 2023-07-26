@@ -95,11 +95,11 @@ DateTime ReadDate(const char *p, int year_digits) {
 	uint32	hour	= get_digits(p + 4, 2);
 	uint32	mins	= get_digits(p + 6, 2);
 	float	secs	= from_string<float>(p + 8);
-	return DateTime(year, month, day) + DateTime::Secs((hour * 60 + mins) * 60 + secs);
+	return DateTime(year, month, day) + Duration::Secs((hour * 60 + mins) * 60 + secs);
 }
 
 void WriteDate(string_accum &a, DateTime d) {
-	Date		date(d.Days());
+	Date		date(d.Day());
 	TimeOfDay	tod(d.TimeOfDay());
 	a.format("%02u%02u%02u%02u%02u%02uZ", date.year%100, date.month, date.day, tod.Hour(), tod.Min(), int(tod.Sec()));
 }
@@ -479,7 +479,8 @@ struct ans1_dynamic_array {
 	void	*append(uint32 size) {
 		if (curr_size >= max_size) {
 			max_size	= max(max_size * 2, 16);
-			p			= aligned_realloc(p, size * max_size, 8);
+			//p			= aligned_realloc(p, size * max_size, 8);
+			p			= iso::realloc(p, size * max_size);
 		}
 		void	*r = (uint8*)p + size * curr_size++;
 		memset(r, 0, size);
@@ -487,7 +488,8 @@ struct ans1_dynamic_array {
 	}
 	void	*trim(uint32 size) {
 		max_size = curr_size;
-		return p = aligned_realloc(p, size * curr_size, 8);
+		//return p = aligned_realloc(p, size * curr_size, 8);
+		return p = iso::realloc(p, size * curr_size);
 	}
 	void	*get(uint32 size, int i) {
 		return (uint8*)p + i * size;

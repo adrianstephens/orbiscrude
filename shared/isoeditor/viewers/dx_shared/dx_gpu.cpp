@@ -9,71 +9,6 @@ using namespace app;
 
 namespace iso { namespace dx {
 
-ChannelUse::chans GetChannels(DXGI_COMPONENTS format) {
-	ChannelUse::chans c;
-	for (int i = 0; i < 4; i++)
-		c[i] = format.GetChan(i);
-	return c;
-}
-
-template<typename T> const void *copy_slices(const block<T, 3> &dest, const void *srce, DXGI_COMPONENTS format, uint64 depth_stride) {
-	srce = copy_slices(dest, srce, format.Layout(), format.Type(), depth_stride);
-	RearrangeChannels(dest, GetChannels(format));
-	return srce;
-}
-
-ISO_ptr_machine<void> GetBitmap(const char *name, const void *srce, DXGI_COMPONENTS format, int width, int height, int depth, int mips, int flags) {
-	uint64	depth_stride = size2D(format, width, height, mips);
-
-	if (mips > 1)
-		flags |= BMF_MIPS;
-
-	if (depth == 0)
-		depth = 1;
-
-	if (format.IsHDR()) {
-		ISO_ptr_machine<HDRbitmap64>	bm(name);
-		bm->Create(width, height * depth, flags, depth);
-
-		if (mips > 1) {
-			bm->SetMips(mips);
-			for (int i = 0; i < mips; i++)
-				srce = copy_slices(bm->Mip3D(i), srce, format, depth_stride);
-
-		} else {
-			copy_slices(bm->All3D(), srce, format, depth_stride);
-		}
-		return bm;
-
-	} else {
-		ISO_ptr_machine<bitmap64>	bm(name);
-		bm->Create(width, height * depth, flags, depth);
-
-		if (mips > 1) {
-			bm->SetMips(mips);
-			for (int i = 0; i < mips; i++)
-				srce = copy_slices(bm->Mip3D(i), srce, format, depth_stride);
-
-		} else {
-			copy_slices(bm->All3D(), srce, format, depth_stride);
-		}
-		return bm;
-	}
-}
-
-ISO_ptr_machine<void> GetBitmap(const char *name, SimulatorDXBC::Resource &rec) {
-	switch (rec.dim) {
-		case RESOURCE_DIMENSION_TEXTURE1D:
-			return GetBitmap(name, rec, rec.format, rec.width, rec.depth, 1, rec.mips, 0);
-		case RESOURCE_DIMENSION_TEXTURE2D:
-			return GetBitmap(name, rec, rec.format, rec.width, rec.height, rec.depth, rec.mips, 0);
-		case RESOURCE_DIMENSION_TEXTURE3D:
-			return GetBitmap(name, rec, rec.format, rec.width, rec.height, rec.depth, rec.mips, BMF_VOLUME);
-		default:
-			return ISO_NULL;
-	}
-}
-
 #define CT(T)	ctypes.get_type<T>()
 
 const C_type *dxgi_c_types[] = {
@@ -126,10 +61,10 @@ const C_type *dxgi_c_types[] = {
 	0,						//DXGI_FORMAT_R24_UNORM_X8_TYPELESS		= 46,
 	0,						//DXGI_FORMAT_X24_TYPELESS_G8_UINT		= 47,
 	0,						//DXGI_FORMAT_R8G8_TYPELESS				= 48,
-	CT(unorm8[4]),			//DXGI_FORMAT_R8G8_UNORM				= 49,
-	CT(uint8[4]),			//DXGI_FORMAT_R8G8_UINT					= 50,
-	CT(norm8[4]),			//DXGI_FORMAT_R8G8_SNORM				= 51,
-	CT(int8[4]),			//DXGI_FORMAT_R8G8_SINT					= 52,
+	CT(unorm8[2]),			//DXGI_FORMAT_R8G8_UNORM				= 49,
+	CT(uint8[2]),			//DXGI_FORMAT_R8G8_UINT					= 50,
+	CT(norm8[2]),			//DXGI_FORMAT_R8G8_SNORM				= 51,
+	CT(int8[2]),			//DXGI_FORMAT_R8G8_SINT					= 52,
 	0,						//DXGI_FORMAT_R16_TYPELESS				= 53,
 	CT(float16),			//DXGI_FORMAT_R16_FLOAT					= 54,
 	0,						//DXGI_FORMAT_D16_UNORM					= 55,
@@ -217,7 +152,7 @@ const C_type *to_c_type(DXGI_FORMAT f) {
 }
 
 const C_type *to_c_type(DXGI_COMPONENTS f) {
-	const C_type *c_types[8][3] = {
+	static const C_type *c_types[8][3] = {
 		//8 bits		16				32
 		{0,				0,				0,			},	//TYPELESS,
 		{0,				CT(float16),	CT(float),	},	//FLOAT,
@@ -230,6 +165,8 @@ const C_type *to_c_type(DXGI_COMPONENTS f) {
 	};
 
 	auto	info = f.GetLayoutInfo();
+	if (info.bits == 0)
+		return  nullptr;
 
 	const C_type	*c = c_types[f.Type()][log2(info.bits) - 3];
 	if (info.comps > 1)
@@ -237,6 +174,18 @@ const C_type *to_c_type(DXGI_COMPONENTS f) {
 	return c;
 }
 
+static const C_type *to_c_type(const SIG::Element &e) {
+	static const C_type *c_types[4] = {
+		0,
+		CT(uint32),
+		CT(int32),
+		CT(float),
+	};
+	uint32	n = count_bits(e.mask);
+	auto	t = c_types[e.component_type];
+	return n == 1 ? t : ctypes.add(C_type_array(t, n));
+}
+/*
 template<typename T> const C_type *to_c_type(const T *elements) {
 	for (auto &i : elements->Elements()) {
 		string	name	= i.name.get(elements);
@@ -247,8 +196,96 @@ template<typename T> const C_type *to_c_type(const T *elements) {
 	}
 	return nc;
 }
+*/
+const C_type *sig_to_c_type(const dx::Signature &sig) {
+	C_type_struct	type;
+	for (auto &i : sig) {
+		string	name	= i.name.get(sig);
+		if (i.semantic_index)
+			name << i.semantic_index;
+		
+		int		r	= i.register_num;
+		if (r < 0) {
+			switch (i.system_value) {
+				default: ISO_ASSERT(0);
+				case SV_DEPTH:	r = Decls::oDepth; break;
+			}
+		}
 
-Topology2 GetTopology(PrimitiveType prim, uint32 chunks) {
+		type.add_atoffset(name, to_c_type(i), r * 16 + lowest_set_index(i.mask) * 4);
+	}
+	return ctypes.add(move(type));
+}
+
+ChannelUse::chans GetChannels(DXGI_COMPONENTS format) {
+	ChannelUse::chans c;
+	for (int i = 0; i < 4; i++)
+		c[i] = format.GetChan(i);
+	return c;
+}
+
+//template<typename T> const void *copy_slices(const block<T, 3> &dest, const void *srce, DXGI_COMPONENTS format, uint64 depth_stride) {
+//	srce = copy_slices(dest, srce, format.Layout(), format.Type(), depth_stride);
+//	RearrangeChannels(dest, GetChannels(format));
+//	return srce;
+//}
+
+ISO_ptr_machine<void> GetBitmap(const char *name, const void *srce, DXGI_COMPONENTS format, int width, int height, int depth, int mips, int flags) {
+	if (height == 0)
+		height = 1;
+
+	uint64	depth_stride = size2D(format, width, height, mips);
+
+	if (mips > 1)
+		flags |= BMF_MIPS;
+
+	if (depth == 0)
+		depth = 1;
+
+	if (format.IsHDR()) {
+		ISO_ptr_machine<HDRbitmap64>	bm(name);
+		bm->Create(width, height * depth, flags, depth);
+
+		if (mips > 1) {
+			bm->SetMips(mips);
+			for (int i = 0; i < mips; i++)
+				srce = copy_slices(bm->Mip3D(i), srce, format, depth_stride);
+
+		} else {
+			copy_slices(bm->All3D(), srce, format, depth_stride);
+		}
+		return bm;
+
+	} else {
+		ISO_ptr_machine<bitmap64>	bm(name);
+		bm->Create(width, height * depth, flags, depth);
+
+		if (mips > 1) {
+			bm->SetMips(mips);
+			for (int i = 0; i < mips; i++)
+				srce = copy_slices(bm->Mip3D(i), srce, format, depth_stride);
+
+		} else {
+			copy_slices(bm->All3D(), srce, format, depth_stride);
+		}
+		return bm;
+	}
+}
+
+ISO_ptr_machine<void> GetBitmap(const char *name, Resource &rec) {
+	switch (rec.dim) {
+		case RESOURCE_DIMENSION_TEXTURE1D:
+			return GetBitmap(name, rec, rec.format, rec.width, rec.depth, 1, rec.mips, 0);
+		case RESOURCE_DIMENSION_TEXTURE2D:
+			return GetBitmap(name, rec, rec.format, rec.width, rec.height, rec.depth, rec.mips, 0);
+		case RESOURCE_DIMENSION_TEXTURE3D:
+			return GetBitmap(name, rec, rec.format, rec.width, rec.height, rec.depth, rec.mips, BMF_VOLUME);
+		default:
+			return ISO_NULL;
+	}
+}
+
+Topology GetTopology(D3D_PRIMITIVE_TOPOLOGY prim) {
 	static const Topology::Type prim_conv[] = {
 		Topology::UNKNOWN,
 		Topology::POINTLIST,
@@ -265,14 +302,34 @@ Topology2 GetTopology(PrimitiveType prim, uint32 chunks) {
 		Topology::TRILIST_ADJ,
 		Topology::TRISTRIP_ADJ,
 	};
-	if (prim < num_elements(prim_conv))
-		return Topology2(prim_conv[prim], chunks);
-	Topology2	t(Topology::PATCH);
-	t.SetNumCP(prim - 32);
+	if (prim < D3D_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST)
+		return prim_conv[prim];
+
+	Topology	t(Topology::PATCH);
+	t.mul = prim - D3D_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST + 1;
 	return  t;
 }
 
-Topology2 GetTopology(PrimitiveTopology prim) {
+Topology GetTopology(PrimitiveType prim) {
+	static const Topology::Type prim_conv[] = {
+		Topology::UNKNOWN,
+		Topology::POINTLIST,
+		Topology::LINELIST,
+		Topology::TRILIST,
+		Topology::UNKNOWN,
+		Topology::UNKNOWN,
+		Topology::LINELIST_ADJ,
+		Topology::TRILIST_ADJ,
+	};
+	if (prim < PRIMITIVE_1_CONTROL_POINT_PATCH)
+		return prim_conv[prim];
+
+	Topology	t(Topology::PATCH);
+	t.mul = prim - PRIMITIVE_1_CONTROL_POINT_PATCH + 1;
+	return  t;
+}
+
+Topology GetTopology(PrimitiveTopology prim) {
 	static const Topology::Type prim_conv[] = {
 		Topology::UNKNOWN,
 		Topology::POINTLIST,
@@ -288,7 +345,7 @@ Topology2 GetTopology(PrimitiveTopology prim) {
 	return prim_conv[prim];
 }
 
-Topology2 GetTopology(TessellatorOutputPrimitive prim) {
+Topology GetTopology(TessellatorOutputPrimitive prim) {
 	static const Topology::Type prim_conv[] = {
 		Topology::UNKNOWN,
 		Topology::POINTLIST,
@@ -299,30 +356,36 @@ Topology2 GetTopology(TessellatorOutputPrimitive prim) {
 	return prim_conv[prim];
 }
 
-Tesselation GetTesselation(TessellatorDomain domain, range<stride_iterator<const SimulatorDXBC::Register>> pc) {
-	switch (domain) {
-		case dx::DOMAIN_ISOLINE:	return Tesselation(float2{pc[0].x, pc[1].x});
-		case dx::DOMAIN_TRI:		return Tesselation(float4{pc[0].x, pc[1].x, pc[2].x}, pc[3].x);
-		case dx::DOMAIN_QUAD:		return Tesselation(float4{pc[0].x, pc[1].x, pc[2].x, pc[3].x}, float2{pc[4].x, pc[5].x});
-		default:					return Tesselation();
-	}
-}
-
-SimulatorDXBC::Triangle GetTriangle(SimulatorDXBC &sim, const char *semantic_name, int semantic_index, OSGN *vs_out, OSG5 *gs_out, int i0, int i1, int i2) {
-	if (vs_out) {
-		if (auto *x = vs_out->find_by_semantic(semantic_name, semantic_index)) {
-			auto y	= sim.GetRegFile(dx::Operand::TYPE_OUTPUT, x->register_num);
-			return dx::SimulatorDXBC::Triangle(y[i0], y[i1], y[i2]);
+Tesselation GetTesselation(TessellatorDomain domain, range<stride_iterator<const float4p>> pc) {
+	if (as<uint32>(pc[0]).x == 0xcdcdcdcd) {
+		switch (domain) {
+			case dx::DOMAIN_ISOLINE:	return Tesselation(float2{pc[0].w, pc[1].w});
+			case dx::DOMAIN_TRI:		return Tesselation(float3{pc[0].w, pc[1].w, pc[2].w}, pc[3].w);
+			case dx::DOMAIN_QUAD:		return Tesselation(float4{pc[0].w, pc[1].w, pc[2].w, pc[3].w}, float2{pc[4].w, pc[5].w});
+			default:					return Tesselation();
 		}
 	} else {
-		if (auto *x = gs_out->find_by_semantic(semantic_name, semantic_index)) {
-			auto y	= sim.GetStreamFileAll(x->register_num);
-			return dx::SimulatorDXBC::Triangle(y[i0], y[i1], y[i2]);
+		switch (domain) {
+			case dx::DOMAIN_ISOLINE:	return Tesselation(float2{pc[0].x, pc[1].x});
+			case dx::DOMAIN_TRI:		return Tesselation(float3{pc[0].x, pc[1].x, pc[2].x}, pc[3].x);
+			case dx::DOMAIN_QUAD:		return Tesselation(float4{pc[0].x, pc[1].x, pc[2].x, pc[3].x}, float2{pc[4].x, pc[5].x});
+			default:					return Tesselation();
 		}
 	}
-	return dx::SimulatorDXBC::Triangle(float4(zero), float4(zero), float4(zero));
 }
 
+Triangle GetTriangle(SimulatorDX* sim, const SIG::Element* e, int i0, int i1, int i2) {
+	if (e) {
+		auto y	= sim->GetOutput<float4p>(e->register_num);
+		return Triangle(y[i0], y[i1], y[i2]);
+	}
+	return Triangle(float4(zero), float4(zero), float4(zero));
+}
+
+Triangle GetTriangle(SimulatorDX *sim, const char *semantic_name, int semantic_index, const dx::Signature &sig, int i0, int i1, int i2) {
+	return GetTriangle(sim, sig.find_by_semantic(semantic_name, semantic_index), i0, i1, i2);
+}
+/*
 template<typename T> int SetShaderColumns(ColourList *c, const T *elements, int nc, win::Colour col0, win::Colour col1) {
 	for (auto &i : elements->Elements()) {
 		string	name	= i.name.get(elements);
@@ -333,17 +396,32 @@ template<typename T> int SetShaderColumns(ColourList *c, const T *elements, int 
 	}
 	return nc;
 }
+*/
+int SetShaderColumns(ColourList *c, const dx::Signature &sig, int nc, win::Colour col0, win::Colour col1) {
+	for (auto &i : sig) {
+		string	name	= i.name.get(sig);
+		if (i.semantic_index)
+			name << i.semantic_index;
+		for (int m = i.mask; m; m = clear_lowest(m))
+			nc	= c->AddColumn(nc, string(name) << '.' << "xyzw"[lowest_set_index(m)], 50, nc & 1 ? col1 : col0);
+	}
+	return nc;
+}
 
 } } //namespace iso::dx
 
-DXCapturer::~DXCapturer() {
+DXConnection::DXConnection() : paused(false), addr(IP4::localhost, 0) {
+}//, PORT(4567)) {}
+
+
+DXConnection::~DXConnection() {
 	if (paused) {
 		if (!process.Terminate())
 			process.TerminateSafe();
 	}
 }
 
-filename DXCapturer::GetDLLPath(const char *dll_name) {
+filename DXConnection::GetDLLPath(const char *dll_name) {
 	filename	dll_path	= get_exec_dir().add_dir(dll_name);
 	Resource	r(0, dll_name, "BIN");
 	if (!check_writebuff(FileOutput(dll_path), r, r.length())) {
@@ -352,32 +430,47 @@ filename DXCapturer::GetDLLPath(const char *dll_name) {
 	return dll_path;
 }
 	
-bool DXCapturer::OpenProcess(uint32 id, const char *dll_name) {
+bool DXConnection::OpenProcess(uint32 id, const char *dll_name) {
 	if (paused)
 		process.Terminate();
 	
 	if (!process.Open(id))
 		return false;
 
+	uint16	port;
+	if (RunRemote(process.hProcess, (LPTHREAD_START_ROUTINE)GetProcAddress(LoadLibraryEx(dll_name, 0, DONT_RESOLVE_DLL_REFERENCES), "RPC_WhatPort"), 0, port)) {
+		addr.port	= port;
+	}
+
 	paused	= process.IsSuspended();
 	filename	path;
 	return process.FindModule(dll_name, path);
 }
 
-bool DXCapturer::OpenProcess(const filename &app, const char *dir, const char *args, const char *dll_name, const char *dll_path) {
+bool DXConnection::OpenProcess(const filename &app, const char *dir, const char *args, const char *dll_name, const char *dll_path) {
 	if (paused)
 		process.Terminate();
 
 	if (process.Open(app, dir, args)) {
 		filename	path;
-		if (!process.FindModule(dll_name, path))
+		auto		lib	= process.FindModule(dll_name, path);
+		if (!lib) {
 			process.InjectDLL(dll_path);
+			lib	= process.FindModule(dll_name, path);
+		}
 
-		//HANDLE	pipe2;
-		//if (!DuplicateHandle(GetCurrentProcess(), pipe, process, &pipe2, 0, TRUE, DUPLICATE_SAME_ACCESS))
-		//	pipe2 = 0;
+		uint16	port;
+		if (RunRemote(process.hProcess, (LPTHREAD_START_ROUTINE)GetProcAddress(LoadLibraryEx(dll_name, 0, DONT_RESOLVE_DLL_REFERENCES), "RPC_WhatPort"), 0, port)) {
+			addr.port	= port;
+		} else {
+			addr.port	= 0;
+			Socket	sock	= IP4::TCP();
+			addr.bind(sock);
+			IP4::socket_addr	addr2;
+			addr2.local_addr(sock);
+			addr.port	= addr2.port;
+		}
 
-		//remote.CallASync("RPC_InstallHooks", pipe2);
 		process.Run();
 		paused = true;
 		return true;
@@ -385,16 +478,21 @@ bool DXCapturer::OpenProcess(const filename &app, const char *dir, const char *a
 	return false;
 }
 
-void DXCapturer::ConnectDebugOutput() {
-	static const int INTF_DebugOutput = 42;
-	RunThread([addr = addr]() {
-		ISO_OUTPUT("ConnectDebugOutput started");
-		SocketWait	sock =	 addr.socket();
+void DXConnection::ConnectDebugOutput() {
+	static const int
+		INTF_DebugOutput	= 42,
+		INTF_Status			= 0x80,
+		INTF_Text			= 0x81;
+
+	RunThread([this]() {
+		SocketWait	sock	= addr.connect_or_close(IP4::TCP());
 		for (uint32 delay = 1; delay < 10000 && !sock.exists(); delay <<= 1) {
 			Sleep(delay);
-			sock =	 addr.socket();
+			sock =	 addr.connect_or_close(IP4::TCP());
 		}
-		#if 0
+		ISO_OUTPUT("ConnectDebugOutput started\n");
+
+	#if 0
 		if (sock.exists()) {
 			SocketCallRPC<void>(sock, INTF_DebugOutput);
 			char16	buffer[1024];
@@ -404,20 +502,34 @@ void DXCapturer::ConnectDebugOutput() {
 				OutputDebugStringW(ba.term());
 			}
 		}
-		#else
+	#else
 		while (sock.exists()) {
 			SocketCallRPC<void>(sock, INTF_DebugOutput);
 			while (sock.select(1)) {
+			#if 1
+				switch (sock.getc()) {
+					case INTF_Status: SocketRPC(sock, [](int status) {
+						//OutputDebugStringA((string_builder() << ansi_colour("32") << "Status = " << status << ansi_colour("0") << '\n').term());
+						MainWindow::Get()->CheckButton(ID_ORBISCRUDE_PAUSE, status == 0);
+
+					}); break;
+
+					case INTF_Text: SocketRPC(sock, [](with_size<string> s) {
+						OutputDebugStringA((string_builder() << ansi_colour("31") << s << ansi_colour("0")).term());
+					}); break;
+				}
+			#else
 				char	buffer[1024];
 				auto read = sock.readbuff(buffer, 1023);
 				buffer_accum<1024>	ba;
 				ba << ansi_colour("91") << str(buffer, read) << ansi_colour("0");
 				OutputDebugStringA(ba.term());
+			#endif
 			}
-			sock =	 addr.socket();
+			sock =	 addr.connect_or_close(IP4::TCP());
 		}
-		#endif
-		ISO_OUTPUT("ConnectDebugOutput stopped");
+	#endif
+		ISO_OUTPUT("ConnectDebugOutput stopped\n");
 	});
 }
 
@@ -428,399 +540,6 @@ void DXCapturer::ConnectDebugOutput() {
 //		paused = false;
 //	}
 //}
-
-struct type_converter {
-	PDB_types			&pdb;
-	TI					minTI;
-	const char			*name;
-	C_type_composite	*forward_struct;
-	const CV::Bitfield	*bitfield;
-
-	static const C_type *const float_types[];
-	static const C_type *const signed_integral_types[];
-	static const C_type *const unsigned_integral_types[];
-	static const C_type *const int_types[];
-	static const C_type *const special_types[];
-	static const C_type *const special_types2[];
-
-	static const C_type *simple(TI ti) {
-	
-		int	sub	= CV_SUBT(ti);
-		const C_type *type = 0;
-		switch (CV_TYPE(ti)) {
-			case CV::SPECIAL:	type = special_types[sub]; break;
-			case CV::SIGNED:	type = signed_integral_types[sub]; break;
-			case CV::UNSIGNED:	type = unsigned_integral_types[sub]; break;
-			case CV::BOOLEAN:	type = CT(bool); break;
-			case CV::REAL:		type = float_types[sub]; break;
-		//	case CV::COMPLEX:	type = "complex<" << float_types[sub] << '>'; break;
-			case CV::SPECIAL2:	type = special_types2[sub];	break;
-			case CV::INT:		type = int_types[sub];	break;
-		//	case CV::CVRESERVED:type = "<reserved>";	break;
-			default: ISO_ASSERT(0); return 0;
-		}
-		switch (CV_MODE(ti)) {
-			case CV::TM_DIRECT:	return type;
-			case CV::TM_NPTR:	return ctypes.add(C_type_pointer(type, 16, false));
-			case CV::TM_NPTR32:	return ctypes.add(C_type_pointer(type, 32, false));
-			case CV::TM_NPTR64:	return ctypes.add(C_type_pointer(type, 64, false));
-			default: ISO_ASSERT(0); return 0;
-		}
-	}
-	
-	static bool is_conversion_operator(const char *name) {
-		return str(name).begins("operator ");
-	}
-
-	const C_type *procTI(TI ti) {
-		if (ti < 0x1000)
-			return simple(ti);
-		return process<const C_type*>(pdb.GetType(ti), *this);
-	}
-
-	CV::FieldList	*get_fieldlist(TI ti) {
-		if (ti) {
-			CV::FieldList	*list = pdb.GetType(ti)->as<CV::FieldList>();
-			ISO_ASSERT(list->leaf == CV::LF_FIELDLIST || list->leaf == CV::LF_FIELDLIST_16t);
-			return list;
-		}
-		return 0;
-	}
-
-//	const C_type *operator()(nullptr_t) {}
-	template<typename T> const C_type *operator()(const T&, bool = false) { return 0; }
-
-	const C_type *operator()(const CV::HLSL &t) {
-		static const char *to_pssl[] = {
-			0,							//CV_BI_HLSL_INTERFACE_POINTER			= 0x0200,
-			"Texture1D",				//CV_BI_HLSL_TEXTURE1D					= 0x0201,
-			"Texture1D_Array",			//CV_BI_HLSL_TEXTURE1D_ARRAY			= 0x0202,
-			"Texture2D",				//CV_BI_HLSL_TEXTURE2D					= 0x0203,
-			"Texture2D_Array",			//CV_BI_HLSL_TEXTURE2D_ARRAY			= 0x0204,
-			"Texture3D",				//CV_BI_HLSL_TEXTURE3D					= 0x0205,
-			"TextureCube",				//CV_BI_HLSL_TEXTURECUBE				= 0x0206,
-			"TextureCube_Array",		//CV_BI_HLSL_TEXTURECUBE_ARRAY			= 0x0207,
-			"Texture2D",				//CV_BI_HLSL_TEXTURE2DMS				= 0x0208,
-			"Texture2D_Array",			//CV_BI_HLSL_TEXTURE2DMS_ARRAY			= 0x0209,
-			"Sampler",					//CV_BI_HLSL_SAMPLER					= 0x020a,
-			"Sampler",					//CV_BI_HLSL_SAMPLERCOMPARISON			= 0x020b,
-			"DataBuffer",				//CV_BI_HLSL_BUFFER						= 0x020c,
-			"PointBuffer",				//CV_BI_HLSL_POINTSTREAM				= 0x020d,
-			"LineBuffer",				//CV_BI_HLSL_LINESTREAM					= 0x020e,
-			"TriangleBuffer",			//CV_BI_HLSL_TRIANGLESTREAM				= 0x020f,
-			"Inputpatch",				//CV_BI_HLSL_INPUTPATCH					= 0x0210,
-			"Outputpatch",				//CV_BI_HLSL_OUTPUTPATCH				= 0x0211,
-			"RW_Texture1d",				//CV_BI_HLSL_RWTEXTURE1D				= 0x0212,
-			"RW_Texture1d_Array",		//CV_BI_HLSL_RWTEXTURE1D_ARRAY			= 0x0213,
-			"RW_Texture2d",				//CV_BI_HLSL_RWTEXTURE2D				= 0x0214,
-			"RW_Texture2d_Array",		//CV_BI_HLSL_RWTEXTURE2D_ARRAY			= 0x0215,
-			"RW_Texture3d",				//CV_BI_HLSL_RWTEXTURE3D				= 0x0216,
-			"RW_DataBuffer",			//CV_BI_HLSL_RWBUFFER					= 0x0217,
-			"ByteBuffer",				//CV_BI_HLSL_BYTEADDRESS_BUFFER			= 0x0218,
-			"RW_ByteBuffer",			//CV_BI_HLSL_RWBYTEADDRESS_BUFFER		= 0x0219,
-			"RegularBuffer",			//CV_BI_HLSL_STRUCTURED_BUFFER			= 0x021a,
-			"RW_RegularBuffer",			//CV_BI_HLSL_RWSTRUCTURED_BUFFER		= 0x021b,
-			"AppendRegularBuffer",		//CV_BI_HLSL_APPEND_STRUCTURED_BUFFER	= 0x021c,
-			"ConsumeRegularBuffer",		//CV_BI_HLSL_CONSUME_STRUCTURED_BUFFER	= 0x021d,
-			0,							//CV_BI_HLSL_MIN8FLOAT					= 0x021e,
-			0,							//CV_BI_HLSL_MIN10FLOAT					= 0x021f,
-			0,							//CV_BI_HLSL_MIN16FLOAT					= 0x0220,
-			0,							//CV_BI_HLSL_MIN12INT					= 0x0221,
-			0,							//CV_BI_HLSL_MIN16INT					= 0x0222,
-			0,							//CV_BI_HLSL_MIN16UINT					= 0x0223,
-		};
-		auto	*type = procTI(t.subtype);
-		if (const char *pssl = to_pssl[t.kind - 0x200]) {
-			if (auto *temp = builtin_ctypes().lookup(to_pssl[t.kind - 0x200]))
-				type = ctypes.instantiate(temp, pssl, type);
-		}
-		return type;
-	}
-	const C_type *operator()(const CV::Alias &t) {
-		return ctypes.add(t.name, procTI(t.utype));
-	}
-	const C_type *operator()(const CV::Pointer &t) {
-		return ctypes.add(C_type_pointer(procTI(t.utype), 64, is_any(t.attr.ptrmode, CV::PTR_MODE_REF, CV::PTR_MODE_LVREF, CV::PTR_MODE_RVREF)));
-	}
-	const C_type *operator()(const CV::Array &t) {
-		return ctypes.add(C_type_array(procTI(t.elemtype), uint32((int64)t.size / pdb.GetTypeSize(t.elemtype))));
-	}
-	const C_type *operator()(const CV::StridedArray &t) {
-		return ctypes.add(C_type_array(procTI(t.elemtype), uint32((int64)t.size / t.stride), t.stride));
-	}
-	const C_type *operator()(const CV::Vector &t) {
-		return ctypes.add(C_type_array(procTI(t.elemtype), t.count));
-	}
-	const C_type *operator()(const CV::Matrix &t) {
-		if (t.matattr.row_major)
-			return ctypes.add(C_type_array(ctypes.add(C_type_array(procTI(t.elemtype), t.cols)), t.rows));
-		else
-			return ctypes.add(C_type_array(ctypes.add(C_type_array(procTI(t.elemtype), t.rows)), t.cols));
-	}
-	const C_type *operator()(const CV::Proc &t) {
-		return 0;
-	}
-	const C_type *operator()(const CV::BClass &t) {
-		return 0;
-	}
-	const C_type *operator()(const CV::Enumerate &t) {
-		return 0;
-	}
-//	const C_type *operator()(const CV::Member &t) {
-//		auto	type = procTI(t.index);
-//		name	= t.name();
-//		offset	= t.offset;
-//		return type;
-//	}
-//	const C_type *operator()(const CV::STMember &t) {
-//		return 0;
-//	}
-//	const C_type *operator()(const CV::MFunc &t) {
-//		return 0;
-//	}
-//	const C_type *operator()(const CV::Method &t) {
-//		return 0;
-//	}
-//	const C_type *operator()(const CV::OneMethod &t) {
-//		return 0;
-//	}
-	const C_type *operator()(const CV::NestType &t) {
-		return 0;
-	}
-	const C_type *operator()(const CV::Class &t) {
-		string	id		= t.name();
-		auto	ptype	= (C_type_struct*)ctypes.lookup(id);
-
-		if (!ptype || ptype != forward_struct) {
-			if (ptype)
-				return ptype;
-
-			ptype = new C_type_struct(id);
-			ctypes.add(id, ptype);
-		
-			if (t.property.fwdref) {
-				auto	ti = pdb.LookupUDT(t.name());
-				return save(forward_struct, ptype), procTI(ti);
-			}
-		}
-		
-		ptype->_size = (int64)t.size;
-
-		if (auto *list = get_fieldlist(t.derived)) {
-			for (auto &i : list->list())
-				ptype->add(0, process<const C_type*>(&i, *this));
-		}
-
-		if (auto *list = get_fieldlist(t.field)) {
-			for (auto &i : list->list()) {
-				switch (i.leaf) {
-					case CV::LF_BCLASS:
-					case CV::LF_BINTERFACE: {
-						auto	*b = i.as<CV::BClass>();
-						ptype->add_atoffset(nullptr, procTI(b->index), (uint32)(int64)b->offset);
-						break;
-					}
-				}
-			}
-
-			for (auto &i : list->list()) {
-				switch (i.leaf) {
-					case CV::LF_MEMBER: {
-						auto	*m	= i.as<CV::Member>();
-						auto	bf	= save(bitfield, nullptr);
-						if (auto *t	= procTI(m->index)) {;
-							int64	offset	= m->offset;
-							if (bitfield) {
-								ISO_ASSERT(t->type == C_type::INT);
-								auto		*t1 = (const C_type_int*)t;
-								ptype->add_atbit(m->name(), ctypes.add(C_type_int(bitfield->length, t1->flags & ~C_type_int::ENUM)), (uint32)offset * 8 + bitfield->position);
-							} else {
-								ptype->add_atoffset(m->name(), t, (uint32)offset);
-							}
-						}
-						break;
-					}
-					case CV::LF_STMEMBER: {
-						auto	*m	= i.as<CV::STMember>();
-						auto	*t	= procTI(m->index);
-						ptype->add_static(m->name, t);
-						break;
-					}
-				}
-			}
-		}
-
-		return ptype;
-	}
-	const C_type *operator()(const CV::Union &t) {
-		string	id		= t.name();
-		auto	ptype	= (C_type_union*)ctypes.lookup(id);
-
-		if (!ptype || ptype != forward_struct) {
-			if (ptype)
-				return ptype;
-
-			ptype = new C_type_union(id);
-			ctypes.add(id, ptype);
-
-			if (t.property.fwdref) {
-				auto	ti = pdb.LookupUDT(t.name());
-				return save(forward_struct, ptype), procTI(ti);
-			}
-		}
-
-		ptype->_size = (int64)t.size;
-
-		if (auto *list = get_fieldlist(t.field)) {
-			for (auto &i : list->list()) {
-				switch (i.leaf) {
-					case CV::LF_MEMBER: {
-						auto	*m	= i.as<CV::Member>();
-						auto	*t	= procTI(m->index);
-						ptype->add(m->name(), t);
-						break;
-					}
-					case CV::LF_STMEMBER: {
-						auto	*m	= i.as<CV::STMember>();
-						auto	*t	= procTI(m->index);
-						ptype->add_static(m->name, t);
-						break;
-					}
-				}
-			}
-		}
-
-		return ptype;
-	}
-	const C_type *operator()(const CV::Enum &t) {
-		auto	underlying = procTI(t.utype);
-		if (underlying->type != C_type::INT)
-			return 0;
-
-		C_type_enum		e(*(const C_type_int*)underlying, t.count);
-		if (auto *list = get_fieldlist(t.field)) {
-			for (auto &i : list->list()) {
-				switch (i.leaf) {
-					case CV::LF_ENUMERATE: {
-						auto	en = i.as<CV::Enumerate>();
-						e.emplace_back(en->name(), en->value);
-						break;
-					}
-				}
-			}
-		}
-		return ctypes.add(t.name, ctypes.add(e));
-
-	}
-	const C_type *operator()(const CV::ArgList &t) {
-		return 0;
-	}
-	const C_type *operator()(const CV::Modifier &t) {
-		return procTI(t.type);
-	}
-	const C_type *operator()(const CV::ModifierEx &t) {
-		return procTI(t.type);
-	}
-	const C_type *operator()(const CV::Bitfield &t) {
-		const C_type *sub = procTI(t.type);
-		bitfield = &t;
-		return sub;
-	}
-
-	type_converter(PDB_types &pdb) : pdb(pdb), minTI(pdb.MinTI()) {}
-};
-
-const C_type *const type_converter::float_types[] = {
-	CT(float),
-	CT(double),
-	CT(float80),
-	CT(float128),
-	CT(float48),
-	0,//CT(float32PP),
-	CT(float16),
-};
-const C_type *const type_converter::signed_integral_types[] = {
-	CT(char),
-	CT(short),
-	CT(int),
-	CT(int64),
-	0,//CT(int128),
-};
-const C_type *const type_converter::unsigned_integral_types[] = {
-	CT(uint8),
-	CT(uint16),
-	CT(uint32),
-	CT(uint64),
-	CT(uint128),
-};
-const C_type *const type_converter::int_types[] = {
-	CT(char),
-	CT(unsigned char),	//>()wchar?>(),
-	CT(short),
-	CT(unsigned short),
-	CT(int),
-	CT(unsigned),
-	CT(int64),
-	CT(uint64),
-	0,//CT(int128),
-	CT(uint128),
-	CT(char16_t),
-	CT(char32_t),
-};
-const C_type *const type_converter::special_types[] = {
-	0,	//"notype"
-	0,	//"abs",
-	0,	//"segment",
-	0,	//"void",
-	0,	//"currency",
-	0,	//"nbasicstr",
-	0,	//"fbasicstr",
-	0,	//"nottrans",
-	CT(HRESULT),	//"HRESULT",
-};
-const C_type *const type_converter::special_types2[] = {
-	0,	//"bit",
-	0,	//"paschar",
-	0,	//"bool32ff",
-};
-
-const C_type *app::to_c_type(PDB_types &pdb, TI ti) {
-	if (ti < 0x1000)
-		return type_converter::simple(ti);
-
-	type_converter	conv(pdb);
-	return process<const C_type*>(pdb.GetType(ti), conv);
-}
-
-struct hlsl_type_getter {
-	PDB_types		&pdb;
-
-	const CV::HLSL *procTI(TI ti) {
-		if (ti < pdb.MinTI())
-			return 0;
-		return process<const CV::HLSL*>(pdb.GetType(ti), *this);
-	}
-	const CV::HLSL *operator()(const CV::Leaf&, bool = false) {
-		return 0;
-	}
-	const CV::HLSL *operator()(const CV::HLSL &t) {
-		return &t;
-	}
-	const CV::HLSL *operator()(const CV::Alias &t) {
-		return procTI(t.utype);
-	}
-	const CV::HLSL *operator()(const CV::Modifier &t) {
-		return procTI(t.type);
-	}
-	const CV::HLSL *operator()(const CV::ModifierEx &t) {
-		return procTI(t.type);
-	}
-	hlsl_type_getter(PDB_types &pdb) : pdb(pdb) {}
-};
-
-const CV::HLSL *app::get_hlsl_type(PDB_types &pdb, TI ti) {
-	return hlsl_type_getter(pdb).procTI(ti);
-}
 
 int app::MakeHeaders(win::ListViewControl lv, int nc, DXGI_COMPONENTS fmt, const char *prefix, const char *suffix) {
 	static const char *prefixes[] = {
@@ -850,6 +569,61 @@ int app::MakeHeaders(win::ListViewControl lv, int nc, DXGI_COMPONENTS fmt, const
 //-----------------------------------------------------------------------------
 //	D3D_SHADER_VARIABLE_TYPE
 //-----------------------------------------------------------------------------
+
+#define CT(T)	ctypes.get_type<T>()
+const C_type *to_c_type(D3D_SHADER_VARIABLE_TYPE type) {
+	static const hash_map<D3D_SHADER_VARIABLE_TYPE,const C_type*> types = {
+		{D3D_SVT_BOOL,	CT(int)		},
+		{D3D_SVT_INT,	CT(int)		},
+		{D3D_SVT_FLOAT,	CT(float)	},
+		{D3D_SVT_UINT,	CT(uint32)	},
+		{D3D_SVT_UINT8,	CT(int8)	},
+		{D3D_SVT_DOUBLE,CT(double)	},
+	};
+	return types[type];
+}
+#undef CT
+
+const C_type *app::to_c_type(
+	D3D_SHADER_VARIABLE_CLASS	Class,
+	D3D_SHADER_VARIABLE_TYPE	Type,
+	uint32						rows,
+	uint32						cols
+) {
+	auto	base = ::to_c_type(Type);
+
+	if (Class == D3D_SVC_SCALAR)
+		return base;
+		/*
+	int		stride = 0;
+	switch (Type) {
+		case D3D_SVT_BOOL:		stride = 4; break;
+		case D3D_SVT_INT:		stride = 4; break;
+		case D3D_SVT_FLOAT:		stride = 4; break;
+		case D3D_SVT_UINT:		stride = 4; break;
+		case D3D_SVT_UINT8:		stride = 1; break;
+		case D3D_SVT_DOUBLE:	stride = 8; break;
+	}
+	*/
+	switch (Class) {
+		case D3D_SVC_VECTOR:
+			return ctypes.add(C_type_array(base, cols));
+
+		case D3D_SVC_MATRIX_ROWS:
+			base = ctypes.add(C_type_array(base, rows));
+			base = ctypes.add(C_type_array(base, cols));
+			return base;
+
+		case D3D_SVC_MATRIX_COLUMNS:
+			base = ctypes.add(C_type_array(base, cols));
+			base = ctypes.add(C_type_array(base, rows));
+			return base;
+
+		default:
+			return nullptr;
+	}
+}
+
 
 string_accum& GetDataValue(string_accum &sa, const void *data, D3D_SHADER_VARIABLE_TYPE type) {
 	switch (type) {
@@ -1042,14 +816,14 @@ SyntaxColourerRE _HLSLcolourerRE(const ISO::Browser &settings) {
 		")\\b"
 	);
 	const char*	operators(
-		"\\b("
+		"("
 		"++|--|~|!|+|-|*|/"
 		"|%|<<|>>|&|^|||&&|||"
 		"||<|>|<=|>=|==|!=|="
 		"|+=|-=|*=|/=|%=|<<=|>>=|&="
 		"|^=||=|?|:|[|]|(|)"
 		"|{|}|.|;|::|..."
-		")\\b"
+		")"
 	);
 	const char*	semantics(
 		"\\b("
@@ -1087,317 +861,40 @@ const SyntaxColourerRE& app::HLSLcolourerRE() {
 }
 
 //-----------------------------------------------------------------------------
-//	DXBCRegisterWindow
-//-----------------------------------------------------------------------------
-
-void DXBCRegisterWindow::Update(const dx::SimulatorDXBC &sim, dx::SHADERSTAGE stage, ParsedSPDB &spdb, uint64 pc, int thread) {
-	if (!entries) {
-		uint32	offset = 0;
-
-		entries.emplace_back(0, "pc", nullptr, Entry::SIZE64);
-		offset += 8;
-
-		for (uint64 m = sim.InputMask(); m; m = clear_lowest(m)) {
-			int		i		= lowest_set_index(m);
-			auto	type	= sim.input_type(i, stage);
-			offset = AddReg(type, i, offset);
-		}
-
-		for (int i = 0; i < sim.NumInputControlPoints(); i++)
-			offset = AddReg(dx::Operand::TYPE_INPUT_CONTROL_POINT, i, offset);
-
-		for (uint64 m = sim.OutputMask(); m; m = clear_lowest(m)) {
-			int		i		= lowest_set_index(m);
-			auto	type	= sim.output_type(i);
-			if (type != dx::Operand::TYPE_OUTPUT)
-				i = 0;
-			offset = AddReg(sim.output_type(i), i, offset);
-		}
-
-		for (uint64 m = sim.PatchConstOutputMask(); m; m = clear_lowest(m))
-			offset = AddReg(dx::Operand::TYPE_INPUT_PATCH_CONSTANT, lowest_set_index(m), offset);
-
-		for (int i = 0; i < sim.NumOutputControlPoints(); i++)
-			offset = AddReg(dx::Operand::TYPE_OUTPUT_CONTROL_POINT, i, offset);
-
-		for (int i = 0; i < sim.NumTemps(); i++)
-			offset = AddReg(dx::Operand::TYPE_TEMP, i, offset);
-
-		prev_regs.create(offset);
-		SetPane(1, SendMessage(WM_ISO_NEWPANE));
-	}
-
-	struct RegUse {
-		const CV::LOCALSYM	*parent;
-		uint16		offset, size;
-	};
-	hash_map<const void*, RegUse>	uses;
-
-	const CV::LOCALSYM	*parent = 0;
-	if (auto *mod = spdb.HasModule(1)) {
-		for (auto &s : mod->Symbols()) {
-			switch (s.rectyp) {
-				case CV::S_LOCAL:
-					parent = s.as<CV::LOCALSYM>();
-					break;
-				case CV::S_DEFRANGE_HLSL: {
-					auto	&r = *s.as<CV::DEFRANGESYMHLSL>();
-					if (r.range().test({sim.AddressToOffset(pc), 1})) {
-						const void	*off2	= sim.reg_data(thread, (dx::Operand::Type)r.regType, r.offsets());
-						uses[off2]		= RegUse {parent, r.offsetParent, r.sizeInParent};
-					}
-				}
-			}
-		}
-	}
-
-	Entry	*y		= entries;
-	uint32	*pregs	= prev_regs;
-
-	((uint64*)pregs)[0]	= pc;
-	y		+= 1;
-	pregs	+= 2;
-
-	uint32	active = sim.IsActive(thread) ? 0 : Entry::DISABLED;
-
-	for (auto &i : regspecs) {
-		uint32			offset	= i.index * 16;
-		const uint32*	regs	= (const uint32*)sim.reg_data(thread, i.type, make_range_n(&offset, 1));
-
-		for (int j = 0; j < 4; j++, y++) {
-			buffer_accum<256>	acc(RegisterName(i.type, i.index, 1 << j));
-			if (RegUse *use = uses.check(regs))
-				DumpField(acc << '(' << get_name(use->parent), to_c_type(spdb, use->parent->typind), use->offset, true) << ')';
-			y->name		= acc;
-			y->flags	= active | (*regs == 0xcdcdcdcd ? Entry::UNSET : *regs != *pregs ? Entry::CHANGED : 0);
-			*pregs++	= *regs++;
-		}
-	}
-
-	RedrawWindow(*this, NULL, NULL, RDW_INVALIDATE | RDW_ALLCHILDREN);
-}
-
-//-----------------------------------------------------------------------------
-//	DXBCLocalsWindow
-//-----------------------------------------------------------------------------
-
-void DXBCLocalsWindow::Update(const dx::SimulatorDXBC &sim, ParsedSPDB &spdb, uint64 pc, int thread) {
-	frame.clear();
-
-	hash_map_with_key<const CV::SYMTYPE*, uint32>	locals;
-	const CV::LOCALSYM	*parent	= 0;
-	uint32			loc_size;
-	uint64			loc_base;
-
-//	entries.clear();
-	tc.DeleteItem(TVI_ROOT);
-
-	if (auto *mod = spdb.HasModule(1)) {
-		for (auto &s : mod->Symbols()) {
-			switch (s.rectyp) {
-				case CV::S_LOCAL: {
-					auto	*loc	= s.as<CV::LOCALSYM>();
-					if (!parent || parent->name != loc->name || parent->typind != loc->typind) {
-						parent		= loc;
-						loc_size	= uint32(spdb.GetTypeSize(loc->typind));
-						loc_base	= frame.add_chunk(loc_size);
-					//	entries.emplace_back(loc->name, to_c_type(spdb, loc->typind), loc_base);
-						AppendEntry(loc->name, to_c_type(spdb, loc->typind), loc_base);
-					}
-					break;
-				}
-				case CV::S_DEFRANGE_HLSL: {
-					auto	&r = *s.as<CV::DEFRANGESYMHLSL>();
-					if (r.range().test({sim.AddressToOffset(pc), 1})) {
-
-						switch (r.regType) {
-							case dx::Operand::TYPE_STREAM:
-								continue;
-						}
-
-						ISO_ASSERT(r.offsetParent + r.sizeInParent <= loc_size);
-						frame.add_block(loc_base + r.offsetParent, sim.reg_data(thread, (dx::Operand::Type)r.regType, r.offsets()), r.sizeInParent);
-					}
-					break;
-				}
-				case CV::S_GDATA_HLSL:
-				case CV::S_LDATA_HLSL: {
-					auto	*data	= s.as<CV::DATASYMHLSL>();
-					loc_size	= uint32(spdb.GetTypeSize(data->typind));
-					loc_base	= frame.add_chunk(loc_size);
-					frame.add_block(loc_base, (uint8*)sim.grp[data->dataslot]->data().begin() + data->dataoff, loc_size);
-					//entries.emplace_back(data->name, to_c_type(spdb, data->typind), loc_base);
-					AppendEntry(data->name, to_c_type(spdb, data->typind), loc_base);
-					break;
-				}
-			}
-		}
-	}
-
-//	Redraw();
-}
-
-//-----------------------------------------------------------------------------
-//	DXBCTraceWindow
-//-----------------------------------------------------------------------------
-
-class DXBCTraceWindow : public TraceWindow {
-	struct RegAdder : buffer_accum<256>, ListViewControl::Item {
-		ListViewControl			c;
-		row_data				&row;
-		uint8					types[2];
-		bool					source;
-
-		void	SetAddress(uint64 addr) {
-			format("%010I64x", addr);
-			*getp() = 0;
-			Insert(c);
-		}
-		void	SetDis(const char *dis) {
-			reset() << dis;
-			*getp() = 0;
-			Column(1).Set(c);
-		}
-
-		void	AddValue(int i, int reg, int mask, dx::SimulatorDXBC::Register &r) {
-			row.fields[i].reg	= reg;
-			row.fields[i].write	= !source;
-			row.fields[i].mask	= mask;
-
-			float	*f		= (float*)&r;
-			for (int j = 0; j < 4; j++) {
-				reset() << f[j] << '\0';
-				Column(i * 4 + j + 2).Set(c);
-			}
-		}
-
-		RegAdder(ListViewControl _c, row_data &_row) : ListViewControl::Item(getp()), c(_c), row(_row) {}
-	};
-
-	int InsertRegColumns(int nc, const char *name) {
-		for (int i = 0; i < 4; i++)
-			ListViewControl::Column(buffer_accum<64>(name) << '.' << "xyzw"[i]).Width(120).Insert(c, nc++);
-		return nc;
-	}
-public:
-	DXBCTraceWindow(const WindowPos &wpos, dx::SimulatorDXBC &sim, int thread, int max_steps = 0);
-};
-
-int get_mask(const dx::ASMOperand &o) {
-	switch (o.selection_mode) {
-		default:
-		case dx::Operand::SELECTION_MASK:
-			return o.swizzle_bits;
-
-		case dx::Operand::SELECTION_SWIZZLE: {
-			uint8	m = 0;
-			for (int bits = o.swizzle_bits | 0x100; bits != 1; bits >>= 2)
-				m |= 1 << (bits & 3);
-			return m;
-		}
-
-		case dx::Operand::SELECTION_SELECT_1:
-			return 1 << o.swizzle.x;
-	}
-}
-
-DXBCTraceWindow::DXBCTraceWindow(const WindowPos &wpos, dx::SimulatorDXBC &sim, int thread, int max_steps) : TraceWindow(wpos, 4) {
-	static Disassembler	*dis = Disassembler::Find("DXBC");
-
-	int	nc = 2;
-	nc = InsertRegColumns(nc, "dest");
-	nc = InsertRegColumns(nc, "input 0");
-	nc = InsertRegColumns(nc, "input 1");
-	nc = InsertRegColumns(nc, "input 2");
-
-	auto *p = sim.Begin();
-	while(p->IsDeclaration())
-		p = p->next();
-
-	while (p && max_steps--) {
-		RegAdder	ra(c, rows.push_back());
-		ra.SetAddress(sim.Address(p));
-		
-		Disassembler::State	*state = dis->Disassemble(memory_block(unconst(p), p->Length * 4), sim.Address(p));
-		buffer_accum<256>	ba;
-		state->GetLine(ba, 0);
-		ra.SetDis(ba);
-		delete state;
-
-		dx::ASMOperation	op(p);
-
-		ra.source = true;
-		for (int i = 1; i < op.ops.size(); i++)
-			ra.AddValue(i, sim.reg(op.ops[i]), get_mask(op.ops[i]), sim.ref(thread, op.ops[i]));
-
-		p	= sim.ProcessOp(p);
-		ra.source = false;
-		if (op.ops)
-			ra.AddValue(0, sim.reg(op.ops[0]), get_mask(op.ops[0]), sim.ref(thread, op.ops[0]));
-	}
-
-	selected	= 0x100;
-}
-
-Control app::MakeDXBCTraceWindow(const WindowPos &wpos, dx::SimulatorDXBC &sim, int thread, int max_steps) {
-	return *new DXBCTraceWindow(wpos, sim, thread, max_steps);
-}
-
-//-----------------------------------------------------------------------------
 //	Shader Output
 //-----------------------------------------------------------------------------
 
-template<typename T> void FillShaderValues(ListViewControl c, const T *elements, dx::SimulatorDXBC &sim, int col, dx::Operand::Type type, const indices &ix) {
-	if (ix) {
-		for (auto &i : elements->Elements())
-			col = FillColumn(c, col, make_indexed_container(sim.GetRegFile(type, i.register_num).begin(), ix), i.mask, scalar(true));
+void FillShaderValues(ListViewControl c, const dx::Signature &sig, dx::SimulatorDX *sim, int col, dx::Operand::Type type, const dynamic_array<uint32> &indices) {
+	if (indices) {
+		for (auto &i : sig)
+			col = FillColumn(c, col, make_indexed_container(sim->GetRegFile<float4p>(type, i.register_num).begin(), indices), i.mask, scalar(true));
 
 	} else {
-		for (auto &i : elements->Elements())
-			col = FillColumn(c, col, sim.GetRegFile(type, i.register_num), i.mask, scalar(true));
+		for (auto &i : sig)
+			col = FillColumn(c, col, sim->GetRegFile<float4p>(type, i.register_num), i.mask, scalar(true));
 	}
 }
 
-template<typename T> void FillShaderValues(ListViewControl c, const T *elements, dx::SimulatorDXBC &sim, int col, dx::Operand::Type type, const indices &ix, const dynamic_bitarray<uint32> &enabled) {
-	if (ix) {
-		for (auto &i : elements->Elements())
-			col = FillColumn(c, col, make_indexed_container(sim.GetRegFile(type, i.register_num).begin(), ix), i.mask, make_indexed_container(enabled, ix));
+void FillShaderValues(ListViewControl c, const dx::Signature &sig, dx::SimulatorDX *sim, int col, dx::Operand::Type type, const dynamic_array<uint32> &indices, const dynamic_bitarray<uint32> &enabled) {
+	if (indices) {
+		for (auto &i : sig)
+			col = FillColumn(c, col, make_indexed_container(sim->GetRegFile<float4p>(type, i.register_num).begin(), indices), i.mask, make_indexed_container(enabled, indices));
 
 	} else {
-		for (auto &i : elements->Elements())
-			col = FillColumn(c, col, sim.GetRegFile(type, i.register_num), i.mask, make_indexed_container(enabled));
+		for (auto &i : sig)
+			col = FillColumn(c, col, sim->GetRegFile<float4p>(type, i.register_num), i.mask, make_indexed_container(enabled));
 	}
 }
 
-static const C_type *to_c_type(const dx::SIG::Element &e) {
-	static const C_type *c_types[4] = {
-		0,
-		CT(uint32),
-		CT(int32),
-		CT(float),
-	};
-	return ctypes.add(C_type_array(c_types[e.component_type], highest_set_index(e.mask) + 1));
-}
-
-template<typename T> const C_type *elements_to_c_type(const T *elements) {
-	C_type_struct	type;
-	for (auto &i : elements->Elements()) {
-		string	name	= i.name.get(elements);
-		if (i.semantic_index)
-			name << i.semantic_index;
-		type.add_atoffset(name, to_c_type(i), i.register_num * 16);
-	}
-	return ctypes.add(move(type));
-}
-
-template<typename T> TypedBuffer MakeTypedBuffer(dx::SimulatorDXBC &sim, dx::Operand::Type type, const T *elements) {
-	auto			format	= elements_to_c_type(elements);
+TypedBuffer MakeTypedBuffer(dx::SimulatorDX *sim, dx::Operand::Type type, const dx::Signature &sig) {
+	auto			format	= sig_to_c_type(sig);
 	auto			stride	= format->size32();
-	uint32			num		= sim.NumThreads();
+	auto			regs	= sim->GetRegFile<uint8>(type);
+	uint32			num		= regs.size32();
 	malloc_block	mem(stride * num);
 
 	char	*dest	= mem;
-	for (auto &r : sim.GetRegFile(type, 0)) {
+	for (auto &r : regs) {
 		memcpy(dest, &r, stride);
 		dest += stride;
 	}
@@ -1405,18 +902,20 @@ template<typename T> TypedBuffer MakeTypedBuffer(dx::SimulatorDXBC &sim, dx::Ope
 	return TypedBuffer(move(mem), stride, format);
 }
 
-Control app::MakeShaderOutput(const WindowPos &wpos, dx::SimulatorDXBC &sim, const dx::Shader &shader, const indices &ix) {
-	auto	*dxbc		= shader.DXBC();
-	win::Colour col_in0		= MakeColour(2), col_in1  = FadeColour(col_in0);
-	win::Colour col_out0	= MakeColour(1), col_out1 = FadeColour(col_out0);
+Control app::MakeShaderOutput(const WindowPos &wpos, dx::SimulatorDX *sim, const dx::Shader &shader, dynamic_array<uint32> &indices) {
+	using namespace dx;
+	auto	col_in0		= MakeColour(2), col_in1  = FadeColour(col_in0);
+	auto	col_out0	= MakeColour(1), col_out1 = FadeColour(col_out0);
+
+	uint32	num		= sim->NumThreads();
 
 	switch (shader.stage) {
 		case dx::HS: {
-			sim.Run();
+			sim->Run();
 			SplitterWindow		*s		= nullptr;;
 			WindowPos			wpos2	= wpos;
 
-			if (sim.ControlPointMask()) {
+			if (sim->ControlPointMask()) {
 				s		= new SplitterWindow(SplitterWindow::SWF_HORZ | SplitterWindow::SWF_DELETE_ON_DESTROY);
 				s->Create(wpos, "Shader Output", Control::CHILD | Control::CLIPSIBLINGS | Control::VISIBLE);
 				wpos2	= s->GetPanePos(0);
@@ -1429,8 +928,8 @@ Control app::MakeShaderOutput(const WindowPos &wpos, dx::SimulatorDXBC &sim, con
 			nc	= cc->AddColumn(nc, "z", 50, col);
 			nc	= cc->AddColumn(nc, "w", 50, col);
 			
-			auto	regs = sim.GetRegFile(dx::Operand::TYPE_INPUT_PATCH_CONSTANT);
-			for (uint32 m = sim.PatchConstOutputMask(); m; m = clear_lowest(m)) {
+			auto	regs = sim->GetRegFile<float4p>(dx::Operand::TYPE_INPUT_PATCH_CONSTANT);
+			for (uint32 m = sim->PatchConstOutputMask(); m; m = clear_lowest(m)) {
 				int		i = lowest_set_index(m);
 				char	text[64];
 				ListViewControl2::Item	item(text);
@@ -1446,17 +945,18 @@ Control app::MakeShaderOutput(const WindowPos &wpos, dx::SimulatorDXBC &sim, con
 
 			if (s) {
 				VertexOutputWindow	*cp		= new VertexOutputWindow(s->GetPanePos(1), 0, 'HO');
-				uint32				num_cp	= sim.NumOutputControlPoints();
+				uint32				num_cp	= sim->NumOutputControlPoints();
 				cp->vw.SetCount(num_cp);
 
 				nc		= cp->AddColumn(0, "#", 50, RGB(255,255,255));
-				if (auto *out = dxbc->GetBlob<dx::OSGN>()) {
-					nc = SetShaderColumns(cp, out, nc, col_out0, col_out1);
+				if (auto out = shader.GetSignatureOut()) {
+					SetShaderColumns(cp, out, nc, col_out0, col_out1);
 					cp->FillShaderIndex(num_cp);
 
-					dynamic_bitarray<uint32>	enabled(sim.NumThreads());
+					dynamic_bitarray<uint32>	enabled(num);
 					enabled.slice(0, num_cp).set_all();
-					FillShaderValues(cp->vw, out, sim, 1, dx::Operand::TYPE_OUTPUT_CONTROL_POINT, ix, enabled);
+					//FillShaderValues(cp->vw, out, sim, 1, dx::Operand::TYPE_OUTPUT_CONTROL_POINT, indices, enabled);
+					FillShaderValues(cp->vw, out, sim, 1, dx::Operand::TYPE_OUTPUT, indices, enabled);
 				}
 
 				s->SetPanes(
@@ -1474,163 +974,214 @@ Control app::MakeShaderOutput(const WindowPos &wpos, dx::SimulatorDXBC &sim, con
 
 		case dx::GS: {
 			VertexOutputWindow	*c	= new VertexOutputWindow(wpos, "Shader Output", 'GO');
-			auto	in_topo	= GetTopology(sim.gs_input);
-
-			uint32	num		= sim.NumThreads();
-			auto	*in		= dxbc->GetBlob<dx::ISGN>();
-			auto	*out	= dxbc->GetBlob<dx::OSG5>();
 			int		nc		= c->AddColumn(0, "#", 50, RGB(255,255,255));
 			int		in_col	= nc;
-			if (in)
-				nc = SetShaderColumns(c, in, nc, col_in0, col_in1);
+			auto	in		= shader.GetSignatureIn();
+			nc = SetShaderColumns(c, in, nc, col_in0, col_in1);
 
 			int		out_col = nc;
-			if (out)
-				nc = SetShaderColumns(c, out, nc, col_out0, col_out1);
+			auto	out = shader.GetSignatureOut();
+			nc = SetShaderColumns(c, out, nc, col_out0, col_out1);
 
 			int	x = 0;
-			for (auto &i : sim.uav) {
-				nc = MakeHeaders(c->vw, nc, i.format);
+			for (auto &i : sim->uav) {
+				nc = MakeHeaders(c->vw, nc, i->format);
 				c->AddColour(nc, MakeColour(x++));
 			}
 
-			c->FillShaderIndex(num);
-			FillShaderValues(c->vw, in, sim, in_col, dx::Operand::TYPE_INPUT, ix);
+			uint32	per_thread = max(sim->num_input, sim->max_output);
 			
+			for (auto i : int_range(num * per_thread)) {
+				ListViewControl::Item().Insert(c->vw);
+			}
+			//c->vw.SetCount(num * sim->num_input);
+			//c->FillShaderIndex(num);
+
 			for (int i = 0; i < num; i++) {
-				ListViewControl2::Item	item;
-				int		v = in_topo.VertexFromPrim(i, false);
-				for (int j = 0; j < sim.max_output - 1; j++)
-					item.Insert(c->vw, v * sim.max_output + 1);
+				char				text[64];
+				ListViewControl2::Item	item(text);
+				fixed_accum(text) << i;
+				item.Set(c->vw, i * per_thread);
 			}
 
-			sim.Run();
-
-			dynamic_bitarray<uint32>	enabled(num * sim.max_output);
-			for (int i = 0; i < num; i++) {
-				for (int j = 0; j < sim.max_output; j++)
-					enabled[i * sim.max_output + j] = !sim.IsDiscarded(i);
+			uint32	input_size	= highest_set_index(sim->input_mask) + 1;
+			for (auto &i : in) {
+				int	row = 0;
+				switch (i.component_type) {
+					case dx::SIG::UINT32:
+						for (auto &src : sim->GetRegFile<uint4p>(dx::Operand::TYPE_INPUT, i.register_num)) {
+							FillColumn(c->vw, in_col, make_range_n(strided(&src, input_size * sizeof(float4p)), sim->num_input), i.mask, scalar(true), row);
+							row += per_thread;
+						}
+						break;
+					case dx::SIG::FLOAT32: 
+						for (auto &src : sim->GetRegFile<float4p>(dx::Operand::TYPE_INPUT, i.register_num)) {
+							FillColumn(c->vw, in_col, make_range_n(strided(&src, input_size * sizeof(float4p)), sim->num_input), i.mask, scalar(true), row);
+							row += per_thread;
+						}
+						break;
+				}
+				in_col += count_bits(i.mask);
 			}
 
-			if (out) {
-				int		col = out_col;
-				for (auto &i : out->Elements())
-					col = FillColumn(c->vw, col, sim.GetStreamFileAll(i.register_num), i.mask, make_indexed_container(enabled));
+			sim->Run();
+
+			uint32				output_size	= highest_set_index(sim->output_mask & ~(1 << sim->oEmitted)) + 1;
+			temp_array<uint32>	num_output	= sim->GetRegFile<uint32>(dx::Operand::TYPE_OUTPUT, sim->oEmitted);
+
+			for (auto &i : out) {
+				int	t	= 0;
+				switch (i.component_type) {
+					case dx::SIG::UINT32:
+						for (auto &src : sim->GetRegFile<uint4p>(dx::Operand::TYPE_OUTPUT_CONTROL_POINT, i.register_num)) {
+							FillColumn(c->vw, out_col, make_range_n(strided(&src, output_size * sizeof(float4p)), num_output[t]), i.mask, scalar(true), t * per_thread);
+							++t;
+						}
+						break;
+					case dx::SIG::FLOAT32: 
+						for (auto &src : sim->GetRegFile<float4p>(dx::Operand::TYPE_OUTPUT_CONTROL_POINT, i.register_num)) {
+							FillColumn(c->vw, out_col, make_range_n(strided(&src, output_size * sizeof(float4p)), num_output[t]), i.mask, scalar(true), t * per_thread);
+							++t;
+						}
+						break;
+				}
+				out_col += count_bits(i.mask);
 			}
 
-			c->vw.SetCount(num);
 			c->vw.Show();
-
 			return *c;
 		}
 
 		case dx::DS: {
 			VertexOutputWindow *c	= new VertexOutputWindow(wpos, "Shader Output", 'DO');
 
-			auto	*out	= dxbc->GetBlob<dx::OSGN>();
-			int		nc		= c->AddColumn(0, "#", 50, RGB(255,255,255));
-			if (ix)
+			int		nc	= c->AddColumn(0, "#", 50, RGB(255,255,255));
+			if (indices)
 				nc	= c->AddColumn(nc, "index", 50, RGB(255,255,255));
 
 			int		in_col	= nc;
-			int		fields	= sim.tess_domain == dx::DOMAIN_TRI ? 3 : 2;
+			int		fields	= sim->tess_domain == dx::DOMAIN_TRI ? 3 : 2;
 			for (int i = 0; i < fields; i++)
 				nc	= c->AddColumn(nc, string("Domain") << '.' << "xyz"[i], 50, nc & 1 ? col_in1 : col_in0);
 
 			int		out_col = nc;
-			if (out)
-				nc = SetShaderColumns(c, out, nc, col_out0, col_out1);
+			auto	out = shader.GetSignatureOut();
+			nc = SetShaderColumns(c, out, nc, col_out0, col_out1);
 
 			int	x = 0;
-			for (auto &i : sim.uav) {
-				nc = MakeHeaders(c->vw, nc, i.format);
+			for (auto &i : sim->uav) {
+				nc = MakeHeaders(c->vw, nc, i->format);
 				c->AddColour(nc, MakeColour(x++));
 			}
 
-			uint32		num		= ix ? ix.num : sim.NumThreads();
-			c->FillShaderIndex(num);
-			if (ix) {
+			uint32	num2	= indices ? indices.size32() : num;
+			c->FillShaderIndex(num2);
+			if (indices) {
 				int	i = 0;
-				for (auto x : ix)
+				for (auto x : indices)
 					ListViewControl2::Item(to_string(x)).Index(i++).Column(1).Set(c->vw);
+				FillColumn(c->vw, in_col, make_indexed_container(sim->GetRegFile<float4p>(dx::Operand::TYPE_INPUT_DOMAIN_POINT).begin(), indices), bits(fields), scalar(true));
 
-				FillColumn(c->vw, in_col, make_indexed_container(sim.GetRegFile(dx::Operand::TYPE_INPUT_DOMAIN_POINT).begin(), ix), bits(fields), scalar(true));
 			} else {
-				FillColumn(c->vw, in_col, sim.GetRegFile(dx::Operand::TYPE_INPUT_DOMAIN_POINT), bits(fields), scalar(true));
+				FillColumn(c->vw, in_col, sim->GetRegFile<float4p>(dx::Operand::TYPE_INPUT_DOMAIN_POINT), bits(fields), scalar(true));
 			}
 
-			sim.Run();
+			sim->Run();
 
-			dynamic_bitarray<uint32>	enabled(sim.NumThreads());
-			for (int i = 0; i < sim.NumThreads(); i++)
-				enabled[i] = !sim.IsDiscarded(i);
+			dynamic_bitarray<uint32>	enabled(num);
+			for (int i = 0; i < num; i++)
+				enabled[i] = !(sim->ThreadFlags(i) & sim->THREAD_DISCARDED);
 
-			if (out)
-				FillShaderValues(c->vw, out, sim, out_col, dx::Operand::TYPE_OUTPUT, ix, enabled);
+			FillShaderValues(c->vw, out, sim, out_col, dx::Operand::TYPE_OUTPUT, indices, enabled);
 
-			c->vw.SetCount(num);
+			c->vw.SetCount(num2);
 			c->vw.Show();
 
 			return *c;
 		}
 
+		case dx::AS: {
+			sim->Run();
+			dynamic_array<uint4p>	regs	= sim->GetRegFile<uint4p>(dx::Operand::TYPE_INPUT_PATCH_CONSTANT);
+			uint32					stride	= regs.size() * 16;
+			auto					format	= ctypes.get_array_type<uint4p>(regs.size());
+			named<TypedBuffer>		buffers[] = {
+				{"out", TypedBuffer(regs.detach_raw(), stride, format)}
+			};
+			return *MakeVertexWindow(wpos, "Shader Output", 'AO', buffers, indices);
+		}
+
+		case dx::MS: {
+			sim->Run();
+			if (sim->output_topology == TOPOLOGY_LINELIST) {
+				auto	prims	= sim->GetRegFile<uint2p>(Operand::TYPE_OUTPUT_CONTROL_POINT);
+				indices.resize(prims.size() * 2);
+				copy(prims, (uint2p*)indices.begin());
+			} else {
+				auto	prims	= sim->GetRegFile<uint3p>(Operand::TYPE_OUTPUT_CONTROL_POINT);
+				indices.resize(prims.size() * 3);
+				copy(prims, (uint3p*)indices.begin());
+			}
+
+			named<TypedBuffer>	buffers[] = {
+				{"out",	MakeTypedBuffer(sim, dx::Operand::TYPE_OUTPUT,shader.GetSignatureOut())}
+			};
+			return *MakeVertexWindow(wpos, "Shader Output", 'MO', buffers, indices);
+		}
+
 		default: {
-#if 0
-			VertexOutputWindow *c	= new VertexOutputWindow(wpos, "Shader Output", ("VPDHGC"[shader.stage] << 8) + 'O');
+			TypedBuffer	inbuff	= MakeTypedBuffer(sim, dx::Operand::TYPE_INPUT, shader.GetSignatureIn());
+			sim->Run();
+			TypedBuffer	outbuff	= MakeTypedBuffer(sim, dx::Operand::TYPE_OUTPUT,shader.GetSignatureOut());
 
-			auto	*in		= dxbc->GetBlob<dx::ISGN>();
-			auto	*out	= dxbc->GetBlob<dx::OSGN>();
-			int		nc		= c->AddColumn(0, "#", 50, RGB(255,255,255));
-			if (ix)
-				nc	= c->AddColumn(nc, "index", 50, RGB(255,255,255));
-
-			int		in_col = nc;
-			if (in)
-				nc = SetShaderColumns(c, in, nc, col_in0, col_in1);
-
-			int		out_col = nc;
-			if (out)
-				nc = SetShaderColumns(c, out, nc, col_out0, col_out1);
-
-			int	x = 0;
-			for (auto &i : sim.uav) {
-				nc = MakeHeaders(c->vw, nc, i.format);
-				c->AddColour(nc, MakeColour(x++));
-			}
-
-			uint32		num		= ix ? ix.num : sim.NumThreads();
-			c->FillShaderIndex(num);
-			if (ix) {
-				int	i = 0;
-				for (auto x : ix)
-					ListViewControl2::Item(to_string(x)).Index(i++).Column(1).Set(c->vw);
-			}
-			FillShaderValues(*c, in, sim, in_col, dx::Operand::TYPE_INPUT, ix);
-
-			sim.Run();
-
-			dynamic_bitarray<uint32>	enabled(sim.NumThreads());
-			for (int i = 0; i < sim.NumThreads(); i++)
-				enabled[i] = !sim.IsDiscarded(i);
-
-			if (out)
-				FillShaderValues(*c, out, sim, out_col, dx::Operand::TYPE_OUTPUT, ix, enabled);
-
-			c->vw.SetCount(num);
-			c->vw.Show();
-
-			return *c;
-#else
-			auto	in = MakeTypedBuffer(sim, dx::Operand::TYPE_INPUT, dxbc->GetBlob<dx::ISGN>());
-			sim.Run();
-			auto	out = MakeTypedBuffer(sim, dx::Operand::TYPE_OUTPUT, dxbc->GetBlob<dx::OSGN>());
 			named<TypedBuffer>		buffers[2] = {
-				{"in",	in},
-				{"out",	out}
+				{"in",	move(inbuff)},
+				{"out",	move(outbuff)}
 			};
 
-			return *MakeVertexWindow(wpos, "Shader Output", ("VPDHGC"[shader.stage] << 8) + 'O', buffers, 2, ix);
-#endif
+			return *MakeVertexWindow(wpos, "Shader Output", ("VPDHGAMC"[shader.stage] << 8) + 'O', buffers, indices);
+		}
+	}
+}
+
+void app::AddShaderOutput(Control c, dx::SimulatorDX *sim, const dx::Shader &shader, dynamic_array<uint32> &indices) {
+	switch (shader.stage) {
+		case dx::AS: {
+			sim->Run();
+			dynamic_array<uint4p>	regs	= sim->GetRegFile<uint4p>(dx::Operand::TYPE_INPUT_PATCH_CONSTANT);
+			uint32					stride	= regs.size() * 16;
+			auto					format	= ctypes.get_array_type<uint4p>(regs.size());
+			TypedBuffer				buffers[] = {
+				TypedBuffer(regs.detach_raw(), stride, format)
+			};
+			VertexWindow::Cast(c)->AddVertices(buffers, indices, 0);
+			break;
+		}
+
+		case dx::MS: {
+			sim->Run();
+			auto	prims = sim->GetRegFile<uint3p>(dx::Operand::TYPE_OUTPUT_CONTROL_POINT);
+			indices.resize(prims.size() * 3);
+			copy(prims, (uint3p*)indices.begin());
+			TypedBuffer				buffers[] = {
+				MakeTypedBuffer(sim, dx::Operand::TYPE_OUTPUT,shader.GetSignatureOut())
+			};
+			auto	v	= VertexWindow::Cast(c);
+			auto	nv	= v->NumUnique();
+			for (auto &i : indices)
+				i += nv;
+			v->AddVertices(buffers, indices, 0);
+			break;
+		}
+
+		default: {
+			TypedBuffer	inbuff	= MakeTypedBuffer(sim, dx::Operand::TYPE_INPUT, shader.GetSignatureIn());
+			sim->Run();
+			TypedBuffer	outbuff	= MakeTypedBuffer(sim, dx::Operand::TYPE_OUTPUT,shader.GetSignatureOut());
+
+			TypedBuffer		buffers[2] = {move(inbuff), move(outbuff)};
+			VertexWindow::Cast(c)->AddVertices(buffers, indices, 0);
+			break;
 		}
 	}
 }

@@ -81,7 +81,7 @@ class BINwriterImp : BINwriter {
 	}
 
 public:
-	BINwriterImp(ostream_ref _file, ISO_ptr<void> &p) : file(_file) {
+	BINwriterImp(ostream_ref _file, ISO_ptr_machine<void> p) : file(_file) {
 		bin_exporter	= this;
 		ISO::Browser b	= ISO::Browser(p);
 
@@ -453,7 +453,7 @@ public:
 		uint8	*p	= map;
 
 		if (i == map.length() / BLOCK)
-			return ISO::MakePtr(0, memory_block(p + i * uint64(BLOCK), map.length() % BLOCK));
+			return ISO::MakePtr(none, memory_block(p + i * uint64(BLOCK), map.length() % BLOCK));
 
 		return ISO::MakeBrowser(*(block_t*)(p + i * uint64(BLOCK)));
 	}
@@ -488,6 +488,10 @@ class BINFileHandler : public FileHandler {
 		return p;
 	}
 	bool			Write(ISO_ptr<void> p, ostream_ref file) override {
+		BINwriterImp(file, p);
+		return true;
+	}
+	bool			Write64(ISO_ptr64<void> p, ostream_ref file) override {
 		BINwriterImp(file, p);
 		return true;
 	}

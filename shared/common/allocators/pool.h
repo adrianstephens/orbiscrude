@@ -53,7 +53,7 @@ public:
 
 template<typename T, int N> class fixed_pool {
 protected:
-	typedef uint_bits_t<LOG2_CEIL(N + 1)>	I;
+	typedef uint_bits_t<klog2_ceil<N + 1>>	I;
 	I				avail;
 	space_for<T[N]>	array;
 public:

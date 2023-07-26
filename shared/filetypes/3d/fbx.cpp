@@ -268,7 +268,7 @@ public:
 	int64			read_int()				{ return next(ValueReaderBase::read_int(type)); }
 	double			read_float()			{ return next(ValueReaderBase::read_float(type)); }
 	string			read_string()			{ return next(ValueReaderBase::read_string()); }
-	ISO_ptr<void>	read_iso(tag id = 0)	{ return next(ValueReaderBase::read_iso(type, id)); }
+	ISO_ptr<void>	read_iso(tag id = {})	{ return next(ValueReaderBase::read_iso(type, id)); }
 
 	void	discard() {
 		if (type) {
@@ -345,7 +345,7 @@ ISO_ptr<void> FBXBinaryReader::ReadEntity(tag id, BFBXentity &ent) {
 		p->Append(val.read_iso());
 
 	if (has_block)
-		p->Append(ReadBlock(0, ent.next));
+		p->Append(ReadBlock(none, ent.next));
 
 	return p;
 }
@@ -762,7 +762,7 @@ public:
 
 	int64			read_number()			{ return next(AsciiValueReaderBase::read_number()); }
 	string			read_string()			{ string s; return next(AsciiValueReaderBase::read_string(s)); }
-	ISO_ptr<void>	read_iso(tag id = 0)	{ return next(AsciiValueReaderBase::read_iso(type, id)); }
+	ISO_ptr<void>	read_iso(tag id = {})	{ return next(AsciiValueReaderBase::read_iso(type, id)); }
 
 	void	read_type() {
 		int	c = skip_comments(file);
@@ -827,7 +827,7 @@ ISO_ptr<void> FBXAsciiReader::ReadEntity(tag id) {
 
 	int	c = skip_comments(file);
 	if (c == '{') {
-		p->Append(ReadBlock(0));
+		p->Append(ReadBlock(none));
 		c = skip_comments(file);
 	}
 	file.put_back(c);
@@ -1156,7 +1156,7 @@ ref_ptr<ColourSource> FBXMaterialMaker::GetColourSource(const ISO::Browser &b) {
 			filename	fn		= FileHandler::FindAbsolute(rel);
 			if (!fn)
 				fn = rel;
-			bm	= MakePtrExternal(ISO::getdef<bitmap>(), fn);
+			bm.CreateExternal(fn);
 		}
 		*(ISO_ptr_machine<void>*)tex	= bm;
 
@@ -1234,7 +1234,7 @@ struct FBXComponent {
 				f(vals);
 				break;
 			case AllSame:
-				f(scalar<T>(*vals));
+				f(scalar(*vals));
 				break;
 			case ByPolygonVertex:
 				if (indices)
@@ -1284,7 +1284,8 @@ struct FBXComponent {
 		stride_iterator<void> dest;
 		Write_s(const Indexer<uint32> &_indexer, stride_iterator<void> &_dest) : indexer(_indexer), dest(_dest) {}
 		template<typename I> void	operator()(I i) {
-			copy(make_indexed_container(i, indexer.RevIndices()), stride_iterator<array_vec<float, num_elements_v<typename iterator_traits<I>::element>> >(dest));
+			//copy(make_indexed_container(i, indexer.RevIndices()), stride_iterator<array_vec<float, num_elements_v<typename iterator_traits<I>::element>> >(dest));
+			copy(make_indexed_container(i, indexer.RevIndices()), stride_iterator<array_vec<float, num_elements_v<it_element_t<I>>> >(dest));
 		}
 	};
 	void	Write(stride_iterator<void> dest, const Indexer<uint32> &indexer, const FBXindex *vert_indices, const int *poly_indices) {
@@ -1322,7 +1323,7 @@ void FBXAddSubMesh(const Indexer<uint32> &indexer, ModelBuilder &mb, const ISO::
 			}
 		}
 
-		array<uint16,3>	*d = mesh->indices.begin();
+		auto	d = mesh->indices.begin();
 
 		for (auto i = i0, e = i0 + indexer.NumIndices(); i != e; ) {
 		#if 1
@@ -1351,7 +1352,7 @@ void FBXAddSubMesh(const Indexer<uint32> &indexer, ModelBuilder &mb, const ISO::
 			}
 		#endif
 		}
-		mesh->UpdateExtents();
+		mesh->UpdateExtent();
 	} else {
 		mb.InitVerts(vert_type, indexer.NumUnique());
 		malloc_block	verts(mb.vert_size * indexer.NumUnique());
@@ -2268,7 +2269,7 @@ void GetAnimationTransform(Animation &anim, ISO::Browser b, const FBXSettings &s
 
 			if (channel == cstr("T")) {
 				if (dynamic_array<float3> t = GetAnimation3D(i[1], settings)) {
-					ISO_ptr<ISO_openarray<float3p> >	p("pos", make_deferred<op_mul>(t, scalar((float)settings.scale)));
+					ISO_ptr<ISO_openarray<float3p> >	p("pos", make_deferred<op_mul>(t, (float)settings.scale));
 					anim.Append(p);
 				}
 
@@ -2329,20 +2330,20 @@ ISO_ptr<anything> GetAnimation(ISO_ptr<void> takes, const FBXSettings &settings)
 					ISO::Browser			props	= GetProperties(settings.bone_lookup[i.ID()].or_default());
 					if (ISO::Browser b = props["Lcl Translation"]) {
 						if (dynamic_array<float3> t = GetLocalAnimation(b, settings)) {
-							ISO_ptr<ISO_openarray<float3p > >	p("pos", make_deferred<op_mul>(t, scalar(settings.scale)));
+							ISO_ptr<ISO_openarray<float3p>>		p("pos", make_deferred<op_mul>(t, (float)settings.scale));
 							anim->Append(p);
 						}
 					}
 					if (ISO::Browser b = props["Lcl Rotation"]) {
 						if (dynamic_array<float3> t = GetLocalAnimation(b, settings)) {
-							ISO_ptr<ISO_openarray<float4p> >					p("rot", t.size32());
+							ISO_ptr<ISO_openarray<float4p>>		p("rot", t.size32());
 							transform(t, *p, [](float3 rot){ return FBXRotation(rot).v; });
 							anim->Append(p);
 						}
 					}
 					if (ISO::Browser b = props["Lcl Scaling"]) {
 						if (dynamic_array<float3> t = GetLocalAnimation(b, settings)) {
-							ISO_ptr<ISO_openarray<float3p > >	p("scale", t);
+							ISO_ptr<ISO_openarray<float3p>>		p("scale", t);
 							anim->Append(p);
 						}
 					}
@@ -2361,7 +2362,11 @@ ISO_ptr<anything> GetAnimation(ISO_ptr<void> takes, const FBXSettings &settings)
 class FBXFileHandler : FileHandler {
 	const char*		GetExt() override { return "fbx";				}
 	const char*		GetDescription() override { return "Kaydara Filmbox";	}
-	int				Check(istream_ref file) override { file.seek(0); return file.get<BFBXheader>().valid() ? CHECK_PROBABLE : CHECK_NO_OPINION; }
+	int				Check(istream_ref file) override {
+		file.seek(0);
+		BFBXheader	h;
+		return file.read(h) && h.valid() ? CHECK_PROBABLE : CHECK_NO_OPINION;
+	}
 
 	ISO_ptr<void>	Read(tag id, istream_ref file) override {
 		ISO_ptr<anything>	p(id);
@@ -2411,7 +2416,7 @@ class FBXFileHandler : FileHandler {
 				else if (tok == "Takes")
 					takes = fbx.ReadEntity(tok);
 				else
-					fbx.ReadEntity(0);	// discard
+					fbx.ReadEntity(none);	// discard
 
 			}
 		}
@@ -2471,7 +2476,8 @@ class RAWFBXFileHandler : FileHandler {
 	const char*		GetDescription() override { return "RAW Kaydara Filmbox";	}
 	int				Check(istream_ref file) override {
 		file.seek(0);
-		if (file.get<BFBXheader>().valid())
+		BFBXheader	h;
+		if (file.read(h) && h.valid())
 			return CHECK_PROBABLE;
 		
 		file.seek(0);

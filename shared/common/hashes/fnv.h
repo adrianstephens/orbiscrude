@@ -20,8 +20,8 @@ template<typename T, typename W> inline T _FNV(const W *buffer, size_t count, T 
 		hash = T((hash * prime) ^ *p);
 	return hash;
 }
-template<typename T> inline T _FNV(const char *buffer, T hash = FNV_vals<T>::basis, T prime = FNV_vals<T>::prime) {
-	while (char c = *buffer++)
+template<typename T, typename W> inline T _FNV_zt(const W *buffer, T hash = FNV_vals<T>::basis, T prime = FNV_vals<T>::prime) {
+	while (W c = *buffer++)
 		hash = T(hash * prime) ^ c;
 	return hash;
 }
@@ -30,8 +30,8 @@ template<typename T, typename W> inline T _FNVa(const W *buffer, size_t count, T
 		hash = T((hash ^ *p) * prime);
 	return hash;
 }
-template<typename T> inline T _FNVa(const char *buffer, T hash = FNV_vals<T>::basis, T prime = FNV_vals<T>::prime) {
-	while (char c = *buffer++)
+template<typename T, typename W> inline T _FNVa_zt(const W *buffer, T hash = FNV_vals<T>::basis, T prime = FNV_vals<T>::prime) {
+	while (W c = *buffer++)
 		hash = T((hash ^ c) * prime);
 	return hash;
 }
@@ -49,7 +49,7 @@ template<typename T, typename W, size_t N> constexpr T FNVa_const(const W (&buff
 	return FNVa_const(buffer, N - 1, 0, hash, prime);
 }
 
-uint32 constexpr operator"" _fnv(const char* s, size_t len)				{ return FNV_const<uint32>(s, len); }
+uint32 constexpr operator"" _fnv(const char* s, size_t len)					{ return FNV_const<uint32>(s, len); }
 uint32 constexpr operator"" _hash(const char* s, size_t len)				{ return FNV_const<uint32>(s, len); }
 
 template<typename T> constexpr T FNV_basis(T prime = FNV_vals<T>::prime)	{ return FNV_const<T>("chongo <Landon Curt Noll> /\\../\\", 0, prime);}
@@ -62,15 +62,15 @@ template<typename T, typename W> T FNV0_str(const W *buffer, size_t len)	{ retur
 
 // FNV1 - start with basis
 template<typename T> T FNV1(const void *buffer, size_t len)					{ return buffer && len ? _FNV((const uint8*)buffer, len, FNV_vals<T>::basis) : 0; }
-template<typename T> T FNV1(const char *buffer)								{ return buffer ? _FNV(buffer, FNV_vals<T>::basis) : 0; }
-template<typename T, typename X> T FNV1(const X &x)							{ return FNV1<T>(&x, sizeof(X)); }
-template<typename T, typename W> T FNV1_str(const W *buffer, size_t len)	{ return buffer && len ? _FNV(buffer, len, FNV_vals<T>::basis) : 0; }
+template<typename T, typename W> T FNV1(const W *buffer)					{ return buffer ? _FNV_zt(buffer, FNV_vals<T>::basis) : 0; }
+template<typename T, typename X> T FNV1(const X &x)							{ return FNV1<T>((uint8*)&x, sizeof(X)); }
+template<typename T, typename W> T FNV1(const W *buffer, size_t len)		{ return buffer && len ? _FNV(buffer, len, FNV_vals<T>::basis) : 0; }
 
 // FNV1a - ^, then *
 template<typename T> T FNV1a(const void *buffer, size_t len)				{ return buffer && len ? _FNVa((const uint8*)buffer, len, FNV_vals<T>::basis) : 0; }
-template<typename T> T FNV1a(const char *buffer)							{ return buffer ? _FNVa(buffer, FNV_vals<T>::basis) : 0; }
-template<typename T, typename X> T FNV1a(const X &x)						{ return FNV1a<T>(&x, sizeof(X)); }
-template<typename T, typename W> T FNV1a_str(const W *buffer, size_t len)	{ return buffer && len ? _FNVa(buffer, len, FNV_vals<T>::basis) : 0; }
+template<typename T, typename W> T FNV1a(const W *buffer)					{ return buffer ? _FNVa_zt(buffer, FNV_vals<T>::basis) : 0; }
+template<typename T, typename X> T FNV1a(const X &x)						{ return FNV1a<T>((uint8*)&x, sizeof(X)); }
+template<typename T, typename W> T FNV1a(const W *buffer, size_t len)		{ return buffer && len ? _FNVa(buffer, len, FNV_vals<T>::basis) : 0; }
 
 // non power of 2 bits
 template<int N, typename T> constexpr T	xor_fold(T i)			{ return (i ^ (i >> N)) & bits(N); }
@@ -79,11 +79,11 @@ template<> constexpr uint64				xor_fold<64>(uint64 i)	{ return i; }
 
 template<int N> using fnv_type = typename T_if<(N<=32), uint32, uint64>::type;
 template<int N, typename W>	fnv_type<N> FNV0(const W *buffer, size_t len)	{ return buffer ? xor_fold<N>(_FNV(buffer, len, fnv_type<N>(0))) : 0; }
-template<int N>				fnv_type<N> FNV0(const char *buffer)			{ return buffer ? xor_fold<N>(_FNV(buffer, fnv_type<N>(0))) : 0; }
+template<int N, typename W>	fnv_type<N> FNV0(const W *buffer)				{ return buffer ? xor_fold<N>(_FNV(buffer, fnv_type<N>(0))) : 0; }
 template<int N, typename W>	fnv_type<N> FNV1(const W *buffer, size_t len)	{ return buffer && len ? xor_fold<N>(_FNV(buffer, len, FNV_vals<fnv_type<N>>::basis)) : 0; }
-template<int N>				fnv_type<N> FNV1(const char *buffer)			{ return buffer ? xor_fold<N>(_FNV(buffer, FNV_vals<fnv_type<N>>::basis)) : 0; }
+template<int N, typename W>	fnv_type<N> FNV1(const W *buffer)				{ return buffer ? xor_fold<N>(_FNV(buffer, FNV_vals<fnv_type<N>>::basis)) : 0; }
 template<int N, typename W>	fnv_type<N> FNV1a(const W *buffer, size_t len)	{ return buffer && len ? xor_fold<N>(_FNVa(buffer, len, FNV_vals<fnv_type<N>>::basis)) : 0; }
-template<int N>				fnv_type<N> FNV1a(const char *buffer)			{ return buffer ? xor_fold<N>(_FNVa(buffer, FNV_vals<fnv_type<N>>::basis)) : 0; }
+template<int N, typename W>	fnv_type<N> FNV1a(const W *buffer)				{ return buffer ? xor_fold<N>(_FNVa(buffer, FNV_vals<fnv_type<N>>::basis)) : 0; }
 
 template<int N, bool BASIS = true, bool A = false> struct FNV {
 	typedef fnv_type<N>	CODE;

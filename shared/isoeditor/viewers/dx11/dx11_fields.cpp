@@ -388,7 +388,7 @@ template<> field fields<D3D11_RASTERIZER_DESC>::f[] = {
 template<> field fields<D3D11_RASTERIZER_DESC1>::f[] = {
 #undef S
 #define S D3D11_RASTERIZER_DESC1
-	field::call<D3D11_RASTERIZER_DESC>(0, 0),
+	field::make<D3D11_RASTERIZER_DESC>(0, 0),
 	_MAKE_FIELD(S,ForcedSampleCount)
 	TERMINATOR
 };
@@ -445,7 +445,7 @@ template<> field fields<D3D11_TEXTURE2D_DESC>::f[] = {
 	_MAKE_FIELD(S,MipLevels)
 	_MAKE_FIELD(S,ArraySize)
 	_MAKE_FIELD(S,Format)
-	CALL_FIELD(SampleDesc),
+	_MAKE_FIELD(S,SampleDesc)
 	_MAKE_FIELD(S,Usage)
 	_MAKE_FIELDT(S,BindFlags, D3D11_BIND_FLAG),
 	_MAKE_FIELDT(S,CPUAccessFlags, D3D11_CPU_ACCESS_FLAG),

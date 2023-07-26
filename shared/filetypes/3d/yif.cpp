@@ -1360,8 +1360,8 @@ template<int F> struct ISO::def<SYifVertexF<F> > : public ISO::TypeCompositeN<co
 	}
 };
 
-ISO_ptr<Model3>	MakeModel(CYifMesh *mesh) {
-	ISO_ptr<Model3>	model(mesh->GetName());
+ISO_ptr<Model>	MakeModel(CYifMesh *mesh) {
+	ISO_ptr<Model>	model(mesh->GetName());
 
 	for (int s = 0, sn = mesh->GetNumSurfaces(); s < sn; s++) {
 		CYifSurface			*surf	= mesh->GetSurfRef(s);
@@ -1372,6 +1372,7 @@ ISO_ptr<Model3>	MakeModel(CYifMesh *mesh) {
 
 		if (surf->GetNrIrregularPatches() || surf->GetNrRegularPatches()) {
 			// subdivision
+		#if 1
 			if (int n = surf->GetNrRegularPatches()) {
 				ISO_ptr<SubMeshN<16> >	sm(0);
 
@@ -1397,7 +1398,8 @@ ISO_ptr<Model3>	MakeModel(CYifMesh *mesh) {
 				model.SetFlags(ISO::Value::HASEXTERNAL);
 				model->submeshes.Append(sm);
 			}
-#if 1
+		#endif
+		#if 1
 			if (int n = surf->GetNrIrregularPatches()) {
 				ISO_ptr<SubMeshN<32>>	sm(0);
 
@@ -1434,7 +1436,7 @@ ISO_ptr<Model3>	MakeModel(CYifMesh *mesh) {
 				model.SetFlags(ISO::Value::HASEXTERNAL);
 				model->submeshes.Append(sm);
 			}
-#endif
+		#endif
 		} else {
 			// normal mesh
 			ISO_ptr<SubMesh>	sm(0);
@@ -1491,7 +1493,7 @@ class YIFFileHandler : FileHandler {
 		scene.ReadScene(file);
 
 		for (int i = 0, n = scene.GetNumMeshes(); i < n; i++) {
-			ISO_ptr<Model3>	m = MakeModel(scene.GetMeshRef(i));
+			auto	m = MakeModel(scene.GetMeshRef(i));
 			return m;
 		}
 		return ISO_NULL;

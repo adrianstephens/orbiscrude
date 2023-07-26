@@ -1121,7 +1121,7 @@ bool Archive::Read(istream_ref file, const_memory_block next) {
 		uint32 emptyFileIndex	= 0;
 		for (uint32 i = 0; i < numFiles; i++) {
 			File& file = Files[i];
-			if (!emptyStreamVector[i]) {
+			if (i >= numEmptyStreams || !emptyStreamVector[i]) {
 				file.HasStream	= true;
 				file.Size		= unpackSizes[sizeIndex];
 				file.Crc		= digests[sizeIndex];
@@ -1190,7 +1190,8 @@ class SevenZFileHandler : public FileHandler {
 	int				Check(istream_ref file) override {
 		using namespace sevenz;
 		file.seek(0);
-		return file.get<SignatureHeader>().valid() ? CHECK_PROBABLE : CHECK_DEFINITE_NO;
+		SignatureHeader	h;
+		return file.read(h) && h.valid() ? CHECK_PROBABLE : CHECK_DEFINITE_NO;
 	}
 
 	ISO_ptr<void>	Read(tag id, istream_ref file) override {

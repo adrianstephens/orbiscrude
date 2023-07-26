@@ -82,11 +82,29 @@ ISO::Browser2 VirtualDeref(ISO::Browser2 b) {
 	return b;
 }
 
-ISO::Browser2 SkipPointer(ISO::Browser2 b) {
-	ISO::Browser2 b2;
-	while ((b.SkipUser().GetType() == ISO::REFERENCE || b.SkipUser().IsVirtPtr()) && (b2 = *b))
-		b = b2;
-	return b;
+ISO::Browser2 SkipPointer(ISO::Browser2 b, bool defer) {
+	for (;;) {
+		auto	type = SkipUser(b.GetTypeDef());
+		switch (TypeType(type)) {
+			default:
+				break;
+
+			case ISO::VIRTUAL:
+				if (!defer || !(type->flags & ISO::Virtual::DEFER)) {
+					if (auto b2 = *b) {
+						b = b2;
+						continue;
+					}
+				}
+				break;
+
+			case ISO::REFERENCE:
+				b = *b;
+				continue;
+
+		}
+		return b;
+	}
 }
 
 ISO_ptr<anything> UnVirtualise(const ISO::Browser &b0) {
@@ -118,6 +136,39 @@ ISO_ptr<void>	RemoteFix(const tag2 &id, const ISO::Type *type, ISO::Browser &v, 
 }
 
 //-----------------------------------------------------------------------------
+//	Progress
+//-----------------------------------------------------------------------------
+
+bool ScaleProgress::ready() {
+	uint32	idigits	= uint32(digits + 0.5f);
+	uint64	frac	= pow(uint64(10), idigits);
+	int64	val		= mul_div(frac * 100, offset, total);
+
+	if (val == update_val) {
+		if (time - update_time < 0.25f)
+			return false;
+
+		digits	= idigits = max((int)log_base<10>(total / (offset - update_offset)) - 1, 0);
+		frac	= pow(uint64(10), idigits);
+		val		= mul_div(frac * 100, offset, total);
+		//++digits;
+	}
+
+	if (time - update_time < 0.1f)
+		digits *= 0.9999f;
+
+	update_val		= val;
+	update_time		= time;
+	update_offset	= offset;
+	return true;
+}
+
+float ScaleProgress::remaining_time() const {
+	return (float)time * (total - offset) / offset;
+}
+
+
+//-----------------------------------------------------------------------------
 //	File
 //-----------------------------------------------------------------------------
 
@@ -143,6 +194,9 @@ const char *WriteFileExt(const ISO::Browser2 &b, tag id) {
 }
 
 const char *WriteFilesExt(const ISO::Browser2 &b, tag id) {
+	if (const char *ext = id.rfind('.'))
+		return ext;
+
 	if (b.GetTypeDef()->SameAs<anything>())
 		return "";
 
@@ -165,15 +219,17 @@ void WriteFile(const filename &fn, const ISO::Browser2 &b) {
 	create_dir(fn.dir());
 	FileOutput		file(fn);
 	if (file.exists()) {
+		if (IsRawData2(b)) {
+			file.writebuff(b[0], b.Count() * b[0].GetSize());
+			//FileHandler::Get("bin")->Write64(b, file);
+			return;
+		}
 		if (FileHandler *fh = FileHandler::Get(fn.ext())) {
-			if (fh->Write(b, file))
+			if (fh->Write64(b, file))
 				return;
 		}
 
-		if (IsRawData2(b)) {
-			FileHandler::Get("bin")->Write(b, file);
-
-		} else if (b.SkipUser().GetType() == ISO::STRING) {
+		if (b.SkipUser().GetType() == ISO::STRING) {
 			file.writebuff(b[0], b.Count() * b[0].GetSize());
 
 		} else {
@@ -185,7 +241,7 @@ void WriteFile(const filename &fn, const ISO::Browser2 &b) {
 			if (b.SkipUser().GetType() == ISO::VIRTUAL) {
 				auto	b2 = SkipPointer(*b);
 				if (IsRawData2(b2)) {
-					FileHandler::Get("bin")->Write(b2, file);
+					FileHandler::Get("bin")->Write64(b2, file);
 					return;
 				}
 			}
@@ -212,14 +268,11 @@ void WriteDirectory(const filename &dir, const ISO::Browser2 &b, HierarchyProgre
 	uint32	n = b.Count();
 	
 	auto	saver	= save(progress.prog, n);
-//	progress.StartChildren(n);
 	for (int i = 0; i < n; i++) {
 		tag				id	= b.GetName(i);
-//		filename		fn	= filename(dir).add_dir(filename(id).name()).set_ext(WriteFilesExt(b2, id));
 		filename		fn	= filename(dir).add_dir(filename(id).name_ext());
 		WriteFiles(fn, SkipPointer(*b[i]).SkipUser(), progress, depth + 1);
 	}
-//	progress.EndChildren(n);
 }
 
 void WriteFiles(const filename &fn, const ISO::Browser2 &b, HierarchyProgress &progress, int depth) {
@@ -246,6 +299,55 @@ void WriteFiles(const filename &fn, const ISO::Browser2 &b, HierarchyProgress &p
 	}
 	progress.Next();
 }
+
+#if 0
+struct FileCollector {
+	filename		fn;
+	ISO::Browser2	b
+};
+
+void CollectFile(const filename &fn, const ISO::Browser2 &b) {
+	if (IsRawData2(b)) {
+		file.writebuff(b[0], b.GetSize());
+		//FileHandler::Get("bin")->Write64(b, file);
+		return;
+	}
+}
+void CollectDirectory(const filename &dir, const ISO::Browser2 &b, int depth) {
+	ISO_ASSERT(depth < 100);
+	uint32	n = b.Count();
+
+	for (int i = 0; i < n; i++) {
+		tag				id	= b.GetName(i);
+		filename		fn	= filename(dir).add_dir(filename(id).name_ext());
+		CollectFiles(fn, SkipPointer(*b[i]).SkipUser(), depth + 1);
+	}
+}
+
+void CollectFiles(dynamic_array<CollectFile> files, const filename &fn, const ISO::Browser2 &b, int depth) {
+	if (b.GetTypeDef()->SameAs<anything>()) {
+		CollectDirectory(fn, b, depth);
+
+	} else if (IsRawData2(b)) {
+		CollectFile(fn, b);
+
+	} else if (b.GetType() == ISO::VIRTUAL) {
+		auto	b2	= *b;
+		if (IsRawData2(b2)) {
+			CollectFile(fn, b2);
+		} else {
+			auto	v = (ISO::Virtual*)b.GetTypeDef();
+			switch (v->Count(v, b)) {
+				case 0:		CollectFile(fn, SkipPointer(*b)); break;
+				case 1:		CollectFile(fn, SkipPointer(b[0])); break;
+				default:	CollectDirectory(fn, b, depth); break;
+			}
+		}
+	} else {
+		CollectFile(fn, b);
+	}
+}
+#endif
 
 string GetFileFilter() {
 	string_builder	p;
@@ -323,7 +425,7 @@ int ISOTree::GetIndex(HTREEITEM hItem) {
 	return GetItemParam(hItem);
 }
 
-void ISOTree::SetItem(HTREEITEM hItem, const ISO::Browser2 &b, const char *name) {
+void ISOTree::SetItem(HTREEITEM hItem, const ISO::Browser2 &b, const char *name) const {
 	TreeControl::Item	i(hItem);
 	if (name)
 		i.Text(name);
@@ -333,17 +435,17 @@ void ISOTree::SetItem(HTREEITEM hItem, const ISO::Browser2 &b, const char *name)
 #endif
 }
 
-HTREEITEM ISOTree::AddItem(HTREEITEM hParent, HTREEITEM hAfter, const char *name, int i, ADD_FLAGS flags) {
+HTREEITEM ISOTree::AddItem(HTREEITEM hParent, HTREEITEM hAfter, const char *name, int i, ADD_FLAGS flags) const {
 	int	state = flags & PRE_EXPAND ? Item::EXPANDEDONCE : 0;
 	return Item(name).Param(i).SetState(state).Children(flags & HAS_CHILDREN).Insert(*this, hParent, hAfter);
 }
 
-HTREEITEM ISOTree::AddItem(HTREEITEM hParent, HTREEITEM hAfter, const char *name, int i, ADD_FLAGS flags, ImageListBitmap image) {
+HTREEITEM ISOTree::AddItem(HTREEITEM hParent, HTREEITEM hAfter, const char *name, int i, ADD_FLAGS flags, ImageListBitmap image) const {
 	int	state = flags & PRE_EXPAND ? Item::EXPANDEDONCE : 0;
 	return Item(name).Image(image).Image2(image).Param(i).SetState(state).Children(flags & HAS_CHILDREN).Insert(*this, hParent, hAfter);
 }
 
-HTREEITEM ISOTree::InsertItem(HTREEITEM hParent, HTREEITEM hAfter, int i, const ISO::Browser2 &b) {
+HTREEITEM ISOTree::InsertItem(HTREEITEM hParent, HTREEITEM hAfter, int i, const ISO::Browser2 &b) const {
 	HTREEITEM	h	= AddItem(hParent, hAfter, ItemName(b, i), i, GetFlags(b), GetTreeIcon(b));
 	HTREEITEM	hi	= h;
 	while (hi = GetNextItem(hi)) {
@@ -352,7 +454,7 @@ HTREEITEM ISOTree::InsertItem(HTREEITEM hParent, HTREEITEM hAfter, int i, const 
 	return h;
 }
 
-void ISOTree::RemoveItem(const ISO::Browser2 &b, HTREEITEM hParent, int index) {
+void ISOTree::RemoveItem(const ISO::Browser2 &b, HTREEITEM hParent, int index) const {
 	HTREEITEM hChild = GetChildItem(hParent);
 	for (int i = 0; i < index; i++)
 		hChild = GetNextItem(hChild);
@@ -382,10 +484,35 @@ int ISOTree::Setup(const ISO::Browser2 &b, HTREEITEM hParent, int maximum) {
 			int	c = b.Count();
 			if (maximum && c > maximum)
 				return c;
-			EnableRedraws(false);
+
+		#if 1
 			for (int i = 0; i < c; i++)
 				AddItem(hParent, TVI_LAST, ItemNameI(b, i), i, GetFlags(b[i]));
-			EnableRedraws(true);
+		#else
+			static const int by = 100;
+			//EnableRedraws(false);
+			for (int i = 0; i < min(c, by); i++)
+				AddItem(hParent, TVI_LAST, ItemNameI(b, i), i, GetFlags(b[i]));
+			//EnableRedraws(true);
+			if (c > by) {
+				RunThread([me = *this, b, hParent, c]() {
+					Semaphore	sem;
+					for (int i = by; i < c; i += by) {
+						sem.lock();
+
+						JobQueue::Main().add([me, &sem, b, hParent, i0 = i, i1 = min(i + by, c)]() {
+							ISO_TRACEF("add ") << i0 << '\n';
+							//me.EnableRedraws(false);
+							for (int i = i0; i < i1; ++i)
+								me.AddItem(hParent, TVI_LAST, ItemNameI(b, i), i, GetFlags(b[i]));
+							//me.EnableRedraws(true);
+							sem.unlock();
+						});
+					}
+					sem.lock();
+				});
+			}
+		#endif
 			break;
 		}
 
@@ -429,9 +556,11 @@ HTREEITEM ISOTree::Locate(HTREEITEM hItem, ISO::Browser2 b, const ISO_ptr<void> 
 	if (b) {
 		if (b.SkipUser().GetType() == ISO::REFERENCE && p == *(ISO_ptr<void>*)b)
 			return hItem;
-		for (HTREEITEM h = GetChildItem(hItem); h; h = GetNextItem(h)) {
-			if (HTREEITEM h2 = Locate(h, GetChild(b, h), p))
-				return h2;
+		if (hItem == TVI_ROOT || (GetItemState(hItem) & Item::EXPANDED)) {
+			for (HTREEITEM h = GetChildItem(hItem); h; h = GetNextItem(h)) {
+				if (HTREEITEM h2 = Locate(h, GetChild(b, h), p))
+					return h2;
+			}
 		}
 	}
 	return 0;

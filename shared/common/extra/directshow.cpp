@@ -70,7 +70,7 @@ HRESULT Pin::AgreeMediaType(IPin *pReceivePin, const AM_MEDIA_TYPE *pmt) {
 //-----------------------------------------------------------------------------
 
 bool iso::PinHasMajorType(IPin *pin, const GUID &majorType) {
-	if (com_ptr<IAMStreamConfig> config = query(pin)) {
+	if (auto config = query<IAMStreamConfig>(pin)) {
 		int count, size;
 		if (SUCCEEDED(config->GetNumberOfCapabilities(&count, &size))) {
 			malloc_block	caps(size);
@@ -89,7 +89,7 @@ bool iso::PinHasMajorType(IPin *pin, const GUID &majorType) {
 }
 
 HRESULT	iso::ConfigurePin(IPin *pin, AM_MEDIA_TYPE *_mt, uint32 width, uint32 height, uint64 frame) {
-	com_ptr<IAMStreamConfig>	config = query(pin);
+	auto				config = query<IAMStreamConfig>(pin);
 	MediaTypeHolder		mt(_mt);
 	VIDEOINFOHEADER		*vih	= (VIDEOINFOHEADER*)mt->pbFormat;
 	BITMAPINFOHEADER	&bmi	= vih->bmiHeader;
@@ -138,32 +138,27 @@ IPin* iso::GetPin(IBaseFilter *filter, PIN_DIRECTION dir, const GUID *majorType,
 
 
 HRESULT iso::LoadGraphFile(IGraphBuilder *graph, const filename &fn) {
-	HRESULT					hr;
-	com_ptr<IStorage>		storage;
-	if (FAILED(hr = StgOpenStorage(str16(fn), 0, STGM_TRANSACTED | STGM_READ | STGM_SHARE_DENY_WRITE, 0, 0, &storage)))
-		return hr;
+	HRESULT				hr;
+	com_ptr<IStorage>	storage;
+	com_ptr<IStream>	stream;
 
-	com_ptr<IStream>		stream;
-	if (FAILED(hr = storage->OpenStream(L"ActiveMovieGraph", 0, STGM_READ | STGM_SHARE_EXCLUSIVE, 0, &stream)))
-		return hr;
-
-	com_ptr<IPersistStream>	persist = query(graph);
-	return persist->Load(stream);
+	if (SUCCEEDED(hr = StgOpenStorage(str16(fn), 0, STGM_TRANSACTED | STGM_READ | STGM_SHARE_DENY_WRITE, 0, 0, &storage))
+	&&	SUCCEEDED(hr = storage->OpenStream(L"ActiveMovieGraph", 0, STGM_READ | STGM_SHARE_EXCLUSIVE, 0, &stream))
+	)
+		return query<IPersistStream>(graph)->Load(stream);
+	return hr;
 }
 
 HRESULT iso::SaveGraphFile(IGraphBuilder *graph, const filename &fn) {
-	HRESULT					hr;
-	com_ptr<IStorage>		storage;
-	if (FAILED(hr = StgCreateDocfile(str16(fn), STGM_CREATE | STGM_TRANSACTED | STGM_READWRITE | STGM_SHARE_EXCLUSIVE, 0, &storage)))
-		return hr;
+	HRESULT				hr;
+	com_ptr<IStorage>	storage;
+	com_ptr<IStream>	stream;
 
-	com_ptr<IStream>		stream;
-	if (FAILED(hr = storage->CreateStream(L"ActiveMovieGraph", STGM_WRITE | STGM_CREATE | STGM_SHARE_EXCLUSIVE, 0, 0, &stream)))
-		return hr;
+	if (SUCCEEDED(hr = StgCreateDocfile(str16(fn), STGM_CREATE | STGM_TRANSACTED | STGM_READWRITE | STGM_SHARE_EXCLUSIVE, 0, &storage))
+	&&	SUCCEEDED(hr = storage->CreateStream(L"ActiveMovieGraph", STGM_WRITE | STGM_CREATE | STGM_SHARE_EXCLUSIVE, 0, 0, &stream))
+	&&	SUCCEEDED(hr = query<IPersistStream>(graph)->Save(stream, TRUE))
+	)
+		return storage->Commit(STGC_DEFAULT);
 
-	com_ptr<IPersistStream>	persist = query(graph);
-	if (FAILED(hr = persist->Save(stream, TRUE)))
-		return hr;
-
-	return storage->Commit(STGC_DEFAULT);
+	return hr;
 }

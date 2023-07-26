@@ -7,25 +7,71 @@
 
 namespace iso {
 
-template<typename I> class iblock_buffer {
-protected:
-	I			buffer;
-	void		move(intptr_t n)	{ buffer += n; }
-public:
-	constexpr int	pitch()		const	{ return 1; }
-	constexpr I		begin()		const	{ return buffer; }
-	constexpr operator	I()		const	{ return buffer; }
-	constexpr intptr_t	offset(const I i) const	{ return i - buffer; }
+template<typename I> constexpr int		intra_pitch(const I&)				{ return 1; }
+template<typename I> void				intra_move(I &i, intptr_t n)		{ i += n; }
+template<typename I> constexpr intptr_t	intra_diff(const I &a, const I &b)	{ return a - b; }
 
-	constexpr iblock_buffer(I buffer = I()) : buffer(buffer) {}
-};
-
+template<typename I, int N> class iblock;
 template<typename I, int N> class iblock_iterator;
+template<typename I, int N> class iblockptr;
+
+//-----------------------------------------------------------------------------
+//	iblock
+//-----------------------------------------------------------------------------
+
+template<typename I> class iblock<I, 1> {
+protected:
+	friend iblockptr<I, 1>;
+	I		buffer;
+	uint32	count;
+//	struct	temp;
+public:
+	iblock() 	{}
+	iblock(const iblock&)				= default;
+	constexpr	iblock(I buffer, uint32 count) : buffer(buffer), count(count)	{}
+//	iblock&					operator=(const iblock &c) 	{ assign(c); return *this; }
+//	template<typename C> iblock &operator=(const C &c)	{ assign(c); return *this; }
+	constexpr operator		auto()					const	{ return begin(); }
+
+	constexpr uint32		size()					const	{ return count; }
+	constexpr int32			pitch()					const	{ return intra_pitch(buffer); }
+	constexpr auto			begin()					const	{ using iso::begin; return begin(buffer); }
+	constexpr auto			end()					const	{ using iso::begin; return begin(buffer) + count; }
+	constexpr uint32		max_size()				const	{ return count; }
+	constexpr decltype(auto)operator[](int i)		const	{ return buffer[i]; }
+	constexpr int			index_of(const I e)		const	{ return e < buffer ? -1 : e - buffer; }
+
+//	template<int N2> temp	slice(int i, int n)	const	{ return temp(*this).template slice<N2>(i, n); }
+//	template<int N2> temp	slice(int i)		const	{ return temp(*this).template slice<N2>(i); }
+
+	iblock<I, 1>	slice(int i, int n)	const	{ auto t = *this; t.cut(i, n); return t; }
+	iblock<I, 1>	slice(int i)		const	{ auto t = *this; t.cut(i); return t; }
+
+	void		cut(int i) {
+		buffer	+= i;
+		count	= count <= i ? 0 : count - i;
+	}
+	void		cut(int i, int n) {
+		cut(i);
+		count	= n < 0 ? max(n + count, 0) : min(n, count);
+	}
+
+	template<typename W> bool	write(W &&w) const	{ using iso::begin; return writen(w, begin(buffer), count); }
+	template<typename R> bool	read(R &&r) const	{ using iso::begin; return readn(r, begin(buffer), count); }
+
+	template<typename S> void assign(const S &s) {
+		using iso::begin;
+		copy(begin(s), begin(s) + min(num_elements(s), size()), begin());
+	}
+	friend constexpr size_t num_elements(const iblock &c) {
+		return c.count;
+	}
+};
 
 template<typename I, int N> class iblock : public iblock<I, N - 1> {
 protected:
 	typedef iblock<I, N - 1>	B;
-	struct temp;
+	struct	temp;
 	int32	stride;
 	uint32	count;
 
@@ -33,26 +79,28 @@ public:
 	typedef iblock_iterator<I, N>	iterator;
 
 	iblock()	{}
+	iblock(const iblock&)				= default;
 	constexpr iblock(const B &b, int32 stride, uint32 count) : B(b), stride(stride), count(count)	{}
-
+//	iblock&	operator=(const iblock &c) 	{ assign(c); return *this; }
+	
 	constexpr uint32		size()					const	{ return count; }
 	constexpr int32			pitch()					const	{ return stride; }
 	constexpr iterator		begin()					const	{ return iterator(*this, stride); }
 	constexpr iterator		end()					const	{ return begin() += (int)count; }
 	constexpr uint32		max_size()				const	{ return max(count, B::max_size()); }
 	constexpr B				operator[](int i)		const	{ return begin()[i]; }
-	constexpr int			index_of(const I e)		const	{ return B::offset(e) / stride; }
+	constexpr int			index_of(const I e)		const	{ return intra_diff(e, B::buffer) / stride; }
 
 	template<int N2> iblock<I, N2>&			get()			{ return *this; }
 	template<int N2> const iblock<I, N2>&	get()	const	{ return *this; }
 
-	void		cut(int i, int n) {
-		B::move(i * intptr_t(stride));
-		count	= count <= i ? 0 : n < 0 ? max(n + count - i, 0) : min(n, count - i);
-	}
 	void		cut(int i) {
-		B::move(i * intptr_t(stride));
+		intra_move(B::buffer, i * intptr_t(stride));
 		count	= count <= i ? 0 : count - i;
+	}
+	void		cut(int i, int n) {
+		cut(i);
+		count	= n < 0 ? max(n + count, 0) : min(n, count);
 	}
 	void		skip(int i) {
 		stride *= i;
@@ -92,12 +140,12 @@ template<typename I, int N> class iblock_iterator : public iblock<I, N - 1> {
 	typedef iblock<I, N - 1>	B;
 	int32	stride;
 public:
-	iblock_iterator&	operator++()		{ B::move(stride);		return *this; }
-	iblock_iterator&	operator--()		{ B::move(-stride);		return *this; }
-	iblock_iterator		operator++(int)		{ auto i = *this; B::move( stride); return i; }
-	iblock_iterator		operator--(int)		{ auto i = *this; B::move(-stride); return i; }
-	iblock_iterator&	operator+=(int i)	{ B::move(intptr_t(stride) * i);	return *this; }
-	iblock_iterator&	operator-=(int i)	{ B::move(-intptr_t(stride) * i);	return *this; }
+	iblock_iterator&	operator++()		{ intra_move(B::buffer, stride);		return *this; }
+	iblock_iterator&	operator--()		{ intra_move(B::buffer, -stride);		return *this; }
+	iblock_iterator		operator++(int)		{ auto i = *this; intra_move(B::buffer,  stride); return i; }
+	iblock_iterator		operator--(int)		{ auto i = *this; intra_move(B::buffer, -stride); return i; }
+	iblock_iterator&	operator+=(int i)	{ intra_move(B::buffer,  intptr_t(stride) * i);	return *this; }
+	iblock_iterator&	operator-=(int i)	{ intra_move(B::buffer, -intptr_t(stride) * i);	return *this; }
 
 	constexpr B			operator*()								const	{ return *this; }
 	constexpr bool		operator==(const iblock_iterator &b)	const	{ return B::buffer == b.buffer; }
@@ -105,7 +153,7 @@ public:
 	constexpr B			operator[](int i)						const	{ return iblock_iterator(*this) += i; }
 	constexpr iblock_iterator	operator+(int i)				const	{ return iblock_iterator(*this) += i; }
 	constexpr iblock_iterator	operator-(int i)				const	{ return iblock_iterator(*this) -= i; }
-	constexpr int		operator-(const iblock_iterator &b)		const	{ return B::offset(b.buffer) / stride; }
+	constexpr int		operator-(const iblock_iterator &b)		const	{ return intra_diff(B::buffer, b.buffer) / stride; }
 	constexpr iblock_iterator(const B &b, int32 stride) : B(b), stride(stride)	{}
 };
 
@@ -116,94 +164,127 @@ template<typename I, int N> struct iblock<I, N>::temp : iblock<I, N> {
 	template<int N2> temp		sub(int i, int n)		{ iblock<I, N2>::cut(i, n); return *this; }
 	template<int N2> temp		slice(int i, int n)		{ iblock<I, N2>::cut(i, n); return *this; }
 	template<int N2> temp		slice(int i)			{ iblock<I, N2>::cut(i); return *this; }
-	template<int N2, typename T_enable_if<N2 != 1>::type* = nullptr> temp	skip(int i)		{ iblock<I, N2>::skip(i); return *this; }
-	template<int N2, typename T_enable_if<N2 == 1>::type* = nullptr> auto	skip(int i) 	{ return iso::skip<1>(*this, i); }
+	template<int N2, enable_if_t<N2 != 1>* = nullptr> temp	skip(int i)		{ iblock<I, N2>::skip(i); return *this; }
+	template<int N2, enable_if_t<N2 == 1>* = nullptr> auto	skip(int i) 	{ return iso::skip<1>(*this, i); }
 	friend const iblock<I, N>&	get(const temp &b)		{ return b; }
+	friend iblock<I, N>			get(temp &&b)			{ return b; }
 	friend iblock<I, N>&		put(temp &b)			{ return b; }
 };
 
-template<typename I> class iblock<I, 1> : public iblock_buffer<I> {
+
+template<> class iblock<void*, 1> {
 protected:
-	typedef iblock_buffer<I>	B;
-	using	B::buffer;
-	uint32	count;
-	struct	temp;
-public:
-	iblock() 	{}
-	constexpr	iblock(I buffer, uint32 count) : iblock_buffer<I>(buffer), count(count)	{}
-
-	template<typename C> iblock &operator=(const C &c) { assign(c); return *this; }
-
-	constexpr uint32		size()					const	{ return count; }
-	constexpr auto			end()					const	{ return B::begin() + count; }
-	constexpr uint32		max_size()				const	{ return count; }
-	constexpr decltype(auto)operator[](int i)		const	{ return buffer[i]; }
-	constexpr int			index_of(const I e)		const	{ return e < buffer ? -1 : e - buffer; }
-
-	template<int N2> temp	slice(int i, int n)	const	{ return temp(*this).template slice<N2>(i, n); }
-	template<int N2> temp	slice(int i)		const	{ return temp(*this).template slice<N2>(i); }
-
-	void		cut(int i, int n) {
-		buffer += i;
-		count	= count <= i ? 0 : n < 0 ? max(n + count - i, 0) : min(n, count - i);
-	}
-	void		cut(int i) {
-		buffer += i;
-		count	= count <= i ? 0 : count - i;
-	}
-
-	template<typename W> bool	write(W &&w) const	{ return writen(w, buffer, count); }
-	template<typename R> bool	read(R &&r) const	{ return readn(r, buffer, count); }
-
-	template<typename S> void assign(const S &s) {
-		using iso::begin;
-		copy(begin(s), begin(s) + min(num_elements(s), size()), B::begin());
-	}
-	friend constexpr size_t num_elements(const iblock &c) {
-		return c.count;
-	}
-};
-
-template<> class iblock<void*, 1> : public iblock_buffer<void*> {
-protected:
+	void		*buffer;
 	uint32		count;
 public:
 	iblock()	{}
-	constexpr	iblock(void *buffer, uint32 count) : iblock_buffer<void*>(buffer), count(count)	{}
+	constexpr	iblock(void *buffer, uint32 count) : buffer(buffer), count(count)	{}
 	constexpr uint32	size()	const	{ return count; }
 };
 
-template<typename T> struct byte_moveable {
-	T	*p;
-	byte_moveable(T *p) : p(p) {}
-	operator T*()	const	{ return p; }
-};
+//-----------------------------------------------------------------------------
+//	iblockptr
+//-----------------------------------------------------------------------------
 
-template<typename T> class iblock_buffer<byte_moveable<T>> {
+template<typename I> class iblockptr<I, 1> {
 protected:
-	T			*buffer;
-	void		move(intptr_t n)		{ buffer = (T*)((uint8*)buffer + n); }
+	I		buffer;
+	constexpr auto			_begin()				const	{ using iso::begin; return begin(buffer); }
 public:
-	constexpr int	pitch()		const	{ return (int)sizeof(T); }
-	constexpr T*	begin()		const	{ return buffer; }
-	constexpr operator	T*()	const	{ return buffer; }
-	constexpr intptr_t	offset(const T *i) const	{ return (uint8*)i - (uint8*)buffer; }
-	constexpr iblock_buffer(T *buffer = nullptr) : buffer(buffer) {}
+	iblockptr()	{}
+	constexpr	iblockptr(I buffer) : buffer(buffer)	{}
+	constexpr	iblockptr(const iblock<I, 1> &b) : buffer(b.buffer)	{}
+	constexpr int32			pitch()					const	{ return intra_pitch(buffer); }
+	constexpr int			index_of(const I e)		const	{ return e < buffer ? -1 : e - buffer; }
+	constexpr decltype(auto) operator[](int i)		const	{ return buffer[i]; }
+	auto&					operator+=(int i)				{ buffer += i; return *this; }
+
 };
 
+template<typename I, int N> class iblockptr : public iblockptr<I, N - 1> {
+protected:
+	typedef iblockptr<I, N - 1>	B;
+	struct	temp;
+	int32	stride;
+	constexpr auto			_begin()				const	{ return *this; }
+
+public:
+	iblockptr()	{}
+	constexpr iblockptr(const B &b, int32 stride) : B(b), stride(stride) {}
+	constexpr iblockptr(const iblock<I, N> &b) : B(b), stride(b.pitch()) {}
+
+	constexpr auto			begin()					const	{ return B::_begin(); }
+	constexpr int32			pitch()					const	{ return stride; }
+	constexpr int			index_of(const I e)		const	{ return intra_diff(e, B::buffer) / stride; }
+	template<int N2> constexpr temp	slice(int i)	const	{ return temp(*this).template slice<N2>(i); }
+	template<typename...I> auto		slice(I...i)	const	{ return temp(*this).template slice<1>(i...); }
+
+	auto&			operator++()		{ intra_move(B::buffer, stride);					return *this; }
+	auto&			operator--()		{ intra_move(B::buffer, -stride);					return *this; }
+	auto			operator++(int)		{ auto i = *this; intra_move(B::buffer,  stride);	return i; }
+	auto			operator--(int)		{ auto i = *this; intra_move(B::buffer, -stride);	return i; }
+	auto&			operator+=(int i)	{ intra_move(B::buffer,  intptr_t(stride) * i);		return *this; }
+	auto&			operator-=(int i)	{ intra_move(B::buffer, -intptr_t(stride) * i);		return *this; }
+
+	constexpr B		operator*()						const	{ return *this; }
+	constexpr bool	operator==(const iblockptr &b)	const	{ return B::buffer == b.buffer; }
+	constexpr bool	operator!=(const iblockptr &b)	const	{ return B::buffer != b.buffer; }
+	constexpr auto	operator[](int i)				const	{ return (*this + i).begin(); }
+	constexpr auto	operator+(int i)				const	{ return copy(*this) += i; }
+	constexpr auto	operator-(int i)				const	{ return copy(*this) -= i; }
+	constexpr int	operator-(const iblockptr &b)	const	{ return intra_diff(B::buffer, b.buffer) / stride; }
+};
+
+template<typename I, int N> struct iblockptr<I, N>::temp : iblockptr<I, N> {
+	temp(const iblockptr<I, N> &b) : iblockptr<I, N>(b) {}
+	template<int N2> temp	slice(int i)	{ iblockptr<I, N2>::operator+=(i); return *this; }
+	template<int N2, typename...I> auto		slice(int i0, I...i)	{ return slice<N2>(i0).template slice<N2 + 1>(i...); }
+};
+
+//-----------------------------------------------------------------------------
+//	makers
+//-----------------------------------------------------------------------------
+
+template<typename I>						constexpr auto	make_blockptr(I p)														{ return iblockptr<I, 1>(p); }
+template<typename I, int N>					constexpr auto	make_blockptr(const iblockptr<I, N> &p, uint32 s)						{ return iblockptr<I, N + 1>(p, s); }
+template<typename I, int N, typename... W>	constexpr auto	make_blockptr(const iblockptr<I, N> &p, uint32 s0, W...s)				{ return make_block(make_blockptr(p, s0), s...); }
+//template<typename I, typename... W>			constexpr auto	make_blockptr(I p, W...s)												{ return make_blockptr(make_blockptr(p), s...); }
+template<typename T>						constexpr auto	make_iblockptr(T *p)													{ return iblockptr<T*, 1>(p); }
+template<typename T, typename... W>			constexpr auto	make_iblockptr(T *p, W...w)												{ return make_blockptr(make_iblockptr(p), w...); }
+template<typename T, int N>					constexpr auto	make_iblockptr(T (*p)[N])												{ return make_iblockptr((T*)p, N * sizeof(T)); }
 
 template<typename I>						constexpr auto	make_block(I p, uint32 w)												{ return iblock<I, 1>(p, w); }
 template<typename I, int N>					constexpr auto	make_block(const iblock<I, N> &p, uint32 w)								{ return iblock<I, N + 1>(p, p.pitch() * p.size(), w); }
 template<typename I, int N, typename... W>	constexpr auto	make_block(const iblock<I, N> &p, uint32 w0, W...w)						{ return make_block(make_block(p, w0), w...); }
 template<typename I, typename... W>			constexpr auto	make_block(I p, uint32 w0, W...w)										{ return make_block(make_block(p, w0), w...); }
 
-
 template<typename I, int N>					constexpr auto	make_strided_block(const iblock<I, N> &p, uint32 s, uint32 w)			{ return iblock<I, N + 1>(p, s, w); }
 template<typename I, int N, typename... W>	constexpr auto	make_strided_block(const iblock<I, N> &p, uint32 s0, uint32 w0, W...w)	{ return make_strided_block(make_strided_block(p, s0, w0), w...); }
 template<typename I, typename... W>			constexpr auto	make_strided_iblock(I p, uint32 w0, W...w)								{ return make_strided_block(make_block(p, w0), w...); }
 
+template<typename I> iblock<I, 2> flip_vertical(const iblock<I, 2> &b) {
+	return make_strided_block(b[b.template size<2>() - 1].begin(), b.template size<1>(), -b.template pitch<2>(), b.template size<2>());
+}
+
+template<typename I, int N>			constexpr size_t	data_size(const iblock<I, N> &b)			{ return b.size() * b.pitch(); }
+template<typename I, int N>			constexpr size_t	num_elements_total(const iblock<I, N> &b)	{ return b.size() * num_elements_total(b[0]); }
+template<typename I>				constexpr size_t	num_elements_total(const iblock<I, 1> &b)	{ return b.size(); }
+template<int D, typename I, int N>	constexpr bool		can_flatten(const iblock<I, N> &b)			{ return b.template pitch<D>() == b.template pitch<D - 1>() * b.template size<D - 1>(); }
+
+template<int D, int N>	struct flatten_s		{ template<typename I> static constexpr auto f(const iblock<I, N> &b) { return make_strided_block(flatten_s<D, N - 1>::f(b[0]), b.pitch(), b.size()); }};
+template<int D>			struct flatten_s<D, D>	{ template<typename I> static constexpr auto f(const iblock<I, D> &b) { return make_block<I, D - 2>(b, b.template size<D - 1>() * b.size()); }};
+template<>				struct flatten_s<1, 1>	{ template<typename I> static constexpr auto f(const iblock<I, 1> &b) { return b; }};
+template<>				struct flatten_s<2, 2>	{ template<typename I> static constexpr auto f(const iblock<I, 2> &b) { return make_block(b.template get<1>().begin(), b.template size<1>() * b.template size()); }};
+template<int D, typename I, int N> constexpr auto flatten(const iblock<I, N> &b)		{ return flatten_s<D, N>::f(b); }
+
+template<int D, int N>	struct skip_s			{ template<typename I> static constexpr auto f(const iblock<I, N> &b, int s) { return make_strided_block(skip_s<D, N - 1>::f(b[0], s), b.pitch(), b.size()); }};
+template<int D>			struct skip_s<D, D>		{ template<typename I> static constexpr auto f(const iblock<I, D> &b, int s) { return make_strided_block(b, b.pitch() * s, b.size() / s); }};
+template<>				struct skip_s<1, 1>		{ template<typename I> static constexpr auto f(const iblock<I, 1> &b, int s) { return make_strided_iblock(b.begin(), b.pitch() * s, 1, b.size() / s); }};
+template<int D, typename I, int N> constexpr auto skip(const iblock<I, N> &b, int s)	{ return skip_s<D, N>::f(b, s); }
+
 template<typename T, typename V, int N> void fill(iblock_iterator<T, N> s, iblock_iterator<T, N> e, const V &v) {
-	for (; s != e; ++s) fill(*s, v);
+	for (; s != e; ++s)
+		fill(*s, v);
 }
 
 template<typename S, typename D, int N> void copy(iblock_iterator<S, N> s, iblock_iterator<S, N> e, iblock_iterator<D, N> d) {
@@ -213,214 +294,51 @@ template<typename S, typename D, int N> void copy(iblock_iterator<S, N> s, ibloc
 template<typename S, typename D, int N> void copy(const iblock<S, N> &s, D &&d)	{ copy(unconst(s), d); }
 template<typename S, typename D, int N> void copy(iblock<S, N> &&s, D &&d)		{ copy(s, d); }
 
+template<typename I, typename F> void over(iblock<I, 1>& b, F &&f) {
+	for (auto &i : b)
+		f(i);
+}
+template<typename I, typename F, int N> void over(iblock<I, N> &&b, F &&f)	{
+	for (auto i : b)
+		over(i, f);
+}
+
+template<typename I, typename F> auto transform(const iblock<I, 1>& b, F &&f) {
+	return make_block(transform(b.begin(), forward<F>(f)), b.size());
+}
+
+template<typename I, int N, typename F> auto transform(const iblock<I, N>& b, F &&f) {
+	return make_block(transform(*b.begin(), forward<F>(f)), b.size());
+}
 
 //-----------------------------------------------------------------------------
 //	block - view onto supplied memory
 //-----------------------------------------------------------------------------
-#if 1
-template<typename T, int N> using block = iblock<byte_moveable<T>, N>;
-template<typename T, int N> using block_iterator = iblock_iterator<byte_moveable<T>, N>;
 
-#else
-template<typename T, int N> class block_iterator;
+template<typename T> struct byte_moveable {
+	T	*p;
+	byte_moveable(T *p = nullptr) : p(p) {}
+	constexpr operator T*()	const	{ return p; }
+	auto& operator+=(size_t i)		{ p += i; return *this; }
 
-template<typename T, int N> class block : public block<T, N - 1> {
-protected:
-	typedef block<T, N - 1>	B;
-	using B::buffer;
-	struct temp;
-
-	int32		stride;
-	uint32		count;
-
-public:
-	typedef block_iterator<T, N>	iterator, const_iterator;
-	typedef B			element, &reference;
-	typedef	block		block_type;
-
-	block()		{}
-	constexpr block(const B &b, int32 stride, uint32 count) : B(b), stride(stride), count(count)	{}
-
-	constexpr uint32		size()					const	{ return count; }
-	constexpr int32			pitch()					const	{ return stride; }
-	constexpr iterator		begin()					const	{ return iterator(*this, stride); }
-	constexpr iterator		end()					const	{ return begin() += (int)count; }
-	constexpr uint32		max_size()				const	{ return max(count, B::max_size()); }
-	constexpr B				operator[](int i)		const	{ return begin()[i]; }
-	constexpr int			index_of(const T *e)	const	{ return e < buffer ? -1 : ((char*)e - (char*)buffer) / stride; }
-	constexpr memory_block	data()					const	{ return memory_block(buffer, stride * count); }
-
-	template<int N2> block<T, N2>&			get()			{ return *this; }
-	template<int N2> const block<T, N2>&	get()	const	{ return *this; }
-
-	void		cut(int i, int n) {
-		if (n < 0)
-			n += count - i;
-		buffer	= (T*)((char*)buffer + i * intptr_t(stride));
-		count	= count > i ? min(uint32(max(n, 0)), count - i) : 0;
-	}
-	void		cut(int i) {
-		buffer	= (T*)((char*)buffer + i * intptr_t(stride));
-		count	= count > i ? count - i : 0;
-	}
-	void		skip(int i) {
-		stride *= i;
-		count /= i;
-	}
-
-	template<int N2> constexpr uint32	size()				const	{ return block<T, N2>::size(); }
-	template<int N2> constexpr int32	pitch()				const	{ return block<T, N2>::pitch(); }
-	template<int N2> constexpr temp		sub(int i, int n)	const	{ return temp(*this).template sub<N2>(i, n); }
-	template<int N2> constexpr temp		slice(int i, int n)	const	{ return temp(*this).template slice<N2>(i, n); }
-	template<int N2> constexpr temp		slice(int i)		const	{ return temp(*this).template slice<N2>(i); }
-	template<int N2> constexpr auto		skip(int i)			const	{ return temp(*this).template skip<N2>(i); }
-
-	template<typename S> void assign(const S &s) {
-		auto	j = begin();
-		for (auto i = s.begin(), ie = i + min(num_elements(s), size()); i != ie; ++i, ++j)
-			j.assign(*i);
-	}
-
-	template<typename W> bool	write(W &&w) const	{
-		for (auto i : *this)
-			if (!w.write(i))
-				return false;
-		return true;
-	}
-
-	template<typename R> bool	read(R &&r) const	{
-		for (auto i : *this)
-			if (!r.read(i))
-				return false;
-		return true;
-	}
-
-	friend	constexpr size_t num_elements(const block &c) {
-		return c.count;
-	}
+	friend constexpr T*			begin(const byte_moveable& i)				{ return i.p; }
+	friend constexpr T*			begin(byte_moveable&& i)					{ return i.p; }
+	friend constexpr int		intra_pitch(const byte_moveable&)			{ return (int)sizeof(T); }
+	friend void					intra_move(byte_moveable &i, intptr_t n)	{ i.p = (T*)((uint8*)i.p + n); }
+	friend constexpr intptr_t	intra_diff(const byte_moveable &a, const byte_moveable &b)	{ return (uint8*)a.p - (uint8*)b.p; }
 };
 
-template<typename T, int N> class block_iterator : public block<T, N - 1> {
-	typedef block<T, N - 1>	B;
-	using	B::buffer;
-	int32		stride;
-public:
-	typedef random_access_iterator_t	iterator_category;
-	block_iterator&	operator++()		{ B::move(stride);		return *this; }
-	block_iterator&	operator--()		{ B::move(-stride);		return *this; }
-	block_iterator	operator++(int)		{ auto i = *this; B::move( stride); return i; }
-	block_iterator	operator--(int)		{ auto i = *this; B::move(-stride); return i; }
-	block_iterator&	operator+=(int i)	{ B::move(stride * i);	return *this; }
-	block_iterator&	operator-=(int i)	{ B::move(-stride * i);	return *this; }
+template<typename T, int N> using block		= iblock<byte_moveable<T>, N>;
+template<typename T, int N> using blockptr	= iblockptr<byte_moveable<T>, N>;
 
-	constexpr B			operator*()							const	{ return *this; }
-	constexpr bool		operator==(const block_iterator &b)	const	{ return buffer == b.buffer; }
-	constexpr bool		operator!=(const block_iterator &b)	const	{ return buffer != b.buffer; }
-	constexpr B			operator[](int i)					const	{ return block_iterator(*this) += i; }
-	constexpr block_iterator	operator+(int i)			const	{ return block_iterator(*this) += i; }
-	constexpr block_iterator	operator-(int i)			const	{ return block_iterator(*this) -= i; }
-	constexpr int		operator-(const block_iterator &b)	const	{ return ((char*)buffer - (char*)b.buffer) / stride; }
-	constexpr block_iterator(const B &b, int32 _stride) : B(b), stride(_stride)	{}
-};
+template<typename T>				constexpr auto			make_blockptr(T *p)						{ return blockptr<T, 1>(p); }
+template<typename T, typename... W>	constexpr auto			make_blockptr(T *p, W...w)				{ return make_blockptr(make_blockptr(p), w...); }
+template<typename T, int N>			constexpr auto			make_blockptr(T (*p)[N])				{ return make_blockptr((T*)p, N * sizeof(T)); }
 
-template<int D, typename T, int N> constexpr auto skip(const block<T, N> &b, int s);
-
-template<typename T, int N> struct block<T, N>::temp : block<T, N> {
-	temp(const block<T, N> &b) : block<T, N>(b) {}
-	template<int N2> temp		sub(int i, int n)		{ block<T, N2>::cut(i, n); return *this; }
-	template<int N2> temp		slice(int i, int n)	{ block<T, N2>::cut(i, n); return *this; }
-	template<int N2> temp		slice(int i)		{ block<T, N2>::cut(i); return *this; }
-	template<int N2, typename T_enable_if<N2 != 1>::type* = nullptr> temp	skip(int i)		{ block<T, N2>::skip(i); return *this; }
-	template<int N2, typename T_enable_if<N2 == 1>::type* = nullptr> auto	skip(int i) 	{ return iso::skip<1>(*this, i); }
-	friend const block<T, N>&	get(const temp &b)		{ return b; }
-	friend block<T, N>&			put(temp &b)			{ return b; }
-};
-
-
-template<typename T> class block<T, 1> {
-protected:
-	T			*buffer;
-	uint32		count;
-	void		move(int n) { buffer = (T*)((char*)buffer + n); }
-	struct temp;
-public:
-	typedef T		element, &reference, *iterator, *const_iterator;
-	typedef	block	block_type;
-
-	block() : buffer(0)	{}
-	constexpr	block(T *buffer, uint32 count) : buffer(buffer), count(count)	{}
-	template<size_t N> constexpr	block(T (&buffer)[N]) : buffer(buffer), count(N)	{}
-
-	template<typename C> block &operator=(const C &c) { assign(c); return *this; }
-
-	constexpr operator		T*()					const	{ return buffer; }
-	constexpr uint32		size()					const	{ return count; }
-	constexpr int32			pitch()					const	{ return (int32)sizeof(T); }
-	constexpr iterator		begin()					const	{ return buffer; }
-	constexpr iterator		end()					const	{ return begin() + count; }
-	constexpr uint32		max_size()				const	{ return count; }
-	constexpr T&			operator[](int i)		const	{ return begin()[i]; }
-	constexpr int			index_of(const T *e)	const	{ return e < buffer ? -1 : e - buffer; }
-	constexpr memory_block	data()					const	{ return memory_block(buffer, count * sizeof(T)); }
-
-	template<int N2> temp	slice(int i, int n)	const	{ return temp(*this).template slice<N2>(i, n); }
-	template<int N2> temp	slice(int i)		const	{ return temp(*this).template slice<N2>(i); }
-
-	void		cut(int i, int n) {
-		if (n < 0)
-			n += count - i;
-		buffer	+= i;
-		count	= count > i ? min(uint32(max(n, 0)), count - i) : 0;
-	}
-	void		cut(int i) {
-		buffer	+= i;
-		count	= count > i ? count - i : 0;
-	}
-
-	template<typename W> bool	write(W &&w) const	{ return writen(w, buffer, count); }
-	template<typename R> bool	read(R &&r) const	{ return readn(r, buffer, count); }
-
-	template<typename S> void assign(const S &s) {
-		using iso::begin;
-		copy(begin(s), begin(s) + min(num_elements(s), size()), begin());
-	}
-	friend constexpr size_t num_elements(const block &c) {
-		return c.count;
-	}
-};
-
-template<> class block<void, 1> {
-protected:
-	void		*buffer;
-	uint32		count;
-	void		move(int n) { buffer = (char*)buffer + n; }
-public:
-	block() : buffer(0)	{}
-	constexpr	block(void *buffer, uint32 count) : buffer(buffer), count(count)	{}
-
-	constexpr void*			begin()					const	{ return buffer; }
-	constexpr operator		void*()					const	{ return buffer; }
-	constexpr uint32		size()					const	{ return count; }
-};
-
-template<typename T> struct block<T, 1>::temp : block<T, 1> {
-	temp(const block<T, 1> &b) : block<T, 1>(b) {}
-	template<int N2> temp		sub(int i, int n)		{ block<T, N2>::cut(i, n); return *this; }
-	template<int N2> temp		slice(int i, int n)	{ block<T, N2>::cut(i, n); return *this; }
-	template<int N2> temp		slice(int i)		{ block<T, N2>::cut(i); return *this; }
-	friend const block<T, 1>&	get(const temp &b)		{ return b; }
-	friend block<T, 1>&			put(temp &b)			{ return b; }
-};
-#endif
-
-template<typename T>						constexpr block<T, 1>	make_block(T *p, uint32 w)											{ return block<T, 1>(p, w); }
-//template<typename T, int N>					constexpr block<T, N+1> make_block(const block<T,N> &p, uint32 w)							{ return block<T, N+1>(p, p.pitch() * p.size(), w); }
-//template<typename T, int N, typename... W>	constexpr auto			make_block(const block<T, N> &p, uint32 w0, W...w)					{ return make_block(make_block(p, w0), w...); }
-template<typename T, typename... W>			constexpr auto			make_block(T *p, uint32 w0, W...w)									{ return make_block(make_block(p, w0), w...); }
-
-//template<typename T, int N>					constexpr block<T, N+1> make_strided_block(const block<T,N> &p, uint32 s, uint32 w)			{ return block<T, N+1>(p, s, w); }
-//template<typename T, int N, typename... W>	constexpr auto			make_strided_block(const block<T, N> &p, uint32 s0, uint32 w0, W...w){ return make_strided_block(make_strided_block(p, s0, w0), w...); }
-template<typename T, typename... W>			constexpr auto			make_strided_block(T *p, uint32 w0, W...w)							{ return make_strided_block(make_block(p, w0), w...); }
+template<typename T>				constexpr block<T, 1>	make_block(T *p, uint32 w)					{ return {p, w}; }
+template<typename T, typename... W>	constexpr auto			make_block(T *p, uint32 w0, W...w)			{ return make_block(make_block(p, w0), w...); }
+template<typename T, typename... W>	constexpr auto			make_strided_block(T *p, uint32 w0, W...w)	{ return make_strided_block(make_block(p, w0), w...); }
+template<typename T, int N, typename H>	constexpr auto		make_block(T (*p)[N], uint32 w, H h)		{ return make_strided_block(make_block((T*)p, w), N * sizeof(T), h); }
 
 template<int N>	struct block_maker {
 	template<typename I, int M, typename W> static constexpr auto f (const iblock<I,M> &p, W *w)	{ return block_maker<N - 1>::f(make_block(p, *w), w + 1); }
@@ -436,73 +354,11 @@ template<int N, typename I, typename W>		constexpr iblock<I, N>	make_block(I p, 
 template<int N, typename I, typename W>		constexpr iblock<I, N>	make_strided_block(I p, W *w)	{ return block_maker<N - 1>::fs(make_block(p, *w), w + 1); }
 template<int N, typename I, typename W>		constexpr iblock<I, N>	make_block_rev(I p, W *w)		{ return block_maker<N - 1>::r(make_block(p, w[N - 1]), w); }
 
-template<typename T> block<T, 2> flip_vertical(const block<T, 2> &b) {
-	return make_strided_block(b[b.template size<2>() - 1].begin(), -b.template pitch<2>(), b.template size<1>(), b.template size<2>());
-}
-
-template<typename T, int N>				constexpr size_t		data_size(const block<T, N> &b)				{ return b.size() * b.pitch(); }
-template<typename T, int N>				constexpr size_t		num_elements_total(const block<T, N> &b)	{ return b.size() * num_elements_total(b[0]); }
-template<typename T>					constexpr size_t		num_elements_total(const block<T, 1> &b)	{ return b.size(); }
 template<typename U, typename T>		constexpr block<U, 1>	element_cast(const block<T, 1> &b)			{ return block<U, 1>((U*)b.begin(), b.size()); }
 template<typename U, typename T, int N> constexpr block<U, N>	element_cast(const block<T, N> &b)			{ return block<U, N>(element_cast<U>(b[0]), b.pitch(), b.size()); }
 template<typename U, typename T, int N> constexpr block<U, N>	element_cast(block<T, N> &b)				{ return element_cast<U>(make_const(b)); }
 template<typename U, typename T, int N> constexpr block<U, N>	element_cast(block<T, N> &&b)				{ return element_cast<U>(make_const(b)); }
-template<int D, typename T, int N>		constexpr bool			can_flatten(const block<T, N> &b)			{ return b.template pitch<D>() == b.template pitch<D - 1>() * b.template size<D - 1>(); }
 
-template<int D, int N>	struct flatten_s		{ template<typename T> static constexpr auto f(const block<T, N> &b) { return make_strided_block(flatten_s<D, N - 1>::f(b[0]), b.pitch(), b.size()); }};
-template<int D>			struct flatten_s<D, D>	{ template<typename T> static constexpr auto f(const block<T, D> &b) { return make_block<T, D - 2>(b, b.template size<D - 1>() * b.size()); }};
-template<>				struct flatten_s<1, 1>	{ template<typename T> static constexpr auto f(const block<T, 1> &b) { return b; }};
-template<>				struct flatten_s<2, 2>	{ template<typename T> static constexpr auto f(const block<T, 2> &b) { return make_block(b.template get<1>().begin(), b.template size<1>() * b.template size()); }};
-template<int D, typename T, int N> constexpr auto flatten(const block<T, N> &b)		{ return flatten_s<D, N>::f(b); }
-
-template<int D, int N>	struct skip_s			{ template<typename T> static constexpr auto f(const block<T, N> &b, int s) { return make_strided_block(skip_s<D, N - 1>::f(b[0], s), b.pitch(), b.size()); }};
-template<int D>			struct skip_s<D, D>		{ template<typename T> static constexpr auto f(const block<T, D> &b, int s) { return make_strided_block(b, b.pitch() * s, b.size() / s); }};
-template<>				struct skip_s<1, 1>		{ template<typename T> static constexpr auto f(const block<T, 1> &b, int s) { return make_strided_block(b.begin(), b.pitch() * s, 1, b.size() / s); }};
-template<int D, typename T, int N> constexpr auto skip(const block<T, N> &b, int s)	{ return skip_s<D, N>::f(b, s); }
-
-
-//template<int X, int Y, typename T> auto block_mask(const block<T, 2> &block) {
-//	return block_mask<X, Y>(block.template size<1>(), block.template size<2>());
-//}
-
-/*
-template<typename F, typename AT, typename B, int N> struct deferred<F, const block<AT, N>&, B> : F {
-	typedef const block<AT, N>	&A;
-	typedef typename T_noref<B>::type	B2;
-	A	a;
-	B	b;
-
-	typedef deferred<F, const block<AT, N - 1>&, typename B2::element>	element, reference;
-	typedef random_access_iterator_t	iterator_category;
-	typedef indexed_iterator<deferred, int_iterator<int> > iterator;
-
-	deferred(F &&f, A &&_a, B &&_b)	: F(move(f)), a(forward<A>(_a)), b(forward<B>(_b)) {}
-	element		operator[](int i)	const	{ return element(F(), a[i], b[i]); }
-	iterator	begin()				const	{ return iterator(*this, 0); }
-	iterator	end()				const	{ return iterator(*this, num_elements(*this)); }
-	friend constexpr size_t num_elements(const deferred &c) {
-		return min(c.a.size(), num_elements(c.b));
-	}
-};
-
-template<typename F, typename AT, typename B> struct deferred<F, const block<AT, 1>&, B> : F {
-	typedef const block<AT, 1>	&A;
-	A	a;
-	B	b;
-
-	typedef AT							element, reference;
-	typedef random_access_iterator_t	iterator_category;
-	typedef indexed_iterator<deferred, int_iterator<int> > iterator;
-
-	deferred(F &&f, A &&_a, B &&_b)	: F(move(f)), a(forward<A>(_a)), b(forward<B>(_b)) {}
-	element		operator[](int i)	const	{ return (*this)(a[i], b[i]); }
-	iterator	begin()				const	{ return iterator(*this, 0); }
-	iterator	end()				const	{ return iterator(*this, num_elements(*this)); }
-	friend constexpr size_t num_elements(const deferred &c) {
-		return min(c.a.size(), num_elements(c.b));
-	}
-};
-*/
 //-----------------------------------------------------------------------------
 //	auto_block - owns memory
 //-----------------------------------------------------------------------------
@@ -510,34 +366,64 @@ template<typename F, typename AT, typename B> struct deferred<F, const block<AT,
 template<typename T, int N> struct auto_block : block<T, N> {
 	typedef block<T, N> B;
 
-	auto_block()							{ clear(*this); }
-#ifdef USE_RVALUE_REFS
+	auto_block()							{ B::buffer = nullptr; }
 	auto_block(auto_block &&b) : B(b)		{ b.buffer = 0; }
 	auto_block& operator=(auto_block &&b)	{ swap(*this, b); return *this; }
-#endif
-	~auto_block()					{ delete[] B::buffer; }
-	B&			get() 				{ return *this; }
-	const B&	get() const			{ return *this; }
-    B			detach() 			{ block<T, N> b = *this; B::buffer = 0; return b; }
-
-	friend void swap(auto_block &a, auto_block &b) { swap((B&)a, (B&)b); }
+	~auto_block()							{ delete[] B::buffer; }
+	B&			get() 						{ return *this; }
+	const B&	get() const					{ return *this; }
+    B			detach() 					{ block<T, N> b = *this; B::buffer = 0; return b; }
+	void		clear()						{ delete[] B::buffer; B:buffer = 0; }
+	friend void swap(auto_block &a, auto_block &b) { raw_swap((B&)a, (B&)b); }
 
 	template<typename U> friend constexpr block<U, N>	element_cast(const auto_block &b)	{ return element_cast<U>(static_cast<const B&>(b)); }
 	template<typename U> friend constexpr block<U, N>	element_cast(auto_block &b)			{ return element_cast<U>(make_const(b)); }
 	template<typename U> friend constexpr block<U, N>	element_cast(auto_block &&b)		{ return element_cast<U>(make_const(b)); }
 };
 
-template<typename T, int N>				constexpr auto _make_auto_block(block<T, N> &&p)	{ return force_cast<auto_block<T,N>>(p); }
+template<typename T, int N>				constexpr auto	_make_auto_block(block<T, N> &&p)	{ return force_cast<auto_block<T,N>>(p); }
 template<typename T, typename... W>		inline auto		make_auto_block(W... w)				{ return _make_auto_block(make_block(new T[prod(w...)], w...)); }
 template<typename T, int N, typename W>	constexpr auto	make_auto_block(W *w)				{ return _make_auto_block(make_block(new T[prod<N>], w));}
 template<typename T, int N, typename W>	constexpr auto	make_auto_block_rev(W *w)			{ return _make_auto_block(make_block_rev(new T[prod<N>], w)); }
 
-template<typename T, typename T2, typename... W>		inline auto _make_auto_block_using(const T2 &p, W... w)				{ return make_block(new T[prod(w...)], w...); }
-template<typename T, typename T2, int N, typename... W>	inline auto _make_auto_block_using(const block<T2,N> &p, W... w)	{ return _make_auto_block_using<T>(p[0], p.size(), w...); }
+template<typename T, typename S, typename... W>			inline auto _make_auto_block_using(const S &p, W... w)				{ return make_block(new T[prod(w...)], w...); }
+template<typename T, typename S, int N, typename... W>	inline auto _make_auto_block_using(const iblock<S,N> &p, W... w)	{ return _make_auto_block_using<T>(p[0], p.size(), w...); }
 template<typename T, int N, typename... W>				inline auto	make_auto_block_using(const block<T,N> &p, W... w)		{ return _make_auto_block(_make_auto_block_using<T>(p, w...)); }
-template<typename T, typename T2, int N, typename... W>	inline auto	make_auto_block_using(const block<T2,N> &p, W... w)		{ return _make_auto_block(_make_auto_block_using<T>(p, w...)); }
+template<typename T, typename S, int N, typename... W>	inline auto	make_auto_block_using(const iblock<S,N> &p, W... w)		{ return _make_auto_block(_make_auto_block_using<T>(p, w...)); }
 template<typename T, typename... W>						inline auto	make_auto_block_using(const T &t, W... w)				{ return make_auto_block<T>(w...); }
 
+template<typename D, typename S, int N>	auto_block<D,N>	to(const iblock<S, N> &b) {
+	auto	b2 = make_auto_block_using<D>(b);
+	copy(b, b2.get());
+	return b2;
+}
+
+template<typename D, typename S, int N>	enable_if_t<!same_v<S,D>, auto_block<D,N>>			to(const block<S, N> &b) {
+	auto	b2 = make_auto_block_using<D>(b);
+	copy(b, b2.get());
+	return b2;
+}
+template<typename D, typename S, int N>	enable_if_t<same_v<S,D>, const block<D,N>&>			to(const block<S, N> &b) {
+	return b;
+}
+
+template<typename D, typename S, int N> struct block_via_s : auto_block<D, N> {
+	const iblock<S, N>	&s;
+	block_via_s(block_via_s&&) = default;
+	block_via_s(const iblock<S, N> &s) : s(s) { auto_block<D, N>::operator=(make_auto_block_using<D, S>(s)); }
+	~block_via_s() { copy(this->get(), s); }
+};
+
+template<typename D, typename S, int N> block_via_s<D, S, N>	via(const iblock<S, N> &s) { return s; }
+template<typename D, typename S, int N> enable_if_t<!same_v<D, S>, block_via_s<D, byte_moveable<S>, N>>	via(const block<S, N> &s) { return s; }
+template<typename D, typename S, int N> enable_if_t<same_v<D, S>, const block<S, N>&>		via(const block<S, N> &s) { return s; }
+
+template<typename A, typename B, int N>	void	swap(iblock<A, N> &&a, iblock<B, N> &&b) {
+	auto	ai = a.begin();
+	auto	bi = b.begin();
+	for (int i = a.size(); i--; ++ai, ++bi)
+		swap(*ai, *bi);
+}
 
 //-----------------------------------------------------------------------------
 //	algorithms
@@ -546,19 +432,18 @@ template<typename T, typename... W>						inline auto	make_auto_block_using(const
 template<class I, class F>						inline F for_each(I i, I end, F f);
 template<class I1, class I2, class F>			inline F for_each2(I1 i1, I1 end, I2 i2, F f);
 template<class I1, class I2, class I3, class F>	inline F for_each3(I1 i1, I1 end, I2 i2, I3 i3, F f);
-//template<class I, class O> inline void copy(I first, I last, O dest);
 
-template<typename T1, int N, class F> F for_each(block_iterator<T1, N> i1, block_iterator<T1, N> end, F f) {
+template<typename T1, int N, class F> F for_each(iblock_iterator<T1, N> i1, iblock_iterator<T1, N> end, F f) {
 	for (; i1 != end; ++i1)
 		for_each(i1.begin(), i1.end(), f);
 	return f;
 }
-template<typename T1, typename T2, int N, class F> F for_each2(block_iterator<T1, N> i1, block_iterator<T1, N> end, block_iterator<T2, N> i2, F f) {
+template<typename T1, typename T2, int N, class F> F for_each2(iblock_iterator<T1, N> i1, iblock_iterator<T1, N> end, iblock_iterator<T2, N> i2, F f) {
 	for (; i1 != end; ++i1, ++i2)
 		for_each2(*i1, *i2, f);
 	return f;
 }
-template<typename T1, typename T2, typename T3, int N, class F> F for_each3(block_iterator<T1, N> i1, block_iterator<T1, N> end, block_iterator<T2, N> i2, block_iterator<T3, N> i3, F f) {
+template<typename T1, typename T2, typename T3, int N, class F> F for_each3(iblock_iterator<T1, N> i1, iblock_iterator<T1, N> end, iblock_iterator<T2, N> i2, iblock_iterator<T3, N> i3, F f) {
 	for (; i1 != end; ++i1, ++i2, ++i3)
 		for_each3(*i1, *i2, *i3, f);
 	return f;
@@ -599,6 +484,10 @@ template<typename T> T dot(const block<T, 1> &a, const block<T, 1> &b) {
 	return t;
 }
 
+template<int X, typename D, typename S> void decode_blocked(const S &s, D& d) {
+	for (uint32 x = 0; x < s.size(); x++)
+		s[x].Decode(d.slice(x * X, X));
+}
 template<int X, int Y, typename D, typename S> void decode_blocked(const S &s, D& d) {
 	for (uint32 y = 0; y < s.size(); y++) {
 		for (uint32 x = 0; x < s.template size<1>(); x++)
@@ -611,6 +500,10 @@ template<int X, int Y, int Z, typename D, typename S> void decode_blocked(const 
 			for (uint32 x = 0; x < s.template size<1>(); x++)
 				s[y][x].Decode(d.template sub<1>(x * X, X).template sub<2>(y * Y, Y).template sub<3>(z * Z, Z));
 	}
+}
+template<int X, typename D,typename S> void encode_blocked(const S &s, D& d) {
+	for (uint32 x = 0; x < d.size(); x++)
+		d[x].Encode(s.slice(x * X, X));
 }
 template<int X, int Y, typename D,typename S> void encode_blocked(const S &s, D& d) {
 	for (uint32 y = 0; y < d.size(); y++) {

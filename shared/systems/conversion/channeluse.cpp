@@ -91,7 +91,7 @@ int ChannelUse::Scan(const block<ISO_rgba, 2> &rect) {
 	uint8	s	= Chans2Same(rc);
 
 	for (int y = 0, w = rect.size<1>(), h = rect.size<2>(); y < h; y++) {
-		ISO_rgba	*tex	= rect[y];
+		ISO_rgba	*tex	= rect[y].begin();
 		for (int x = w; x--; tex++) {
 			chans	c	= *(uint32*)tex;
 			z	|= c;
@@ -113,7 +113,7 @@ int ChannelUse::Scan(const block<HDRpixel, 2> &rect) {
 	uint8	s	= Chans2Same(rc);
 
 	for (int y = 0, w = rect.size<1>(), h = rect.size<2>(); y < h; y++) {
-		HDRpixel	*tex	= rect[y];
+		HDRpixel	*tex	= rect[y].begin();
 		for (int x = w; x--; tex++) {
 			c.r	|= Classify(tex->r);
 			c.g	|= Classify(tex->g);
@@ -201,7 +201,7 @@ int ChannelUse::Scan(const int *data, int ncomps, int count, int stride) {
 bool CheckMask(int c, const block<ISO_rgba, 2> &rect) {
 	uint32	mask	= 0xff << (c * 8);
 	for (int y = 0, w = rect.size<1>(), h = rect.size<2>(); y < h; y++) {
-		ISO_rgba	*tex	= rect[y];
+		ISO_rgba	*tex	= rect[y].begin();
 		for (int x = w; x--; tex++) {
 			uint32	c	= *(uint32*)tex;
 			if ((c & mask) == 0 && (c & ~mask) != 0)
@@ -451,7 +451,7 @@ template<typename T> const block<T, 3> &iso::RearrangeChannels(const block<T, 3>
 		if (b & 0x40000000) {
 			for (auto i = block.begin(), e = block.end(); i != e; ++i) {
 				for (auto i1 = i.begin(), e1 = i.end(); i1 != e1; ++i1) {
-					T	*p = i1;
+					T	*p = i1.begin();
 					for (auto *ca = GetField(p, a), *cb = GetField(p, b & 3), *e = ca + block.template size<1>() * 4; ca != e; ca += 4, cb += 4)
 						*ca = *cb;
 				}
@@ -459,7 +459,7 @@ template<typename T> const block<T, 3> &iso::RearrangeChannels(const block<T, 3>
 		} else {
 			for (auto i = block.begin(), e = block.end(); i != e; ++i) {
 				for (auto i1 = i.begin(), e1 = i.end(); i1 != e1; ++i1) {
-					T	*p = i1;
+					T	*p = i1.begin();
 					for (auto *ca = GetField(p, a), *cb = GetField(p, b & 3), *e = ca + block.template size<1>() * 4; ca != e; ca += 4, cb += 4)
 						swap(*ca, *cb);
 				}
@@ -473,7 +473,7 @@ template<typename T> const block<T, 3> &iso::RearrangeChannels(const block<T, 3>
 			uint8	v = c[a] == ChannelUse::ZERO ? 0 : 255;
 			for (auto i = block.begin(), e = block.end(); i != e; ++i) {
 				for (auto i1 = i.begin(), e1 = i.end(); i1 != e1; ++i1) {
-					T	*p = i1;
+					T	*p = i1.begin();
 					for (auto *ca = GetField(p, a), *e = ca + block.template size<1>() * 4; ca != e; ca += 4)
 						*ca = v;
 				}
@@ -492,7 +492,7 @@ template<typename T> const block<T, 3> &iso::RearrangeChannels(const block<T, 3>
 		if (b < ChannelUse::ZERO) {
 			for (auto i = dst.begin(), e = dst.end(), s = src.begin(); i != e; ++i, ++s) {
 				for (auto i1 = i.begin(), e1 = i.end(), s1 = s.begin(); i1 != e1; ++i1, ++s1) {
-					for (auto *ca = GetField(i1, a), *cb = GetField(s1, b), *e = ca + dst.template size<1>() * 4; ca != e; ca += 4, cb += 4)
+					for (auto *ca = GetField(i1.begin(), a), *cb = GetField(s1.begin(), b), *e = ca + dst.template size<1>() * 4; ca != e; ca += 4, cb += 4)
 						*ca = *cb;
 				}
 			}
@@ -500,7 +500,7 @@ template<typename T> const block<T, 3> &iso::RearrangeChannels(const block<T, 3>
 			uint8	v = b == ChannelUse::ZERO ? 0 : 255;
 			for (auto i = dst.begin(), e = dst.end(); i != e; ++i) {
 				for (auto i1 = i.begin(), e1 = i.end(); i1 != e1; ++i1) {
-					T	*p = i1;
+					T	*p = i1.begin();
 					for (auto *ca = GetField(p, a), *e = ca + dst.template size<1>() * 4; ca != e; ca += 4)
 						*ca = v;
 				}

@@ -36,8 +36,8 @@ void TreeColumnControl::Draw(DeviceContext dc, HTREEITEM hItem, const Rect &rect
 		customDraw.clrText		= Colour::SysColor(COLOR_HIGHLIGHTTEXT);
 		customDraw.clrTextBk	= Colour::SysColor(COLOR_HIGHLIGHT);
 	} else {
-		customDraw.clrText		= Colour::SysColor(COLOR_BTNTEXT);
-		customDraw.clrTextBk	= Colour::SysColor(COLOR_WINDOW);
+		customDraw.clrText		= dc.GetTextColour();//Colour::SysColor(COLOR_BTNTEXT);
+		customDraw.clrTextBk	= dc.GetBackground();//Colour::SysColor(COLOR_WINDOW);
 	}
 
 	// column rectangles
@@ -240,8 +240,10 @@ void TreeColumnControl::SetMinWidth(int i, int width) const {
 }
 
 int save_dc;
+win::Font	save_font;
+win::Colour	save_col;
 
-LRESULT TreeColumnControl::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+LRESULT TreeColumnControl::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 		case WM_CREATE: {
 			Rect		rect	= GetClientRect();
@@ -249,7 +251,7 @@ LRESULT TreeColumnControl::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 			header.SetFont(Font::DefaultGui());
 			header.Move(header.GetLayout(rect), SWP_SHOWWINDOW);
 
-			tree.Create(*this, NULL, CHILD | CLIPSIBLINGS | VISIBLE, NOEX, rect, id);
+			tree.Create(*this, none, CHILD | CLIPSIBLINGS | VISIBLE, NOEX, rect, id);
 			Point	size = DeviceContext::Screen().SelectContinue(tree.GetFont()).GetTextExtent("W...");
 			ellipsis_width = size.x;
 			break;
@@ -310,14 +312,22 @@ LRESULT TreeColumnControl::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 
 							case CDDS_ITEMPREPAINT: {
 								int		ret		= Parent()(message, wParam, lParam);
+								NMTVCUSTOMDRAW *nmtvcd	= (NMTVCUSTOMDRAW*)pnmh;
+								DeviceContext	dc(pnmcd->hdc);
+
 								//save_dc = ret == CDRF_NEWFONT ? SaveDC(pnmcd->hdc) : 0;
+								save_font		= win::Font(dc.Current());
+								save_col		= win::Colour(nmtvcd->clrText);
+								
 								save_dc = SaveDC(pnmcd->hdc);
 								return CDRF_NOTIFYPOSTPAINT | ret;
 							}
 
 							case CDDS_ITEMPOSTPAINT: {
-								if (save_dc)
-									RestoreDC(pnmcd->hdc, save_dc);
+								DeviceContext	dc(pnmcd->hdc);
+								dc.Select(save_font);
+								dc.SetTextColour(save_col);
+								//dc.SetBackground(win::Colour(nmtvcd->clrTextBk));
 
 								Rect	rect;
 								GetClipBox(pnmcd->hdc, &rect);
@@ -326,7 +336,7 @@ LRESULT TreeColumnControl::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 								rect.top		= rcLabel.top;
 								rect.bottom		= rcLabel.bottom;
 
-								Draw(pnmcd->hdc, hItem, rect, style | tree.style, tree.GetItemState(hItem), pnmcd->lItemlParam);
+								Draw(dc, hItem, rect, style | tree.style, tree.GetItemState(hItem), pnmcd->lItemlParam);
 								return CDRF_DODEFAULT;
 							}
 						}

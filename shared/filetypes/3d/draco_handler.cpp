@@ -151,7 +151,7 @@ class DRACOFileHandler : FileHandler {
 			}
 		}
 
-		mesh->UpdateExtents();
+		mesh->UpdateExtent();
 		model->UpdateExtents();
 		
 		return model;
@@ -173,13 +173,13 @@ class DRACOFileHandler : FileHandler {
 			for (auto &&e : mesh->VertComponents()) {
 				int		num_components;
 				auto	data_type	= GetDataType(e.type, num_components);
-				auto	type		= GetType(USAGE2(e.id));
+				auto	type		= GetType(USAGE2(e.id.get_crc32()));
 				auto	a			= dw.AddAttribute(id++, type, data_type, num_components, false);
 
 				temp_block	decoded(e.size * num_verts);
 				uint8		*dst	= decoded;
 				for (auto&& src : mesh->VertComponentBlock(e.offset, e.size)) {
-					memcpy(dst, src, e.size);
+					memcpy(dst, src.begin(), e.size);
 					dst += e.size;
 				}
 				a->SetValues(decoded);

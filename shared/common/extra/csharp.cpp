@@ -350,7 +350,7 @@ CS_tokeniser::TOKEN CS_tokeniser::GetToken() {
 			case 'I': case 'J': case 'K': case 'L': case 'M': case 'N': case 'O': case 'P':
 			case 'Q': case 'R': case 'S': case 'T': case 'U': case 'V': case 'W': case 'X':
 			case 'Y': case 'Z':
-				identifier = read_token(reader, char_set::identifier, c);
+				identifier = read_token(reader, char_set::wordchar, c);
 				if (TOKEN *k = keywords.check(identifier))
 					return *k;
 				return TOK_IDENTIFIER;
@@ -1192,7 +1192,7 @@ ast::node* CS_tokeniser::ParseExpression(const C_type_composite *scope, ast::get
 						break;
 					}
 
-					identifier	= read_token(reader, char_set::identifier, token);
+					identifier	= read_token(reader, char_set::wordchar, token);
 				}
 				//fall through
 
@@ -1225,7 +1225,7 @@ ast::node* CS_tokeniser::ParseExpression(const C_type_composite *scope, ast::get
 					for (;;) {
 						while (c == ':' && reader.peekc() == ':') {
 							reader.getc();
-							identifier << c << read_token(reader, char_set::identifier, c);
+							identifier << c << read_token(reader, char_set::wordchar, c);
 							c = reader.getc();
 						}
 

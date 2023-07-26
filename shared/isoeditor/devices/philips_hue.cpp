@@ -230,12 +230,12 @@ public:
 		ba << "api/" << user;
 		if (state)
 			ba << '/' << state;
-		return HTTP::Request(sock, verb, ba, (const char*)0, data);
+		return HTTP::Request(sock, verb, ba.term(), (const char*)0, data);
 	}
 	ISO_ptr<void>	Read(tag2 id, SOCKET sock) const {
 		return json->Read(id, unconst(HTTPinput(sock)));
 	}
-	ISO_ptr<void>	Send(tag2 id, const char *verb, const char *state, const char *data = 0) const {
+	ISO_ptr<void>	Send(tag2 id, const char *verb, const char *state, string_ref data = 0) const {
 		return Read(id, ASyncSend(Connect(), verb, state, data));
 	}
 
@@ -285,7 +285,7 @@ public:
 		);
 	}
 
-	SOCKET	_SetLightState(SOCKET sock, int i, const char *data) const {
+	SOCKET	_SetLightState(SOCKET sock, int i, string_ref data) const {
 		return ASyncSend(sock, "PUT", "lights/" + to_string(i) + "/state", data);
 	}
 	SOCKET	SetLightState(SOCKET sock, int i, bool on)								const { return _SetLightState(sock, i, buffer_accum<256>() << "{\"on\": " << on << '}'); }

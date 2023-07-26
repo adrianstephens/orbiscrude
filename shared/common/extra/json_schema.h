@@ -32,7 +32,8 @@ public:
 // A class representing a JSON-URI for schemas derived from section 8 of JSON Schema: A Media Type for Describing JSON Documents draft-wright-JSON-schema-00
 
 struct json_uri : URLcomponents {
-	json_uri(URLcomponents &&uri) : URLcomponents(move(uri)) {}
+	json_uri(URLcomponents &&uri)	: URLcomponents(move(uri)) {}
+	json_uri(string_ref uri)		: URLcomponents(URLcomponents(uri)) {}
 
 	bool	has_id() const {
 		return URLcomponents::anchor && URLcomponents::anchor[0] && URLcomponents::anchor[0] != '/';

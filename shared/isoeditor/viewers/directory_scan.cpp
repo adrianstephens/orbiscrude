@@ -77,7 +77,7 @@ struct FilenamesHash : DirectoriesWatcher, hash_map<uint64, string>, atomic<refs
 		NONE	= 0,
 		STOP	= -1,
 		JOB		= 1,
-	} command;
+	} command = NONE;
 
 	static uint64 get_hash(const filename &fn) {
 		uint64	x;
@@ -153,7 +153,7 @@ struct FilenamesHash : DirectoriesWatcher, hash_map<uint64, string>, atomic<refs
 	void		Destroy()				{ command = STOP; command_semaphore.unlock(); }
 	void		AddJob(const Job &j)	{ command_job = j; command = JOB; command_semaphore.unlock(); }
 
-	FilenamesHash() : command(NONE), command_semaphore(0) {
+	FilenamesHash() : command_semaphore(0) {
 
 		RunThread([this]() {
 			command_semaphore.lock();

@@ -95,7 +95,7 @@ uint16 IP4::calc_checksum(void *buffer, uint32 size) {
 
 struct PingPacket : ICMP {
 	uint32	timestamp;
-	held_constant<uint32, 0xDEADBEEF>	data[(MAX_PING_DATA_SIZE - sizeof(ICMP)) / sizeof(uint32)];
+	array<uint32, (MAX_PING_DATA_SIZE - sizeof(ICMP)) / sizeof(uint32)>	data = 0xDEADBEEF;
 
 	PingPacket(uint16 _id, uint16 _seq, uint32 size, uint32 _timestamp) : ICMP(ECHO_REQUEST, _id, _seq), timestamp(_timestamp) {
 		checksum = IP4::calc_checksum(this, size);

@@ -69,7 +69,7 @@ bool Remote::Update(const char *spec, bool from) {
 		malloc_block	buffer(sizebe);
 		if (isolink_receive(handle, buffer, sizebe) == sizebe) {
 			ISO::binary_data.SetRemoteTarget(target);
-			ISO_ptr<void>	p2 = ISO::binary_data.Read(0, lvalue(memory_reader(buffer)));
+			ISO_ptr<void>	p2 = ISO::binary_data.Read(none, lvalue(memory_reader(buffer)));
 			if (b.GetType() == ISO::REFERENCE)
 				*(ISO_ptr<void>*)b = p2;
 		}

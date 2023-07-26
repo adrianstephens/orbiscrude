@@ -6,6 +6,7 @@
 #include "maths/geometry.h"
 #include "maths/geometry_iso.h"
 #include "maths/polygon.h"
+#include "maths/simplex.h"
 #include "mesh/shapes.h"
 #include "mesh/shape_gen.h"
 #include "graphics.h"
@@ -13,32 +14,26 @@
 #include "vector_string.h"
 #include "windows/d2d.h"
 #include "render.h"
-#include "maths/simplex.h"
+#include "extra/random.h"
+//#include "2d/fonts.h"
 //#include "extra/gjk.h"
 
 namespace iso {
 int		generate_hull_3d_partial(const position3 *p, int n, uint16 *indices, int steps);
-
-template<> VertexElements	GetVE<ISO::ellipse>() {
-	static VertexElement ve[] = {
-		VertexElement(&ISO::ellipse::_x, "position0"_usage),
-		VertexElement(&ISO::ellipse::ratio, "position1"_usage)
-	};
-	return ve;
-}
-
-template<> VertexElements	GetVE<ISO::quadric>() {
-	static VertexElement ve[] = {
-		VertexElement(&ISO::quadric::d4, "position0"_usage),
-		VertexElement(&ISO::quadric::d3, "position1"_usage),
-		VertexElement(&ISO::quadric::o, "position2"_usage)
-	};
-	return ve;
-}
-
 }
 
 using namespace app;
+
+template<> static const VertexElements ve<ISO::ellipse> = (const VertexElement[]) {
+	{&ISO::ellipse::_x,		"position0"_usage},
+	{&ISO::ellipse::ratio,	"position1"_usage}
+};
+
+template<> static const VertexElements ve<ISO::quadric> = (const VertexElement[]) {
+	{&ISO::quadric::d4,		"position0"_usage},
+	{&ISO::quadric::d3,		"position1"_usage},
+	{&ISO::quadric::o,		"position2"_usage},
+};
 
 typedef convex_polyhedron<indexed_container<ref_array_size<position3>, ref_array_size<uint16>>>	ref_polyhedron;
 
@@ -89,7 +84,7 @@ struct Edges {
 };
 
 void Fill(GraphicsContext &ctx, const ref_polyhedron &poly) {
-	ImmediateStream<float3p>	im(ctx, PRIM_TRILIST, poly.size32());
+	ImmediateStream<float3p>	im(ctx, PRIM_TRILIST, poly.points().size32());
 	float3p	*p = im.begin();
 	for (auto j : poly.points())
 		*p++ = j;
@@ -97,7 +92,7 @@ void Fill(GraphicsContext &ctx, const ref_polyhedron &poly) {
 
 void Line(GraphicsContext &ctx, const ref_polyhedron &poly) {
 	Edges	edges(poly.points().direct().size32());
-	edges.add(poly.points().indices().begin(), poly.size32() / 3);
+	edges.add(poly.points().indices().begin(), poly.points().size32() / 3);
 
 	ImmediateStream<float3p>	im(ctx, PRIM_LINESTRIP, uint32(edges.size()) * 2);
 
@@ -292,22 +287,22 @@ void draw_quadric(RenderEvent *re, const quadric &q, pass *p) {
 
 void View3DDraw(RenderEvent *re, const ellipsoid &e, pass *p) {
 	iso::Draw(re, e, p);
-	draw_quadric(re, quadric(e), p);
+	draw_quadric(re, e, p);
 }
 
 void View3DDraw(RenderEvent *re, const sphere &s, pass *p) {
 	iso::Draw(re, s, p);
-	draw_quadric(re, quadric(s), p);
+	draw_quadric(re, s.matrix() * quadric::standard_sphere(), p);
 }
 
 void View3DDraw(RenderEvent *re, const ref_polyhedron &s, pass *p) {
 	Set(re->ctx, p, ISO::MakeBrowser(re->consts));
 
-	float3	*normals	= alloc_auto(float3, s.size() / 3), *pn = normals;
+	float3	*normals	= alloc_auto(float3, s.points().size() / 3), *pn = normals;
 	for (auto j : make_split_range<3>(s.points()))
 		*pn++ = -normalise(cross(j[1] - j[0], j[2] - j[0]));
 
-	ImmediateStream<VertexIndexBuffer::vertex>	im(re->ctx, PRIM_TRILIST, s.size32());
+	ImmediateStream<VertexIndexBuffer::vertex>	im(re->ctx, PRIM_TRILIST, s.points().size32());
 	auto	*d	= im.begin();
 	int		i	= 0;
 	for (auto &&j : s.points()) {
@@ -665,7 +660,7 @@ public:
 		return false;
 	}
 
-	LRESULT Proc(UINT message, WPARAM wParam, LPARAM lParam);
+	LRESULT Proc(MSG_ID message, WPARAM wParam, LPARAM lParam);
 	ViewTest3D(MainWindow &_main, const WindowPos &wpos, const ISO_ptr<void> &_p);
 };
 
@@ -691,7 +686,7 @@ bool ViewTest3D::supported_type(const ISO::Type *type) {
 	if (type->GetType() != ISO::ARRAY && type->GetType() != ISO::OPENARRAY)
 		return false;
 
-	if (type->SubType()->Is<curve_vertex>())
+	if (type->SubType()->Is("curve_vertex"))
 		return false;
 
 	const ISO::Type *sub = type->SubType()->SkipUser();
@@ -731,7 +726,7 @@ quaternion	GetCompassRot(int c) {
 	}
 }
 
-LRESULT ViewTest3D::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+LRESULT ViewTest3D::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 		case WM_CREATE: {
 			Accelerator::Builder	ab;
@@ -1023,8 +1018,8 @@ LRESULT ViewTest3D::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 								case MODE_HULL: {
 									int		max_indices	= ref_polyhedron::max_indices(pts.size());
 									uint16	*i			= alloc_auto(uint16, max_indices);
-									int		n			= generate_hull_3d_partial(pts, pts.size(), i, step == 0 ? pts.size() : min(step - 1, pts.size()));
-									shapes.push_back(make_shape(ref_polyhedron(make_indexed_container(ref_array_size<position3>(pts.cloud()), ref_array_size<uint16>(make_range_n(i, n))))));
+									int		n			= generate_hull_3d_partial(pts.begin(), pts.size(), i, step == 0 ? pts.size() : min(step - 1, pts.size()));
+									shapes.push_back(make_shape(ref_polyhedron(make_indexed_container(ref_array_size<position3>(pts.cloud().points()), ref_array_size<uint16>(make_range_n(i, n))))));
 									break;
 								}
 								case MODE_SPHERE:
@@ -1046,9 +1041,9 @@ LRESULT ViewTest3D::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 								case MODE_HULLDUAL: {
 									halfspace_intersection3	h(pts.cloud(), alloc_auto(plane, halfspace_intersection3::max_planes(pts.size())));
 									auto		points		= h.points(alloc_auto(position3, h.max_verts()));
-									int			max_indices	= ref_polyhedron::max_indices(points.size32());
+									int			max_indices	= ref_polyhedron::max_indices(points.points().size32());
 									uint16		*i			= alloc_auto(uint16, max_indices);
-									shapes.push_back(make_shape(ref_polyhedron(make_indexed_container(ref_array_size<position3>(points), ref_array_size<uint16>(make_range_n(i, max_indices))))));
+									shapes.push_back(make_shape(ref_polyhedron(make_indexed_container(ref_array_size<position3>(points.points()), ref_array_size<uint16>(make_range_n(i, max_indices))))));
 									break;
 								}
 								default:
@@ -1385,10 +1380,10 @@ void ViewTest3D::Paint(GraphicsContext &ctx) {
 			case MODE_HULL: {
 				int		max_indices	= ref_polyhedron::max_indices(pts.size());
 				uint16	*i			= alloc_auto(uint16, max_indices);
-				int		n			= generate_hull_3d_partial(pts, pts.size(), i, step == 0 ? pts.size() : min(step - 1, pts.size()));
+				int		n			= generate_hull_3d_partial(pts.begin(), pts.size(), i, step == 0 ? pts.size() : min(step - 1, pts.size()));
 
 				ref_polyhedron	hull(make_indexed_container(ref_array_size<position3>(pts), ref_array_size<uint16>(make_range_n(i, n))));
-				ISO_ASSERT(hull.size() <= max_indices);
+				ISO_ASSERT(hull.points().size() <= max_indices);
 				Set(ctx, blend, ISO::MakeBrowser(re.consts));
 				Fill(ctx, hull);
 
@@ -1398,7 +1393,7 @@ void ViewTest3D::Paint(GraphicsContext &ctx) {
 			}
 			case MODE_SPHERE: {
 				sphere		s	= pts.size() == 4
-					? tetrahedron(pts).circumscribe()
+					? tetrahedron(pts.begin()).circumscribe()
 					: pts.cloud().circumscribe();
 
 				consts.SetWorld(s.matrix());
@@ -1407,7 +1402,7 @@ void ViewTest3D::Paint(GraphicsContext &ctx) {
 				SphereVB::get<64>().Render(ctx);
 
 				//conic		c	= (vp * quadric(s)).project_z();
-				conic		c	= (consts.viewProj0 * quadric(s)).project_z();
+				conic		c	= ((consts.viewProj0 * s.matrix()) * quadric::standard_sphere()).project_z();
 				if (c.analyse().type == conic::ELLIPSE) {
 					ellipse		e	= c;
 					wvp	= float4x4(float3x4(e.matrix()));
@@ -1426,7 +1421,7 @@ void ViewTest3D::Paint(GraphicsContext &ctx) {
 			}
 			case MODE_INSPHERE: {
 				sphere		s = pts.size() == 4
-					? tetrahedron(pts).inscribe()
+					? tetrahedron(pts.begin()).inscribe()
 					: halfspace_intersection3(pts.cloud(), alloc_auto(plane, halfspace_intersection3::max_planes(pts.size()))).inscribe();
 
 				consts.SetWorld(s.matrix());
@@ -1484,10 +1479,10 @@ void ViewTest3D::Paint(GraphicsContext &ctx) {
 			case MODE_HULLDUAL: {
 				halfspace_intersection3	h(pts.cloud(), alloc_auto(plane, halfspace_intersection3::max_planes(pts.size())));
 				auto		points		= h.points(alloc_auto(position3, h.max_verts()));
-				int			max_indices	= ref_polyhedron::max_indices(points.size32());
+				int			max_indices	= ref_polyhedron::max_indices(points.points().size32());
 				uint16		*i			= alloc_auto(uint16, max_indices);
-				ref_polyhedron	hull(make_indexed_container(ref_array_size<position3>(points), ref_array_size<uint16>(make_range_n(i, max_indices))));
-				ISO_ASSERT(hull.size() <= max_indices);
+				ref_polyhedron	hull(make_indexed_container(ref_array_size<position3>(points.points()), ref_array_size<uint16>(make_range_n(i, max_indices))));
+				ISO_ASSERT(hull.points().size() <= max_indices);
 				Set(ctx, blend, ISO::MakeBrowser(re.consts));
 				Fill(ctx, hull);
 

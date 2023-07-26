@@ -2,7 +2,7 @@
 #define LIGHT_H
 
 #include "base/vector.h"
-#include "base/colour.h"
+#include "extra/colour.h"
 
 namespace iso {
 

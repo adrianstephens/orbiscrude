@@ -355,7 +355,7 @@ struct TypeArray : TypeBase {
 	void		(*create)(void*);
 
 	TypeArray(TYPE type, uint32 size, const Type *_subtype, void(*_create)(void*)): TypeBase(this, type, size), subtype(_subtype), create(_create) {}
-	template<typename T> TypeArray(TYPE type, uint32 size, T*): TypeBase(this, type, size), subtype(get_type<T>()), create(&iso::create<T>) {}
+	template<typename T> TypeArray(TYPE type, uint32 size, T*): TypeBase(this, type, size), subtype(get_type<T>()), create(&iso::construct<T>) {}
 	bool	read(istream_ref file, void *p, Value &v)			const;
 	bool	write(ostream_ref file, const void *p, uint32 tag)	const;
 

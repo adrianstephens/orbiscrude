@@ -1,11 +1,12 @@
 #include <d3d12.h>
 #include "dx12_helpers.h"
-#include "dx\dxgi_helpers.h"
+#include "base/sparse_array.h"
 
 namespace iso {
 
 struct CommandRange : holder<const ID3D12CommandList*>, interval<uint32> {
-	CommandRange(ID3D12CommandList *_t);
+	CommandRange() {}
+	CommandRange(ID3D12CommandList *t);
 };
 
 typedef ID3D12Device8								ID3D12DeviceLatest;
@@ -36,6 +37,12 @@ template<> struct	Wrappable<ID3D12PipelineLibrary1	> : T_type<ID3D12PipelineLibr
 
 template<> struct	Wrappable<ID3D12Fence				> : T_type<ID3D12FenceLatest> {};
 template<> struct	Wrappable<ID3D12Fence1				> : T_type<ID3D12FenceLatest> {};
+
+
+struct D3D12_GPU_VIRTUAL_ADDRESS2 {
+	D3D12_GPU_VIRTUAL_ADDRESS p;
+	constexpr operator D3D12_GPU_VIRTUAL_ADDRESS() const { return p; }
+};
 
 template<> struct TL_fields<D3D12_INPUT_ELEMENT_DESC>			: T_type<type_list<LPCSTR, UINT, DXGI_FORMAT, UINT, UINT, D3D12_INPUT_CLASSIFICATION, UINT>> {};
 template<> struct TL_fields<D3D12_INPUT_LAYOUT_DESC>			: T_type<type_list<counted<const D3D12_INPUT_ELEMENT_DESC, 1>, UINT>> {};
@@ -68,7 +75,7 @@ template<> struct TL_fields<D3D12_TEXTURE_COPY_LOCATION>		: T_type<type_list<
 		tuple<UINT64, D3D12_SUBRESOURCE_FOOTPRINT>	//D3D12_PLACED_SUBRESOURCE_FOOTPRINT
 	>
 >> {};
-
+/*
 using D3D12_PIPELINE_STATE_STREAM_DESC_SUBOBJECT = union_first<
 	selection<1, 
 		tuple<int, ID3D12RootSignature*>,				//0		D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE
@@ -108,28 +115,101 @@ template<D3D12_PIPELINE_STATE_SUBOBJECT_TYPE i> inline auto& get(const D3D12_PIP
 inline auto next(const D3D12_PIPELINE_STATE_STREAM_DESC_SUBOBJECT* p) {
 	return (const D3D12_PIPELINE_STATE_STREAM_DESC_SUBOBJECT*)((const uint8*)p + align(p->t.t.t.size(p->t.u.t), 8));
 }
+*/
 
 template<> struct TL_fields<D3D12_PIPELINE_STATE_STREAM_DESC>	: T_type<type_list<
 	SIZE_T,
-	next_array<0, D3D12_PIPELINE_STATE_STREAM_DESC_SUBOBJECT, sizeof(uint64)>*
+	next_array<0, dx12::PIPELINE::SUBOBJECT, sizeof(uint64)>*
 >> {};
 
+struct SHADER_ID {
+	uint8	id[D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES];
+	SHADER_ID(const void *p) { memcpy(id, p, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES); }
+	bool	operator==(const SHADER_ID &b) const { return memcmp(id, b.id, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES) == 0; }
+};
+typedef hash_map<LPCWSTR, SHADER_ID>	SHADER_IDS;
 
-template<> struct TL_fields<D3D12_CONSTANT_BUFFER_VIEW_DESC>	: T_type<type_list<D3D12_GPU_VIRTUAL_ADDRESS, UINT>> {};
+template<> struct TL_fields<D3D12_EXPORT_DESC>							: T_type<type_list<LPCWSTR, LPCWSTR, D3D12_EXPORT_FLAGS>> {};
+template<> struct TL_fields<D3D12_HIT_GROUP_DESC>						: T_type<type_list<LPCWSTR, D3D12_HIT_GROUP_TYPE, LPCWSTR, LPCWSTR, LPCWSTR>> {};
+template<> struct TL_fields<D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION>		: T_type<type_list<dup_pointer<const uint8*>, UINT, counted<LPCWSTR, 1>>> {};
+template<> struct TL_fields<D3D12_DXIL_LIBRARY_DESC>					: T_type<type_list<	D3D12_SHADER_BYTECODE, UINT, counted<D3D12_EXPORT_DESC, 1>>> {};
+template<> struct TL_fields<D3D12_EXISTING_COLLECTION_DESC>				: T_type<type_list<ID3D12StateObject*, UINT, counted<D3D12_EXPORT_DESC, 1>>> {};
+template<> struct TL_fields<D3D12_DXIL_SUBOBJECT_TO_EXPORTS_ASSOCIATION>: T_type<type_list<LPCWSTR, UINT, counted<LPCWSTR, 1>>> {};
 
-template<template<class> class M> struct meta::map<M, D3D12_INPUT_ELEMENT_DESC>				: T_type<map_t<M, as_tuple<D3D12_INPUT_ELEMENT_DESC>>> {};
-template<template<class> class M> struct meta::map<M, D3D12_INPUT_LAYOUT_DESC>				: T_type<map_t<M, as_tuple<D3D12_INPUT_LAYOUT_DESC>>> {};
-template<template<class> class M> struct meta::map<M, D3D12_STREAM_OUTPUT_DESC>				: T_type<map_t<M, as_tuple<D3D12_STREAM_OUTPUT_DESC>>> {};
-template<template<class> class M> struct meta::map<M, D3D12_GRAPHICS_PIPELINE_STATE_DESC>	: T_type<map_t<M, as_tuple<D3D12_GRAPHICS_PIPELINE_STATE_DESC>>> {};
-template<template<class> class M> struct meta::map<M, D3D12_COMPUTE_PIPELINE_STATE_DESC>	: T_type<map_t<M, as_tuple<D3D12_COMPUTE_PIPELINE_STATE_DESC>>> {};
-template<template<class> class M> struct meta::map<M, D3D12_COMMAND_SIGNATURE_DESC>			: T_type<map_t<M, as_tuple<D3D12_COMMAND_SIGNATURE_DESC>>> {};
-template<template<class> class M> struct meta::map<M, D3D12_RESOURCE_BARRIER>				: T_type<map_t<M, as_tuple<D3D12_RESOURCE_BARRIER>>> {};
-template<template<class> class M> struct meta::map<M, D3D12_TEXTURE_COPY_LOCATION>			: T_type<map_t<M, as_tuple<D3D12_TEXTURE_COPY_LOCATION>>> {};
-template<template<class> class M> struct meta::map<M, D3D12_PIPELINE_STATE_STREAM_DESC>		: T_type<map_t<M, as_tuple<D3D12_PIPELINE_STATE_STREAM_DESC>>> {};
+template<> struct TL_fields<D3D12_STATE_SUBOBJECT>		: T_type<type_list<
+	D3D12_STATE_SUBOBJECT_TYPE,
+	selection<0, 
+		D3D12_STATE_OBJECT_CONFIG*,						//0		D3D12_STATE_SUBOBJECT_TYPE_STATE_OBJECT_CONFIG
+		ID3D12RootSignature**,							//1		D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE
+		ID3D12RootSignature**,							//2		D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE
+		D3D12_NODE_MASK*,								//3		D3D12_STATE_SUBOBJECT_TYPE_NODE_MASK
+		uint8,											//4		unused
+		D3D12_DXIL_LIBRARY_DESC*,						//5		D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY
+		D3D12_EXISTING_COLLECTION_DESC*,				//6		D3D12_STATE_SUBOBJECT_TYPE_EXISTING_COLLECTION
+		D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION*,		//7		D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION
+		D3D12_DXIL_SUBOBJECT_TO_EXPORTS_ASSOCIATION*,	//8		D3D12_STATE_SUBOBJECT_TYPE_DXIL_SUBOBJECT_TO_EXPORTS_ASSOCIATION
+		D3D12_RAYTRACING_SHADER_CONFIG*,				//9		D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG
+		D3D12_RAYTRACING_PIPELINE_CONFIG*,				//10	D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG
+		D3D12_HIT_GROUP_DESC*,							//11	D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP
+		D3D12_RAYTRACING_PIPELINE_CONFIG1*				//12	D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG1
+	>
+> > {};
+template<> struct TL_fields<D3D12_STATE_OBJECT_DESC>			: T_type<type_list<D3D12_STATE_OBJECT_TYPE, UINT, counted<save_location<const D3D12_STATE_SUBOBJECT>, 1>>> {};
 
-template<> struct RTM<ID3D12CommandList*>						: T_type<CommandRange> {};
+template<> struct TL_fields<D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS>		: T_type<type_list<
+	D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS,
+	selection<0,
+		tuple<
+			UINT,
+			D3D12_ELEMENTS_LAYOUT,
+			D3D12_GPU_VIRTUAL_ADDRESS2
+		>,
+		tuple<
+			UINT,
+			D3D12_ELEMENTS_LAYOUT,
+#if 1
+			counted<D3D12_RAYTRACING_GEOMETRY_DESC, 0>
+#else
+			counted<selection<1,
+				const D3D12_RAYTRACING_GEOMETRY_DESC,
+				const D3D12_RAYTRACING_GEOMETRY_DESC*
+			>, 0>
+#endif
+		>
+	>
+> > {};
 
+template<> struct TL_fields<D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC>		: T_type<type_list<
+	D3D12_GPU_VIRTUAL_ADDRESS2,
+	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS,
+	D3D12_GPU_VIRTUAL_ADDRESS2,
+	D3D12_GPU_VIRTUAL_ADDRESS2
+> > {};
 
+template<> struct TL_fields<D3D12_CONSTANT_BUFFER_VIEW_DESC>	: T_type<type_list<D3D12_GPU_VIRTUAL_ADDRESS2, UINT>> {};
+
+template<template<class> class M> struct meta::map<M, D3D12_INPUT_ELEMENT_DESC>						: T_type<map_t<M, as_tuple<D3D12_INPUT_ELEMENT_DESC>>> {};
+template<template<class> class M> struct meta::map<M, D3D12_INPUT_LAYOUT_DESC>						: T_type<map_t<M, as_tuple<D3D12_INPUT_LAYOUT_DESC>>> {};
+template<template<class> class M> struct meta::map<M, D3D12_STREAM_OUTPUT_DESC>						: T_type<map_t<M, as_tuple<D3D12_STREAM_OUTPUT_DESC>>> {};
+template<template<class> class M> struct meta::map<M, D3D12_GRAPHICS_PIPELINE_STATE_DESC>			: T_type<map_t<M, as_tuple<D3D12_GRAPHICS_PIPELINE_STATE_DESC>>> {};
+template<template<class> class M> struct meta::map<M, D3D12_COMPUTE_PIPELINE_STATE_DESC>			: T_type<map_t<M, as_tuple<D3D12_COMPUTE_PIPELINE_STATE_DESC>>> {};
+template<template<class> class M> struct meta::map<M, D3D12_COMMAND_SIGNATURE_DESC>					: T_type<map_t<M, as_tuple<D3D12_COMMAND_SIGNATURE_DESC>>> {};
+template<template<class> class M> struct meta::map<M, D3D12_RESOURCE_BARRIER>						: T_type<map_t<M, as_tuple<D3D12_RESOURCE_BARRIER>>> {};
+template<template<class> class M> struct meta::map<M, D3D12_TEXTURE_COPY_LOCATION>					: T_type<map_t<M, as_tuple<D3D12_TEXTURE_COPY_LOCATION>>> {};
+template<template<class> class M> struct meta::map<M, D3D12_PIPELINE_STATE_STREAM_DESC>				: T_type<map_t<M, as_tuple<D3D12_PIPELINE_STATE_STREAM_DESC>>> {};
+template<template<class> class M> struct meta::map<M, D3D12_STATE_OBJECT_DESC>						: T_type<map_t<M, as_tuple<D3D12_STATE_OBJECT_DESC>>> {};
+template<template<class> class M> struct meta::map<M, D3D12_EXPORT_DESC>							: T_type<map_t<M, as_tuple<D3D12_EXPORT_DESC>>> {};
+template<template<class> class M> struct meta::map<M, D3D12_HIT_GROUP_DESC>							: T_type<map_t<M, as_tuple<D3D12_HIT_GROUP_DESC>>> {};
+template<template<class> class M> struct meta::map<M, D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION>		: T_type<map_t<M, as_tuple<D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION>>> {};
+template<template<class> class M> struct meta::map<M, D3D12_DXIL_LIBRARY_DESC>						: T_type<map_t<M, as_tuple<D3D12_DXIL_LIBRARY_DESC>>> {};
+template<template<class> class M> struct meta::map<M, D3D12_EXISTING_COLLECTION_DESC>				: T_type<map_t<M, as_tuple<D3D12_EXISTING_COLLECTION_DESC>>> {};
+template<template<class> class M> struct meta::map<M, D3D12_DXIL_SUBOBJECT_TO_EXPORTS_ASSOCIATION>	: T_type<map_t<M, as_tuple<D3D12_DXIL_SUBOBJECT_TO_EXPORTS_ASSOCIATION>>> {};
+template<template<class> class M> struct meta::map<M, D3D12_STATE_SUBOBJECT>						: T_type<map_t<M, as_tuple<D3D12_STATE_SUBOBJECT>>> {};
+
+template<template<class> class M> struct meta::map<M, D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS>	: T_type<map_t<M, as_tuple<D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS>>> {};
+template<template<class> class M> struct meta::map<M, D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC>	: T_type<map_t<M, as_tuple<D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC>>> {};
+
+template<> struct RTM<ID3D12CommandList*>	: T_type<CommandRange> {};
 
 //struct D3D12_INDEX_BUFFER_VIEW {
 //	D3D12_GPU_VIRTUAL_ADDRESS BufferLocation;
@@ -199,7 +279,11 @@ template<class A>	void transfer(A &a, const lookup<D3D12_CONSTANT_BUFFER_VIEW_DE
     t1.BufferLocation	= a->lookup(t0.t.BufferLocation, t1.SizeInBytes);
 }
 
-template<class A>	void transfer(A &a, const lookup<D3D12_STREAM_OUTPUT_BUFFER_VIEW> &t0, D3D12_STREAM_OUTPUT_BUFFER_VIEW &t1) { t1 = t0.t; }
+template<class A>	void transfer(A &a, const lookup<D3D12_STREAM_OUTPUT_BUFFER_VIEW> &t0, D3D12_STREAM_OUTPUT_BUFFER_VIEW &t1) {
+	t1.BufferLocation			= a->lookup(t0.t.BufferLocation, t0.t.SizeInBytes);
+	t1.SizeInBytes				= t0.t.SizeInBytes;
+	t1.BufferFilledSizeLocation	= a->lookup(t0.t.BufferFilledSizeLocation, 8);
+}
 
 template<class A>	void transfer(A &a, const lookup<D3D12_WRITEBUFFERIMMEDIATE_PARAMETER> &t0, D3D12_WRITEBUFFERIMMEDIATE_PARAMETER &t1) {
 	t1.Dest				= a->lookup(t0.t.Dest, 4);
@@ -218,7 +302,6 @@ template<class A>	void transfer(A &a, const lookup<D3D12_BUILD_RAYTRACING_ACCELE
 template<class A>	void transfer(A &a, const lookup<D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC> &t0, D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC &t1) { t1 = t0.t; }
 template<class A>	void transfer(A &a, const lookup<D3D12_DISPATCH_RAYS_DESC> &t0, D3D12_DISPATCH_RAYS_DESC &t1) { t1 = t0.t; }
 
-
 }
 
 namespace dx12 {
@@ -226,13 +309,17 @@ using namespace iso;
 
 enum Interface : uint8 {
 	INTF_GetMemory	= 0,
-	INTF_Pause	= 1,
+	INTF_Pause		= 1,
 	INTF_Continue,
 	INTF_CaptureFrames,
 	INTF_GetObjects,
 	INTF_ResourceData,
 	INTF_HeapData,
 	INTF_DebugOutput = 42,
+
+	// back from target
+	INTF_Status		= 0x80,
+	INTF_Text		= 0x81,
 };
 
 struct RecObject {
@@ -252,7 +339,16 @@ public:
 		CommandQueue,
 		Device,
 		Handle,
-		Shader,	//fake - for viewer
+		StateObject,
+		LifetimeOwner,
+		LifetimeTracker,
+		MetaCommand,
+		PipelineLibrary,
+		ProtectedResourceSession,
+
+		//fake - for viewer
+		ResourceWrite,
+		Shader,
 		
 		NUM_TYPES,
 		DEAD	= 1 << 7
@@ -273,165 +369,110 @@ struct RecObject2 : RecObject {
 	RecObject2()	{}
 	RecObject2(HANDLE h) : RecObject(Handle), obj(h) {}
 	RecObject2(RecObject &rec, ID3D12Object *obj) : RecObject(rec), obj(obj) {}
-	RecObject2(RecObject::TYPE type, string16 &&name, void *obj) : RecObject(type, move(name)), obj(obj) {}
+	RecObject2(TYPE type, string16 &&name, void *obj) : RecObject(type, move(name)), obj(obj) {}
 
 	template<typename R>	bool read(R &&r) {
-		iso::read(r, type, name, obj);
-		auto	size = r.template get<uint32>();
-		return info.read(r, size);
+		return r.read(type, name, obj) && info.read(r, r.template get<uint32>());
 	}
 	template<typename W>	bool write(W &&w) const	{
 		return w.write(type, name, obj, info.size32(), info);
 	}
 };
 
-struct D3D12BLOCK {
-	uint64	offset;
-	uint32	psize;
-	uint32	shift;
-	uint32	width;
-	uint32	height;
-	uint32	depth;
-	uint32	row_pitch;
+struct Tiler {
+	struct Mapping {
+		ID3D12Heap	*heap;
+		uint32		offset;
+		Mapping(ID3D12Heap *heap = 0, uint32 offset = 0) : heap(heap), offset(offset) {}
+	};
 
-	D3D12BLOCK(const D3D12_RESOURCE_DESC &desc, uint32 mip, uint32 slice, uint32 plane) {
-		DXGI_COMPONENTS	comp = desc.Format;
-		shift		= comp.IsBlock() ? 2 : 0;
-		psize		= comp.Bytes();
-		offset		= align((desc.Width >> shift) * psize, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT) * (desc.Height >> shift) * slice;
-		width		= max(desc.Width >> mip, 1);
-		height		= max(desc.Height >> mip, 1);
-		depth		= desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D ? max(desc.DepthOrArraySize >> mip, 1) : 1;
-		row_pitch	= align((((width - 1) >> shift) + 1) * psize, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
-	}
-	D3D12BLOCK(const D3D12_PLACED_SUBRESOURCE_FOOTPRINT &fp) {
-		DXGI_COMPONENTS	comp = fp.Footprint.Format;
-		offset		= fp.Offset;
-		psize		= fp.Footprint.Format == DXGI_FORMAT_UNKNOWN ? 1 : comp.Bytes();
-		shift		= comp.IsBlock() ? 2 : 0;
-		width		= fp.Footprint.Width;
-		height		= fp.Footprint.Height;
-		depth		= fp.Footprint.Depth;
-		row_pitch	= fp.Footprint.RowPitch;
-	}
-	bool	Valid(int x, int y, int z) const {
-		return x <= width && y <= height && z <= depth;
-	}
-	uint64	CalcOffset(int x, int y, int z) const {
-		return (z * (height >> shift) + (y >> shift)) * row_pitch + (x >> shift) * psize + offset;
-	}
-	uint64	Size() const {
-		return ((height >> shift) - 1) * row_pitch + (width >> shift) * psize;
-	}
-	D3D12_BOX	Box() const {
-		return D3D12_BOX {0, 0, 0, width, height, depth};
-	}
-};
+	struct Source {
+		ID3D12Heap*						heap;
+		const D3D12_TILE_RANGE_FLAGS*	flags;
+		const UINT*						offsets;
+		const UINT*						counts;
+		uint32	flag, offset, count;
 
-struct TileMapping {
-	ID3D12Heap	*heap;
-	uint32		offset;
-	TileMapping(ID3D12Heap *_heap = 0, uint32 _offset = 0) : heap(_heap), offset(_offset) {}
-};
+		Source(ID3D12Heap* heap, const D3D12_TILE_RANGE_FLAGS* flags, const UINT* offsets, const UINT*counts)
+			: heap(heap), flags(flags), offsets(offsets), counts(counts)
+			, flag	(flags		? *flags	: D3D12_TILE_RANGE_FLAG_NONE)
+			, offset(offsets	? *offsets	: 0)
+			, count	(counts		? *counts	: 0x7fffffff)
+		{}
 
-struct TileSource {
-	ID3D12Heap*						heap;
-	const D3D12_TILE_RANGE_FLAGS*	flags;
-	const UINT*						offsets;
-	const UINT*						counts;
-
-	uint32	flag, offset, count;
-
-	TileSource(ID3D12Heap* _heap, const D3D12_TILE_RANGE_FLAGS* _flags, const UINT* _offsets, const UINT* _counts)
-		: heap(_heap), flags(_flags), offsets(_offsets), counts(_counts)
-	{
-		flag	= flags		? *flags++		: D3D12_TILE_RANGE_FLAG_NONE;
-		count	= counts	? *counts++		: 0x7fffffff;
-		offset	= offsets	? *offsets++	: 0;
-	}
-
-	bool	skip() const {
-		return flag == D3D12_TILE_RANGE_FLAG_SKIP;
-	}
-	TileMapping operator*()	const {
-		return flag == D3D12_TILE_RANGE_FLAG_NULL
-			? TileMapping()
-			: TileMapping(heap, offset);
-	}
-	TileSource& operator++() {
-		if (--count == 0) {
-			if (counts)
-				count	= *counts++;
-			if (offsets)
-				offset	= *offsets++;
-			if (flags)
-				flag	= *flags++;
-		} else {
-			if (flag == D3D12_TILE_RANGE_FLAG_NONE)
-				++offset;
+		bool	skip() const {
+			return flag == D3D12_TILE_RANGE_FLAG_SKIP;
 		}
-		return *this;
-	}
+		Mapping operator*()	const {
+			return flag == D3D12_TILE_RANGE_FLAG_NULL ? Mapping() : Mapping(heap, offset);
+		}
+		Source& operator++() {
+			if (--count == 0) {
+				if (counts)
+					count	= *++counts;
+				if (offsets)
+					offset	= *++offsets;
+				if (flags)
+					flag	= *++flags;
+			} else {
+				if (flag == D3D12_TILE_RANGE_FLAG_NONE)
+					++offset;
+			}
+			return *this;
+		}
+	};
 
-};
+	struct SubTiler {
+		Mapping *map;
+		int		width, height, depth;
 
-struct Tiler0 {
-	TileMapping *map;
-	int			width, height, depth;
+		SubTiler(Mapping *map, int width, int height, int depth) : map(map), width(width), height(height), depth(depth) {}
 
-	Tiler0(TileMapping *_map, int _width, int _height, int _depth) : map(_map), width(_width), height(_height), depth(_depth) {}
+		uint32 CalcOffset(int x, int y, int z) const {
+			ISO_ASSERT(x < width && y < height && z < depth);
+			return x + width * (y + depth * z);
+		}
 
-	uint32 CalcOffset(int x, int y, int z) const {
-		ISO_ASSERT(x < width && y < height && z < depth);
-		return x + width * (y + depth * z);
-	}
+		Mapping& Tile(int x, int y, int z) const {
+			return map[CalcOffset(x, y, z)];
+		}
 
-	TileMapping& Tile(int x, int y, int z) const {
-		return map[CalcOffset(x, y, z)];
-	}
-
-	void FillBox(TileSource &src, int x, int y, int z, int _width, int _height, int _depth) {
-		for (int z1 = z; z1 < z + _depth; z1++) {
-			for (int y1 = y; y1 < y + _height; y1++) {
-				for (int x1 = x; x1 < x + _width; x1++) {
-					Tile(x1, y1, z1) = *src;
-					++src;
+		void FillBox(Source &src, int x, int y, int z, int _width, int _height, int _depth) {
+			for (int z1 = z; z1 < z + _depth; z1++) {
+				for (int y1 = y; y1 < y + _height; y1++) {
+					for (int x1 = x; x1 < x + _width; x1++) {
+						Tile(x1, y1, z1) = *src;
+						++src;
+					}
 				}
 			}
 		}
-	}
-
-	void Fill(TileSource &src, int x, int y, int z, uint32 n) {
-		for (int i = CalcOffset(x, y, z); n--; ++i) {
-			map[i] = *src;
-			++src;
-		}
-	}
-
-	void CopyBox(Tiler0 &src, int xd, int yd, int zd, int xs, int ys, int zs, int _width, int _height, int _depth) {
-		for (int z = 0; z < _depth; z++) {
-			for (int y = 0; y < _height; y++) {
-				for (int x = 0; x < _width; x++)
-					Tile(xd + x, yd + y, zd + z) = src.Tile(xs + x, ys + y, zs + z);
+		void FillStrip(Source &src, int x, int y, int z, uint32 n) {
+			for (int i = CalcOffset(x, y, z); n--; ++i) {
+				map[i] = *src;
+				++src;
 			}
 		}
-	}
+		void CopyBox(SubTiler &src, int xd, int yd, int zd, int xs, int ys, int zs, int _width, int _height, int _depth) {
+			for (int z = 0; z < _depth; z++) {
+				for (int y = 0; y < _height; y++) {
+					for (int x = 0; x < _width; x++)
+						Tile(xd + x, yd + y, zd + z) = src.Tile(xs + x, ys + y, zs + z);
+				}
+			}
+		}
+		void CopyStrip(SubTiler &src, int xd, int yd, int zd, int xs, int ys, int zs, uint32 n) {
+			int di = CalcOffset(xd, yd, zd), si = src.CalcOffset(xs, ys, zs);
+			while (n--)
+				map[di++] = src.map[si++];
+		}
+	};
 
-	void Copy(Tiler0 &src, int xd, int yd, int zd, int xs, int ys, int zs, uint32 n) {
-		int di = CalcOffset(xd, yd, zd), si = src.CalcOffset(xs, ys, zs);
-		while (n--)
-			map[di++] = src.map[si++];
-	}
-};
+	RESOURCE_DESC	desc;
+	Mapping*		map;
+	int				log2tilew, log2tileh, log2tiled;
 
-struct Tiler {
-	TileMapping *map;
-	int			width, height, depth;
-	int			mips;
-	bool		volume;
-	int			log2tilew, log2tileh, log2tiled;
-
-	Tiler(const D3D12_RESOURCE_DESC &desc, TileMapping *_map) : map(_map), width(desc.Width), height(desc.Height), depth(desc.DepthOrArraySize), mips(desc.MipLevels), volume(desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D) {
+	Tiler(const RESOURCE_DESC &desc, Mapping *map) : desc(desc), map(map) {
 		auto	layout		= DXGI_COMPONENTS(desc.Format).GetLayoutInfo();
 		int		bpp			= layout.bits >> (layout.block ? 4 : 0);
 		uint32	tilen		= D3D12_TILED_RESOURCE_TILE_SIZE_IN_BYTES * 8 / bpp;
@@ -442,11 +483,11 @@ struct Tiler {
 		log2tiled	= 0;
 	}
 
-	Tiler0	SubResource(uint32 sub) {
+	SubTiler	SubResource(uint32 sub) {
 		uint32	tile	= 0;
-		int		w		= width, h = height, d = depth;
+		int		w		= desc.Width, h = desc.Height, d = desc.DepthOrArraySize;
 
-		if (volume) {
+		if (desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D) {
 			while (sub--) {
 				tile += ceil_pow2(w, log2tilew) * ceil_pow2(h, log2tileh) * ceil_pow2(d, log2tiled);
 				w = max(w / 2, 1);
@@ -454,27 +495,222 @@ struct Tiler {
 				d = max(h / 2, 1);
 			}
 		} else {
-			for (uint32	mip = sub % mips; mip--;) {
+			for (uint32	mip = desc.ExtractMip(sub); mip--;) {
 				tile += ceil_pow2(w, log2tilew) * ceil_pow2(h, log2tileh) * d;
 				w = max(w / 2, 1);
 				h = max(h / 2, 1);
 			}
-			tile += ceil_pow2(w, log2tilew) * ceil_pow2(h, log2tileh) * (sub / mips);
+			tile += ceil_pow2(w, log2tilew) * ceil_pow2(h, log2tileh) * desc.ExtractSlice(sub);
 			d = 1;
 		}
 
-		return Tiler0(map + tile, ceil_pow2(w, log2tilew), ceil_pow2(h, log2tileh), ceil_pow2(d, log2tiled));
+		return {map + tile, ceil_pow2(w, log2tilew), ceil_pow2(h, log2tileh), ceil_pow2(d, log2tiled)};
+	}
+};
+
+static constexpr D3D12_RESOURCE_STATES D3D12_RESOURCE_STATE_UNKNOWN = (D3D12_RESOURCE_STATES)~0;
+
+inline D3D12_RESOURCE_STATES max(D3D12_RESOURCE_STATES a, D3D12_RESOURCE_STATES b) {
+	if (a == D3D12_RESOURCE_STATE_UNKNOWN)
+		return b;
+	if (b == D3D12_RESOURCE_STATE_UNKNOWN)
+		return a;
+	auto	c = a | b;
+	return  c & D3D12_RESOURCE_STATE_WRITE ? c & D3D12_RESOURCE_STATE_WRITE : c;
+}
+
+inline auto Transitioner(ID3D12GraphicsCommandList *list) {
+	return [list](ID3D12Resource *res, D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES after, uint32 sub) {
+		if (before != after)
+			list->ResourceBarrier(1, RESOURCE_BARRIER::Transition(res, before, after, sub));
+	};
+}
+
+template<int N> inline auto Transitioner(ID3D12GraphicsCommandList *cmd_list, Barriers<N> &b) {
+	return [cmd_list, &b](ID3D12Resource *res, D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES after, uint32 sub) {
+		b.Transition(cmd_list, res, before, after, sub);
+	};
+}
+
+struct ResourceStates {
+	sparse_array<D3D12_RESOURCE_STATES>	substates;
+	D3D12_RESOURCE_STATES	state;
+
+	ResourceStates(D3D12_RESOURCE_STATES state = D3D12_RESOURCE_STATE_UNKNOWN) : state(state) {}
+
+	void operator=(D3D12_RESOURCE_STATES _state) {
+		substates.clear();
+		state = _state;
+	}
+
+	void set(uint32 sub, D3D12_RESOURCE_STATES _state) {
+		if (sub == D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES) {
+			substates.clear();
+			state = _state;
+		} else {
+			substates[sub] = _state;
+		}
+	}
+	void set(uint32 sub, uint32 num_sub, D3D12_RESOURCE_STATES _state) {
+		if (sub != D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES && num_sub != 1) {
+			if (_state == state) {
+				substates.remove(sub);
+				return;
+			}
+			
+			substates[sub] = _state;
+			if (substates.size() != num_sub)
+				return;
+
+			for (auto& j : substates)
+				if (j.t != _state)
+					return;
+			
+		}
+		substates.clear();
+		state = _state;
+	}
+	D3D12_RESOURCE_STATES get(uint32 sub) const {
+		return sub == D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES ? state : substates[sub].or_default(state);
+	}
+	D3D12_RESOURCE_STATES get_all() const {
+		D3D12_RESOURCE_STATES	all = state;
+		for (auto &i : substates)
+			all |= *i;
+		return all;
+	}
+
+	void set_or(uint32 sub, D3D12_RESOURCE_STATES _state) {
+		if (sub == D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES) {
+			for (auto &i : substates)
+				*i |= _state;
+			state |= _state;
+		} else {
+			substates[sub] |= _state;
+		}
+	}
+	void set_init(uint32 sub, D3D12_RESOURCE_STATES _state) {
+		if (get(sub) == D3D12_RESOURCE_STATE_UNKNOWN) {
+			if (sub == D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES)
+				state = _state;
+			else
+				set(sub, _state);
+		}
+	}
+	void set_init(uint32 sub, uint32 num_sub, D3D12_RESOURCE_STATES _state) {
+		set_init(sub == 0 && num_sub == 1 ? D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES : sub, _state);
+	}
+	void combine(const ResourceStates &b) {
+		if (b.substates) {
+			for (auto &i : b.substates)
+				substates[i.i] = i.t;
+		} else {
+			substates.clear();
+			state = b.state;
+		}
+	}
+	void combine_init(const ResourceStates &b) {
+		if (b.substates) {
+			for (auto &i : b.substates)
+				set_init(i.i, i.t);
+		} else {
+			set_init(D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, b.state);
+		}
+	}
+	void combine_max(const ResourceStates &b) {
+		if (b.substates) {
+			for (auto &i : b.substates)
+				substates[i.i] = max(substates[i.i].or_default(state), i.t);
+		} else if (substates) {
+			for (auto &i : substates)
+				i.t = max(i.t, b.state);
+		} else {
+			state = max(state, b.state);
+		}
+	}
+
+	void compact(uint32 num_sub, D3D12_RESOURCE_STATES default_state = D3D12_RESOURCE_STATE_COMMON) {
+		if (state == D3D12_RESOURCE_STATE_UNKNOWN || substates.size() == num_sub)
+			state = substates ? substates.begin()->t : default_state;
+
+		bool	merge = true;
+		for (auto &j : substates) {
+			merge = j.t == state;
+			if (!merge)
+				break;
+		}
+		if (merge)
+			substates.clear();
+	}
+
+	template<typename T> void transition_to(T &&transitioner, ID3D12Resource *res, D3D12_RESOURCE_STATES to) const {
+		if (substates) {
+			for (int i = 0, n = RESOURCE_DESC(res).NumSubresources(); i < n; i++)
+				transitioner(res, get(i), to, i);
+			//for (auto &i : substates)
+			//	transitioner(res, i.t, to, i.i);
+		} else {
+			transitioner(res, state, to, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
+		}
+	}
+	template<typename T> void transition_from(T &&transitioner, ID3D12Resource *res, D3D12_RESOURCE_STATES from) const {
+		if (substates) {
+			for (int i = 0, n = RESOURCE_DESC(res).NumSubresources(); i < n; i++)
+				transitioner(res, from, get(i), i);
+			//for (auto &i : substates)
+			//	transitioner(res, from, i.t, i.i);
+		} else {
+			transitioner(res, from, state, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
+		}
+	}
+	template<typename T> void transition_to(T &&transitioner, ID3D12Resource *res, const ResourceStates &to) const {
+		if (substates || to.substates) {
+			for (int i = 0, n = RESOURCE_DESC(res).NumSubresources(); i < n; i++)
+				transitioner(res, get(i), to.get(i), i);
+		} else {
+			transitioner(res, state, to.state, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
+		}
 	}
 };
 
 struct RecResource : RESOURCE_DESC {
-	enum Allocation { UnknownAlloc, Reserved, Placed, Committed };
-	Allocation					alloc;
+	enum Allocation {
+		Custom	= 8,	Cache_L0 = 0, Cache_L1 = 4,
+		
+		UnknownAlloc	= 0,
+		Reserved,
+		Placed,
+		Committed,
+		Committed_Upload,
+		Committed_Readback,
+		
+		Custom_NoCPU	= Custom,
+		Custom_WriteCombine,
+		Custom_WriteBack,
+	};
+	Allocation	alloc;
 	union {
 		D3D12_GPU_VIRTUAL_ADDRESS	gpu;
-		TileMapping					*mapping;
+		Tiler::Mapping				*mapping;
 	};
-	uint64						data_size;
+	uint64				data_size;
+
+	static HEAP_PROPERTIES	HeapProps(Allocation alloc) {
+		if (alloc < Committed)
+			return D3D12_HEAP_TYPE(0);
+		if (alloc < Custom)
+			return D3D12_HEAP_TYPE(alloc - Committed + 1);
+		return HEAP_PROPERTIES(D3D12_CPU_PAGE_PROPERTY((alloc & 3) + 1), alloc & Cache_L1 ? D3D12_MEMORY_POOL_L0 : D3D12_MEMORY_POOL_L1);
+	}
+	static Allocation CalcAllocation(const D3D12_HEAP_PROPERTIES &props) {
+		switch (props.Type) {
+			default:
+			case D3D12_HEAP_TYPE_DEFAULT:	return Committed;
+			case D3D12_HEAP_TYPE_UPLOAD:	return Committed_Upload;
+			case D3D12_HEAP_TYPE_READBACK:	return Committed_Readback;
+			case D3D12_HEAP_TYPE_CUSTOM:	return Allocation(Custom + (props.CPUPageProperty - 1) + (props.MemoryPoolPreference == D3D12_MEMORY_POOL_L1 ? Cache_L1 : 0));
+		}
+	}
 
 	RecResource() : alloc(UnknownAlloc), gpu(0), data_size(0) {
 		Dimension = D3D12_RESOURCE_DIMENSION_UNKNOWN;
@@ -486,25 +722,29 @@ struct RecResource : RESOURCE_DESC {
 
 	void	init(ID3D12Device *device, Allocation _alloc, const D3D12_RESOURCE_DESC &desc) {
 		alloc	= _alloc;
-		*static_cast<D3D12_RESOURCE_DESC*>(this) = desc;
-		D3D12_PLACED_SUBRESOURCE_FOOTPRINT	*layouts = alloc_auto(D3D12_PLACED_SUBRESOURCE_FOOTPRINT, NumSubresources(device));
-		device->GetCopyableFootprints(this, 0, NumSubresources(device), 0, layouts, nullptr, nullptr, &data_size);
+		*static_cast<RESOURCE_DESC*>(this) = desc;
+		data_size = TotalSize(device);
 	}
 	void	init(ID3D12Device *device, Allocation _alloc, const D3D12_RESOURCE_DESC1 &desc) {
 		alloc	= _alloc;
-		*static_cast<D3D12_RESOURCE_DESC*>(this) = (D3D12_RESOURCE_DESC&)desc;
-		D3D12_PLACED_SUBRESOURCE_FOOTPRINT	*layouts = alloc_auto(D3D12_PLACED_SUBRESOURCE_FOOTPRINT, NumSubresources(device));
-		device->GetCopyableFootprints(this, 0, NumSubresources(device), 0, layouts, nullptr, nullptr, &data_size);
+		*static_cast<RESOURCE_DESC*>(this) = (D3D12_RESOURCE_DESC&)desc;
+		data_size = TotalSize(device);
 	}
 
-	bool	HasData() const { return gpu && data_size; }
+	bool			HasData()	const	{ return gpu && data_size; }
+	HEAP_PROPERTIES	HeapProps() const	{ return HeapProps(alloc); }
+};
 
-	D3D12BLOCK	GetSubresource(ID3D12Device* device, uint32 i) {
-		D3D12_PLACED_SUBRESOURCE_FOOTPRINT	*layouts	= alloc_auto(D3D12_PLACED_SUBRESOURCE_FOOTPRINT, i + 1);
-		device->GetCopyableFootprints(this, 0, i + 1, 0, layouts, nullptr, nullptr, nullptr);
-		return D3D12BLOCK(layouts[i]);
+struct RecResourceClear : RecResource {
+	D3D12_CLEAR_VALUE	clear;
+	RecResourceClear() { iso::clear(clear); }
+	template<typename D> void	init(ID3D12Device *device, Allocation _alloc, const D &desc, const D3D12_CLEAR_VALUE *_clear) {
+		RecResource::init(device, _alloc, desc);
+		if (_clear)
+			clear = *_clear;
 	}
 };
+
 
 struct RecHeap : D3D12_HEAP_DESC {
 	D3D12_GPU_VIRTUAL_ADDRESS	gpu;
@@ -598,8 +838,25 @@ struct RecCommandList {
 		tag_RSSetShadingRateImage,
 	//ID3D12GraphicsCommandList6
 		tag_DispatchMesh,
+		
+		tag_NUM,
 
-		tag_NUM
+	// breadcrumbs
+		tag_InitializeExtensionCommand,
+		tag_ExecuteExtensionCommand,
+		tag_Present,
+		tag_BeginSubmission,
+		tag_EndSubmission,
+		tag_EncodeFrame,
+		tag_DecodeFrame,
+		tag_DecodeFrame1,
+		tag_DecodeFrame2,
+		tag_ProcessFrames,
+		tag_ProcessFrames1,
+		tag_EstimateMotion,
+		tag_ResolveMotionvectorHeap,
+		tag_ResolveEncoderOutputMetadata,
+
 	};
 	UINT					node_mask;
 	D3D12_COMMAND_LIST_FLAGS flags;
@@ -627,7 +884,7 @@ struct RecCommandList {
 struct RecDevice {
 	enum tag : uint8 {
 		//ID3D12Device
-		tag_CreateCommandQueue,
+/*0*/	tag_CreateCommandQueue,
 		tag_CreateCommandAllocator,
 		tag_CreateGraphicsPipelineState,
 		tag_CreateComputePipelineState,
@@ -637,7 +894,7 @@ struct RecDevice {
 		tag_CreateRootSignature,
 		tag_CreateConstantBufferView,
 		tag_CreateShaderResourceView,
-		tag_CreateUnorderedAccessView,
+/*10*/	tag_CreateUnorderedAccessView,
 		tag_CreateRenderTargetView,
 		tag_CreateDepthStencilView,
 		tag_CreateSampler,
@@ -647,7 +904,7 @@ struct RecDevice {
 		tag_CreateHeap,
 		tag_CreatePlacedResource,
 		tag_CreateReservedResource,
-		tag_CreateSharedHandle,
+/*20*/	tag_CreateSharedHandle,
 		tag_OpenSharedHandle,
 		tag_OpenSharedHandleByName,
 		tag_MakeResident,
@@ -658,7 +915,7 @@ struct RecDevice {
 		tag_CreateCommandSignature,
 		//ID3D12Device1
 		tag_CreatePipelineLibrary,
-		tag_SetEventOnMultipleFenceCompletion,
+/*30*/	tag_SetEventOnMultipleFenceCompletion,
 		tag_SetResidencyPriority,
 		//ID3D12Device2
 		tag_CreatePipelineState,
@@ -671,7 +928,7 @@ struct RecDevice {
 		tag_CreateProtectedResourceSession,
 		tag_CreateCommittedResource1,
 		tag_CreateHeap1,
-		tag_CreateReservedResource1,
+/*40*/	tag_CreateReservedResource1,
 		//ID3D12Device5
 		tag_CreateLifetimeTracker,
 		tag_CreateMetaCommand,
@@ -684,7 +941,7 @@ struct RecDevice {
 		//ID3D12Device8
 		tag_CreateCommittedResource2,
 		tag_CreatePlacedResource1,
-		tag_CreateSamplerFeedbackUnorderedAccessView,
+/*50*/	tag_CreateSamplerFeedbackUnorderedAccessView,
 
 		//ID3D12CommandQueue
 		tag_CommandQueueUpdateTileMappings,
@@ -710,6 +967,17 @@ struct RecDevice {
 	};
 };
 
+struct D3D12_CONSTANT_BUFFER_VIEW_DESC2 : D3D12_CONSTANT_BUFFER_VIEW_DESC {
+
+};
+struct D3D12_SHADER_RESOURCE_VIEW_DESC2 : D3D12_SHADER_RESOURCE_VIEW_DESC {
+
+};
+
+struct D3D12_UNORDERED_ACCESS_VIEW_DESC2 : D3D12_UNORDERED_ACCESS_VIEW_DESC{
+
+};
+
 struct DESCRIPTOR {
 	enum TYPE {
 		NONE, CBV, SRV, UAV, RTV, DSV, SMP,
@@ -718,8 +986,8 @@ struct DESCRIPTOR {
 		IMM, VBV, IBV,
 		DESCH,
 		_NUM
-	} type;
-	ID3D12Resource *res;
+	} type					= NONE;
+	ID3D12Resource *res		= nullptr;
 	union {
 		D3D12_CONSTANT_BUFFER_VIEW_DESC		cbv;
 		D3D12_SHADER_RESOURCE_VIEW_DESC		srv;
@@ -732,88 +1000,115 @@ struct DESCRIPTOR {
 		D3D12_INDEX_BUFFER_VIEW				ibv;
 		D3D12_GPU_VIRTUAL_ADDRESS			ptr;
 		D3D12_GPU_DESCRIPTOR_HANDLE			h;
-		const void							*imm;
+		arbitrary_const_ptr					imm;
 	};
-	DESCRIPTOR(TYPE _type = NONE) : type(_type), res(0) {}
-	void	set(const D3D12_CONSTANT_BUFFER_VIEW_DESC *desc) {
-		type = CBV;
+	
+	template<TYPE T> struct type_s;
+	template<TYPE T> using type_t = typename type_s<T>::type;
+	template<typename T> static constexpr TYPE _get_type();
+
+	template<typename T> void _set(TYPE _type, ID3D12Resource *_res, const T *desc) {
+		type	= _type;
+		res		= _res;
 		if (desc)
-			cbv = *desc;
-		else clear(cbv);
-	}
-	void	set(ID3D12Resource *pResource, const D3D12_SHADER_RESOURCE_VIEW_DESC *desc) {
-		res = pResource;
-		type = SRV;
-		if (desc) {
-			srv = *desc;
-		} else {
-			clear(srv);
-			srv.Shader4ComponentMapping	= D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-		}
-	}
-	void	set(ID3D12Resource *pResource, const D3D12_UNORDERED_ACCESS_VIEW_DESC *desc) {
-		res = pResource;
-		type = UAV;
-		if (desc)
-			uav = *desc;
+			memcpy(&cbv, desc, sizeof(T));
 		else
-			clear(uav);
+			memset(&cbv, 0, sizeof(T));
 	}
-	void	set(const D3D12_SAMPLER_DESC *desc) {
-		type = SMP;
-		smp = *desc;
+	template<typename T> void _set(TYPE _type, ID3D12Resource *_res, const T &desc) {
+		type	= _type;
+		res		= _res;
+		memcpy(&cbv, &desc, sizeof(T));
 	}
-	void	set(ID3D12Resource *pResource, const D3D12_RENDER_TARGET_VIEW_DESC *desc, const D3D12_RESOURCE_DESC &rdesc) {
-		res			= pResource;
-		type		= RTV;
-		if (desc) {
-			rtv	= *desc;
-			if (rtv.Format == DXGI_FORMAT_UNKNOWN)
-				rtv.Format = rdesc.Format;
-		} else {
-			clear(rtv);
+	
+	DESCRIPTOR() {}
+	DESCRIPTOR(TYPE type);
+	template<typename T> DESCRIPTOR(TYPE type, ID3D12Resource *res, const T &t)					{ _set(type, res, t); }
+	template<typename T> DESCRIPTOR(const T &t)													{ _set(_get_type<T>(), nullptr, t); }
+	template<TYPE T> static DESCRIPTOR make(const type_t<T> &t,ID3D12Resource *res = nullptr)	{ return DESCRIPTOR(T, res, t); }
+//	template<TYPE T> static DESCRIPTOR make(const D3D12_GPU_VIRTUAL_ADDRESS2 &t)		{ return make<T>(t.p); }
+	template<TYPE T> static DESCRIPTOR make(const RESOURCE_DESC &desc, ID3D12Resource *res)		{ return make<T>(type_t<T>(desc), res); }
+	template<TYPE T> static DESCRIPTOR make(ID3D12Resource *res)								{ return make<T>(RESOURCE_DESC(res), res); }
+
+	template<typename T> void set(const T *desc, ID3D12Resource *res = nullptr)	{ _set(_get_type<T>(), res, desc); }
+	template<typename T> void set(const T &desc, ID3D12Resource *res = nullptr)	{ _set(_get_type<T>(), res, desc); }
+
+	void	set(const D3D12_RENDER_TARGET_VIEW_DESC *desc, ID3D12Resource *pResource, const D3D12_RESOURCE_DESC &rdesc) {
+		set(desc ? *desc : D3D12_RENDER_TARGET_VIEW_DESC(dx12::RESOURCE_DESC(rdesc)), pResource);
+		if (rtv.Format == DXGI_FORMAT_UNKNOWN)
 			rtv.Format = rdesc.Format;
-			switch (rdesc.Dimension) {
-				case D3D12_RESOURCE_DIMENSION_BUFFER:
-					rtv.ViewDimension		= D3D12_RTV_DIMENSION_BUFFER;
-					rtv.Buffer.NumElements	= rdesc.DepthOrArraySize;
-					break;
-				case D3D12_RESOURCE_DIMENSION_TEXTURE1D:
-					rtv.ViewDimension		= D3D12_RTV_DIMENSION_TEXTURE1D;
-					break;
-				case D3D12_RESOURCE_DIMENSION_TEXTURE2D:
-					rtv.ViewDimension		= D3D12_RTV_DIMENSION_TEXTURE2D;
-					break;
-				case D3D12_RESOURCE_DIMENSION_TEXTURE3D:
-					rtv.ViewDimension		= D3D12_RTV_DIMENSION_TEXTURE3D;
-					rtv.Texture3D.WSize		= rdesc.DepthOrArraySize;
-					break;
-			}
+	}
+	void	set(const D3D12_DEPTH_STENCIL_VIEW_DESC *desc, ID3D12Resource *pResource, const D3D12_RESOURCE_DESC &rdesc) {
+		set(desc ? *desc : D3D12_DEPTH_STENCIL_VIEW_DESC(dx12::RESOURCE_DESC(rdesc)), pResource);
+		if (dsv.Format == DXGI_FORMAT_UNKNOWN)
+			dsv.Format = rdesc.Format;
+	}
+
+	bool	is_valid(D3D12_DESCRIPTOR_RANGE_TYPE kind) const {
+		switch (kind) {
+			case D3D12_DESCRIPTOR_RANGE_TYPE_SRV:		return is_any(type, SRV, UAV, PSRV, PUAV);
+			case D3D12_DESCRIPTOR_RANGE_TYPE_UAV:		return is_any(type, UAV, PUAV);
+			case D3D12_DESCRIPTOR_RANGE_TYPE_CBV:		return is_any(type, CBV, PCBV);
+			case D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER:	return is_any(type, SMP, SSMP);
+			default:	return false;
 		}
 	}
-	void	set(ID3D12Resource *pResource, const D3D12_DEPTH_STENCIL_VIEW_DESC *desc, const D3D12_RESOURCE_DESC &rdesc) {
-		res			= pResource;
-		type		= DSV;
-		if (desc) {
-			dsv	= *desc;
-			if (dsv.Format == DXGI_FORMAT_UNKNOWN)
-				dsv.Format = rdesc.Format;
-		} else {
-			clear(dsv);
-			dsv.Format = rdesc.Format;
-			switch (rdesc.Dimension) {
-				case D3D12_RESOURCE_DIMENSION_TEXTURE1D:
-					dsv.ViewDimension	= D3D12_DSV_DIMENSION_TEXTURE1D;
-					break;
-				case D3D12_RESOURCE_DIMENSION_TEXTURE2D:
-					dsv.ViewDimension	= D3D12_DSV_DIMENSION_TEXTURE2D;
-					break;
-			}
+
+	DXGI_FORMAT		get_format() const {
+		switch (type) {
+			case DESCRIPTOR::SRV:	return srv.Format;
+			case DESCRIPTOR::UAV:	return uav.Format;
+			case DESCRIPTOR::RTV:	return rtv.Format;
+			case DESCRIPTOR::DSV:	return dsv.Format;
+			default:				return DXGI_FORMAT_UNKNOWN;
+		}
+	}
+	int		get_sub(const RESOURCE_DESC &rdesc) const {
+		int		sub		= 0;
+		switch (type) {
+			case DESCRIPTOR::SRV: return rdesc.CalcSubresource(srv);
+			case DESCRIPTOR::UAV: return rdesc.CalcSubresource(uav);
+			case DESCRIPTOR::RTV: return rdesc.CalcSubresource(rtv);
+			case DESCRIPTOR::DSV: return rdesc.CalcSubresource(dsv);
+			default: return 0;
+		}
+	}
+	operator VIEW_DESC() const {
+		switch (type) {
+			case DESCRIPTOR::SRV:	return srv;
+			case DESCRIPTOR::UAV:	return uav;
+			case DESCRIPTOR::RTV:	return rtv;
+			case DESCRIPTOR::DSV:	return dsv;
+			default:				return {};
 		}
 	}
 
 	template<typename T>	friend T	as(TYPE t);
+	friend constexpr bool writeable(TYPE t) { return is_any(t, UAV, RTV, DSV, PUAV); }
 };
+
+template<> struct DESCRIPTOR::type_s<DESCRIPTOR::CBV>	: T_type<D3D12_CONSTANT_BUFFER_VIEW_DESC>	{};
+template<> struct DESCRIPTOR::type_s<DESCRIPTOR::SRV>	: T_type<D3D12_SHADER_RESOURCE_VIEW_DESC>	{};
+template<> struct DESCRIPTOR::type_s<DESCRIPTOR::UAV>	: T_type<D3D12_UNORDERED_ACCESS_VIEW_DESC>	{};
+template<> struct DESCRIPTOR::type_s<DESCRIPTOR::RTV>	: T_type<D3D12_RENDER_TARGET_VIEW_DESC>		{};
+template<> struct DESCRIPTOR::type_s<DESCRIPTOR::DSV>	: T_type<D3D12_DEPTH_STENCIL_VIEW_DESC>		{};
+template<> struct DESCRIPTOR::type_s<DESCRIPTOR::SMP>	: T_type<D3D12_SAMPLER_DESC>				{};
+template<> struct DESCRIPTOR::type_s<DESCRIPTOR::SSMP>	: T_type<D3D12_SAMPLER_DESC>				{};
+template<> struct DESCRIPTOR::type_s<DESCRIPTOR::PCBV>	: T_type<D3D12_GPU_VIRTUAL_ADDRESS>			{};
+template<> struct DESCRIPTOR::type_s<DESCRIPTOR::PSRV>	: T_type<D3D12_GPU_VIRTUAL_ADDRESS>			{};
+template<> struct DESCRIPTOR::type_s<DESCRIPTOR::PUAV>	: T_type<D3D12_GPU_VIRTUAL_ADDRESS>			{};
+template<> struct DESCRIPTOR::type_s<DESCRIPTOR::IMM>	: T_type<uint32*>							{};
+template<> struct DESCRIPTOR::type_s<DESCRIPTOR::VBV>	: T_type<D3D12_VERTEX_BUFFER_VIEW>			{};
+template<> struct DESCRIPTOR::type_s<DESCRIPTOR::IBV>	: T_type<D3D12_INDEX_BUFFER_VIEW>			{};
+template<> struct DESCRIPTOR::type_s<DESCRIPTOR::DESCH>	: T_type<D3D12_GPU_DESCRIPTOR_HANDLE>		{};
+
+template<> constexpr DESCRIPTOR::TYPE DESCRIPTOR::_get_type<D3D12_CONSTANT_BUFFER_VIEW_DESC>()	{ return CBV; }
+template<> constexpr DESCRIPTOR::TYPE DESCRIPTOR::_get_type<D3D12_SHADER_RESOURCE_VIEW_DESC>()	{ return SRV; }
+template<> constexpr DESCRIPTOR::TYPE DESCRIPTOR::_get_type<D3D12_UNORDERED_ACCESS_VIEW_DESC>()	{ return UAV; }
+template<> constexpr DESCRIPTOR::TYPE DESCRIPTOR::_get_type<D3D12_RENDER_TARGET_VIEW_DESC>()	{ return RTV; }
+template<> constexpr DESCRIPTOR::TYPE DESCRIPTOR::_get_type<D3D12_DEPTH_STENCIL_VIEW_DESC>()	{ return DSV; }
+template<> constexpr DESCRIPTOR::TYPE DESCRIPTOR::_get_type<D3D12_SAMPLER_DESC>()				{ return SMP; }
+template<> constexpr DESCRIPTOR::TYPE DESCRIPTOR::_get_type<D3D12_STATIC_SAMPLER_DESC>()		{ return SSMP; }
 
 template<>	inline D3D12_DESCRIPTOR_HEAP_TYPE	as<D3D12_DESCRIPTOR_HEAP_TYPE>(DESCRIPTOR::TYPE t)		{
 	static const int8 table[] = {
@@ -859,12 +1154,16 @@ struct RecDescriptorHeap {
 	D3D12_GPU_DESCRIPTOR_HANDLE	gpu;
 	DESCRIPTOR					descriptors[1];
 
+	const DESCRIPTOR*	begin()	const	{ return descriptors; }
+	const DESCRIPTOR*	end()	const	{ return descriptors + count; }
+
 	int		index(const DESCRIPTOR *d)				const { return d - descriptors; }
 	int		index(D3D12_CPU_DESCRIPTOR_HANDLE h)	const { return (h.ptr - cpu.ptr) / stride; }
 	int		index(D3D12_GPU_DESCRIPTOR_HANDLE h)	const { return (h.ptr - gpu.ptr) / stride; }
 
 	D3D12_CPU_DESCRIPTOR_HANDLE	get_cpu(int i)		const { return {cpu.ptr + i * stride}; }
 	D3D12_GPU_DESCRIPTOR_HANDLE	get_gpu(int i)		const { return {gpu.ptr + i * stride}; }
+	D3D12_GPU_DESCRIPTOR_HANDLE	get_gpu(D3D12_CPU_DESCRIPTOR_HANDLE h)	const { return {h.ptr + (gpu.ptr - cpu.ptr)}; }
 
 	bool	holds(const DESCRIPTOR *d) const {
 		return d >= descriptors && d < descriptors + count;

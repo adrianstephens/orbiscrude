@@ -16,7 +16,7 @@
 		<activatableClass name="composition.App"				threadingModel="both"	xmlns="urn:schemas-microsoft-com:winrt.v1" />
 	</asmv3:file>
 	
-	<trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+	<trustInfo>
 		<security>
 			<requestedPrivileges>
 				<requestedExecutionLevel level='asInvoker' uiAccess='false' />

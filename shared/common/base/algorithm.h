@@ -156,7 +156,7 @@ template<class I> void _rotate(I first, I middle, I last, forward_iterator_t) {
 }
 
 template<class I> void rotate(I first, I middle, I last) {
-	return _rotate(first, middle, last, typename iterator_traits<I>::iterator_category());
+	return _rotate(first, middle, last, iterator_category<I>());
 }
 
 template<class I> void _rotate1(I first, I middle, bidirectional_iterator_t) {
@@ -172,7 +172,7 @@ template<class I> void _rotate1(I first, I middle, forward_iterator_t) {
 
 // equivalent to rotate(first, middle, middle + 1) {
 template<class I> void rotate1(I first, I middle) {
-	return _rotate1(first, middle, typename iterator_traits<I>::iterator_category());
+	return _rotate1(first, middle, iterator_category<I>());
 }
 
 //-----------------------------------------------------------------------------
@@ -221,26 +221,33 @@ template<class C, class F> inline int count(C &&c, F f)				{ return for_each(c, 
 //	finds
 //-----------------------------------------------------------------------------
 
-template<class I> inline I argmax(I i, I end) {
-	I max = i;
+template<class P, class I> inline I find_best(I i, I end, P pred = P()) {
+	I best = i;
 	while (++i != end) {
-		if (*max < *i)
-			max = i;
+		if (pred(*i, *best))
+			best = i;
 	}
-	return max;
+	return best;
 }
 
-template<class I> inline I argmin(I i, I end) {
-	I min = i;
-	while (++i != end) {
-		if (*i < *min)
-			min = i;
-	}
-	return min;
-}
+template<class P, class C> inline auto	find_best(C &&c, P pred = P())		{ return find_best(begin(c), end(c), pred); }
+template<class C> inline auto argmax(C&& c) { return find_best<greater>(c); }
+template<class C> inline auto argmin(C&& c) { return find_best<less>(c); }
 
-template<class C> inline auto argmax(C&& c) { return argmax(begin(c), end(c)); }
-template<class C> inline auto argmin(C&& c) { return argmin(begin(c), end(c)); }
+template<class P, class I, class V> inline I find_best_value(I i, I end, V& result, P pred = P()) {
+	typedef decltype(*i)	T;
+	I	bestu	= i;
+	T	bestv	= *i;
+	while (++i != end) {
+		T	iv = *i;
+		if (pred(iv, bestv)) {
+			besti	= i;
+			bestv	= move(iv);
+		}
+	}
+	result = move(bestv);
+	return besti;
+}
 
 template<class P, class I> inline I find_if(I i, I end, P pred = P()) {
 	while (i != end) {
@@ -259,11 +266,12 @@ template<class P, class I> inline I find_ifn(I i, size_t n, P pred = P()) {
 	return i;
 }
 
+
 template<class P, class C> inline auto	find_if(C &&c, P pred = P())		{ return find_if(begin(c), end(c), pred); }
 
 template<class I, class T> inline auto	find(I i, I end, T&& t)				{ return find_if(i, end, op_bind_second<equal_to, T>(forward<T>(t))); }
-template<class I, class T> inline auto	findn(I i, const T& t, size_t n)	{ return find_ifn(i, op_bind_second<equal_to, T>(forward<T>(t)), n); }
-template<class C, class T> inline auto	find(C &&c, const T& t)				{ return find(begin(c), end(c), t); }
+template<class I, class T> inline auto	findn(I i, T&& t, size_t n)			{ return find_ifn(i, op_bind_second<equal_to, T>(forward<T>(t)), n); }
+template<class C, class T> inline auto	find(C &&c, T&& t)					{ return find(begin(c), end(c), forward<T>(t)); }
 
 template<class P, class I> inline bool	all_of( I i, I end, P p = P())		{ return find_if(i, end, make_not(p)) == end; }
 template<class P, class I> inline bool	any_of( I i, I end, P p = P())		{ return find_if(i, end, p) != end; }
@@ -271,6 +279,7 @@ template<class P, class I> inline bool	none_of(I i, I end, P p = P())		{ return 
 template<class P, class C> inline bool	all_of( C &&c, P p = P())			{ return all_of(begin(c), end(c), p); }
 template<class P, class C> inline bool	any_of( C &&c, P p = P())			{ return any_of(begin(c), end(c), p); }
 template<class P, class C> inline bool	none_of(C &&c, P p = P())			{ return none_of(begin(c), end(c), p); }
+
 
 template<class I1, class I2, class P> inline auto	find_if2(I1 i1, I1 e1, I2 i2, P pred) {
 	while (i1 != e1) {
@@ -281,8 +290,8 @@ template<class I1, class I2, class P> inline auto	find_if2(I1 i1, I1 e1, I2 i2, 
 	}
 	return i1;
 }
-template<class P, class C1, class I2> inline auto	find_if2(C1 &&c1, I2 i2, P p = P())			{ return find_if2(begin(c1), end(c1), i2, p); }
 
+template<class P, class C1, class I2> inline auto	find_if2(C1 &&c1, I2 i2, P p = P())			{ return find_if2(begin(c1), end(c1), i2, p); }
 template<class P, class I1, class I2> inline bool	all_of2( I1 i1, I1 e1, I2 i2, P p = P())	{ return find_if2(i1, e1, i2, make_not(p)) == e1; }
 template<class P, class I1, class I2> inline bool	any_of2( I1 i1, I1 e1, I2 i2, P p = P())	{ return find_if2(i1, e1, i2, p) != e1; }
 template<class P, class I1, class I2> inline bool	none_of2(I1 i1, I1 e1, I2 i2, P p = P())	{ return find_if2(i1, e1, i2, p) == e1; }
@@ -390,7 +399,7 @@ template<class I, class T, class P> inline I _lower_bound(I first, I last, T&& t
 }
 
 template<class I0, class I1, class T, class P=less>	inline auto	lower_bound(I0 first, I1 last, T&& t, P pred = P())	{
-	return _lower_bound(first, last, t, pred, typename iterator_traits<I0>::iterator_category());
+	return _lower_bound(first, last, t, pred, iterator_category<I0>());
 }
 template<class C, class T, class P=less>			inline auto	lower_boundc(C&& c, T&& t, P pred = P()) {
 	return lower_bound(begin(c), end(c), t, pred);
@@ -420,7 +429,7 @@ template<class I, class P> inline I _first_not(I first, I last, P pred, random_a
 	return first;
 }
 
-template<class I, class P> inline I		first_not(I first, I last, P pred)	{ return _first_not(first, last, pred, typename iterator_traits<I>::iterator_category()); }
+template<class I, class P> inline I		first_not(I first, I last, P pred)	{ return _first_not(first, last, pred, iterator_category<I>()); }
 template<class C, class P> inline auto	first_not(C&& c, P pred)			{ return first_not(begin(c), end(c), pred); }
 
 
@@ -515,13 +524,10 @@ template<class P, class C> 			void binary_sort(C&& c)						{ binary_sort(c, P())
 //----------------------------------------
 
 template<class I, class P = less> void selection_sort(I lo, I hi, P comp = P()) {
-	while (--hi != lo) {
-		I max = lo, p = lo;
-		while (p != hi) {
-			if (comp(*max, *++p))
-				max = p;
-		}
-		swap(*max, *hi);
+	while (hi != lo) {
+		auto	p = find_best(lo, hi, comp);
+		swap(*p, *lo);
+		++lo;
 	}
 }
 
@@ -543,10 +549,12 @@ template<class I, class P = less> enable_if_t<!is_lvalue_v<I>> sort(I lo, I hi, 
 	--hi;
 	for (;;) {
 		uintptr_t size = (hi - lo) + 1;
-		// below a certain size, it is faster to use a O(n^2) sorting method
+
 		if (size <= 8) {
+			// below a certain size, it is faster to use a O(n^2) sorting method
 			++hi;
 			selection_sort(lo, hi, comp);
+
 		} else {
 			// Sort the first, middle, last elements into order
 			I mid = lo + size / 2;
@@ -608,21 +616,19 @@ template<class I, class P = less> enable_if_t<!is_lvalue_v<I>> sort(I lo, I hi, 
 			}
 		}
 
-		if (sp-- == stack)
+		if (sp == stack)
 			break;
 
-		stack_entry* e = (stack_entry*)sp;
+		stack_entry* e = (stack_entry*)--sp;
 		lo			   = e->lo;
 		hi			   = e->hi;
 		e->~stack_entry();
 	}
 }
 
-//template<class I, class P = less>	void sort(I &lo, I &hi, P comp = P())	{ sort<I>(lo, hi, comp); }
-template<class P, class I> 			void sort(I lo, I hi)					{ sort(lo, hi, P()); }
-//template<class C, class P = less, typename=enable_if_t<T_has_begin<C>::value>>	void sort(C&& c, P comp = P())	{ sort(begin(c), end(c), comp); }
+template<class P, class I> 			void sort(I lo, I hi)	{ sort(lo, hi, P()); }
 template<class C, class P = less, typename=enable_if_t<has_begin_v<C>>>	void sort(C&& c, P comp = P())	{ sort(begin(c), end(c), comp); }
-template<class P, class C> 			void sort(C&& c)						{ sort(c, P()); }
+template<class P, class C> 			void sort(C&& c)		{ sort(c, P()); }
 
 //----------------------------------------
 //	reverse sort
@@ -859,6 +865,12 @@ template<typename I, typename P = less> void heap_pop(I begin, I end, P comp = P
 	heap_siftdown(begin, end, begin, comp);
 }
 
+template<typename I, typename P = less> auto heap_pop_value(I begin, I end, P comp = P()) {
+	auto	r		= exchange(*begin, *--end);
+	heap_siftdown(begin, end, begin, comp);
+	return r;
+}
+
 template<typename I, typename P = less> void heap_remove(I begin, I end, I item, P comp = P()) {
 	swap(*--end, *item);
 	if (comp(*item, *end))
@@ -933,101 +945,65 @@ template<class C, typename P = less> void heap_push(C &&c, P comp = P()) { heap_
 template<class C, typename P = less> void heap_pop(	C &&c, P comp = P()) { heap_pop(begin(c), end(c), comp); }
 template<class C, typename P = less> void heap_sort(C &&c, P comp = P()) { heap_sort(begin(c), end(c), comp); }
 
-template<class C, typename P = less> struct priority_queue : C, P {
-	typedef reference_t<C>			reference;
+template<class C, typename P = less> struct priority_queue : P {
+	C	c;
 
 	priority_queue() {}
 	template<typename P2> priority_queue(P2&& p2) : P(forward<P2>(p2)) {}
-	template<typename C2, typename P2> priority_queue(C2&& c2, P2&& p2) : C(forward<C2>(c2)), P(forward<P2>(p2)) {
-		heap_make(C::begin(), C::end(), (P&)*this);
+	template<typename C2, typename P2> priority_queue(C2&& c2, P2&& p2) : P(forward<P2>(p2)), c(forward<C2>(c2)) {
+		heap_make(c.begin(), c.end(), (P&)*this);
 	}
 
 	struct iterator {
 		priority_queue*		p;
-
 		iterator(priority_queue* p) : p(p) {}
 		iterator& operator++() {
 			p->pop();
 			return *this;
 		}
-		bool	  operator!=(const iterator& b) const { return !p->empty(); }
-		reference operator*() const { return p->front(); }
+		bool	  operator!=(const iterator& b)	const { return !p->empty(); }
+		decltype(auto) operator*()				const { return p->front(); }
 	};
 
+	bool			empty()				{ return c.empty(); }
+	void			clear()				{ c.clear(); }
+	void			make_heap()			{ heap_make(c.begin(), c.end(), (P&)*this); }
 	const C&		container()	const	{ return *this; }
-	C&				container()			{ return *this; }
+	C&				container()			{ return c; }
 	iterator		begin()				{ return this; }
 	iterator		end()				{ return nullptr; }
 
-	const reference top() const { return C::front(); }
-	reference		top()		{ return C::front(); }
+	decltype(auto)	top()		const	{ return c.front(); }
+	decltype(auto)	top()				{ return c.front(); }
+
 	void			pop() {
-		heap_pop(C::begin(), C::end(), (P&)*this);
-		C::pop_back();
-	}
-	auto pop_value() {
-		auto	r		= exchange(C::front(), C::pop_back_value());
-		heap_siftdown(C::begin(), C::end(), C::begin(), (P&)*this);
-		return r;
-	}
-	template<typename T2> void push(const T2& t) {
-		C::push_back(t);
-		heap_push(C::begin(), C::end(), (P&)*this);
-	}
-
-	void			remove(iterator_t<C> i) {
-		heap_remove(C::begin(), C::end(), i, (P&)*this);
-		C::pop_back();
-	}
-	void 			update(iterator_t<C> i) {
-		heap_update(C::begin(), C::end(), i, (P&)*this);
-	}
-
-	auto						find(const element_t<C>& t)			{ return heap_find(C::begin(), C::end(), t, (P&)*this); }
-	template<typename E> auto	find(const element_t<C>& t, E e)	{ return heap_find(C::begin(), C::end(), t, (P&)*this, e); }
-};
-
-template<class C, typename P> priority_queue<C, P> make_priority_queue(P&& p) { return priority_queue<C, P>(forward<P>(p)); }
-template<class C, typename P> priority_queue<C, P> make_priority_queue(C&& c, P&& p) { return priority_queue<C, P>(forward<C>(c), forward<P>(p)); }
-
-template<class C, typename P = less> struct priority_queue_ref {
-	C&&		c;
-	P		p;
-	typedef iterator_t<C>		iterator;
-	typedef deref_t<iterator>	element;
-
-	priority_queue_ref(C&& c) : c(forward<C>(c)) {}
-	template<typename P2> priority_queue_ref(C&& c, const P2& p2) : c(forward<C>(c)), p(p2) { heap_make(c, p); }
-
-	const element& top() const 	{ return c.front(); }
-	element&	   top() 		{ return c.front(); }
-	void		   pop() {
-		heap_pop(c.begin(), c.end(), p);
+		heap_pop(c.begin(), c.end(), (P&)*this);
 		c.pop_back();
 	}
-	element 		pop_value() {
-		auto	r		= exchange(c.front(), c.pop_back_value());
-		heap_siftdown(c.begin(), c.end(), c.begin(), p);
+	auto			pop_value() {
+		auto	r		= heap_pop_value(c.begin(), c.end(), (P&)*this);
+		c.pop_back();
 		return r;
 	}
 	template<typename T2> void push(const T2& t) {
 		c.push_back(t);
-		heap_push(c.begin(), c.end(), p);
-	}
-	void			remove(iterator i) {
-		 heap_remove(c.begin(), c.end(), i, p);
-		 c.pop_back();
-	}
-	void 			update(iterator i) {
-		heap_update(c.begin(), c.end(), i, p);
+		heap_push(c.begin(), c.end(), (P&)*this);
 	}
 
-	auto					  find(const element& t) 		const { return heap_find(c.begin(), c.end(), t, p); }
-	template<typename E> auto find(const element& t, E e) 	const { return heap_find(c.begin(), c.end(), t, p, e); }
+	void			remove(iterator_t<C> i) {
+		heap_remove(c.begin(), c.end(), i, (P&)*this);
+		c.pop_back();
+	}
+	void 			update(iterator_t<C> i) {
+		heap_update(c.begin(), c.end(), i, (P&)*this);
+	}
+
+	auto						find(const element_t<C>& t)			{ return heap_find(c.begin(), c.end(), t, (P&)*this); }
+	template<typename E> auto	find(const element_t<C>& t, E e)	{ return heap_find(c.begin(), c.end(), t, (P&)*this, e); }
 };
 
-template<class C, class P = less> 	priority_queue_ref<C, P> make_priority_queue_ref(C&& c, P&& p = P()) 	{ return {c, forward<P>(p)}; }
-template<class P, class C> 			priority_queue_ref<C, P> make_priority_queue_ref(C&& c) 				{ return {c, P()}; }
+template<typename P, class C> priority_queue<C, P>	make_priority_queue(P&& p)				{ return priority_queue<C, P>(forward<P>(p)); }
+template<typename P, class C> priority_queue<C, P>	make_priority_queue(C&& c, P&& p = P())	{ return priority_queue<C, P>(forward<C>(c), forward<P>(p)); }
 
 //-----------------------------------------------------------------------------
 //	partition
@@ -1055,6 +1031,7 @@ template<class P, class C> 			auto partition(C&& c) 				{ return partition(c, P(
 //-----------------------------------------------------------------------------
 //	nearest_neighbour
 //-----------------------------------------------------------------------------
+
 
 template<typename C, typename X> auto nearest_neighbour(C& c, const X& x, float& min_dist) {
 	auto	besti = c.begin();

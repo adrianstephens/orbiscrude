@@ -58,7 +58,7 @@ struct ZIP {
 		date()	{}
 		date(const _none&)			{ clear(*this); }
 		date(const Date& d)			: day(d.day), month(d.month), years1980(d.year - 1980) {}
-		operator Date() const		{ return Date::Days(years1980 + 1980, month, day); }
+		operator Date() const		{ return Date(Date::Days(years1980 + 1980, month, day)); }
 	};
 	struct signature {
 		uint32 _sig;
@@ -296,7 +296,7 @@ public:
 	istream_ptr		_Reader(istream_ref file) const {
 		switch (method) {
 			default:
-			case NO_COMPRESSION:	return new istream_offset(file, uncompressed_size);
+			case NO_COMPRESSION:	return new istream_offset(copy(file), uncompressed_size);
 			case DEFLATED:			return new deflate_reader(file, uncompressed_size);
 		#ifdef BZ2_STREAM_H
 			case BZIP2:				return new BZ2istream(file, uncompressed_size);
@@ -370,7 +370,7 @@ public:
 		flags				= h.flag;
 		method				= h.method;
 		crc					= h.crc;
-		mod					= Date(h.mod_date) + TimeOfDay(h.mod_time);
+		mod					= DateTime(Date(h.mod_date)) + TimeOfDay(h.mod_time);
 
 		auto	extra = malloc_block(file, h.extrafield_length);
 		for (auto& i : make_next_range<const extension>(extra)) {
@@ -510,7 +510,7 @@ public:
 	ZIPwriter(ostream_ref file) : file(file) {}
 	~ZIPwriter();
 
-	void Write(const char *name, const memory_block &data, const DateTime &mod = DateTime::Now(), const char* password = 0, const char* random = 0);
+	void Write(const char *name, const_memory_block data, const DateTime &mod = DateTime::Now(), const char* password = 0, const char* random = 0);
 };
 
 } // namespace iso

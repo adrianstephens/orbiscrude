@@ -11,13 +11,9 @@
 //#undef HAS_COMPUTE
 using namespace iso;
 
-#ifndef MAKEFOURCC
-#define MAKEFOURCC(ch0, ch1, ch2, ch3) ((uint32(uint8(ch0))) | ((uint32(uint8(ch1))) << 8) | ((uint32(uint8(ch2))) << 16) | ((uint32(uint8(ch3))) << 24))
-#endif
-
 namespace DDS {
 
-	enum class DXGI_FORMAT : uint32 {
+	enum class DXGI : uint32 {
 		//components listed low to high
 		UNKNOWN 					= 0,
 		R32G32B32A32_TYPELESS 		= 1,
@@ -157,18 +153,17 @@ namespace DDS {
 		V16U16				= 64,
 		A2W10V10U10			= 67,
 
-		UYVY				= MAKEFOURCC('U', 'Y', 'V',	'Y'),
-		R8G8_B8G8			= MAKEFOURCC('R', 'G', 'B',	'G'),
-		YUY2				= MAKEFOURCC('Y', 'U', 'Y',	'2'),
-		G8R8_G8B8			= MAKEFOURCC('G', 'R', 'G',	'B'),
-		DXT1				= MAKEFOURCC('D', 'X', 'T',	'1'),
-		DXT2				= MAKEFOURCC('D', 'X', 'T',	'2'),
-		DXT3				= MAKEFOURCC('D', 'X', 'T',	'3'),
-		DXT4				= MAKEFOURCC('D', 'X', 'T',	'4'),
-		DXT5				= MAKEFOURCC('D', 'X', 'T',	'5'),
-
-		BC4					= MAKEFOURCC('A', 'T', 'I',	'1'),
-		BC5					= MAKEFOURCC('A', 'T', 'I',	'2'),
+		UYVY				= "UYVY"_u32,
+		R8G8_B8G8			= "RGBG"_u32,
+		YUY2				= "YUY2"_u32,
+		G8R8_G8B8			= "GRGB"_u32,
+		DXT1				= "DXT1"_u32,
+		DXT2				= "DXT2"_u32,
+		DXT3				= "DXT3"_u32,
+		DXT4				= "DXT4"_u32,
+		DXT5				= "DXT5"_u32,
+		BC4					= "ATI1"_u32,
+		BC5					= "ATI2"_u32,
 
 		DXT1b				= 0xC,
 		DXT2b				= 0xE,
@@ -194,7 +189,7 @@ namespace DDS {
 
 		Q16W16V16U16		= 110,
 
-		MULTI2_ARGB8		= MAKEFOURCC('M','E','T','1'),
+		MULTI2_ARGB8		= "MET1"_u32,
 
 		// Floating	point surface formats
 
@@ -211,31 +206,24 @@ namespace DDS {
 		CxV8U8				= 117,
 
 		// my formats
-		B8G8R8				= 20 | 0x80000000,
-
-		DS10				= MAKEFOURCC('D','S','1','0'),
-		BC6H_UF16			= 0x80000000|(uint32)DXGI_FORMAT::BC6H_UF16,
-		BC6H_SF16			= 0x80000000|(uint32)DXGI_FORMAT::BC6H_SF16,
-		BC7_UNORM 			= 0x80000000|(uint32)DXGI_FORMAT::BC7_UNORM,
-		BC7_UNORM_SRGB 		= 0x80000000|(uint32)DXGI_FORMAT::BC7_UNORM_SRGB,
+		B8G8R8				= 20 | 0x40000000,
 	};
 
-	constexpr bool			is_dxgi(D3DFMT f)			{ return (uint32)f & 0x80000000; }
-	constexpr bool			is_fourcc(D3DFMT f)			{ return (uint32)f >= 0x100; }
-	constexpr DXGI_FORMAT	to_dxgi(D3DFMT f)			{ return DXGI_FORMAT((uint32)f & 0x7fffffff); }
-	constexpr D3DFMT		from_dxgi(DXGI_FORMAT f)	{ return D3DFMT((uint32)f | 0x80000000); }
-
-	enum {
-		DDS_ALPHA		= 0x1,
-		DDS_ALPHAONLY	= 0x2,
-		DDS_FOURCC		= 0x4,
-		DDS_RGB			= 0x40,
-		DDS_RGBA		= DDS_RGB | DDS_ALPHA,
-		DDS_YUV			= 0x200,
-		DDS_LUMINANCE	= 0x20000,
-	};
+	constexpr bool		is_dxgi(D3DFMT f)	{ return (uint32)f & 0x80000000; }
+	constexpr DXGI		to_dxgi(D3DFMT f)	{ return DXGI((uint32)f & 0x7fffffff); }
+	constexpr D3DFMT	dxgi(DXGI f)	{ return D3DFMT((uint32)f | 0x80000000); }
 
 	struct PIXELFORMAT {
+		enum FLAGS {
+			ALPHA		= 0x1,
+			ALPHAONLY	= 0x2,
+			FOURCC		= 0x4,
+			RGB			= 0x40,
+			RGBA		= RGB | ALPHA,
+			YUV			= 0x200,
+			LUMINANCE	= 0x20000,
+		};
+
 		uint32le	size;
 		uint32le	flags;
 		uint32le	fourCC;
@@ -260,11 +248,11 @@ namespace DDS {
 		};
 
 		PIXELFORMAT() {}
-		constexpr PIXELFORMAT(D3DFMT f) : size(sizeof(*this)), flags(DDS_FOURCC), fourCC((uint32)f), bits(0), m0(0), m1(0), m2(0), m3(0) {}
-		constexpr PIXELFORMAT(D3DFMT f, uint32 bits, uint32 lum) : size(sizeof(*this)), flags(DDS_RGB|DDS_LUMINANCE), fourCC((uint32)f), bits(bits), m0(lum), m1(0), m2(0), m3(0) {}
-		constexpr PIXELFORMAT(D3DFMT f, uint32 bits, uint32 lum, uint32 a) : size(sizeof(*this)), flags(DDS_RGBA|DDS_LUMINANCE), fourCC((uint32)f), bits(bits), m0(lum), m1(0), m2(0), m3(a) {}
-		constexpr PIXELFORMAT(D3DFMT f, uint32 bits, uint32 r, uint32 g, uint32 b) : size(sizeof(*this)), flags(DDS_RGB), fourCC((uint32)f), bits(bits), m0(r), m1(g), m2(b), m3(0) {}
-		constexpr PIXELFORMAT(D3DFMT f, uint32 bits, uint32 r, uint32 g, uint32 b, uint32 a) : size(sizeof(*this)), flags(DDS_RGBA), fourCC((uint32)f), bits(bits), m0(r), m1(g), m2(b), m3(a) {}
+		constexpr PIXELFORMAT(D3DFMT f) : size(sizeof(*this)), flags(FOURCC), fourCC((uint32)f), bits(0), m0(0), m1(0), m2(0), m3(0) {}
+		constexpr PIXELFORMAT(D3DFMT f, uint32 bits, uint32 lum) : size(sizeof(*this)), flags(RGB|LUMINANCE), fourCC((uint32)f), bits(bits), m0(lum), m1(0), m2(0), m3(0) {}
+		constexpr PIXELFORMAT(D3DFMT f, uint32 bits, uint32 lum, uint32 a) : size(sizeof(*this)), flags(RGBA|LUMINANCE), fourCC((uint32)f), bits(bits), m0(lum), m1(0), m2(0), m3(a) {}
+		constexpr PIXELFORMAT(D3DFMT f, uint32 bits, uint32 r, uint32 g, uint32 b) : size(sizeof(*this)), flags(RGB), fourCC((uint32)f), bits(bits), m0(r), m1(g), m2(b), m3(0) {}
+		constexpr PIXELFORMAT(D3DFMT f, uint32 bits, uint32 r, uint32 g, uint32 b, uint32 a) : size(sizeof(*this)), flags(RGBA), fourCC((uint32)f), bits(bits), m0(r), m1(g), m2(b), m3(a) {}
 	};
 
 
@@ -383,28 +371,51 @@ namespace DDS {
 			uint32		dwVolumeDepth;
 		};
 		uint32			dwReserved2;
+		HEADER()  { clear(*this); size = sizeof(*this); ddspf.size = sizeof(ddspf); }
+		HEADER(int _width, int _height) : HEADER() {
+			width	= _width;
+			height	= _height;
+			flags	= DDSD_TEXTURE | DDSD_LINEARSIZE;
+			dwCaps	= DDSCAPS_TEXTURE;
+
+		}
+		void	SetMips(int mips) {
+			flags			|= DDSD_MIPMAPCOUNT;
+			dwCaps			|= DDSCAPS_MIPMAP;
+			dwMipMapCount	= mips;
+		}
+		void	SetCube() {
+			dwCaps			|= DDSCAPS_COMPLEX;
+			dwCaps2			|= DDSCAPS2_CUBEMAP | DDSCAPS2_CUBEMAP_ALL_FACES;
+		}
+		void	SetVolume(int depth) {
+			flags			|= DDSD_DEPTH;
+			dwCaps2			|= DDSCAPS2_VOLUME;
+			dwDepth			= depth;
+		}
+
 	};
 
-#ifndef __d3d10_h__
-	enum D3D10_RESOURCE_DIMENSION {
-		D3D10_RESOURCE_DIMENSION_UNKNOWN 		= 0,
-		D3D10_RESOURCE_DIMENSION_BUFFER 		= 1,
-		D3D10_RESOURCE_DIMENSION_TEXTURE1D 		= 2,
-		D3D10_RESOURCE_DIMENSION_TEXTURE2D 		= 3,
-		D3D10_RESOURCE_DIMENSION_TEXTURE3D 		= 4,
-	};
-	enum D3D10_RESOURCE_MISC_FLAG {
-		D3D10_RESOURCE_MISC_GENERATE_MIPS 		= 0x1L,
-		D3D10_RESOURCE_MISC_SHARED 				= 0x2L,
-		D3D10_RESOURCE_MISC_TEXTURECUBE 		= 0x4L,
-		D3D10_RESOURCE_MISC_SHARED_KEYEDMUTEX	= 0x10L,
-		D3D10_RESOURCE_MISC_GDI_COMPATIBLE 		= 0x20L,
-	};
-#endif
+
 	struct HEADER_DS10: littleendian_types {
-		DXGI_FORMAT		dxgiFormat;
-		D3D10_RESOURCE_DIMENSION resourceDimension;
-		uint32			miscFlag;
+		enum DIMENSION : uint32 {
+			DIMENSION_UNKNOWN 		= 0,
+			DIMENSION_BUFFER 		= 1,
+			DIMENSION_TEXTURE1D 	= 2,
+			DIMENSION_TEXTURE2D 	= 3,
+			DIMENSION_TEXTURE3D 	= 4,
+		};
+		enum FLAG {
+			GENERATE_MIPS 		= 0x1L,
+			SHARED 				= 0x2L,
+			TEXTURECUBE 		= 0x4L,
+			SHARED_KEYEDMUTEX	= 0x10L,
+			GDI_COMPATIBLE 		= 0x20L,
+		};
+
+		DXGI		format;
+		DIMENSION		dim;
+		uint32			flags;
 		uint32			arraySize;
 		uint32			reserved;
 	};
@@ -418,14 +429,14 @@ namespace DDS {
 	typedef TexelFormat<32, 16,8, 8,8, 0,8, 24,8>	Col32_A8R8G8B8;
 	typedef TexelFormat<32,  0,8, 8,8, 16,8, 24,8>	Col32_A8B8G8R8;
 
-	const PIXELFORMAT DDSPF_DXT1(D3DFMT::DXT1);
-	const PIXELFORMAT DDSPF_DXT2(D3DFMT::DXT2);
-	const PIXELFORMAT DDSPF_DXT3(D3DFMT::DXT3);
-	const PIXELFORMAT DDSPF_DXT4(D3DFMT::DXT4);
-	const PIXELFORMAT DDSPF_DXT5(D3DFMT::DXT5);
-	const PIXELFORMAT DDSPF_R8G8_B8G8(D3DFMT::R8G8_B8G8);
-	const PIXELFORMAT DDSPF_G8R8_G8B8(D3DFMT::G8R8_G8B8);
-	const PIXELFORMAT DDSPF_DS10(D3DFMT::DS10);
+	const PIXELFORMAT DDSPF_DXT1		(D3DFMT::DXT1);
+	const PIXELFORMAT DDSPF_DXT2		(D3DFMT::DXT2);
+	const PIXELFORMAT DDSPF_DXT3		(D3DFMT::DXT3);
+	const PIXELFORMAT DDSPF_DXT4		(D3DFMT::DXT4);
+	const PIXELFORMAT DDSPF_DXT5		(D3DFMT::DXT5);
+	const PIXELFORMAT DDSPF_R8G8_B8G8	(D3DFMT::R8G8_B8G8);
+	const PIXELFORMAT DDSPF_G8R8_G8B8	(D3DFMT::G8R8_G8B8);
+	const PIXELFORMAT DDSPF_DS10		(D3DFMT("DS10"_u32));
 	const PIXELFORMAT DDSPF_A8R8G8B8	(D3DFMT::A8R8G8B8,	32, 0x00ff0000, 0x0000ff00, 0x000000ff, 0xff000000);
 	const PIXELFORMAT DDSPF_A8B8G8R8	(D3DFMT::A8B8G8R8,	32, 0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000);
 	const PIXELFORMAT DDSPF_A1R5G5B5	(D3DFMT::A1R5G5B5,	16, 0x00007c00, 0x000003e0, 0x0000001f, 0x00008000);
@@ -435,29 +446,32 @@ namespace DDS {
 	const PIXELFORMAT DDSPF_A8L8		(D3DFMT::A8L8,		16, 0x000000ff, 0x0000ff00);
 	const PIXELFORMAT DDSPF_L8			(D3DFMT::L8,		8,	0x000000ff);
 
-	DXGI_FORMAT	GetDXGIformat(D3DFMT fmt) {
+	DXGI	GetDXGIformat(D3DFMT fmt) {
+		if (is_dxgi(fmt))
+			return to_dxgi(fmt);
+
 		switch (fmt) {
-			case D3DFMT::R8G8B8:			return DXGI_FORMAT::B8G8R8A8_UNORM;
-			case D3DFMT::A8R8G8B8:			return DXGI_FORMAT::B8G8R8A8_UNORM;
-			case D3DFMT::X8R8G8B8:			return DXGI_FORMAT::B8G8R8A8_UNORM;
-			case D3DFMT::R5G6B5:			return DXGI_FORMAT::B5G6R5_UNORM;
-			case D3DFMT::X1R5G5B5:			return DXGI_FORMAT::B5G5R5A1_UNORM;
-			case D3DFMT::A1R5G5B5:			return DXGI_FORMAT::B5G5R5A1_UNORM;//??
+			case D3DFMT::R8G8B8:			return DXGI::B8G8R8A8_UNORM;
+			case D3DFMT::A8R8G8B8:			return DXGI::B8G8R8A8_UNORM;
+			case D3DFMT::X8R8G8B8:			return DXGI::B8G8R8A8_UNORM;
+			case D3DFMT::R5G6B5:			return DXGI::B5G6R5_UNORM;
+			case D3DFMT::X1R5G5B5:			return DXGI::B5G5R5A1_UNORM;
+			case D3DFMT::A1R5G5B5:			return DXGI::B5G5R5A1_UNORM;//??
 //			case D3DFMT::A4R4G4B4:			return
 //			case D3DFMT::R3G3B2:			return
-			case D3DFMT::A8:				return DXGI_FORMAT::A8_UNORM;
+			case D3DFMT::A8:				return DXGI::A8_UNORM;
 //			case D3DFMT::A8R3G3B2:			return
 //			case D3DFMT::X4R4G4B4:			return
-			case D3DFMT::A2B10G10R10:		return DXGI_FORMAT::R10G10B10A2_UNORM;
-			case D3DFMT::A8B8G8R8:			return DXGI_FORMAT::R8G8B8A8_UNORM;
-			case D3DFMT::X8B8G8R8:			return DXGI_FORMAT::R8G8B8A8_UNORM;
-			case D3DFMT::G16R16:			return DXGI_FORMAT::R16G16_UNORM;
-			case D3DFMT::A2R10G10B10:		return DXGI_FORMAT::R10G10B10A2_UNORM;
-			case D3DFMT::A16B16G16R16:		return DXGI_FORMAT::R16G16B16A16_UNORM;
-			case D3DFMT::A8P8:				return DXGI_FORMAT::R8G8_UNORM;
-			case D3DFMT::P8:				return DXGI_FORMAT::A8_UNORM;
-			case D3DFMT::L8:				return DXGI_FORMAT::A8_UNORM;
-			case D3DFMT::A8L8:				return DXGI_FORMAT::R8G8_UNORM;
+			case D3DFMT::A2B10G10R10:		return DXGI::R10G10B10A2_UNORM;
+			case D3DFMT::A8B8G8R8:			return DXGI::R8G8B8A8_UNORM;
+			case D3DFMT::X8B8G8R8:			return DXGI::R8G8B8A8_UNORM;
+			case D3DFMT::G16R16:			return DXGI::R16G16_UNORM;
+			case D3DFMT::A2R10G10B10:		return DXGI::R10G10B10A2_UNORM;
+			case D3DFMT::A16B16G16R16:		return DXGI::R16G16B16A16_UNORM;
+			case D3DFMT::A8P8:				return DXGI::R8G8_UNORM;
+			case D3DFMT::P8:				return DXGI::A8_UNORM;
+			case D3DFMT::L8:				return DXGI::A8_UNORM;
+			case D3DFMT::A8L8:				return DXGI::R8G8_UNORM;
 //			case D3DFMT::A4L4:				return
 //			case D3DFMT::V8U8:				return
 //			case D3DFMT::L6V5U5:			return
@@ -465,22 +479,22 @@ namespace DDS {
 //			case D3DFMT::Q8W8V8U8:			return
 //			case D3DFMT::V16U16:			return
 //			case D3DFMT::A2W10V10U10:		return
-			case D3DFMT::R16F:				return DXGI_FORMAT::R16_FLOAT;
-			case D3DFMT::G16R16F:			return DXGI_FORMAT::R16G16_FLOAT;
-			case D3DFMT::R32F:				return DXGI_FORMAT::R32_FLOAT;
-			case D3DFMT::G32R32F:			return DXGI_FORMAT::R32G32_FLOAT;
-			case D3DFMT::DXT1:				return DXGI_FORMAT::BC1_UNORM;
+			case D3DFMT::R16F:				return DXGI::R16_FLOAT;
+			case D3DFMT::G16R16F:			return DXGI::R16G16_FLOAT;
+			case D3DFMT::R32F:				return DXGI::R32_FLOAT;
+			case D3DFMT::G32R32F:			return DXGI::R32G32_FLOAT;
+			case D3DFMT::DXT1:				return DXGI::BC1_UNORM;
 			case D3DFMT::DXT2:
-			case D3DFMT::DXT3:				return DXGI_FORMAT::BC2_UNORM;
+			case D3DFMT::DXT3:				return DXGI::BC2_UNORM;
 			case D3DFMT::DXT4:
-			case D3DFMT::DXT5:				return DXGI_FORMAT::BC2_UNORM;
-			case D3DFMT::BC4:				return DXGI_FORMAT::BC4_UNORM;
-			case D3DFMT::BC5:				return DXGI_FORMAT::BC5_UNORM;
-			case D3DFMT::R8G8_B8G8:			return DXGI_FORMAT::G8R8_G8B8_UNORM;
-			case D3DFMT::G8R8_G8B8:			return DXGI_FORMAT::R8G8_B8G8_UNORM;
-			case D3DFMT::A16B16G16R16F:		return DXGI_FORMAT::R16G16B16A16_FLOAT;
-			case D3DFMT::A32B32G32R32F:		return DXGI_FORMAT::R32G32B32A32_FLOAT;
-			default:						return DXGI_FORMAT::UNKNOWN;
+			case D3DFMT::DXT5:				return DXGI::BC2_UNORM;
+			case D3DFMT::BC4:				return DXGI::BC4_UNORM;
+			case D3DFMT::BC5:				return DXGI::BC5_UNORM;
+			case D3DFMT::R8G8_B8G8:			return DXGI::G8R8_G8B8_UNORM;
+			case D3DFMT::G8R8_G8B8:			return DXGI::R8G8_B8G8_UNORM;
+			case D3DFMT::A16B16G16R16F:		return DXGI::R16G16B16A16_FLOAT;
+			case D3DFMT::A32B32G32R32F:		return DXGI::R32G32B32A32_FLOAT;
+			default:						return DXGI::UNKNOWN;
 		}
 	}
 
@@ -496,7 +510,7 @@ namespace DDS {
 			case D3DFMT::DXT5:			return vbitmap_format(5,6,5,8,		vbitmap_format::ALL_COMP);
 			case D3DFMT::BC4:			return vbitmap_format(8,0,0,0,		vbitmap_format::ALL_COMP);
 			case D3DFMT::BC5:			return vbitmap_format(8,8,0,0,		vbitmap_format::ALL_COMP);
-			case D3DFMT::BC7_UNORM:		return vbitmap_format(5,6,5,5,		vbitmap_format::ALL_COMP);
+			case dxgi(DXGI::BC7_UNORM):	return vbitmap_format(5,6,5,5,		vbitmap_format::ALL_COMP);
 			case D3DFMT::A8:			return vbitmap_format(0,0,0,8);
 //			case D3DFMT::A1R5G5B5:		return vbitmap_format(5,5,5,1);
 			case D3DFMT::A4R4G4B4:		return vbitmap_format(4,4,4,4);
@@ -522,167 +536,137 @@ namespace DDS {
 			}
 		}
 	}
-	vbitmap_format Getformat(DXGI_FORMAT dxgi) {
+	vbitmap_format Getformat(DXGI dxgi) {
 		switch (dxgi) {
-			case DXGI_FORMAT::R32G32B32A32_TYPELESS:
-			case DXGI_FORMAT::R32G32B32A32_FLOAT:
-			case DXGI_FORMAT::R32G32B32A32_UINT:
-			case DXGI_FORMAT::R32G32B32A32_SINT:	return vbitmap_format(32,32,32,32);
-			case DXGI_FORMAT::R32G32B32_TYPELESS:
-			case DXGI_FORMAT::R32G32B32_FLOAT:
-			case DXGI_FORMAT::R32G32B32_UINT:
-			case DXGI_FORMAT::R32G32B32_SINT:		return vbitmap_format(32,32,32,0);
+			case DXGI::R32G32B32A32_TYPELESS:	case DXGI::R32G32B32A32_FLOAT:		case DXGI::R32G32B32A32_UINT:		case DXGI::R32G32B32A32_SINT:
+				return vbitmap_format(32,32,32,32);
 
-			case DXGI_FORMAT::R16G16B16A16_TYPELESS:
-			case DXGI_FORMAT::R16G16B16A16_FLOAT:
-			case DXGI_FORMAT::R16G16B16A16_UNORM:
-			case DXGI_FORMAT::R16G16B16A16_UINT:
-			case DXGI_FORMAT::R16G16B16A16_SNORM:
-			case DXGI_FORMAT::R16G16B16A16_SINT:	return vbitmap_format(16,16,16,16);
+			case DXGI::R32G32B32_TYPELESS:		case DXGI::R32G32B32_FLOAT:			case DXGI::R32G32B32_UINT:			case DXGI::R32G32B32_SINT:
+				return vbitmap_format(32,32,32,0);
 
-			case DXGI_FORMAT::R32G32_TYPELESS:
-			case DXGI_FORMAT::R32G32_FLOAT:
-			case DXGI_FORMAT::R32G32_UINT:
-			case DXGI_FORMAT::R32G32_SINT:			return vbitmap_format(32,32,0,0);
+			case DXGI::R16G16B16A16_TYPELESS:	case DXGI::R16G16B16A16_FLOAT:		case DXGI::R16G16B16A16_UNORM:		case DXGI::R16G16B16A16_UINT:	case DXGI::R16G16B16A16_SNORM:	case DXGI::R16G16B16A16_SINT:
+				return vbitmap_format(16,16,16,16);
 
-			case DXGI_FORMAT::R32G8X24_TYPELESS:
-			case DXGI_FORMAT::D32_FLOAT_S8X24_UINT:
-			case DXGI_FORMAT::R32_FLOAT_X8X24_TYPELESS:
-			case DXGI_FORMAT::X32_TYPELESS_G8X24_UINT: return vbitmap_format(32,8,24,0);
+			case DXGI::R32G32_TYPELESS:			case DXGI::R32G32_FLOAT:			case DXGI::R32G32_UINT:				case DXGI::R32G32_SINT:
+				return vbitmap_format(32,32,0,0);
 
-			case DXGI_FORMAT::R10G10B10A2_TYPELESS:
-			case DXGI_FORMAT::R10G10B10A2_UNORM:
-			case DXGI_FORMAT::R10G10B10A2_UINT:		return vbitmap_format(10,10,10,2);
-			case DXGI_FORMAT::R11G11B10_FLOAT:		return vbitmap_format(11,11,10,0);
+			case DXGI::R32G8X24_TYPELESS:		case DXGI::D32_FLOAT_S8X24_UINT:	case DXGI::R32_FLOAT_X8X24_TYPELESS:case DXGI::X32_TYPELESS_G8X24_UINT:
+				return vbitmap_format(32,8,24,0);
 
-			case DXGI_FORMAT::R8G8B8A8_TYPELESS:
-			case DXGI_FORMAT::R8G8B8A8_UNORM:
-			case DXGI_FORMAT::R8G8B8A8_UNORM_SRGB:
-			case DXGI_FORMAT::R8G8B8A8_UINT:
-			case DXGI_FORMAT::R8G8B8A8_SNORM:
-			case DXGI_FORMAT::R8G8B8A8_SINT:		return vbitmap_format(8,8,8,8);
+			case DXGI::R10G10B10A2_TYPELESS:	case DXGI::R10G10B10A2_UNORM:		case DXGI::R10G10B10A2_UINT:
+				return vbitmap_format(10,10,10,2);
+			case DXGI::R11G11B10_FLOAT:
+				return vbitmap_format(11,11,10,0);
 
-			case DXGI_FORMAT::R16G16_TYPELESS:
-			case DXGI_FORMAT::R16G16_FLOAT:
-			case DXGI_FORMAT::R16G16_UNORM:
-			case DXGI_FORMAT::R16G16_UINT:
-			case DXGI_FORMAT::R16G16_SNORM:
-			case DXGI_FORMAT::R16G16_SINT:			return vbitmap_format(16,16,0,0);
+			case DXGI::R8G8B8A8_TYPELESS:		case DXGI::R8G8B8A8_UNORM:			case DXGI::R8G8B8A8_UNORM_SRGB:		case DXGI::R8G8B8A8_UINT:		case DXGI::R8G8B8A8_SNORM:		case DXGI::R8G8B8A8_SINT:
+				return vbitmap_format(8,8,8,8);
 
-			case DXGI_FORMAT::R32_TYPELESS:
-			case DXGI_FORMAT::D32_FLOAT:
-			case DXGI_FORMAT::R32_FLOAT:
-			case DXGI_FORMAT::R32_UINT:
-			case DXGI_FORMAT::R32_SINT:				return vbitmap_format(32,0,0,0);
+			case DXGI::R16G16_TYPELESS:			case DXGI::R16G16_FLOAT:			case DXGI::R16G16_UNORM:			case DXGI::R16G16_UINT:			case DXGI::R16G16_SNORM:		case DXGI::R16G16_SINT:
+				return vbitmap_format(16,16,0,0);
 
-			case DXGI_FORMAT::R24G8_TYPELESS:
-			case DXGI_FORMAT::D24_UNORM_S8_UINT:
-			case DXGI_FORMAT::R24_UNORM_X8_TYPELESS:
-			case DXGI_FORMAT::X24_TYPELESS_G8_UINT:	return vbitmap_format(24,8,0,0);
+			case DXGI::R32_TYPELESS:			case DXGI::D32_FLOAT:				case DXGI::R32_FLOAT:				case DXGI::R32_UINT:			case DXGI::R32_SINT:
+				return vbitmap_format(32,0,0,0);
 
-			case DXGI_FORMAT::R8G8_TYPELESS:
-			case DXGI_FORMAT::R8G8_UNORM:
-			case DXGI_FORMAT::R8G8_UINT:
-			case DXGI_FORMAT::R8G8_SNORM:
-			case DXGI_FORMAT::R8G8_SINT:			return vbitmap_format(8,8,0,0);
+			case DXGI::R24G8_TYPELESS:			case DXGI::D24_UNORM_S8_UINT:		case DXGI::R24_UNORM_X8_TYPELESS:	case DXGI::X24_TYPELESS_G8_UINT:
+				return vbitmap_format(24,8,0,0);
 
-			case DXGI_FORMAT::R16_TYPELESS:
-			case DXGI_FORMAT::R16_FLOAT:
-			case DXGI_FORMAT::D16_UNORM:
-			case DXGI_FORMAT::R16_UNORM:
-			case DXGI_FORMAT::R16_UINT:
-			case DXGI_FORMAT::R16_SNORM:
-			case DXGI_FORMAT::R16_SINT:				return vbitmap_format(16,0,0,0);
+			case DXGI::R8G8_TYPELESS:			case DXGI::R8G8_UNORM:				case DXGI::R8G8_UINT:				case DXGI::R8G8_SNORM:			case DXGI::R8G8_SINT:
+				return vbitmap_format(8,8,0,0);
 
-			case DXGI_FORMAT::R8_TYPELESS:
-			case DXGI_FORMAT::R8_UNORM:
-			case DXGI_FORMAT::R8_UINT:
-			case DXGI_FORMAT::R8_SNORM:
-			case DXGI_FORMAT::R8_SINT:				return vbitmap_format(8,0,0,0);
+			case DXGI::R16_TYPELESS:			case DXGI::R16_FLOAT:				case DXGI::D16_UNORM:				case DXGI::R16_UNORM:			case DXGI::R16_UINT:			case DXGI::R16_SNORM:			case DXGI::R16_SINT:
+				return vbitmap_format(16,0,0,0);
 
-			case DXGI_FORMAT::A8_UNORM:				return vbitmap_format(0,0,0,8);
-			case DXGI_FORMAT::R1_UNORM:				return vbitmap_format(1,0,0,0);
+			case DXGI::R8_TYPELESS:				case DXGI::R8_UNORM:				case DXGI::R8_UINT:					case DXGI::R8_SNORM:			case DXGI::R8_SINT:	
+				return vbitmap_format(8,0,0,0);
 
-			case DXGI_FORMAT::R9G9B9E5_SHAREDEXP:	return vbitmap_format(9,9,9,0,		vbitmap_format::FLOAT);
-			case DXGI_FORMAT::R8G8_B8G8_UNORM:
-			case DXGI_FORMAT::G8R8_G8B8_UNORM:
+			case DXGI::A8_UNORM:				return vbitmap_format(0,0,0,8);
+			case DXGI::R1_UNORM:				return vbitmap_format(1,0,0,0);
 
-			case DXGI_FORMAT::BC1_TYPELESS:
-			case DXGI_FORMAT::BC1_UNORM:
-			case DXGI_FORMAT::BC1_UNORM_SRGB:		return vbitmap_format(5,6,5,1,		vbitmap_format::ALL_COMP);
-			case DXGI_FORMAT::BC2_TYPELESS:
-			case DXGI_FORMAT::BC2_UNORM:
-			case DXGI_FORMAT::BC2_UNORM_SRGB:		return vbitmap_format(5,6,5,4,		vbitmap_format::ALL_COMP);
-			case DXGI_FORMAT::BC3_TYPELESS:
-			case DXGI_FORMAT::BC3_UNORM:
-			case DXGI_FORMAT::BC3_UNORM_SRGB:		return vbitmap_format(5,6,5,4,		vbitmap_format::RGB_COMP);
-			case DXGI_FORMAT::BC4_TYPELESS:
-			case DXGI_FORMAT::BC4_UNORM:
-			case DXGI_FORMAT::BC4_SNORM:			return vbitmap_format(8,0,0,0,		vbitmap_format::R_COMP);
-			case DXGI_FORMAT::BC5_TYPELESS:
-			case DXGI_FORMAT::BC5_UNORM:
-			case DXGI_FORMAT::BC5_SNORM:			return vbitmap_format(8,8,0,0,		vbitmap_format::RG_COMP);
+			case DXGI::R9G9B9E5_SHAREDEXP:		return vbitmap_format(9,9,9,0,		vbitmap_format::FLOAT);
+//			case DXGI::R8G8_B8G8_UNORM:
+//			case DXGI::G8R8_G8B8_UNORM:
 
-			case DXGI_FORMAT::B5G6R5_UNORM:			return vbitmap_format(5,6,5,0);
-			case DXGI_FORMAT::B5G5R5A1_UNORM:		return vbitmap_format(5,5,5,1);
-			case DXGI_FORMAT::B8G8R8A8_UNORM:		return vbitmap_format(8,8,8,8);
-			case DXGI_FORMAT::B8G8R8X8_UNORM:		return vbitmap_format(8,8,8,8);
-			case DXGI_FORMAT::R10G10B10_XR_BIAS_A2_UNORM:
-			case DXGI_FORMAT::B8G8R8A8_TYPELESS:
-			case DXGI_FORMAT::B8G8R8A8_UNORM_SRGB:
-			case DXGI_FORMAT::B8G8R8X8_TYPELESS:
-			case DXGI_FORMAT::B8G8R8X8_UNORM_SRGB:
+			case DXGI::BC1_TYPELESS:			case DXGI::BC1_UNORM:			case DXGI::BC1_UNORM_SRGB:
+				return vbitmap_format(5,6,5,1, vbitmap_format::ALL_COMP);
+			case DXGI::BC2_TYPELESS:			case DXGI::BC2_UNORM:			case DXGI::BC2_UNORM_SRGB:
+				return vbitmap_format(5,6,5,4, vbitmap_format::ALL_COMP);
+			case DXGI::BC3_TYPELESS:			case DXGI::BC3_UNORM:			case DXGI::BC3_UNORM_SRGB:
+				return vbitmap_format(5,6,5,4, vbitmap_format::RGB_COMP);
+			case DXGI::BC4_TYPELESS:			case DXGI::BC4_UNORM:			case DXGI::BC4_SNORM:
+				return vbitmap_format(8,0,0,0, vbitmap_format::R_COMP);
+			case DXGI::BC5_TYPELESS:			case DXGI::BC5_UNORM:			case DXGI::BC5_SNORM:
+				return vbitmap_format(8,8,0,0, vbitmap_format::RG_COMP);
 
-			case DXGI_FORMAT::BC6H_TYPELESS:
-			case DXGI_FORMAT::BC6H_UF16:			return vbitmap_format(16,16,16,0, vbitmap_format::RGB_COMP | vbitmap_format::FLOAT);
-			case DXGI_FORMAT::BC6H_SF16:			return vbitmap_format(16,16,16,0, vbitmap_format::RGB_COMP | vbitmap_format::FLOAT | vbitmap_format::SIGNED);
-			case DXGI_FORMAT::BC7_TYPELESS:
-			case DXGI_FORMAT::BC7_UNORM:
-			case DXGI_FORMAT::BC7_UNORM_SRGB:		return vbitmap_format(8,8,8,8, vbitmap_format::ALL_COMP);
-			default:								return vbitmap_format();
+			case DXGI::B5G6R5_UNORM:			return vbitmap_format(5,6,5,0);
+			case DXGI::B5G5R5A1_UNORM:			return vbitmap_format(5,5,5,1);
+			case DXGI::B8G8R8A8_UNORM:			return vbitmap_format(8,8,8,8);
+			case DXGI::B8G8R8X8_UNORM:			return vbitmap_format(8,8,8,8);
+			case DXGI::R10G10B10_XR_BIAS_A2_UNORM:
+			case DXGI::B8G8R8A8_TYPELESS:
+			case DXGI::B8G8R8A8_UNORM_SRGB:
+			case DXGI::B8G8R8X8_TYPELESS:
+			case DXGI::B8G8R8X8_UNORM_SRGB:
+
+			case DXGI::BC6H_TYPELESS:
+			case DXGI::BC6H_UF16:				return vbitmap_format(16,16,16,0, vbitmap_format::RGB_COMP | vbitmap_format::FLOAT);
+			case DXGI::BC6H_SF16:				return vbitmap_format(16,16,16,0, vbitmap_format::RGB_COMP | vbitmap_format::FLOAT | vbitmap_format::SIGNED);
+			case DXGI::BC7_TYPELESS:
+			case DXGI::BC7_UNORM:
+			case DXGI::BC7_UNORM_SRGB:			return vbitmap_format(8,8,8,8, vbitmap_format::ALL_COMP);
+			default:							return vbitmap_format();
 		}
 	}
 
 	uint32 CalcSurfaceStride(uint32 width, const PIXELFORMAT &ddspf) {
 		DDS::D3DFMT	fmt = (DDS::D3DFMT)ddspf.fourCC;
 		switch (fmt) {
-			case D3DFMT::DXT1:
-			case D3DFMT::BC4:
+			case D3DFMT::DXT1:			case D3DFMT::DXT1b:			case D3DFMT::BC4:
 				return ((width + 3) / 4) * 8;
-			case D3DFMT::DXT2:
-			case D3DFMT::DXT3:
-			case D3DFMT::DXT4:
-			case D3DFMT::DXT5:
-			case D3DFMT::BC5:
+
+			case D3DFMT::DXT2:			case D3DFMT::DXT2b:			case D3DFMT::DXT3:			case D3DFMT::DXT4:
+			case D3DFMT::DXT4b:			case D3DFMT::DXT5:			case D3DFMT::BC5:
 				return ((width + 3) / 4) * 16;
-			case D3DFMT::R8G8_B8G8:
-			case D3DFMT::G8R8_G8B8:
-			case D3DFMT::UYVY:
+			case D3DFMT::R8G8_B8G8:		case D3DFMT::G8R8_G8B8:		case D3DFMT::UYVY:			case D3DFMT::YUY2:
 				return (width + 1) / 2 * 4;
-			case D3DFMT::A8R8G8B8:
-			case D3DFMT::A8B8G8R8:
+
+		// 128 bit
+			case D3DFMT::A32B32G32R32F:
+				return 16 * width;
+
+		// 64 bit
+			case D3DFMT::A16B16G16R16:	case D3DFMT::Q16W16V16U16:	case D3DFMT::A16B16G16R16F:	case D3DFMT::G32R32F:
+			case dxgi(DXGI::R16G16B16A16_FLOAT):
+				return 8 * width;
+		// 32 bit
+			case D3DFMT::A8R8G8B8:		case D3DFMT::A8B8G8R8:		case D3DFMT::X8R8G8B8:		case D3DFMT::X1R5G5B5:
+			case D3DFMT::A2B10G10R10:	case D3DFMT::X8B8G8R8:		case D3DFMT::G16R16:		case D3DFMT::A2R10G10B10:
+			case D3DFMT::X8L8V8U8:		case D3DFMT::Q8W8V8U8:		case D3DFMT::V16U16:		case D3DFMT::A2W10V10U10:
+			case D3DFMT::D32:			case D3DFMT::D24S8:			case D3DFMT::D24X8:			case D3DFMT::D24X4S4:
+			case D3DFMT::D32F_LOCKABLE:	case D3DFMT::D24FS8:		case D3DFMT::G16R16F:		case D3DFMT::R32F:
 				return 4 * width;
-			case D3DFMT::B8G8R8:
-			case D3DFMT::R8G8B8:
+		// 24 bit
+			case D3DFMT::B8G8R8:		case D3DFMT::R8G8B8:
 				return 3 * width;
-			case D3DFMT::A8P8:
-			case D3DFMT::A8L8:
-			case D3DFMT::A1R5G5B5:
-			case D3DFMT::A4R4G4B4:
-			case D3DFMT::R5G6B5:
+		// 16 bit
+			case D3DFMT::A8P8:			case D3DFMT::A8L8:			case D3DFMT::A1R5G5B5:		case D3DFMT::A4R4G4B4:
+			case D3DFMT::R5G6B5:		case D3DFMT::X4R4G4B4:		case D3DFMT::V8U8:			case D3DFMT::L6V5U5:
+			case D3DFMT::D16_LOCKABLE:	case D3DFMT::D15S1:			case D3DFMT::D16:			case D3DFMT::L16:
+			case D3DFMT::R16F:
 				return 2 * width;
-			case D3DFMT::L8:
-			case D3DFMT::P8:
+		// 8 bit
+			case D3DFMT::L8:			case D3DFMT::P8:			case D3DFMT::A8:			case D3DFMT::A8R3G3B2:
+			case D3DFMT::R3G3B2:		case D3DFMT::A4L4:
 				return width;
 
-			case D3DFMT::BC6H_UF16:
-			case D3DFMT::BC6H_SF16:
-			case D3DFMT::BC7_UNORM:
-			case D3DFMT::BC7_UNORM_SRGB:
+			case dxgi(DXGI::BC6H_UF16):
+			case dxgi(DXGI::BC6H_SF16):
+			case dxgi(DXGI::BC7_UNORM):
+			case dxgi(DXGI::BC7_UNORM_SRGB):
 				width = (width + 3) / 4;
-				if (fmt <= from_dxgi(DDS::DXGI_FORMAT::BC1_UNORM_SRGB))
+				if (fmt <= dxgi(DDS::DXGI::BC1_UNORM_SRGB))
 					return width * 8;
 				return width * 16;
+
 			default: {
 				if (is_dxgi(fmt))
 					return (Getformat(to_dxgi(fmt)).bits() + 7) / 8 * width;
@@ -700,10 +684,10 @@ namespace DDS {
 			case D3DFMT::DXT5:
 			case D3DFMT::BC4:
 			case D3DFMT::BC5:
-			case D3DFMT::BC6H_UF16:
-			case D3DFMT::BC6H_SF16:
-			case D3DFMT::BC7_UNORM:
-			case D3DFMT::BC7_UNORM_SRGB:
+			case dxgi(DXGI::BC6H_UF16):
+			case dxgi(DXGI::BC6H_SF16):
+			case dxgi(DXGI::BC7_UNORM):
+			case dxgi(DXGI::BC7_UNORM_SRGB):
 				return 4;
 			default:
 				return 1;
@@ -727,26 +711,14 @@ namespace DDS {
 //using namespace DDS;
 
 struct DDSFileHandler: public BitmapFileHandler {
-	const char*		GetExt() override { return "dds";					}
-	const char*		GetDescription() override { return "DirectDraw Surface";	}
+	const char*		GetExt()				override { return "dds"; }
+	const char*		GetDescription()		override { return "DirectDraw Surface";	}
 	int				Check(istream_ref file) override { file.seek(0); return file.get<uint32>() == "DDS "_u32 ? CHECK_PROBABLE: CHECK_DEFINITE_NO; }
-
 	ISO_ptr<void>	Read(tag id, istream_ref file) override;
-
 #ifdef CROSS_PLATFORM
-	static bool				Write(bitmap &bm, ostream_ref file, DDS::D3DFMT fmt);
-	static bool				Write(HDRbitmap &bm, ostream_ref file, DDS::D3DFMT fmt);
-	static bool				Write(vbitmap &bm, ostream_ref file, DDS::D3DFMT fmt, uint32 flags);
-
 	bool			Write(ISO_ptr<void> p, ostream_ref file) override;
 #endif
 } dds;
-
-#ifdef CROSS_PLATFORM
-bool WriteDDS(vbitmap &bm, ostream_ref file, uint32 flags) {
-	return DDSFileHandler::Write(bm, file, DDS::D3DFMT::UNKNOWN, flags);
-}
-#endif
 
 vbitmap_format GetDDSFormat(void *dds_header) {
 	return DDS::Getformat(((DDS::HEADER*)((uint32*)dds_header + 1))->ddspf);
@@ -802,223 +774,167 @@ void PS3_DeSwizzle(uint32 width, uint32 height, uint32 depth, void *srce, void *
 	}
 }
 
-template<typename S, typename D> bool CopyPixels(const block<D, 2> &rect, S *srce, uint32 stride) {
-	int		width	= rect.template size<1>(), height = rect.template size<2>();
-	for (int y = 0; y < height; y++, srce = (S*)((uint8*)srce + stride))
-		copy_n((S*)srce, rect[y].begin(), width);
+template<bool S> struct MaskFormatT;
+template<bool S> static constexpr int num_elements_v<param_element<const uint32&, MaskFormatT<S>>> = 0;	// prevent match with HDRpixel's assign
+template<typename T, bool S> void assign(T &f, const param_element<const uint32&, MaskFormatT<S>> &c)	{
+	c.p.read(c.t, f);
+}
+
+struct MaskFormat {
+	uint32	rmask, gmask, bmask, amask;
+	uint32	rshift, gshift, bshift, ashift;
+	MaskFormat(const DDS::PIXELFORMAT &ddspf)
+		: rmask(ddspf.mask[0]), gmask(ddspf.mask[1]), bmask(ddspf.mask[2]), amask(ddspf.mask[3])
+		, rshift(highest_set_index(rmask) - 7), gshift(highest_set_index(gmask) - 7), bshift(highest_set_index(bmask) - 7), ashift(highest_set_index(amask) - 7)
+	{}
+	void	read(uint32 i, ISO_rgba &p)	const {
+		p = {
+			(i & rmask) >> rshift,
+			(i & gmask) >> gshift,
+			(i & bmask) >> bshift,
+			(i & amask) >> ashift
+		};
+	}
+};
+
+template<> struct MaskFormatT<false> : MaskFormat {
+	float	rscale, gscale, bscale, ascale;
+	MaskFormatT(const DDS::PIXELFORMAT &ddspf) : MaskFormat(ddspf),
+		rscale(rmask ? 1.0f / rmask : 0.f), gscale(gmask ? 1.0f / gmask : 0.f), bscale(bmask ? 1.0f / bmask : 0.f), ascale(amask ? 1.0f / amask : 0.f)
+	{}
+	using MaskFormat::read;
+	void	read(uint32 i, HDRpixel &p)	const {
+		p = {
+			(i & rmask) * rscale,
+			(i & gmask) * gscale,
+			(i & bmask) * bscale,
+			(i & amask) * ascale
+		};
+	}
+};
+
+template<> struct MaskFormatT<true> : MaskFormat {
+	float	rscale, gscale, bscale, ascale;
+	MaskFormatT(const DDS::PIXELFORMAT &ddspf) : MaskFormat(ddspf),
+		rscale(rmask ? 0.5f / rmask : 0.f), gscale(gmask ? 0.5f / gmask : 0.f), bscale(bmask ? 0.5f / bmask : 0.f), ascale(amask ? 0.5f / amask : 0.f)
+	{}
+	using MaskFormat::read;
+	void	read(uint32 i, HDRpixel &p)	const {
+		p = {
+			mask_sign_extend(i, rmask) * rscale,
+			mask_sign_extend(i, gmask) * gscale,
+			mask_sign_extend(i, bmask) * bscale,
+			mask_sign_extend(i, amask) * ascale
+		};
+	}
+};
+
+struct R8G8_B8G8 {
+	uint8	r, g0, b, g1;
+	bool	Decode(const block<ISO_rgba, 1>& block) const {
+		block[0] = ISO_rgba(r, g0, b);
+		block[1] = ISO_rgba(r, g1, b);
+		return true;
+	}
+	void	Encode(const block<ISO_rgba, 1>& block) {
+		r	= (block[0].r + block[1].r) / 2;
+		g0	= block[0].g;
+		b	= (block[0].b + block[1].b) / 2;
+		g1	= block[1].g;
+	}
+	template<typename D> friend void copy(block<const R8G8_B8G8, 1> &srce, D& dest)		{ decode_blocked<2>(srce, dest); }
+	template<typename S> friend void copy(block<S, 1> &srce, block<R8G8_B8G8, 1> &dest)	{ encode_blocked<2>(srce, dest); }
+};
+
+struct G8R8_G8B8 {
+	uint8	g0, r, g1, b;
+	bool	Decode(const block<ISO_rgba, 1>& block) const {
+		block[0] = ISO_rgba(r, g0, b);
+		block[1] = ISO_rgba(r, g1, b);
+		return true;
+	}
+	void	Encode(const block<ISO_rgba, 1>& block) {
+		r	= (block[0].r + block[1].r) / 2;
+		g0	= block[0].g;
+		b	= (block[0].b + block[1].b) / 2;
+		g1	= block[1].g;
+	}
+	template<typename D> friend void copy(block<const G8R8_G8B8, 1> &srce, D& dest)		{ decode_blocked<2>(srce, dest); }
+	template<typename S> friend void copy(block<S, 1> &srce, block<G8R8_G8B8, 1> &dest)	{ encode_blocked<2>(srce, dest); }
+};
+
+struct UYVY {
+	uint8 y0, v, y1, u;
+	bool	Decode(const block<ISO_rgba, 1>& block) const {
+		block[0] = ISO_rgba::YUV(y0, u, v);
+		block[1] = ISO_rgba::YUV(y1, u, v);
+		return true;
+	}
+	void	Encode(const block<ISO_rgba, 1>& block) {
+		ISO_ASSERT(0);
+	}
+	template<typename D> friend void copy(block<const UYVY, 1> &srce, D& dest) { decode_blocked<2>(srce, dest); }
+};
+
+
+template<typename S, typename D> bool CopyPixels(const block<D, 2> &dest, const void *srce, uint32 stride) {
+	copy(make_strided_block((const S*)srce, dest.template size<1>(), stride, dest.template size<2>()), dest);
 	return true;
 }
 
-void SwitchRG(const block<ISO_rgba, 2> &block) {
-	for (auto i = block.begin(), i1 = block.end(); i != i1; ++i) {
-		for (auto j = i.begin(), j1 = i.end(); j != j1; ++j)
-			swap(j->r, j->b);
-	}
-}
-
-template<typename S, typename D> bool CopyBlocks(const block<D, 2> &rect, S *srce, uint32 stride) {
-	int		width	= rect.template size<1>(), height = rect.template size<2>();
-	for (int y = 0; y < height; y += 4, srce = (S*)((uint8*)srce + stride)) {
-		S	*p = srce;
-		for (int x = 0; x < width; x += 4)
-			p++->Decode(rect.template sub<1>(x, 4).template sub<2>(y, 4));
-	}
-	//SwitchRG(rect);
+template<typename S, int X, int Y, typename D> bool CopyBlocks(const block<D, 2> &dest, const void *srce, uint32 stride) {
+	copy(make_strided_block((const S*)srce, div_round_up(dest.template size<1>(), X), stride, div_round_up(dest.template size<2>(), Y)), dest);
 	return true;
 }
 
-bool LoadSurface(const block<ISO_rgba, 2> &rect, void *srce, uint32 stride, const DDS::PIXELFORMAT &ddspf) {
+
+template<typename T> bool LoadSurface(const block<T, 2> &dest, void *srce, uint32 stride, const DDS::PIXELFORMAT &ddspf) {
 	using namespace DDS;
 
-	int		width	= rect.size<1>(), height = rect.size<2>();
-
 	switch ((D3DFMT)ddspf.fourCC) {
-		case D3DFMT::DXT1:
-			return CopyBlocks(rect, (DXT1rec*)srce, stride);
-
+		case D3DFMT::DXT1:			return CopyBlocks<DXT1rec,		4,4>		(via<ISO_rgba>(dest), srce, stride);
 		case D3DFMT::DXT2:
-		case D3DFMT::DXT3:
-			return CopyBlocks(rect, (DXT23rec*)srce, stride);
-
+		case D3DFMT::DXT3:			return CopyBlocks<DXT23rec,		4,4>		(via<ISO_rgba>(dest), srce, stride);
 		case D3DFMT::DXT4:
-		case D3DFMT::DXT5:
-			return CopyBlocks(rect, (DXT45rec*)srce, stride);
-
-		case D3DFMT::BC4:
-			return CopyBlocks(rect, (BC<4>*)srce, stride);
-
-		case D3DFMT::BC5:
-			return CopyBlocks(rect, (BC<5>*)srce, stride);
-
-		case D3DFMT::BC7_UNORM:
-			return CopyBlocks(rect, (BC<7>*)srce, stride);
-
-		case D3DFMT::R8G8_B8G8:
-			for (int y = 0; y < height; y++, srce = (uint8*)srce + stride) {
-				ISO_rgba	*dest = rect[y];
-				for (int x = 0; x < width; x += 2) {
-					dest[x + 0].r	= dest[x + 1].r = ((uint8*)srce)[x * 2 + 0];
-					dest[x + 0].b	= dest[x + 1].b = ((uint8*)srce)[x * 2 + 2];
-					dest[x + 0].g	= ((uint8*)srce)[x * 2 + 1];
-					dest[x + 1].g	= ((uint8*)srce)[x * 2 + 3];
-				}
-			}
-			return true;
-
-		case D3DFMT::G8R8_G8B8:
-			for (int y = 0; y < height; y++, srce = (uint8*)srce + stride) {
-				ISO_rgba	*dest = rect[y];
-				for (int x = 0; x < width; x += 2) {
-					dest[x + 0].r	= dest[x + 1].r = ((uint8*)srce)[x * 2 + 1];
-					dest[x + 0].b	= dest[x + 1].b = ((uint8*)srce)[x * 2 + 3];
-					dest[x + 0].g	= ((uint8*)srce)[x * 2 + 0];
-					dest[x + 1].g	= ((uint8*)srce)[x * 2 + 2];
-				}
-			}
-			return true;
-
-		case D3DFMT::UYVY:
-			for (int y = 0; y < height; y++, srce = (uint8*)srce + stride) {
-				ISO_rgba	*dest = rect[y];
-				struct uyvy { uint8 y0, v, y1, u; } *p = (uyvy*)srce;
-				for (int x = 0; x < width; x += 2, p++) {
-					dest[x + 0]	= ISO_rgba::YUV(p->y0, p->u, p->v);
-					dest[x + 1]	= ISO_rgba::YUV(p->y1, p->u, p->v);
-				}
-			}
-			return true;
-
-		case D3DFMT::A8R8G8B8:
-			return CopyPixels(rect, (Texel<Col32_A8R8G8B8>*)srce, stride);
-
-		case D3DFMT::B8G8R8:
-			return CopyPixels(rect, (Texel<Col32_A8R8G8B8>*)srce, stride);
-//			for (int y = 0; y < height; y++, srce = (uint8*)srce + stride)
-//				copy_n((Texel<Col24_B8G8R8>*)srce, rect[y].begin(), width);
-//			return true;
-
-		case D3DFMT::R8G8B8:
-			return CopyPixels(rect, (Texel<Col24_R8G8B8>*)srce, stride);
-
+		case D3DFMT::DXT5:			return CopyBlocks<DXT45rec,		4,4>		(via<ISO_rgba>(dest), srce, stride);
+		case D3DFMT::BC4:			return CopyBlocks<BC<4>,		4,4>		(via<ISO_rgba>(dest), srce, stride);
+		case D3DFMT::BC5:			return CopyBlocks<BC<5>,		4,4>		(via<ISO_rgba>(dest), srce, stride);
+		case dxgi(DXGI::BC6H_UF16):	return CopyBlocks<BC<6>,		4,4>		(via<HDRpixel>(dest), srce, stride);;
+		case dxgi(DXGI::BC6H_SF16):	return CopyBlocks<BC<-6>,		4,4>		(via<HDRpixel>(dest), srce, stride);;
+		case dxgi(DXGI::BC7_UNORM):	return CopyBlocks<BC<7>,		4,4>		(via<ISO_rgba>(dest), srce, stride);
+		case D3DFMT::R8G8_B8G8:		return CopyBlocks<R8G8_B8G8,	2,1>		(via<ISO_rgba>(dest), srce, stride);
+		case D3DFMT::G8R8_G8B8:		return CopyBlocks<G8R8_G8B8,	2,1>		(via<ISO_rgba>(dest), srce, stride);
+		case D3DFMT::UYVY:			return CopyBlocks<UYVY,			2,1>		(via<ISO_rgba>(dest), (const UYVY*)srce, stride);
+		case D3DFMT::A8R8G8B8:		return CopyPixels<Texel<Col32_A8R8G8B8>>	(dest, srce, stride);
+		case D3DFMT::B8G8R8:		return CopyPixels<Texel<Col32_A8R8G8B8>>	(dest, srce, stride);
+		case D3DFMT::R8G8B8:		return CopyPixels<Texel<Col24_R8G8B8>>		(dest, srce, stride);
 		case D3DFMT::A8P8:
-		case D3DFMT::A8L8:
-			return CopyPixels(rect, (Texel<Col16_A8P8>*)srce, stride);
-
-		case D3DFMT::A1R5G5B5:
-			return CopyPixels(rect, (Texel<Col16_A1R5G5B5>*)srce, stride);
-
-		case D3DFMT::A4R4G4B4:
-			return CopyPixels(rect, (Texel<Col16_A4R4G4B4>*)srce, stride);
-
-		case D3DFMT::R5G6B5:
-			return CopyPixels(rect, (Texel<Col16_R5G6B5>*)srce, stride);
-
+		case D3DFMT::A8L8:			return CopyPixels<Texel<Col16_A8P8>>		(dest, (Texel<Col16_A8P8>*)srce, stride);
+		case D3DFMT::A1R5G5B5:		return CopyPixels<Texel<Col16_A1R5G5B5>>	(dest, (Texel<Col16_A1R5G5B5>*)srce, stride);
+		case D3DFMT::A4R4G4B4:		return CopyPixels<Texel<Col16_A4R4G4B4>>	(dest, (Texel<Col16_A4R4G4B4>*)srce, stride);
+		case D3DFMT::R5G6B5:		return CopyPixels<Texel<Col16_R5G6B5>>		(dest, (Texel<Col16_R5G6B5>*)srce, stride);
 		case D3DFMT::L8:
-		case D3DFMT::P8:
-			return CopyPixels(rect, (uint8*)srce, stride);
+		case D3DFMT::P8:			return CopyPixels<uint8>					(dest, srce, stride);
+		case D3DFMT::A32B32G32R32F:	return CopyPixels<HDRpixel>					(dest, srce, stride);
+		case D3DFMT::A16B16G16R16:	return CopyPixels<field_vec<unorm16,unorm16,unorm16,unorm16>>(dest, srce, stride);
 
-		case D3DFMT::A32B32G32R32F:
-			return CopyPixels(rect, (HDRpixel*)srce, stride);
+		case dxgi(DXGI::R16G16B16A16_FLOAT):
+			return CopyPixels<hfloat4p>(dest, srce, stride);
 
-		default: {
-			uint32	rmask	= ddspf.mask[0];
-			uint32	gmask	= ddspf.mask[1];
-			uint32	bmask	= ddspf.mask[2];
-			uint32	amask	= ddspf.mask[3];
-
-			uint32	rshift	= highest_set_index(rmask)	- 7;
-			uint32	gshift	= highest_set_index(gmask)	- 7;
-			uint32	bshift	= highest_set_index(bmask)	- 7;
-			uint32	ashift	= highest_set_index(amask)	- 7;
-
+		default:
 			int		bpp		= (ddspf.bits + 7) / 8;
-			for (int y = 0; y < height; y++, srce = (uint8*)srce + stride) {
-				ISO_rgba	*dest = rect[y];
-				for (int x = 0; x < width; x++) {
-					uint32	p	= *(uint32*)((char*)srce + x * bpp);
-					dest[x].r = (p & rmask) >> rshift;
-					dest[x].g = (p & gmask) >> gshift;
-					dest[x].b = (p & bmask) >> bshift;
-					dest[x].a = (p & amask) >> ashift;
-				}
-			}
+			int		width	= dest.template size<1>(), height = dest.template size<2>();
+			if (ddspf.flags & 0x80000)
+				copy(make_strided_iblock(make_param_iterator(strided((const uint32*)srce, bpp), MaskFormatT<true>(ddspf)), width, stride, height), dest);
+			else
+				copy(make_strided_iblock(make_param_iterator(strided((const uint32*)srce, bpp), MaskFormatT<false>(ddspf)), width, stride, height), dest);
 			return true;
-		}
+			return true;
 	}
 	return true;
 }
 
-inline int	sign_extend_mask(uint32 x, uint32 m, uint32 s)	{ return (x & m) - ((x & s) << 1); }
-
-bool LoadSurface(const block<HDRpixel, 2> &rect, void *srce, uint32 stride, const DDS::PIXELFORMAT &ddspf) {
-	using namespace DDS;
-
-	int				width	= rect.size<1>(), height = rect.size<2>();
-
-	switch ((D3DFMT)ddspf.fourCC) {
-		case D3DFMT::A32B32G32R32F:
-			return CopyPixels(rect, (float4p*)srce, stride);
-
-		case D3DFMT::A16B16G16R16:
-			return CopyPixels(rect, (field_vec<unorm16,unorm16,unorm16,unorm16>*)srce, stride);
-
-		case D3DFMT::BC6H_UF16:
-		case D3DFMT::BC6H_SF16:
-			return CopyBlocks(rect, (BC<6>*)srce, stride);
-
-		default: {
-			uint32	rmask	= ddspf.mask[0];
-			uint32	gmask	= ddspf.mask[1];
-			uint32	bmask	= ddspf.mask[2];
-			uint32	amask	= ddspf.mask[3];
-
-			int		bpp		= (ddspf.bits + 7) / 8;
-
-			if (ddspf.flags & 0x80000) {
-				float	rscale	= rmask ? 0.5f / rmask: 0.f;
-				float	gscale	= gmask ? 0.5f / gmask: 0.f;
-				float	bscale	= bmask ? 0.5f / bmask: 0.f;
-				float	ascale	= amask ? 0.5f / amask: 0.f;
-
-				uint32	rsign	= highest_set(rmask);
-				uint32	gsign	= highest_set(gmask);
-				uint32	bsign	= highest_set(bmask);
-				uint32	asign	= highest_set(amask);
-
-				for (int y = 0; y < height; y++, srce = (uint8*)srce + stride) {
-					HDRpixel	*dest = rect[y];
-					for (int x = 0; x < width; x++) {
-						uint32	p	= *(uint32*)((char*)srce + x * bpp);
-						dest[x].r = sign_extend_mask(p, rmask, rsign) * rscale;
-						dest[x].g = sign_extend_mask(p, gmask, gsign) * gscale;
-						dest[x].b = sign_extend_mask(p, bmask, bsign) * bscale;
-						dest[x].a = sign_extend_mask(p, amask, asign) * ascale;
-					}
-				}
-			} else {
-				float	rscale	= rmask ? 1.0f / rmask: 0.f;
-				float	gscale	= gmask ? 1.0f / gmask: 0.f;
-				float	bscale	= bmask ? 1.0f / bmask: 0.f;
-				float	ascale	= amask ? 1.0f / amask: 0.f;
-
-				for (int y = 0; y < height; y++, srce = (uint8*)srce + stride) {
-					HDRpixel	*dest = rect[y];
-					for (int x = 0; x < width; x++) {
-						uint32	p	= *(uint32*)((char*)srce + x * bpp);
-						dest[x].r = (p & rmask) * rscale;
-						dest[x].g = (p & gmask) * gscale;
-						dest[x].b = (p & bmask) * bscale;
-						dest[x].a = (p & amask) * ascale;
-					}
-				}
-			}
-			return true;
-		}
-	}
-}
-
-struct vbitmap_DDS: vbitmap {
-
+struct vbitmap_DDS : vbitmap {
 	DDS::PIXELFORMAT	ddspf;
 	DDS::HEADER_DS10	ddsh10;
 	malloc_block		data;
@@ -1029,6 +945,7 @@ struct vbitmap_DDS: vbitmap {
 		uint32	myheight	= vbitmap::height;
 		uint32	offset		= 0;
 
+	#if 0	// all mip0, all mip1, etc
 		if (in.z && volume)
 			offset = CalcMipsSize(mywidth, myheight, depth, ddspf, mips + 1, volume) * in.z;
 
@@ -1040,6 +957,17 @@ struct vbitmap_DDS: vbitmap {
 
 		if (in.z && !volume)
 			offset += CalcSurfaceSize(mywidth, myheight, ddspf) * in.z;
+
+	#else	// all slice 0, all slice 1, etc
+		if (in.z)
+			offset = CalcMipsSize(mywidth, myheight, volume ? depth : 1, ddspf, mips + 1, volume) * in.z;
+
+		if (in.m) {
+			offset	+= CalcMipsSize(mywidth, myheight, 1, ddspf, in.m, volume);
+			mywidth		= max(mywidth >> in.m, 1);
+			myheight	= max(myheight >> in.m, 1);
+		}
+	#endif
 
 		uint32	mystride	= CalcSurfaceStride(mywidth, ddspf);
 		uint32	blockwidth	= BlockWidth((DDS::D3DFMT)(uint32)ddspf.fourCC);
@@ -1062,7 +990,7 @@ struct vbitmap_DDS: vbitmap {
 		}
 	}
 
-	vbitmap_DDS(istream_ref file): vbitmap(this) {
+	vbitmap_DDS(istream_ref file) : vbitmap(this) {
 		using namespace DDS;
 
 		uint32			ddsh_size	= file.get<uint32le>();
@@ -1078,11 +1006,11 @@ struct vbitmap_DDS: vbitmap {
 		format	= Getformat(ddsh->ddspf);
 		mips	= ddsh->dwMipMapCount ? ddsh->dwMipMapCount - 1: 0;
 
-		if ((D3DFMT)(uint32)ddspf.fourCC == D3DFMT::DS10) {
+		if (ddspf.fourCC == "DS10"_u32 || ddspf.fourCC == "DX10"_u32) {
 			file.read(ddsh10);
-			if (ddsh10.dxgiFormat != DDS::DXGI_FORMAT::UNKNOWN) {
-				ddspf.fourCC = (uint32)ddsh10.dxgiFormat | 0x80000000;
-				format = Getformat(ddsh10.dxgiFormat);
+			if (ddsh10.format != DDS::DXGI::UNKNOWN) {
+				ddspf.fourCC = (uint32)ddsh10.format | 0x80000000;
+				format = Getformat(ddsh10.format);
 				int		total = 0;
 				for (int i = 0; i < 4; i++) {
 					int		n		= format.array[i] & vbitmap_format::SIZE_MASK;
@@ -1090,12 +1018,11 @@ struct vbitmap_DDS: vbitmap {
 					total	+= n;
 				}
 				ddspf.bits = total;
-
 			}
-			switch (ddsh10.resourceDimension) {
-				case D3D10_RESOURCE_DIMENSION_TEXTURE1D:
+			switch (ddsh10.dim) {
+				case HEADER_DS10::DIMENSION_TEXTURE1D:
 					break;
-				case D3D10_RESOURCE_DIMENSION_TEXTURE2D:
+				case HEADER_DS10::DIMENSION_TEXTURE2D:
 					depth = ddsh10.arraySize;
 					break;
 				default:
@@ -1188,7 +1115,8 @@ struct vbitmap_DDS: vbitmap {
 ISO_DEFSAME(vbitmap_DDS, vbitmap);
 
 ISO_ptr<void> DDSFileHandler::Read(tag id, istream_ref file) {
-	if (file.get<uint32>() != "DDS "_u32)
+	uint32	h;
+	if (!file.read(h) || h != "DDS "_u32)
 		return ISO_NULL;
 
 	return ISO_ptr<vbitmap_DDS>(id, file);
@@ -1196,150 +1124,49 @@ ISO_ptr<void> DDSFileHandler::Read(tag id, istream_ref file) {
 
 #ifdef CROSS_PLATFORM
 
-bool SaveSurface(const block<ISO_rgba, 2> &rect, ostream_ref file, DDS::D3DFMT fmt) {
-	using namespace DDS;
-
-	int		scan	= 0;
-	int		width	= rect.size<1>(), height = rect.size<2>();
-
-	switch (fmt) {
-		case D3DFMT::DXT1: {
-			auto	dest = make_auto_block<DXT1rec>(div_round_up(width, 4), div_round_up(height, 4));
-			copy(rect, dest.get());
-			return file.write(dest);
-		}
-		case D3DFMT::DXT2:
-		case D3DFMT::DXT3: {
-			auto	dest = make_auto_block<DXT23rec>(div_round_up(width, 4), div_round_up(height, 4));
-			copy(rect, dest.get());
-			return file.write(dest);
-		}
-		case D3DFMT::DXT4:
-		case D3DFMT::DXT5: {
-			auto	dest = make_auto_block<DXT45rec>(div_round_up(width, 4), div_round_up(height, 4));
-			copy(rect, dest.get());
-			return file.write(dest);
-		}
-		case D3DFMT::BC4: {
-			BC<4>	rec;
-			for (int y = 0; y < height; y += 4) {
-				for (int x = 0; x < width; x += 4) {
-					rec.Encode(rect.sub<1>(x, 4).sub<2>(y, 4));
-					file.write(rec);
-				}
-			}
-			return true;
-		}
-		case D3DFMT::BC5: {
-			BC<5>	rec;
-			for (int y = 0; y < height; y += 4) {
-				for (int x = 0; x < width; x += 4) {
-					rec.Encode(rect.sub<1>(x, 4).sub<2>(y, 4));
-					file.write(rec);
-				}
-			}
-			return true;
-		}
-		case D3DFMT::BC7_UNORM: {
-			BC<7>	rec;
-			for (int y = 0; y < height; y += 4) {
-				for (int x = 0; x < width; x += 4) {
-					rec.Encode(rect.sub<1>(x, 4).sub<2>(y, 4));
-					file.write(rec);
-				}
-			}
-			return true;
-		}
-		case D3DFMT::BC6H_UF16:
-		case D3DFMT::BC6H_SF16: {
-			auto	srce = make_auto_block<HDRpixel>(width, height);
-			copy(rect, srce.get());
-			auto	dest = make_auto_block<BC<6>>(div_round_up(width, 4), div_round_up(height, 4));
-			copy(make_const(srce.get()), dest.get());
-			return file.write(dest);
-		}
-
-		case D3DFMT::R8G8_B8G8:
-		case D3DFMT::G8R8_G8B8:	scan = (width + 1) / 2 * 4; break;
-		case D3DFMT::A8B8G8R8:
-		case D3DFMT::A8R8G8B8:	scan = width * 4;			break;
-		case D3DFMT::R8G8B8:	scan = width * 3;			break;
-		case D3DFMT::A8P8:
-		case D3DFMT::A8L8:
-		case D3DFMT::A1R5G5B5:
-		case D3DFMT::A4R4G4B4:
-		case D3DFMT::R5G6B5:	scan = width * 2;			break;
-		case D3DFMT::L8:
-		case D3DFMT::P8:		scan = width;				break;
-		default:
-			return false;
-	};
-
-	if (scan) {
-		malloc_block	dest(scan + 4);
-		for (int y = 0; y < height; y++) {
-			const ISO_rgba	*srce = rect[y];
-			switch (fmt) {
-				case D3DFMT::A8B8G8R8:	copy_n(srce, (Texel<Col32_A8B8G8R8>*)dest, width); break;
-				case D3DFMT::A8R8G8B8:	copy_n(srce, (Texel<Col32_A8R8G8B8>*)dest, width); break;
-				case D3DFMT::R8G8B8:	copy_n(srce, (Texel<Col24_R8G8B8>*)	dest, width); break;
-				case D3DFMT::A8P8:
-				case D3DFMT::A8L8:		copy_n(srce, (Texel<Col16_A8P8>*)	dest, width); break;
-				case D3DFMT::A1R5G5B5:	copy_n(srce, (Texel<Col16_A1R5G5B5>*)dest, width); break;
-				case D3DFMT::A4R4G4B4:	copy_n(srce, (Texel<Col16_A4R4G4B4>*)dest, width); break;
-				case D3DFMT::R5G6B5:	copy_n(srce, (Texel<Col16_R5G6B5>*)	dest, width); break;
-				case D3DFMT::L8:
-				case D3DFMT::P8:
-					for (int x = 0; x < width; x++)
-						((uint8*)dest)[x] = srce[x].r;
-					break;
-				case D3DFMT::R8G8_B8G8:
-					for (int x = 0; x < width; x += 2) {
-						((uint8*)dest)[x * 2 + 0] = (srce[x + 0].r + srce[x + 1].r) / 2;
-						((uint8*)dest)[x * 2 + 1] = srce[x + 0].g;
-						((uint8*)dest)[x * 2 + 2] = (srce[x + 0].b + srce[x + 1].b) / 2;
-						((uint8*)dest)[x * 2 + 3] = srce[x + 1].g;
-					}
-					break;
-				case D3DFMT::G8R8_G8B8:
-					for (int x = 0; x < width; x += 2) {
-						((uint8*)dest)[x * 2 + 0] = srce[x + 0].g;
-						((uint8*)dest)[x * 2 + 1] = (srce[x + 0].r + srce[x + 1].r) / 2;
-						((uint8*)dest)[x * 2 + 2] = srce[x + 1].g;
-						((uint8*)dest)[x * 2 + 3] = (srce[x + 0].b + srce[x + 1].b) / 2;
-					}
-					break;
-				default:
-					break;
-			};
-			file.writebuff(dest, scan);
-		}
-	}
-
-	return true;
+template<typename D, typename S> bool SavePixels(const block<S, 2> &srce, ostream_ref file) {
+	return file.write(to<D>(srce));
 }
 
-bool SaveSurface(const block<HDRpixel, 2> &rect, ostream_ref file, DDS::D3DFMT fmt) {
+template<typename D, int X, int Y, typename S> bool SaveBlocks(const block<S, 2> &srce, ostream_ref file) {
+	auto	dest	= make_auto_block<D>(div_round_up(srce.template size<1>(), X), div_round_up(srce.template size<2>(), Y));
+	copy(srce, dest.get());
+	return file.write(dest);
+}
+
+template<typename S> bool SaveSurface(const block<S, 2> &rect, ostream_ref file, DDS::D3DFMT fmt) {
 	using namespace DDS;
-	int		width	= rect.size<1>(), height = rect.size<2>();
 
 	switch (fmt) {
-		case D3DFMT::BC6H_UF16:
-		case D3DFMT::BC6H_SF16: {
-			auto	dest = make_auto_block<BC<6>>(div_round_up(width, 4), div_round_up(height, 4));
-			copy(rect, dest.get());
-			return file.write(dest);
-		}
-		case D3DFMT::A32B32G32R32F: {
-			for (int y = 0; y < height; y++)
-				file.writebuff(rect[y], width * sizeof(float[4]));
-			return true;
-		}
+		case D3DFMT::DXT1:			return SaveBlocks<DXT1rec,		4,4>	(to<ISO_rgba>(rect), file);
+		case D3DFMT::DXT2:
+		case D3DFMT::DXT3:			return SaveBlocks<DXT23rec,		4,4>	(to<ISO_rgba>(rect), file);
+		case D3DFMT::DXT4:
+		case D3DFMT::DXT5:			return SaveBlocks<DXT45rec,		4,4>	(to<ISO_rgba>(rect), file);
+		case D3DFMT::BC4:			return SaveBlocks<BC<4>,		4,4>	(to<ISO_rgba>(rect), file);
+		case D3DFMT::BC5:			return SaveBlocks<BC<5>,		4,4>	(to<ISO_rgba>(rect), file);
+		case dxgi(DXGI::BC6H_UF16):	return SaveBlocks<BC<6>,		4,4>	(to<HDRpixel>(rect), file);
+		case dxgi(DXGI::BC6H_SF16):	return SaveBlocks<BC<-6>,		4,4>	(to<HDRpixel>(rect), file);
+		case dxgi(DXGI::BC7_UNORM):	return SaveBlocks<BC<7>,		4,4>	(to<ISO_rgba>(rect), file);
+		case D3DFMT::R8G8_B8G8:		return SaveBlocks<R8G8_B8G8,	2,1>	(to<ISO_rgba>(rect), file);
+		case D3DFMT::G8R8_G8B8:		return SaveBlocks<G8R8_G8B8,	2,1>	(to<ISO_rgba>(rect), file);
+
+		case D3DFMT::A8B8G8R8:		return SavePixels<Texel<Col32_A8B8G8R8>>(rect, file);
+		case D3DFMT::A8R8G8B8:		return SavePixels<Texel<Col32_A8R8G8B8>>(rect, file);
+		case D3DFMT::R8G8B8:		return SavePixels<Texel<Col24_R8G8B8>>	(rect, file);
+		case D3DFMT::A8P8:
+		case D3DFMT::A8L8:			return SavePixels<Texel<Col16_A8P8>>	(rect, file);
+		case D3DFMT::A1R5G5B5:		return SavePixels<Texel<Col16_A1R5G5B5>>(rect, file);
+		case D3DFMT::A4R4G4B4:		return SavePixels<Texel<Col16_A4R4G4B4>>(rect, file);
+		case D3DFMT::R5G6B5:		return SavePixels<Texel<Col16_R5G6B5>>	(rect, file);
+		case D3DFMT::L8:
+		case D3DFMT::P8:			return SavePixels<Texel<TexelFormat<8,0,8,0,0,0,0>>>(rect, file);
+
+		case D3DFMT::A32B32G32R32F: return file.write(to<HDRpixel>(rect));
 
 		default:
 			return false;
 	}
-
 }
 
 template<typename T> bool SaveAllMipSurfaces(const block<T, 2> &rect, ostream_ref file, DDS::D3DFMT fmt, int num_mips) {
@@ -1353,62 +1180,39 @@ template<typename T> bool SaveAllMipSurfaces(const block<T, 2> &rect, ostream_re
 	return true;
 }
 
-bool DDSFileHandler::Write(bitmap &bm, ostream_ref file, DDS::D3DFMT fmt) {
+bool SaveSurface(const vbitmap_loc &loc, ostream_ref file, int w, int h, int bpp) {
+	auto	temp = make_auto_block<uint8>(w * bpp / 8, h);
+	loc.get(temp);
+	file.writebuff(temp[0].begin(), w * bpp / 8 * h);
+	return true;
+}
+
+bool SaveAllMipSurfaces(const vbitmap_loc &loc, ostream_ref file, int w, int h, int bpp, int num_mips) {
+	for (int i = 0; i < num_mips; ++i) {
+		if (!SaveSurface(vbitmap_loc(loc).set_mip(i), file, max(w >> i, 1), max(h >> i, 1), bpp))
+			return false;
+	}
+	return true;
+}
+
+template<typename T> bool WriteTexture(block<T, 3> bm, TextureType type, int mips, ostream_ref file, DDS::D3DFMT fmt) {
 	using namespace DDS;
-
-	HEADER		ddsh;
-	HEADER_DS10	ddsh10;
-
-	bool		intensity	= bm.IsIntensity();
-	bool		paletted	= bm.IsPaletted();
-	bool		alpha		= bm.HasAlpha();
-//	bool		sixteen		= BMWF_GETBITS(flags) == 16;
 
 	file.write("DDS "_u32);
 
-	int			width		= bm.BaseWidth();
-	int			height		= bm.BaseHeight();
-	int			depth		= bm.Depth();
-	int			num_mips	= bm.Mips();
+	int			width		= bm.template size<1>();
+	int			height		= bm.template size<2>();
+	int			depth		= bm.template size<3>();
 
-	clear(ddsh);
-	clear(ddsh10);
-	ddsh.size		= sizeof(ddsh);
-	ddsh.flags		= DDSD_TEXTURE;
-	ddsh.width		= width;
-	ddsh.height		= height;
-	ddsh.dwCaps		= DDSCAPS_TEXTURE;
+	HEADER		ddsh(width, height);
 
-	if (num_mips) {
-		int	block		= BlockWidth(fmt);
-		int	max_mips	= MaxMips(width / block, height / block);
-		num_mips		= min(num_mips, max_mips - 1);
-
-		ddsh.flags			|= DDSD_MIPMAPCOUNT;
-		ddsh.dwCaps			|= DDSCAPS_MIPMAP;
-		ddsh.dwMipMapCount	= num_mips + 1;
+	if (mips) {
+		int	block	= BlockWidth(fmt);
+		mips		= min(mips, MaxMips(width / block, height / block));
+		ddsh.SetMips(mips);
 	}
 
-	if (fmt == D3DFMT::UNKNOWN) {
-	/*	if (flags & BMWF_COMPRESS) {
-			fmt	= !alpha || (bm.Flags() & BMF_ONEBITALPHA) || BMWF_GETALPHABITS(flags) == 1 ? D3DFMT::DXT1: BMWF_GETALPHABITS(flags) == 4 ? D3DFMT::DXT2: D3DFMT::DXT4;
-			ddsh.flags		|= DDS::HEADER_FLAGS_LINEARSIZE;
-			ddsh.dwPitchOrLinearSize = (width / 4) * (height / 4) * (fmt == D3DFMT::DXT1 ? 8: 16);
-		} else */{
-			if (paletted) {
-				fmt = alpha ? D3DFMT::A8P8: D3DFMT::P8;
-			} else if (intensity) {
-				fmt = alpha ? D3DFMT::A8L8: D3DFMT::L8;
-			} /*else if (sixteen) {
-				fmt = alpha ? (BMWF_GETALPHABITS(flags) == 1 || (bm.Flags() & BMF_ONEBITALPHA) ? D3DFMT::A1R5G5B5: D3DFMT::A4R4G4B4): D3DFMT::R5G6B5;
-			} */else {
-				fmt = alpha ? D3DFMT::A8B8G8R8 : D3DFMT::R8G8B8;
-			}
-		}
-	}
-	ddsh.flags		|= DDSD_LINEARSIZE;
-
-	const DDS::PIXELFORMAT	*ddspf;
+	const PIXELFORMAT	*ddspf;
 	switch (fmt) {
 		case D3DFMT::DXT1:		ddspf = &DDSPF_DXT1;		break;
 		case D3DFMT::DXT2:		ddspf = &DDSPF_DXT2;		break;
@@ -1425,165 +1229,103 @@ bool DDSFileHandler::Write(bitmap &bm, ostream_ref file, DDS::D3DFMT fmt) {
 		case D3DFMT::G8R8_G8B8:	ddspf = &DDSPF_G8R8_G8B8;	break;
 		case D3DFMT::A8L8:		ddspf = &DDSPF_A8L8;		break;
 		case D3DFMT::L8:		ddspf = &DDSPF_L8;			break;
-		default:
-			if (!is_dxgi(fmt))
-				return false;
-			ddspf						= &DDSPF_DS10;
-			ddsh10.dxgiFormat			= (DDS::DXGI_FORMAT)((uint32)fmt & ~0x80000000);
-			ddsh10.resourceDimension	= D3D10_RESOURCE_DIMENSION_TEXTURE2D;
-			ddsh10.arraySize			= depth;
-			break;
+		default:				ddspf = &DDSPF_DS10;		break;
 	}
 
-	if (bm.IsCube()) {
-		ddsh.dwCaps		|= DDSCAPS_COMPLEX;
-		ddsh.dwCaps2	= DDSCAPS2_CUBEMAP | DDSCAPS2_CUBEMAP_ALL_FACES;
-	} else if (bm.IsVolume()) {
-		ddsh.dwDepth	= depth;
-		ddsh.flags		|= DDSD_DEPTH;
-		ddsh.dwCaps2	= DDSCAPS2_VOLUME;
-	} else if (depth != 1 && !is_dxgi(fmt)) {
-		ddspf			= &DDSPF_DS10;
-		ddsh10.dxgiFormat			= GetDXGIformat(fmt);
-		ddsh10.resourceDimension	= D3D10_RESOURCE_DIMENSION_TEXTURE2D;
-		ddsh10.arraySize			= depth;
+	switch (type) {
+		case TT_CUBE:
+			ddsh.SetCube();
+			break;
+		case TT_VOLUME:
+			ddsh.SetVolume(depth);
+			break;
+		case TT_ARRAY:
+			ddspf	= &DDSPF_DS10;
+			break;
 	}
 
 	ddsh.ddspf = *ddspf;
 	file.write(ddsh);
 
-	if (ddspf == &DDSPF_DS10)
+	if (ddspf == &DDSPF_DS10) {
+		HEADER_DS10	ddsh10;
+		ddsh10.format		= GetDXGIformat(fmt);
+		ddsh10.dim			= HEADER_DS10::DIMENSION_TEXTURE2D;
+		ddsh10.arraySize	= depth;
 		file.write(ddsh10);
+	}
 
-	if (bm.IsCube()) {
-		for (int i = 0; i < 6; i++) {
-			if (!SaveAllMipSurfaces(bm.Block(0, height * i, bm.Width(), height), file, fmt, num_mips + 1))
-				return false;
-		}
-	} else if (bm.IsVolume()) {
+	if (type == TT_VOLUME) {
 		for (int i = 0; i < depth; i++) {
-			if (!SaveSurface(bm.Block(0, height * i, bm.Width(), height), file, fmt))
+			if (!SaveSurface(bm[i], file, fmt))
 				return false;
 		}
 	} else {
 		for (int i = 0; i < depth; i++) {
-			if (!SaveAllMipSurfaces(bm.Block(0, height * i, bm.Width(), height), file, fmt, num_mips + 1))
+			if (!SaveAllMipSurfaces(bm[i], file, fmt, mips))
 				return false;
 		}
 	}
 	return true;
 }
 
-bool DDSFileHandler::Write(HDRbitmap &bm, ostream_ref file, DDS::D3DFMT fmt) {
+//-----------------------------------------------------------------------------
+//	write bitmap
+//-----------------------------------------------------------------------------
+
+bool WriteTexture(bitmap &bm, ostream_ref file, DDS::D3DFMT fmt) {
+	using namespace DDS;
+
+	bool		intensity	= bm.IsIntensity();
+	bool		paletted	= bm.IsPaletted();
+	bool		alpha		= bm.HasAlpha();
+
+	if (fmt == D3DFMT::UNKNOWN) {
+		/*	if (flags & BMWF_COMPRESS) {
+		fmt	= !alpha || (bm.Flags() & BMF_ONEBITALPHA) || BMWF_GETALPHABITS(flags) == 1 ? D3DFMT::DXT1: BMWF_GETALPHABITS(flags) == 4 ? D3DFMT::DXT2: D3DFMT::DXT4;
+		ddsh.flags		|= DDS::HEADER_FLAGS_LINEARSIZE;
+		ddsh.dwPitchOrLinearSize = (width / 4) * (height / 4) * (fmt == D3DFMT::DXT1 ? 8: 16);
+		} else */{
+			if (paletted) {
+				fmt = alpha ? D3DFMT::A8P8: D3DFMT::P8;
+			} else if (intensity) {
+				fmt = alpha ? D3DFMT::A8L8: D3DFMT::L8;
+			} else {
+				fmt = alpha ? D3DFMT::A8B8G8R8 : D3DFMT::R8G8B8;
+			}
+		}
+	}
+	
+	return WriteTexture(bm.All3D(), bm.Type(), bm.Mips(), file, fmt);
+}
+
+bool WriteTexture(HDRbitmap &bm, ostream_ref file, DDS::D3DFMT fmt) {
 	using namespace DDS;
 
 	if (fmt == D3DFMT::UNKNOWN)
 		fmt = D3DFMT::A32B32G32R32F;
 
-	int			width		= bm.BaseWidth();
-	int			height		= bm.BaseHeight();
-	int			depth		= bm.Depth();
-	int			num_mips	= bm.Mips();
-
-	HEADER	ddsh;
-	clear(ddsh);
-	ddsh.size		= sizeof(ddsh);
-	ddsh.flags		= DDSD_TEXTURE | DDSD_LINEARSIZE;
-	ddsh.width		= width;
-	ddsh.height		= height;
-	ddsh.dwDepth	= depth == 6 ? 1: depth;
-	ddsh.dwCaps		= DDSCAPS_TEXTURE;
-
-	if (num_mips > 1) {
-		ddsh.flags			|= DDSD_MIPMAPCOUNT;
-		ddsh.dwCaps			|= DDSCAPS_MIPMAP;
-		ddsh.dwMipMapCount	= num_mips + 1;
-	}
-
-	if (bm.IsCube()) {
-		ddsh.dwCaps		|= DDSCAPS_COMPLEX;
-		ddsh.dwCaps2	= DDSCAPS2_CUBEMAP | DDSCAPS2_CUBEMAP_ALL_FACES;
-	} else if (bm.IsVolume()) {
-		ddsh.dwDepth	= depth;
-		ddsh.flags		|= DDSD_DEPTH;
-		ddsh.dwCaps2	= DDSCAPS2_VOLUME;
-	}
-
-	PIXELFORMAT DDSPF_A32B32G32R32F(D3DFMT::A32B32G32R32F, 128, 32,32,32,32);
-	ddsh.ddspf = DDSPF_A32B32G32R32F;
-
-	file.write("DDS "_u32);
-	file.write(ddsh);
-#if 0
-	return SaveSurface(bm.Block(0, 0, width, height), file, fmt);
-#else
-	if (bm.IsCube()) {
-		for (int i = 0; i < 6; i++) {
-			if (!SaveAllMipSurfaces(bm.Block(0, height * i, bm.Width(), height), file, fmt, num_mips + 1))
-				return false;
-		}
-	} else if (bm.IsVolume()) {
-		for (int i = 0; i < depth; i++) {
-			if (!SaveSurface(bm.Block(0, height * i, bm.Width(), height), file, fmt))
-				return false;
-		}
-	} else {
-		for (int i = 0; i < depth; i++) {
-			if (!SaveAllMipSurfaces(bm.Block(0, height * i, bm.Width(), height), file, fmt, num_mips + 1))
-				return false;
-		}
-	}
-	return true;
-#endif
+	return WriteTexture(bm.All3D(), bm.Type(), bm.Mips(), file, fmt);
 }
 
-bool SaveSurface(const vbitmap_loc &loc, ostream_ref file, int w, int h, int bpp) {
-	auto	temp = make_auto_block<uint8>(w * bpp / 8, h);
-	loc.get(temp);
-	file.writebuff(temp[0], w * bpp / 8 * h);
-	return true;
-}
 
-bool SaveAllMipSurfaces(const vbitmap_loc &loc, ostream_ref file, int w, int h, int bpp, int num_mips) {
-	for (int i = 0; i < num_mips; ++i) {
-		if (!SaveSurface(vbitmap_loc(loc).set_mip(i), file, max(w >> i, 1), max(h >> i, 1), bpp))
-			return false;
-	}
-	return true;
-}
-
-bool DDSFileHandler::Write(vbitmap &bm, ostream_ref file, DDS::D3DFMT fmt, uint32 flags) {
+bool WriteTexture(vbitmap &bm, ostream_ref file, DDS::D3DFMT fmt, uint32 flags) {
 	using namespace DDS;
-
-	HEADER			ddsh;
-	PIXELFORMAT		&ddspf	= ddsh.ddspf;
-
-	clear(ddsh);
 
 	int			width		= bm.Width();
 	int			height		= bm.Height();
 	int			depth		= bm.Depth();
 	int			num_mips	= bm.Mips();
 
-	ddsh.size		= sizeof(ddsh);
-	ddspf.size		= sizeof(ddspf);
-	ddsh.flags		= flags | DDSD_TEXTURE | DDSD_LINEARSIZE;
-	ddsh.width		= width;
-	ddsh.height		= height;
-	ddsh.dwCaps		= DDSCAPS_TEXTURE;
+	HEADER		ddsh(width, height);
 
-	if (num_mips > 1) {
-		ddsh.flags			|= DDSD_MIPMAPCOUNT;
-		ddsh.dwCaps			|= DDSCAPS_MIPMAP;
-		ddsh.dwMipMapCount	= num_mips + 1;
-	}
+	if (num_mips)
+		ddsh.SetMips(num_mips + 1);
+
 	if (bm.IsCube()) {
-		ddsh.dwCaps		|= DDSCAPS_COMPLEX;
-		ddsh.dwCaps2	= DDSCAPS2_CUBEMAP | DDSCAPS2_CUBEMAP_ALL_FACES;
+		ddsh.SetCube();
 	} else if (bm.IsVolume()) {
-		ddsh.dwDepth	= depth;
-		ddsh.flags		|= DDSD_DEPTH;
-		ddsh.dwCaps2	= DDSCAPS2_VOLUME;
+		ddsh.SetVolume(depth);
 	}
 
 	if (fmt != D3DFMT::UNKNOWN) {
@@ -1610,6 +1352,7 @@ bool DDSFileHandler::Write(vbitmap &bm, ostream_ref file, DDS::D3DFMT fmt, uint3
 	}
 
 	uint32	bpp = 0;
+	PIXELFORMAT		&ddspf	= ddsh.ddspf;
 	ddspf.fourCC	= (uint32)fmt;
 
 	switch (fmt) {
@@ -1618,7 +1361,7 @@ bool DDSFileHandler::Write(vbitmap &bm, ostream_ref file, DDS::D3DFMT fmt, uint3
 			bpp			= 64;
 			width		/= 4;
 			height		/= 4;
-			ddspf.flags	= DDS_FOURCC;
+			ddspf.flags	= PIXELFORMAT::FOURCC;
 			break;
 		case D3DFMT::DXT3:
 		case D3DFMT::DXT5:
@@ -1626,7 +1369,7 @@ bool DDSFileHandler::Write(vbitmap &bm, ostream_ref file, DDS::D3DFMT fmt, uint3
 			bpp			= 128;
 			width		/= 4;
 			height		/= 4;
-			ddspf.flags	= DDS_FOURCC;
+			ddspf.flags	= PIXELFORMAT::FOURCC;
 			break;
 		default:
 			break;
@@ -1634,9 +1377,9 @@ bool DDSFileHandler::Write(vbitmap &bm, ostream_ref file, DDS::D3DFMT fmt, uint3
 
 	if ((uint32)fmt < 0x100) {
 		if (bm.format & 0x003f3f3f)
-			ddspf.flags	|= DDS_RGB;
+			ddspf.flags	|= PIXELFORMAT::RGB;
 		if (bm.format & 0x3f000000)
-			ddspf.flags	|= DDS_ALPHA;
+			ddspf.flags	|= PIXELFORMAT::ALPHA;
 
 		bpp				= bm.format.bits();
 		ddspf.bits	= bpp;
@@ -1668,6 +1411,10 @@ bool DDSFileHandler::Write(vbitmap &bm, ostream_ref file, DDS::D3DFMT fmt, uint3
 		}
 	}
 	return true;
+}
+
+bool WriteDDS(vbitmap &bm, ostream_ref file, uint32 flags) {
+	return WriteTexture(bm, file, DDS::D3DFMT::UNKNOWN, flags);
 }
 
 bool DDSFileHandler::Write(ISO_ptr<void> p, ostream_ref file) {
@@ -1716,9 +1463,9 @@ bool DDSFileHandler::Write(ISO_ptr<void> p, ostream_ref file) {
 		{D3DFMT::DXT5,			CHANS(0x85,0x86,0x85,0x88)	},
 		{D3DFMT::BC4,			CHANS(0x88,0x80,0x80,0x00)	},
 		{D3DFMT::BC5,			CHANS(0x88,0x88,0x00,0x00)	},
-		{D3DFMT::BC6H_UF16,		CHANS(0x90,0x90,0x90,0x40)	},
-		{D3DFMT::BC6H_SF16,		CHANS(0x90,0xd0,0x90,0x40)	},
-		{D3DFMT::BC7_UNORM,		CHANS(0x85,0x86,0x85,0x85)	},
+		{dxgi(DXGI::BC6H_UF16),	CHANS(0x90,0x90,0x90,0x40)	},
+		{dxgi(DXGI::BC6H_SF16),	CHANS(0x90,0xd0,0x90,0x40)	},
+		{dxgi(DXGI::BC7_UNORM),	CHANS(0x85,0x86,0x85,0x85)	},
 	};
 
 	if (cu) {
@@ -1727,22 +1474,22 @@ bool DDSFileHandler::Write(ISO_ptr<void> p, ostream_ref file) {
 			fmt = formats[i].format;
 	}
 
-	if (p.IsType<HDRbitmap>())
-		return Write(*(HDRbitmap*)p, file, fmt);
+	if (auto p2 = p.test_cast<HDRbitmap>())
+		return WriteTexture(*p2, file, fmt);
 
-	if (p.IsType<vbitmap>())
-		return Write(*(vbitmap*)p, file, fmt, 0);
+	if (auto p2 = p.test_cast<vbitmap>())
+		return WriteTexture(*p2, file, fmt, 0);
 
 	if (ISO_ptr<bitmap2> p2 = ISO_conversion::convert<bitmap2>(p)) {
 		p = *p2;
 
-		if (p.IsType<HDRbitmap>())
-			return Write(*(HDRbitmap*)p, file, fmt);
+		if (auto p1 = p.test_cast<HDRbitmap>())
+			return WriteTexture(*p1, file, fmt);
 
-		if (p.IsType<vbitmap>())
-			return Write(*(vbitmap*)p, file, fmt, 0);
+		if (auto p1 = p.test_cast<vbitmap>())
+			return WriteTexture(*p1, file, fmt, 0);
 
-		return Write(*(bitmap*)p, file, fmt);
+		return WriteTexture(*(bitmap*)p, file, fmt);
 	}
 
 	return false;

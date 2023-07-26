@@ -60,13 +60,13 @@ public:
 //	Editor
 //-----------------------------------------------------------------------------
 
-struct ISO_VirtualTarget : ISO::Browser2	{
+struct ISO_VirtualTarget : ISO::Browser2 {
 	ISO::Browser	v;
 	string			spec;
 	uint32			bin;
 
 	explicit ISO_VirtualTarget(const ISO::Browser2 &b) : ISO::Browser2(b), bin(0) {}
-	ISO_VirtualTarget(const ISO::Browser2 &b, ISO::Browser &_v, const char *_spec, uint32 _bin) : ISO::Browser2(b), v(_v), spec(_spec), bin(_bin) {}
+	ISO_VirtualTarget(const ISO::Browser2 &b, ISO::Browser &v, const char *spec, uint32 bin) : ISO::Browser2(b), v(v), spec(spec), bin(bin) {}
 
 	void operator=(const ISO::Browser2 &b) {
 		ISO::Browser2::operator=(b);
@@ -95,19 +95,13 @@ struct ISO_VirtualTarget : ISO::Browser2	{
 
 class Editor : public static_list<Editor> {
 public:
-	enum MODE {
-		MODE_create,
-		MODE_home,
-		MODE_command,
-		MODE_click,
-	};
 protected:
 	virtual bool		Matches(const ISO::Type *type)				{ return false; }
 	virtual bool		Matches(const ISO::Browser &b)				{ return b.GetTypeDef() && Matches(b.GetTypeDef()); }
-	virtual bool		Command(MainWindow &main, ID id, MODE mode)	{ return false; }
+	virtual bool		Command(MainWindow &main, ID id)			{ return false; }
 
 public:
-	static	bool		CommandAll(MainWindow &main, ID id, MODE mode);
+	static	bool		CommandAll(MainWindow &main, ID id);
 	static	Editor*		Find(ISO::Browser2 &b);
 	static	Control		FindOpen(const char *name);
 

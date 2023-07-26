@@ -19,6 +19,7 @@ using namespace iso;
 atomic<int32>	total_pairs1, total_pairs2;
 
 class CollisionContainer : public SceneTree, public DeleteOnDestroy<CollisionContainer> {
+	static CreateWithWorld<CollisionContainer> maker;
 public:
 	using SceneTree::operator new;
 	using SceneTree::operator delete;
@@ -123,13 +124,7 @@ public:
 };
 
 CollisionContainer	*CollisionContainer::me;
-
-struct CollisionsMaker: Handles2<CollisionsMaker, WorldEvent> {
-	void	operator()(WorldEvent *ev) {
-		if (ev->state == WorldEvent::BEGIN)
-			new CollisionContainer(ev->world);
-	}
-} collisions_maker;
+CreateWithWorld<CollisionContainer> CollisionContainer::maker;
 
 cuboid	CollisionItem0::GetBox()	const			{ return node->box; }
 void	CollisionItem0::_Update(param(cuboid) box)	{ container->Move(box, node); }

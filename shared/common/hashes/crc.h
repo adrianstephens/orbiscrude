@@ -31,8 +31,11 @@ template<typename T, T POLY> struct CRC_table<T, POLY, true> {
 };
 */
 template<typename T, T POLY, bool REVERSE> struct CRC_table_generator {
-	static constexpr T f(T crc, int j = 0) {
+	static constexpr T f(T crc, int j) {
 		return j == 8 ? crc : f((crc << 1) ^ (crc >> (sizeof(T) * 8 - 1) ? POLY : 0), j + 1);
+	}
+	static constexpr T f(T crc) {
+		return f(crc << ((sizeof(T) - 1) * 8), 0);
 	}
 };
 template<typename T, T POLY> struct CRC_table_generator<T, POLY, true> {
@@ -51,7 +54,7 @@ template<typename T, T POLY, bool REVERSE> struct crc_table {
 template<typename T, T POLY, bool REVERSE> constexpr meta::array<T,256> crc_table<T,POLY,REVERSE>::t;
 
 template<typename T, bool REVERSE>	struct CRC_next {
-	static inline T next(T crc, uint8 c, const T *table) {	// table lookup
+	static inline T _next(T crc, uint8 c, const T *table) {	// table lookup
 		return table[(crc >> ((sizeof(T) - 1) * 8)) ^ c] ^ (crc << 8);
 	}
 	template<typename C> static T _slow(T crc, C c, T poly) { // one bit at a time

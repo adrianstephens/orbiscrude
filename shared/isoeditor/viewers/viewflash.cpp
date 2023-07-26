@@ -276,7 +276,7 @@ class ViewFlash : public Window<ViewFlash>, public WindowTimer<ViewFlash> {
 	BitmapCache			cache;
 	int					frame;
 public:
-	LRESULT Proc(UINT message, WPARAM wParam, LPARAM lParam);
+	LRESULT Proc(MSG_ID message, WPARAM wParam, LPARAM lParam);
 
 	ViewFlash(const WindowPos &wpos, ISO_ptr<void> p) : fps(20), frame(0) {
 		flash	= p;
@@ -291,7 +291,7 @@ public:
 	}
 };
 
-LRESULT ViewFlash::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+LRESULT ViewFlash::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 		case WM_CREATE:
 			tb.Create(*this, NULL, VISIBLE | CHILD, NOEX, GetClientRect().Subbox(0, -32, 0, 0));
@@ -372,7 +372,7 @@ LRESULT ViewFlash::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 		case WM_NOTIFY: {
 			NMHDR	*nmh = (NMHDR*)lParam;
 			switch (nmh->code) {
-				case d2d::PAINT: {
+				case d2d::PAINT_INFO::CODE: {
 					auto	*info = (d2d::PAINT_INFO*)nmh;
 					FlashContext(
 						target, cache, ToClient(GetMousePos()), !!(GetKeyState(VK_LBUTTON) & 0x8000)

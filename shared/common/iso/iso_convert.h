@@ -176,15 +176,10 @@ template<typename R, typename... PP> class ConversionT<R(PP...)> : public Conver
 	R				(*f)(PP...);
 	TypeUserSave	param_type;
 
-	template<size_t... II> force_inline R call(_params *p, index_list<II...>&&) {
-//		return f(get<PP>(p->template get<II>())...);
-		return f(p->template get<II>()...);
-	}
-
 public:
 	ptr_machine<void> operator()(ptr_machine<void> p, const Type *type, FLAGS flags) {
 		if (p.GetType() == &param_type)
-			return ret(p.ID(), call((_params*)p, meta::make_index_list<sizeof...(PP)>()), flags);
+			return ret(p.ID(), call(f, *(_params*)p), flags);
 		return ISO_NULL;
 	}
 	ConversionT(R(*f)(PP...), tag2 id, Type::FLAGS flags) : Conversion(this), f(f), param_type(id, getdef<_params>(), flags) {}
@@ -234,7 +229,7 @@ namespace iso {
 		uint32			n	= b.Count();
 		auto			bi	= b.begin();
 
-		create(&a, n);
+		construct(&a, n);
 
 		return ISO::Conversion::batch_convert(
 			*bi, (uint32)bi.GetStride(), bi.GetType(),

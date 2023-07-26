@@ -99,9 +99,39 @@ void TabControl2::SetItemControl(Control c, int i) const {
 	SetItemControl(c, c.GetText(), i);
 }
 
+int TabControl2::ParentNotify(Control c, MSG_ID msg) {
+	switch (msg) {
+		case WM_DESTROY: {
+			int		i	= FindControl(c);
+			if (i >= 0) {
+				RemoveItem(i);
+				return 0;
+			}
+			break;
+		}
+		case WM_CREATE: {
+			if (c.Class().name() == "msctls_updown32")
+				break;
+			if (FindControl(c) < 0) {
+				TabControl::Item().Text(c.GetText()).Image(0).Param(c).Insert(*this);
+				return 0;
+			}
+			break;
+		}
+		case WM_SETTEXT: {
+			int		i	= FindControl(c);
+			if (i >= 0) {
+				GetItem(i).Text(c.GetText()).Set(*this, i);
+				return 0;
+			}
+			break;
+		}
+	}
+	return 0;
+}
 
-LRESULT TabControl3::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
-	switch (message) {
+LRESULT TabControl3::Proc(MSG_ID msg, WPARAM wParam, LPARAM lParam) {
+	switch (msg) {
 		case WM_SIZE:
 			ResizeItems();
 			break;
@@ -109,7 +139,7 @@ LRESULT TabControl3::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 		case WM_PAINT: {
 			Rect	rect;
 			GetUpdateRect(*this, &rect, FALSE);
-			Super(message, wParam, lParam);
+			Super(msg, wParam, lParam);
 			FixTabPaint(*this, DeviceContext(*this), rect);
 			return 0;
 		}
@@ -121,9 +151,18 @@ LRESULT TabControl3::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 
 		case WM_NOTIFY:
 		case WM_COMMAND:
-			return Parent()(message, wParam, lParam);
+			if (HIWORD(wParam) != 0xffff)
+				return Parent()(msg, wParam, lParam);
+			break;
+
+		case WM_KEYDOWN:
+			return Parent()(msg, wParam, lParam);
+
+		//case WM_PARENTNOTIFY:
+		//	return ParentNotify(lParam, MSG_ID(LOWORD(wParam)));
+
 	}
-	return Super(message, wParam, lParam);
+	return Super(msg, wParam, lParam);
 }
 
 //-----------------------------------------------------------------------------
@@ -139,8 +178,8 @@ TabWindow::TabWindow() : drag(-1), hot(-1), flags(REPLACE_SAMEID) {
 	}
 }
 
-LRESULT TabWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
-	switch (message) {
+LRESULT TabWindow::Proc(MSG_ID msg, WPARAM wParam, LPARAM lParam) {
+	switch (msg) {
 		case WM_CREATE:
 			Class().style &= ~(CS_VREDRAW | CS_HREDRAW);
 			SetImageList(images);
@@ -214,7 +253,7 @@ LRESULT TabWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 		case WM_PAINT: {
 			Rect	rect;
 			GetUpdateRect(*this, &rect, FALSE);
-			Super(message, wParam, lParam);
+			Super(msg, wParam, lParam);
 			FixTabPaint(*this, DeviceContext(*this), rect);
 			return 0;
 		}
@@ -222,7 +261,7 @@ LRESULT TabWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 		case TCM_DELETEITEM: {
 			int	i = wParam;
 			int	s = GetSelectedIndex();
-			Super(TCM_DELETEITEM, i);
+			Super(msg, i);
 			if (Count() == 0) {
 				Destroy();
 
@@ -242,7 +281,7 @@ LRESULT TabWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 				case WM_DESTROY: {
 					int		i	= FindControl(c);
 					if (i >= 0) {
-						Parent()(message, wParam, lParam);
+						Parent()(msg, wParam, lParam);
 						RemoveItem(i);
 						return 0;
 					}
@@ -281,24 +320,26 @@ LRESULT TabWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 		}
 
 		default:
-			if (message < WM_USER || message >= WM_USER + 0x100)
+			if (msg < WM_USER || msg >= WM_USER + 0x100)
 				break;
-//			ISO_TRACEF("user ") << hex(message) << '\n';
+//			ISO_TRACEF("user ") << hex(msg) << '\n';
 		case WM_CHAR:
 		case WM_NOTIFY:
 		case WM_DROPFILES:
-			return Parent()(message, wParam, lParam);
+			return Parent()(msg, wParam, lParam);
 		case WM_COMMAND:
-			if (HIWORD(wParam) != 0xffff)
-				return Parent()(message, wParam, lParam);
+			if (HIWORD(wParam) == 0xffff)
+				return GetSelectedControl()(msg, wParam, lParam);
+			else
+				return Parent()(msg, wParam, lParam);
 			break;
 
 		case WM_NCDESTROY:
-			Super(message, wParam, lParam);
+			Super(msg, wParam, lParam);
 			delete this;
 			return 0;
 	}
-	return Super(message, wParam, lParam);
+	return Super(msg, wParam, lParam);
 }
 
 void TabWindow::AddTab(Control c, int i, bool new_tab) {
@@ -379,8 +420,8 @@ TabControl2 DestroyedTabs(SplitterWindow *top, TabControl2 tab) {
 //	TitledWindow
 //-----------------------------------------------------------------------------
 
-LRESULT TitledWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
-	switch (message) {
+LRESULT TitledWindow::Proc(MSG_ID msg, WPARAM wParam, LPARAM lParam) {
+	switch (msg) {
 		case WM_SIZE: {
 			Rect	rect = GetChildRect();
 			for (auto i : Children())
@@ -405,19 +446,19 @@ LRESULT TitledWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 			break;
 
 		default:
-			if (message < WM_USER)
+			if (msg < WM_USER)
 				break;
 		case WM_CHAR:
 		case WM_NOTIFY:
 		case WM_DROPFILES:
 //		case WM_COMMAND:
-			return Parent()(message, wParam, lParam);
+			return Parent()(msg, wParam, lParam);
 
 		case WM_NCDESTROY:
 			delete this;
 			return 0;
 	}
-	return Super(message, wParam, lParam);
+	return Super(msg, wParam, lParam);
 }
 
 //-----------------------------------------------------------------------------
@@ -538,8 +579,8 @@ WindowPos StackWindow::Dock(DockEdge edge, uint32 size) {
 		return Docker(Parent()).Dock(edge, size);
 }
 
-LRESULT StackWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
-	switch (message) {
+LRESULT StackWindow::Proc(MSG_ID msg, WPARAM wParam, LPARAM lParam) {
+	switch (msg) {
 		case WM_CREATE:
 			last = this;
 			break;
@@ -564,7 +605,7 @@ LRESULT StackWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 					return 1;
 
 //				default:
-//					return Parent()(message, wParam, lParam);
+//					return Parent()(msg, wParam, lParam);
 			}
 			break;
 
@@ -583,9 +624,9 @@ LRESULT StackWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 			return 0;
 
 		case WM_NOTIFY:
-			return Parent()(message, wParam, lParam);
+			return Parent()(msg, wParam, lParam);
 	}
-	return Super(message, wParam, lParam);
+	return Super(msg, wParam, lParam);
 }
 
 //-----------------------------------------------------------------------------
@@ -595,12 +636,12 @@ LRESULT StackWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 class HighlightWindow : public Window<HighlightWindow> {
 public:
 	static HBRUSH get_class_background()	{ return GetSysColorBrush(COLOR_ACTIVECAPTION); }
-	LRESULT Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
-		if (message == WM_NCDESTROY) {
+	LRESULT Proc(MSG_ID msg, WPARAM wParam, LPARAM lParam) {
+		if (msg == WM_NCDESTROY) {
 			hWnd = 0;
 			return 0;
 		}
-		return Super(message, wParam, lParam);
+		return Super(msg, wParam, lParam);
 	}
 	bool	Move(const Rect &rect) {
 		Point			size = rect.Size();
@@ -719,7 +760,7 @@ public:
 	Control Find(const Point &mouse, Control exclude, Point size, uint32 flags) {
 		Control	new_control;
 
-		enum_thread_windows(GetCurrentThreadId(), [mouse, exclude, flags, &new_control](ChildEnumerator *e, Control c) {
+		enum_thread_windows(GetCurrentThreadId(), [mouse, exclude, &new_control](ChildEnumerator *e, Control c) {
 			if (c != exclude) {
 				Rect	r	= c.GetRect();
 				Rect	cr	= c.ToScreen(c.GetChildRect());
@@ -794,8 +835,8 @@ Rect DockingWindow::GetFrameAdjust() const {
 	: Rect(7,4 - TopExtra(), -14, TopExtra() - 7);
 }
 
-LRESULT DockingWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
-	switch (message) {
+LRESULT DockingWindow::Proc(MSG_ID msg, WPARAM wParam, LPARAM lParam) {
+	switch (msg) {
 		case WM_SIZE:
 			child.Move(GetChildRect());
 			return 0;
@@ -836,7 +877,7 @@ LRESULT DockingWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 
 //		case WM_COMMAND:
 //			if (HIWORD(wParam) != 0xffff)
-//				return Control(GetFocus())(message, wparam(wParam, 0xffff), lParam);
+//				return Control(GetFocus())(msg, wparam(wParam, 0xffff), lParam);
 //			break;
 
 		case WM_NCDESTROY:
@@ -844,7 +885,7 @@ LRESULT DockingWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 		case WM_DESTROY:
 			return 0;
 	}
-	return Super(message, wParam, lParam);
+	return Super(msg, wParam, lParam);
 }
 
 void DockingWindow::Dock(DockEdge edge, Control c) {
@@ -859,9 +900,27 @@ TabWindow* DockingWindow::FindTab(ID id, int &index) {
 	return Docker::FindTab(Child(), id, index);
 }
 
+
+template<typename T> T *FindChild(Control c) {
+	if (auto *sw = SplitterWindow::Cast(c)) {
+		if (T *t = FindChild<T>(sw->GetPane(0)))
+			return t;
+		return FindChild<T>(sw->GetPane(1));
+	}
+	return T::Cast(c);
+}
+
 //-----------------------------------------------------------------------------
 //	SeparateWindow
 //-----------------------------------------------------------------------------
+
+TabWindow *SeparateWindow::GetTabs() {
+	if (auto tabs = FindChild<TabWindow>(child))
+		return tabs;
+	auto *tabs = new TabWindow(GetChildWindowPos(), GetChild());
+	SetChildImmediate(*tabs);
+	return tabs;
+}
 
 void SeparateWindow::AdjustToolbars() {
 	auto	frame	= GetFrameAdjust();
@@ -897,7 +956,7 @@ ToolBarControl SeparateWindow::CreateToolbar(ID id, ID bmid) {
 			return i;
 	}
 
-	ToolBarControl	tb(*this, NULL, CHILD | ToolBarControl::NODIVIDER | ToolBarControl::NORESIZE | ToolBarControl::FLAT | ToolBarControl::TRNSPARENT | ToolBarControl::TOOLTIPS, NOEX, id);
+	ToolBarControl	tb(*this, none, CHILD | ToolBarControl::NODIVIDER | ToolBarControl::NORESIZE | ToolBarControl::FLAT | ToolBarControl::TRNSPARENT | ToolBarControl::TOOLTIPS, NOEX, id);
 	tb.id = id;
 	tb.Init(GetLocalInstance(), id, bmid);
 	tb(TB_SETMAXTEXTROWS, 0);
@@ -951,9 +1010,9 @@ void CheckTab(SeparateWindow *sep, TabControl2 tab) {
 	}
 }
 */
-LRESULT SeparateWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
+LRESULT SeparateWindow::Proc(MSG_ID msg, WPARAM wParam, LPARAM lParam) {
 	LRESULT	r;
-	switch (message) {
+	switch (msg) {
 	#ifndef DWM_H
 		case WM_NCCREATE:
 			EnableNonClientDpiScaling(hWnd);
@@ -1028,7 +1087,7 @@ LRESULT SeparateWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 			break;
 		case WM_NCHITTEST:
 			if (_DWM::Composition()) {
-				if (DwmDefWindowProc(hWnd, message, wParam, lParam, &r))
+				if (DwmDefWindowProc(hWnd, msg, wParam, lParam, &r))
 					return r;
 				Rect	client	= ToScreen(GetChildRect());
 				Point	pt		= Point(lParam);
@@ -1073,14 +1132,16 @@ LRESULT SeparateWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 
 		case WM_COMMAND:
 			if (owner)
-				return owner(message, wParam, lParam);
+				return owner(msg, wParam, lParam);
 			if (HIWORD(wParam) != 0xffff && (lParam == 0 || find(toolbars, HWND(lParam)) != toolbars.end())) {
-				//return Control(GetFocus())(message, wparam(wParam, 0xffff), lParam);
+				//return Control(GetFocus())(msg, wparam(wParam, 0xffff), lParam);
 				for (Control c = GetFocus(); c; c = c.Parent()) {
-					if (c(message, wparam(wParam, 0xffff), lParam))
-						break;
+					if (auto r = c(msg, wparam(wParam, 0xffff), lParam))
+						return r;
 				}
 			}
+			if (auto r = child(msg, wparam(wParam, 0xffff), lParam))
+				return r;
 			break;
 
 		case WM_NOTIFY: {
@@ -1119,7 +1180,7 @@ LRESULT SeparateWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 					return 1;
 
 				default:
-					return owner(message, wParam, lParam);
+					return owner(msg, wParam, lParam);
 			}
 			return 0;
 		}
@@ -1164,10 +1225,10 @@ LRESULT SeparateWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 			return 0;
 
 	}
-	if (DwmDefWindowProc(hWnd, message, wParam, lParam, &r))
+	if (DwmDefWindowProc(hWnd, msg, wParam, lParam, &r))
 		return r;
 
-	return Super(message, wParam, lParam);
+	return Super(msg, wParam, lParam);
 }
 
 //-----------------------------------------------------------------------------
@@ -1183,8 +1244,8 @@ DockableWindow::DockableWindow(Control c) {
 	c.SetParent(*this);
 }
 
-LRESULT DockableWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
-	switch (message) {
+LRESULT DockableWindow::Proc(MSG_ID msg, WPARAM wParam, LPARAM lParam) {
+	switch (msg) {
 		case WM_SIZE:
 			Child().Move(GetChildRect());
 			return 0;
@@ -1213,7 +1274,7 @@ LRESULT DockableWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 			return 0;
 
 	}
-	return Super(message, wParam, lParam);
+	return Super(msg, wParam, lParam);
 }
 
 //-----------------------------------------------------------------------------
@@ -1234,15 +1295,6 @@ void Docker::BringToFront(Control c) {
 		c0	= c;
 		c	= c.Parent();
 	}
-}
-
-template<typename T> T *FindChild(Control c) {
-	if (auto *sw = SplitterWindow::Cast(c)) {
-		if (T *t = FindChild<T>(sw->GetPane(0)))
-			return t;
-		return FindChild<T>(sw->GetPane(1));
-	}
-	return T::Cast(c);
 }
 
 TabWindow *Docker::FindTab(Control c, ID id, int &index) {
@@ -1292,7 +1344,7 @@ Docker::Docker(Control c) : stack(0), tab(0), pane(-1) {
 	}
 }
 
-Docker::Docker(DockingWindow *dock) : dock(*dock), stack(0), pane(-1), tab(0) {
+Docker::Docker(DockingWindow *dock) : dock(*dock), stack(0), tab(0), pane(-1) {
 	tab = FindChild<TabWindow>(dock->GetChild());
 }
 

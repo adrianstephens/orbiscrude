@@ -486,7 +486,7 @@ struct PointerTypeNode : TypeNode {
 struct VariableSymbolNode : SymbolNode {
 	StorageClass SC;
 	TypeNode*	Type;
-	VariableSymbolNode(QualifiedNameNode *Name, TypeNode *Type = 0, StorageClass SC = StorageClass::Global) : SymbolNode(NodeKind::VariableSymbol, Name), Type(Type), SC(SC) {}
+	VariableSymbolNode(QualifiedNameNode *Name, TypeNode *Type = 0, StorageClass SC = StorageClass::Global) : SymbolNode(NodeKind::VariableSymbol, Name), SC(SC), Type(Type) {}
 	void output(string_accum& OS, OutputFlags Flags) const override {
 		if ((Flags & OF_AccessSpecifiers) && ((int)SC & 3))
 			OS	<< Access_names[(int)SC & 3] << ": ";
@@ -1406,7 +1406,7 @@ namespace iso {
 string demangle_vc(const char* mangled, uint32 flags) {
 	Demangler D;
 
-	string_scan s = mangled;
+	string_scan s(str(mangled));
 	if (SymbolNode* AST = D.parse(s, (OutputFlags)flags)) {
 		string_builder S;
 		AST->output(S, (OutputFlags)flags);
@@ -1418,7 +1418,7 @@ string demangle_vc(const char* mangled, uint32 flags) {
 string_accum& demangle_vc(string_accum &a, const char* mangled, uint32 flags) {
 	Demangler D;
 
-	string_scan s = mangled;
+	string_scan s(str(mangled));
 	if (SymbolNode* AST = D.parse(s, (OutputFlags)flags)) {
 		AST->output(a, (OutputFlags)flags);
 	} else {

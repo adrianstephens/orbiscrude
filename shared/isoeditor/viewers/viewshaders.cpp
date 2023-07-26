@@ -1,10 +1,10 @@
 #include "main.h"
-//#include "viewer.h"
 #include "com.h"
 #include "iso/iso_binary.h"
 #include "graphics.h"
 #include "common/shader.h"
 #include <d3dcompiler.h>
+#include <dxcapi.h>
 
 #ifndef __clang__
 #include <d3dx9shader.h>
@@ -29,6 +29,20 @@ bool DisassemblePS3Shader(const void *p, ostream_ref file, bool ps);
 bool DisassemblePS3Shader(const void *p, size_t size, ostream_ref file, bool ps);
 
 #ifdef USE_DX11
+bool DisassembleSM6Shader(const void *p, size_t size, ostream_ref file) {
+	com_ptr<IDxcLibrary>	lib;
+	com_ptr<IDxcCompiler2>	compiler;
+	DxcCreateInstance(CLSID_DxcLibrary, COM_CREATE(&lib));
+	DxcCreateInstance(CLSID_DxcCompiler, COM_CREATE(&compiler));
+
+	com_ptr<IDxcBlobEncoding>	source;
+	lib->CreateBlobWithEncodingFromPinned(p, size, CP_ACP, &source);
+
+	com_ptr<IDxcBlobEncoding>	blob;
+	compiler->Disassemble(source, &blob);
+	file.writebuff(blob->GetBufferPointer(), blob->GetBufferSize());
+	return true;
+}
 bool DisassembleDX11Shader(const void *p, size_t size, ostream_ref file) {
 	com_ptr<ID3DBlob>	blob;
 	if (FAILED(D3DDisassemble(p, size, D3D_DISASM_ENABLE_COLOR_CODE, 0, &blob)))
@@ -39,7 +53,7 @@ bool DisassembleDX11Shader(const void *p, size_t size, ostream_ref file) {
 #endif
 
 #ifndef __clang__
-bool DisassemblePCShader(const void *p, ostream_ref file, bool ps) {
+bool DisassembleDX9Shader(const void *p, ostream_ref file, bool ps) {
 	com_ptr<ID3DXBuffer>	dis;
 	if (FAILED(D3DXDisassembleShader((DWORD*)p, 1, NULL, &dis)))
 		return false;
@@ -59,7 +73,7 @@ protected:
 	ISO_ptr<void>		p;
 	uint32				max_expand;
 public:
-	LRESULT Proc(UINT message, WPARAM wParam, LPARAM lParam);
+	LRESULT Proc(MSG_ID message, WPARAM wParam, LPARAM lParam);
 
 //	void			SetEditWindow(Control c);
 	ViewTree(MainWindow &_main, const WindowPos &wpos, const ISO_ptr<void> &_p) : p(_p), max_expand(1000) {
@@ -68,7 +82,7 @@ public:
 	}
 };
 
-LRESULT ViewTree::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+LRESULT ViewTree::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 		case WM_CREATE: {
 			splitter.Create(GetChildWindowPos(), 0, CHILD | VISIBLE | CLIPSIBLINGS, NOEX);
@@ -129,7 +143,7 @@ ISO_ptr<void> MakeISO_PDB(PDB &&pdb);
 class EditorShader : public Editor {
 	enum {
 		VS = 0, PS = 1,
-		PC = 0, PS3 = 2, PS3_raw = 4, X360 = 6, WII = 8, DX11 = 10,
+		DX9 = 0, PS3 = 2, PS3_raw = 4, X360 = 6, WII = 8, DX11 = 10, SM6 = 12
 	};
 	int	Check(void *p, uint32 len) {
 		if (len > 4) {
@@ -138,10 +152,14 @@ class EditorShader : public Editor {
 			uint32be		*be	= (uint32be*)p;
 
 			if ((ps = le[0] == 0xffff0300) || le[0] == 0xfffe0300)
-				return PC + int(ps);
+				return DX9 + int(ps);
 
-			if (be[0] == 'DXBC')
+			if (be[0] == 'DXBC') {
+				auto	dxbc	= (const dx::DXBC*)p;
+				if (dxbc->GetBlob(dx::DXBC::DXIL))
+					return SM6;
 				return DX11;
+			}
 
 //			char			*pc	= (char*)p;
 //			if ((ps = pc[0] == 'P') || pc[0] == 'V')
@@ -181,15 +199,16 @@ class EditorShader : public Editor {
 #ifdef USE_DX11
 		if (b.Is("DX11ShaderStage")) {
 			const dx::DXBC	*dxbc	= *b;
-
-			MSF::EC		error;
-			ref_ptr<MSF::reader>	msf = new MSF::reader(lvalue(memory_reader(dxbc->GetBlob(dx::DXBC::ShaderPDB))), &error);
-			if (!error) {
-				PDBinfo		info;
-				if (info.load(msf, snPDB)) {
-					PDB	pdb;
-					if (pdb.load(info, msf))
-						return *new ViewTree(main, wpos, MakeISO_PDB(move(pdb)));
+			if (auto blob = dxbc->GetBlob(dx::DXBC::ShaderPDB)) {
+				MSF::EC		error;
+				ref_ptr<MSF::reader>	msf = new MSF::reader(lvalue(memory_reader(blob)), &error);
+				if (!error) {
+					PDBinfo		info;
+					if (info.load(msf, snPDB)) {
+						PDB	pdb;
+						if (pdb.load(info, msf))
+							return *new ViewTree(main, wpos, MakeISO_PDB(move(pdb)));
+					}
 				}
 			}
 
@@ -233,10 +252,10 @@ class EditorShader : public Editor {
 					com_ptr<ID3DBlob>	blob;
 					if (SUCCEEDED(D3DDisassemble(sub, sub.length(),
 						D3D_DISASM_ENABLE_COLOR_CODE,
-						buffer_accum<256>()
+						(buffer_accum<256>()
 							<< "\n<font color = \"#00f000\">//" << repeat('-', 40)
 							<< "\n//\t" << shader_types[i] << " SHADER"
-							<< "\n//" << repeat('-', 40) << "\n</font>\n",
+							<< "\n//" << repeat('-', 40) << "\n</font>\n").term(),
 						&blob
 					))) {
 						text += memory_block(blob->GetBufferPointer(), blob->GetBufferSize());
@@ -278,10 +297,11 @@ class EditorShader : public Editor {
 		bool			html	= false;
 		switch (type & ~1) {
 #ifdef USE_DX11
+			case SM6:		DisassembleSM6Shader(p, len, m);		break;
 			case DX11:		html = DisassembleDX11Shader(p, len, m);break;
 #endif
 #ifndef __clang__
-			case PC:		html = DisassemblePCShader(p, m, ps);	break;
+			case DX9:		html = DisassembleDX9Shader(p, m, ps);	break;
 #endif
 			case PS3:		DisassemblePS3Shader(p, m, ps);			break;
 			default:

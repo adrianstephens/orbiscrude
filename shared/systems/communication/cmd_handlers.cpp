@@ -357,10 +357,10 @@ static class ObjectMap : public Handles2<ObjectMap, WorldEvent> {
 	Object* Lookup(crc32 id, size_t depth) const;
 
 public:
-	Object* Lookup(crc32 id) const;
-	void Append(crc32 id, Object *obj) {
-		cache.push_front(new Entry(id, obj));
-	}
+	Object* Lookup(crc32 id)			const;
+	Object* Lookup(string_ref id)		const	{ return Lookup(crc32(id)); }
+	void	Append(crc32 id, Object *obj)		{ cache.push_front(new Entry(id, obj)); }
+	void	Append(string_ref id, Object *obj)	{ cache.push_front(new Entry(crc32(id), obj)); }
 	void operator()(WorldEvent *ev) {
 		if (ev->state == WorldEvent::END) {
 			while (!cache.empty())
@@ -473,7 +473,7 @@ static CmdHandler<ISO_CRC("DeleteObject", 0x5b4ba3de)> chDeleteObject;
 
 // ModifyLight
 template<> void CmdHandler<ISO_CRC("ModifyLight", 0x302e70f9)>::Process(ISO::Browser b) {
-	crc32	id = b.GetMember(ISO_CRC("id", 0xbf396750)).GetString();
+	auto	id = crc32(b.GetMember(ISO_CRC("id", 0xbf396750)).GetString());
 	Light	light;
 	light.col		= colour(*(float3p*)b.GetMember(ISO_CRC("colour", 0xfaf865ce)), one);
 	light.range		= b.GetMember(ISO_CRC("range", 0x93875a49)).GetFloat();
@@ -498,7 +498,7 @@ string_accum& operator<<(string_accum &a, param(float3x4) m) {
 template<> void CmdHandler<ISO_CRC("RetrieveLight", 0xb9a7cd42)>::Process(isolink_handle_t handle, ISO::Browser b) {
 	// lookup
 	buffer_accum<256> buffer;
-	crc32 id = b.GetMember(ISO_CRC("id", 0xbf396750)).GetString();
+	crc32 id = crc32(b.GetMember(ISO_CRC("id", 0xbf396750)).GetString());
 	if (const Light *light = World::Current()->GetItem<Light>(id)) {
 		buffer
 			<< "colour = " << light->col.rgb << " "
@@ -510,7 +510,7 @@ template<> void CmdHandler<ISO_CRC("RetrieveLight", 0xb9a7cd42)>::Process(isolin
 	// respond
 	uint32be buffer_len = buffer.size32() + 1;
 	if (isolink_send(handle, &buffer_len, sizeof(buffer_len)))
-		isolink_send(handle, buffer, buffer_len);
+		isolink_send(handle, buffer.term(), buffer_len);
 	isolink_close(handle);
 }
 static CmdHandler<ISO_CRC("RetrieveLight", 0xb9a7cd42)> chRetrieveLight;

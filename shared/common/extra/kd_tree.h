@@ -11,16 +11,34 @@ namespace iso {
 //	k-kd_tree
 //-----------------------------------------------------------------------------
 
-template<typename C, typename V=typename container_traits<typename T_noconst<typename T_noref<C>::type>::type>::element, typename T=typename container_traits<V>::element> struct kd_tree {
+struct kd_leaf {
+	int			axis;
+	range<int*>	indices;
+	kd_leaf(int *begin, int *end) : axis(-1), indices(begin, end) {}
+};
+
+template<typename C, typename V=element_t<noconst_t<noref_t<C>>>, typename T=element_t<V>> struct kd_tree {
 	struct kd_node {
 		int		axis;
 		T		split;
 		kd_node *child[2];
 	};
-	struct kd_leaf {
-		int			axis;
-		range<int*>	indices;
-		kd_leaf(int *begin, int *end) : axis(-1), indices(begin, end) {}
+
+	struct iterator {
+		int		*index	= nullptr;
+		kd_leaf	*leaf	= nullptr;
+		const kd_node	*stack[32], **sp = stack;
+
+		iterator(const kd_node *node, const C &data, const V &x);
+		iterator(const kd_node *node, const C &data, uint32 index);
+		int		operator*()	const { return *index; }
+		void	remove(int threshold = 16) {
+			leaf->indices.erase_unordered(index);
+			index = nullptr;
+			if (leaf->indices.size32() < threshold) {
+				//merge down?
+			}
+		}
 	};
 
 	C						data;
@@ -29,80 +47,94 @@ template<typename C, typename V=typename container_traits<typename T_noconst<typ
 	dynamic_array<kd_node>	nodes;
 
 	kd_tree() {}
-	template<typename C2> kd_tree(const C2 &_data, int threshold = 16) : data(unconst(_data)) {
-		init(threshold);
+	template<typename C2> kd_tree(const C2 &_data, int threshold = 16, bool use_median = false) : data(unconst(_data)) {
+		init(threshold, use_median);
 	}
-	template<typename C2> void init(const C2 &_data, int threshold = 16) {
+	template<typename C2> void init(const C2 &_data, int threshold = 16, bool use_median = false) {
 		data = _data;
-		init(threshold);
+		init(threshold, use_median);
 	}
-	void	init(int threshold = 16);
+	void	init(int threshold = 16, bool use_median = false);
 	int		nearest_neighbour(const V &x, float &_min_dist) const;
+	auto	find(const V& x)	const { return iterator(nodes.begin(), data, x); }
+	auto	find(uint32 index)	const { return iterator(nodes.begin(), data, index); }
 };
 
-template<typename C, typename V, typename T> void kd_tree<C,V,T>::init(int threshold) {
-	int		n			= data.size32();
-	int		max_leaves	= div_round_up(n, (threshold + 1) / 2);
-	int		max_nodes	= (1 << log2_ceil(max_leaves)) - 1;// max_leaves - 1;//log2_ceil(max_leaves);
+template<typename C> kd_tree<C> make_kd_tree(C &&c, int threshold = 16) { return {forward<C>(c), threshold}; }
 
-	indices.resize(n);
+template<typename C, typename V, typename T> void kd_tree<C,V,T>::init(int threshold, bool use_median) {
+	int		n			= num_elements32(data);
+	int		max_leaves	= div_round_up(n, (threshold + 1) / 2);
+	int		max_nodes	= (1 << log2_ceil(max_leaves)) - 1;
+
 	leaves.reserve(max_leaves);
 	nodes.reserve(max_nodes);
-
-	copy(int_range(0, n), indices);
+	indices = int_range(0, n);
 
 	struct entry {
-		int		*begin, *end;
-		kd_node	*node;
+		range<int*>	indices;
+		kd_node*	node;
 	};
 
 	entry	stack[32], *sp = stack;
-	sp->begin	= indices.begin();
-	sp->end		= indices.end();
-	sp->node	= new(nodes) kd_node;
+	sp->indices	= indices;
+	sp->node	= &nodes.push_back();
 	++sp;
-
-	interval<V>	box;
 
 	while (sp > stack) {
 		--sp;
-		int		*begin	= sp->begin, *end = sp->end;
-		kd_node	*node = sp->node;
 
-		int		*i		= begin;
-		box	= interval<V>(data[*i++]);
-		while (i < end)
-			box	|= data[*i++];
+		auto	begin	= sp->indices.begin();
+		auto	end		= sp->indices.end();
 
-		int	axis	= max_component_index(box);
+		int		axis;
+		T		split;
+		int*	pivot;
 
-		int	*pivot = median(begin, end, [&](int a, int b) {
-			return data[a][axis] < data[b][axis];
-		});
+		if (use_median) {
+			auto	box		= get_extent<V>(make_indexed_container(data, sp->indices));
+			// split along axis with largest extent
+			axis	= max_component_index(box);
+			pivot	= median(sp->indices, [&](int a, int b) { return data[a][axis] < data[b][axis]; });
+			split	= data[pivot[-1]][axis];
+			while (pivot < end - 1 && data[*pivot][axis] == split)
+				++pivot;
+		
+			split	= (split + data[*pivot][axis]) / 2;
 
-		T	v0 = data[pivot[-1]][axis];
-		while (pivot < end - 1 && data[*pivot][axis] == v0)
-			++pivot;
-
-		node->axis	= axis;
-		node->split	= (v0 + data[*pivot][axis]) / 2;
-//		node->split	= data[*pivot][axis];
-
-		if (pivot - begin <= threshold) {
-			node->child[0] = (kd_node*)&leaves.emplace_back(begin, pivot);
 		} else {
-			sp->node	= node->child[0] = new(nodes) kd_node;
-			sp->begin	= begin;
-			sp->end		= pivot;
+			// gather statistics on the points in the subtree using Welford's algorithm
+			V	mean	= zero, var = zero;
+			int	x		= 0;
+			for (auto i : sp->indices) {
+				auto	delta	= data[i] - mean;
+				mean	+= delta / ++x;
+				var		+= delta * (data[i] - mean);
+			}
+
+			// split along axis with largest variance
+			axis	= max_component_index(var);
+			split	= mean[axis];
+			pivot	= partition(sp->indices,  [&](int i) { return data[i][axis] > split; });
+		}
+
+		kd_node	*node	= sp->node;
+		node->axis		= axis;
+		node->split		= split;
+
+		if (end - pivot <= threshold) {
+			node->child[1]	= (kd_node*)&leaves.emplace_back(pivot, end);
+		} else {
+			sp->node		= node->child[1] = &nodes.push_back();
+			sp->indices		= {pivot, end};
 			++sp;
 		}
 
-		if (end - pivot <= threshold) {
-			node->child[1] = (kd_node*)&leaves.emplace_back(pivot, end);
+		if (pivot - begin <= threshold) {
+			node->child[0]	= (kd_node*)&leaves.emplace_back(begin, pivot);
 		} else {
-			sp->node	= node->child[1] = new(nodes) kd_node;
-			sp->begin	= pivot;
-			sp->end		= end;
+			sp->node		= node->child[0] = &nodes.push_back();
+			sp->indices		= {begin, pivot};
 			++sp;
 		}
 	}
@@ -123,14 +155,12 @@ template<typename C, typename V, typename T> int kd_tree<C,V,T>::nearest_neighbo
 			node	= node->child[x[node->axis] >= node->split];
 		}
 
-		if (node->axis < 0) {
-			kd_leaf	*leaf = (kd_leaf*)node;
-			for (auto &i : leaf->indices) {
-				T	dist = dist2(data[i], x);
-				if (dist < min_dist) {
-					min_dist	= dist;
-					min_index	= i;
-				}
+		kd_leaf	*leaf = (kd_leaf*)node;
+		for (auto &i : leaf->indices) {
+			T	dist = dist2(data[i], x);
+			if (dist < min_dist) {
+				min_dist	= dist;
+				min_index	= i;
 			}
 		}
 
@@ -140,10 +170,57 @@ template<typename C, typename V, typename T> int kd_tree<C,V,T>::nearest_neighbo
 				return min_index;
 			}
 			node = *--sp;
-		} while	(node->axis >= 0 && square(x[node->axis] - node->split) >= min_dist);
+		} while	(square(x[node->axis] - node->split) >= min_dist);
 
 		node = node->child[x[node->axis] < node->split];
 	}
 }
+
+template<typename C, typename V, typename T> kd_tree<C,V,T>::iterator::iterator(const kd_node *node, const C &data, const V &x) {
+	T	min_dist	= maximum;
+
+	for (;;) {
+		while (node->axis >= 0) {
+			*sp++	= node;
+			node	= node->child[x[node->axis] > node->split];
+		}
+
+		for (auto &i : ((kd_leaf*)node)->indices) {
+			T	dist = dist2(data[i], x);
+			if (dist <= min_dist) {
+				min_dist	= dist;
+				index		= &i;
+				leaf		= (kd_leaf*)node;
+			}
+		}
+
+		do {
+			if (sp == stack)
+				return;
+			node = *--sp;
+		} while	(square(x[node->axis] - node->split) > min_dist);
+
+		node = node->child[x[node->axis] <= node->split];
+	}
+}
+
+template<typename C, typename V, typename T> kd_tree<C,V,T>::iterator::iterator(const kd_node *node, const C &data, uint32 ix) {
+	V	x			= data[ix];
+
+	while (node->axis >= 0) {
+		*sp++	= node;
+		node	= node->child[x[node->axis] > node->split];
+	}
+
+	for (auto &i : ((kd_leaf*)node)->indices) {
+		if (i == ix) {
+			index	= &i;
+			leaf	= (kd_leaf*)node;
+			return;
+		}
+	}
+}
+
+
 } // namespace iso
 #endif // KD_TREE_H

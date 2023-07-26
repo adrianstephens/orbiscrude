@@ -396,10 +396,31 @@ Allowed Instrinsics (?)
 
 	<!-- misc -->
 
-	<Type Name="iso::space_for&lt;*&gt;">
+	<Type Name="iso::normalised&lt;iso::n_plane&lt;*,*&gt;&gt;">
+		<DisplayString>{v}</DisplayString>
+	</Type>
+
+	<Type Name="iso::normalised&lt;iso::line&lt;*,*&gt;&gt;">
+		<DisplayString>{v}</DisplayString>
+	</Type>
+
+
+	<Type Name="iso::normalised&lt;*&gt;">
+		<DisplayString>{t}</DisplayString>
+	</Type>
+
+
+	<Type Name="iso::space_for&lt;*,*&gt;">
 		<DisplayString>{*($T1*)this}</DisplayString>
 		<Expand>
 			<ExpandedItem>*($T1*)this</ExpandedItem>
+		</Expand>
+	</Type>
+
+	<Type Name="iso::space_for&lt;D3D12_RESOURCE_BARRIER [*],*&gt;">
+		<DisplayString>{$T1}</DisplayString>
+		<Expand>
+			<ExpandedItem>(D3D12_RESOURCE_BARRIER*)this,[$T1]</ExpandedItem>
 		</Expand>
 	</Type>
 
@@ -500,6 +521,10 @@ Allowed Instrinsics (?)
 
 	<!-- iterators -->
 
+	<Type Name="iso::iterator_wrapper&lt;*,*,*&gt;">
+		<DisplayString>i = {i}</DisplayString>
+	</Type>
+
 	<!-- containers -->
 
 	<Type Name="iso::range&lt;*&gt;">
@@ -513,14 +538,32 @@ Allowed Instrinsics (?)
 	</Type>
 
 	<Type Name="iso::range&lt;iso::stride_iterator&lt;*&gt;&gt;">
-		<DisplayString>size = {((char*)b.p - (char*)a.p) / a.s}</DisplayString>
+		<DisplayString>size = {((char*)b.i - (char*)a.i) / a.s}</DisplayString>
 		<Expand>
 			<CustomListItems>
-				<Variable Name="p" InitialValue="a.p" />
-				<Size>((char*)b.p - (char*)a.p) / a.s</Size>
+				<Variable Name="p" InitialValue="a.i" />
+				<Size>((char*)b.i - (char*)a.i) / a.s</Size>
 				<Loop>
 					<Item>*p</Item>
 					<Exec>p = ($T1*)((char*)p + a.s)</Exec>
+				</Loop>
+			</CustomListItems>
+		</Expand>
+	</Type>
+
+	<Type Name="iso::dynamic_mixout&lt;*,*&gt;">
+		<DisplayString>hello, size = {size()}</DisplayString>
+	</Type>
+
+	<Type Name="iso::_order_array&lt;*,*,*&gt;">
+		<DisplayString>order, size = {curr_size}</DisplayString>
+		<Expand>
+			<CustomListItems>
+				<Variable Name="i" InitialValue="0" />
+				<Size>curr_size</Size>
+				<Loop>
+					<Item>*_get(i)</Item>
+					<Exec>i = i + 1</Exec>
 				</Loop>
 			</CustomListItems>
 		</Expand>
@@ -536,7 +579,7 @@ Allowed Instrinsics (?)
 		</Expand>
 	</Type>
 
-	<Type Name="iso::ptr_array&lt;*&gt;" Inheritable="false">
+	<Type Name="iso::ptr_array&lt;*&gt;">
 		<DisplayString>[{curr_size,d}] {p,[curr_size]}</DisplayString>
 		<Expand>
 			<ArrayItems>
@@ -546,7 +589,7 @@ Allowed Instrinsics (?)
 		</Expand>
 	</Type>
 
-	<Type Name="iso::static_array&lt;*&gt;" Inheritable="false">
+	<Type Name="iso::static_array&lt;*,*&gt;" Inheritable="true">
 		<DisplayString>[{curr_size,d} / {$T2,d}] {($T1*)&amp;t,[curr_size]}</DisplayString>
 		<Expand>
 			<ArrayItems>
@@ -576,7 +619,7 @@ Allowed Instrinsics (?)
 		</Expand>
 	</Type>
 
-	<Type Name="iso::_ptr_array&lt;*&gt;" Inheritable="false">
+	<Type Name="iso::_ptr_array&lt;*&gt;">
 		<DisplayString>[{curr_size,d}] {p,[curr_size]}</DisplayString>
 		<Expand>
 			<ArrayItems>
@@ -586,6 +629,25 @@ Allowed Instrinsics (?)
 		</Expand>
 	</Type>
 
+	<Type Name="iso::dynamic_mixout&lt;*,*&gt;">
+		<Expand>
+			<ExpandedItem>*($T1*)this</ExpandedItem>			
+		</Expand>
+	</Type>
+
+	<Type Name="iso::_order_array&lt;*,*,*&gt;" Inheritable="false">
+		<DisplayString>[{curr_size,d}]</DisplayString>
+		<Expand>
+			<CustomListItems>
+				<Variable Name="i" InitialValue="0" />
+				<Loop>
+					<Break Condition="i == curr_size" />
+					<Item>i == 0 || __log2(i) &lt; $T2 ? (($T1*)order0)[i] : orders[__log2(i) - $T2][i - (1 &lt;&lt; __log2(i))]</Item>
+					<Exec>i = i + 1 </Exec>
+				</Loop>
+			</CustomListItems>
+		</Expand>
+	</Type>
 
 	<Type Name="iso::link&lt;*&gt;">
 		<DisplayString>{t}</DisplayString>
@@ -672,7 +734,7 @@ Allowed Instrinsics (?)
 	<Type Name="iso::rbtree_base&lt;*,*&gt;">
 		<Expand>
 			<TreeItems>
-				<HeadPointer>b</HeadPointer>
+				<HeadPointer>_root</HeadPointer>
 				<LeftPointer>($T1*)(child[0].v &amp; -4)</LeftPointer>
 				<RightPointer>($T1*)(child[1].v &amp; -4)</RightPointer>
 				<ValueNode>*this</ValueNode>
@@ -680,27 +742,34 @@ Allowed Instrinsics (?)
 		</Expand>
 	</Type>
 
-	<Type Name="iso::tree_base0&lt;*,*&gt;">
+	<Type Name="iso::tree_stack&lt;*,*&gt;">
+		<Expand>
+			<ArrayItems>
+				<Size>sp - stack</Size>
+				<ValuePointer>stack</ValuePointer>
+			</ArrayItems>
+		</Expand>
+	</Type>
+
+	<Type Name="iso::tree_base&lt;*,*&gt;">
 		<Expand>
 			<TreeItems>
-				<HeadPointer>b</HeadPointer>
+				<HeadPointer>_root</HeadPointer>
 				<LeftPointer>child[0]</LeftPointer>
 				<RightPointer>child[1]</RightPointer>
-				<ValueNode>*this</ValueNode>
+				<ValueNode>($T1*)this</ValueNode>
 			</TreeItems>
 		</Expand>
 	</Type>
-
+	<Type Name="iso::e_treenode&lt;*&gt;" Inheritable="false">
+		<DisplayString>{($T1*)this}</DisplayString>
+		<Expand>
+			<Item Name ="x">($T1*)this</Item>
+		</Expand>
+	</Type>
+	
 	<Type Name="iso::map_node&lt;iso::interval&lt;*&gt;,*&gt;">
 		<DisplayString>a={a}, b={b}, val={v}</DisplayString>
-	</Type>
-
-
-	<Type Name="iso::map_node&lt;*,*&gt;">
-		<DisplayString>key={k}, val={v}</DisplayString>
-		<Expand>
-			<ExpandedItem>b</ExpandedItem>
-		</Expand>
 	</Type>
 
 	<Type Name="iso::interval_node&lt;*,*&gt;">
@@ -718,13 +787,7 @@ Allowed Instrinsics (?)
 		</Expand>
 	</Type>
 
-	<Type Name="iso::map&lt;*,*,*&gt;::iterator">
-		<Expand>
-			<ExpandedItem>sp[-1]</ExpandedItem>
-		</Expand>
-	</Type>
-
-	<Type Name="iso::hash_map&lt;*,*,*,*&gt;&gt;">
+	<Type Name="iso::hash_storage&lt;*,*, 0, 0&gt;&gt;">
 		<DisplayString>size = {curr_size}</DisplayString>
 		<Expand>
 			<CustomListItems>
@@ -739,9 +802,93 @@ Allowed Instrinsics (?)
 				</Loop>
 			</CustomListItems>
 		</Expand>
-
+	</Type>
+	
+	<Type Name="iso::hash_storage&lt;*,*, 0,*&gt;&gt;">
+		<DisplayString>size = {curr_size}</DisplayString>
+		<Expand>
+			<CustomListItems>
+				<Variable Name="i" InitialValue="-1" />
+				<Size>curr_size</Size>
+				<Loop>
+					<Loop>
+						<Exec>i = i + 1</Exec>
+						<Break Condition="hashes[i] != i + 1 &amp;&amp; hashes[i] != i + 2" />
+					</Loop>
+					<Item Name="[{hashes[i]}]">values[i]</Item>
+				</Loop>
+			</CustomListItems>
+		</Expand>
 	</Type>
 
+	<Type Name="iso::hash_storage&lt;*,*, 1, 0&gt;&gt;">
+		<DisplayString>size = {curr_size.v}</DisplayString>
+		<Expand>
+			<CustomListItems>
+				<Variable Name="i" InitialValue="-1" />
+				<Size>curr_size.v</Size>
+				<Loop>
+					<Loop>
+						<Exec>i = i + 1</Exec>
+						<Break Condition="hashes[i] != i + 1 &amp;&amp; hashes[i] != i + 2" />
+					</Loop>
+					<Item Name="[{hashes[i]}]">(($T2*)(hashes + max_size.v))[i]</Item>
+				</Loop>
+			</CustomListItems>
+		</Expand>
+	</Type>
+
+	<Type Name="iso::hash_storage&lt;*,*, 1,*&gt;&gt;">
+		<DisplayString>size = {curr_size.v}</DisplayString>
+		<Expand>
+			<CustomListItems>
+				<Variable Name="i" InitialValue="-1" />
+				<Size>curr_size.v</Size>
+				<Loop>
+					<Loop>
+						<Exec>i = i + 1</Exec>
+						<Break Condition="hashes[i] != i + 1 &amp;&amp; hashes[i] != i + 2" />
+					</Loop>
+					<Item Name="[{hashes[i]}]">values[i]</Item>
+				</Loop>
+			</CustomListItems>
+		</Expand>
+	</Type>
+
+	<Type Name="iso::hash_set&lt;*, 0,*&gt;&gt;">
+		<DisplayString>size = {curr_size}</DisplayString>
+		<Expand>
+			<CustomListItems>
+				<Variable Name="i" InitialValue="-1" />
+				<Size>curr_size</Size>
+				<Loop>
+					<Loop>
+						<Exec>i = i + 1</Exec>
+						<Break Condition="hashes[i] != i + 1 &amp;&amp; hashes[i] != i + 2" />
+					</Loop>
+					<Item Name="[{i}]">hashes[i]</Item>
+				</Loop>
+			</CustomListItems>
+		</Expand>
+	</Type>
+	
+	<Type Name="iso::hash_set&lt;*, 1,*&gt;&gt;">
+		<DisplayString>size = {curr_size.v}</DisplayString>
+		<Expand>
+			<CustomListItems>
+				<Variable Name="i" InitialValue="-1" />
+				<Size>curr_size.v</Size>
+				<Loop>
+					<Loop>
+						<Exec>i = i + 1</Exec>
+						<Break Condition="hashes[i] != i + 1 &amp;&amp; hashes[i] != i + 2" />
+					</Loop>
+					<Item Name="[{i}]">hashes[i]</Item>
+				</Loop>
+			</CustomListItems>
+		</Expand>
+	</Type>
+	
 	<Type Name="iso::fixed_pool&lt;*,*&gt;">
 		<DisplayString>avail = {avail}</DisplayString>
 		<Expand>
@@ -835,14 +982,25 @@ Allowed Instrinsics (?)
 		</Expand>
 	</Type>
 
-	<Type Name="iso::TL_tuple&lt;iso::type_list&lt;&gt;&gt;">
+	<Type Name="iso::tuple_field&lt;*,*&gt;">
+		<Expand>
+			<Item Name="x">t</Item>
+			<ExpandedItem Condition="!last">(next_t*)(tuple_t*)this</ExpandedItem>
+		</Expand>
 	</Type>
 
-	<Type Name="iso::TL_tuple&lt;iso::offset_type_list&lt;*,*&gt;&gt;">
+	<Type Name="iso::TL_tuple&lt;*&gt;">
 		<Expand>
-			<Item Name="x">((head_offset_t*)this)->t</Item>
-			<ExpandedItem>*(tail_t*)this</ExpandedItem>
+			<ExpandedItem>(iso::tuple_field&lt;$T1,0&gt;*)this</ExpandedItem>
 		</Expand>
+	</Type>
+
+	<Type Name="iso::variant&lt;*&gt;">
+		<DisplayString>index = {index,d}</DisplayString>
+		<!--Expand>
+			<Item Condition="index == 0" Name="x">u.t</Item>
+			<Item Condition="index == 1" Name="x">u.u.t</Item>
+		</Expand-->
 	</Type>
 
 	<!-- bits -->
@@ -911,9 +1069,17 @@ Allowed Instrinsics (?)
 
 	<Type Name="iso::soft_pointer&lt;*,ISO::base_fixed_shift&lt;*,*&gt; &gt;">
 		<DisplayString Condition="offset == 0">{($T1*)0}</DisplayString>
-		<DisplayString>{($T1*)((char*)ISO::base_fixed&lt;$T2&gt;::base + (offset&lt;&lt;$T3))}</DisplayString>
+		<DisplayString>{($T1*)((char*)ISO::base_fixed&lt;$T2&gt;::base + (__int64(offset)&lt;&lt;$T3))}</DisplayString>
 		<Expand>
-			<Item Name="ptr">*($T1*)((char*)ISO::base_fixed&lt;$T2&gt;::base + (offset&lt;&lt;$T3))</Item>
+			<Item Name="ptr">*($T1*)((char*)ISO::base_fixed&lt;$T2&gt;::base + (__int64(offset)&lt;&lt;$T3))</Item>
+		</Expand>
+	</Type>
+
+	<Type Name="iso::soft_pointer&lt;iso::holder&lt;*&gt;,ISO::base_fixed_shift&lt;*,*&gt; &gt;">
+		<DisplayString Condition="offset == 0">{($T1*)0}</DisplayString>
+		<DisplayString>{($T1*)((char*)ISO::base_fixed&lt;$T2&gt;::base + (__int64(offset)&lt;&lt;$T3))}</DisplayString>
+		<Expand>
+			<Item Name="ptr">*($T1*)((char*)ISO::base_fixed&lt;$T2&gt;::base + (__int64(offset)&lt;&lt;$T3))</Item>
 		</Expand>
 	</Type>
 
@@ -1007,18 +1173,18 @@ Allowed Instrinsics (?)
 
 	<Type Name="ISO::ptr&lt;void,32&gt;">
 		<DisplayString Condition="p.offset == 0">NULL</DisplayString>
-		<DisplayString>{((ISO::Value*)((char*)ISO::base_fixed&lt;void&gt;::base + (p.offset*4)))[-1]} {p}</DisplayString>
+		<DisplayString>{((ISO::Value*)((char*)ISO::base_fixed&lt;void&gt;::base + __int64(p.offset)*4))[-1]} {p}</DisplayString>
 		<Expand>
-			<ExpandedItem Condition="p.offset != 0">((ISO::Value*)((char*)ISO::base_fixed&lt;void&gt;::base + (p.offset*4)))[-1]</ExpandedItem>
+			<ExpandedItem Condition="p.offset != 0">((ISO::Value*)((char*)ISO::base_fixed&lt;void&gt;::base + __int64(p.offset)*4))[-1]</ExpandedItem>
 			<Item Condition="p.offset != 0" Name="data">p</Item>
 		</Expand>
 	</Type>
 
 	<Type Name="ISO::ptr&lt;*,32&gt;" Inheritable="false">
 		<DisplayString Condition="p.offset== 0">NULL</DisplayString>
-		<DisplayString>{((ISO::Value*)((char*)ISO::base_fixed&lt;void&gt;::base + (p.offset*4)))[-1]} {p}</DisplayString>
+		<DisplayString>{((ISO::Value*)((char*)ISO::base_fixed&lt;void&gt;::base + __int64(p.offset)*4))[-1]} {p}</DisplayString>
 		<Expand>
-			<ExpandedItem Condition="p.offset != 0">((ISO::Value*)((char*)ISO::base_fixed&lt;void&gt;::base + (p.offset*4)))[-1]</ExpandedItem>
+			<ExpandedItem Condition="p.offset != 0">((ISO::Value*)((char*)ISO::base_fixed&lt;void&gt;::base + __int64(p.offset)*4))[-1]</ExpandedItem>
 			<Item Condition="p.offset != 0" Name="data">p</Item>
 		</Expand>
 	</Type>
@@ -1043,21 +1209,21 @@ Allowed Instrinsics (?)
 
 	<Type Name="ISO::OpenArray&lt;*,32&gt;" Inheritable="false">
 		<DisplayString Condition="p.offset == 0">NULL</DisplayString>
-		<DisplayString>count={((int*)((char*)ISO::base_fixed&lt;void&gt;::base + (p.offset*4)))[-1]} {p}</DisplayString>
+		<DisplayString>count={((int*)((char*)ISO::base_fixed&lt;void&gt;::base + __int64(p.offset)*4))[-1] &amp; 0x7fffffff} {p}</DisplayString>
 		<Expand>
 			<ArrayItems Condition="p.offset != 0">
-				<Size>((int*)((char*)ISO::base_fixed&lt;void&gt;::base + (p.offset*4)))[-1]</Size>
-				<ValuePointer>($T1*)((char*)ISO::base_fixed&lt;void&gt;::base + (p.offset*4))</ValuePointer>
+				<Size>((int*)((char*)ISO::base_fixed&lt;void&gt;::base + __int64(p.offset)*4))[-1] &amp; 0x7fffffff</Size>
+				<ValuePointer>($T1*)((char*)ISO::base_fixed&lt;void&gt;::base + __int64(p.offset)*4)</ValuePointer>
 			</ArrayItems>
 		</Expand>
 	</Type>
 
 	<Type Name="ISO::OpenArray&lt;*,64&gt;" Inheritable="false">
 		<DisplayString Condition="p.t == 0">NULL</DisplayString>
-		<DisplayString>count={((int*)p.t)[-1]} {p}</DisplayString>
+		<DisplayString>count={((int*)p.t)[-1] &amp; 0x7fffffff} {p}</DisplayString>
 		<Expand>
 			<ArrayItems Condition="p.t != 0">
-				<Size>((int*)p.t)[-1]</Size>
+				<Size>((int*)p.t)[-1] &amp; 0x7fffffff</Size>
 				<ValuePointer>p.t</ValuePointer>
 			</ArrayItems>
 		</Expand>
@@ -1065,7 +1231,7 @@ Allowed Instrinsics (?)
 
 	<Type Name="ISO::OpenArray&lt;void,*&gt;" Inheritable="false">
 		<DisplayString Condition="p.offset == 0">NULL</DisplayString>
-		<DisplayString>count={((int*)((char*)ISO::base_fixed&lt;void&gt;::base + (p.offset*4)))[-1]} {p}</DisplayString>
+		<DisplayString>count={((int*)((char*)ISO::base_fixed&lt;void&gt;::base + __int64(p.offset)*4))[-1] &amp; 0x7fffffff} {p}</DisplayString>
 		<Expand>
 			<ExpandedItem>p</ExpandedItem>
 		</Expand>
@@ -1246,6 +1412,83 @@ Allowed Instrinsics (?)
 		<Expand>
 			<Item Name="ptr">t</Item>
 		</Expand>
+	</Type>
+
+	<Type Name="ID3D12Resource">
+		<DisplayString>{dx12::GetName((ID3D12Object*)this)}</DisplayString>
+	</Type>
+
+	<Type Name="D3D12_RESOURCE_TRANSITION_BARRIER" Inheritable="true">
+		<DisplayString Condition="~Subresource">Transition {pResource}[{Subresource,d}] from {StateBefore} to {StateAfter}</DisplayString>
+		<DisplayString>Transition {pResource} from {StateBefore} to {StateAfter}</DisplayString>
+	</Type>
+	
+	<Type Name="D3D12_RESOURCE_BARRIER" Inheritable="true">
+		<DisplayString Condition="Type == 0">{Transition}</DisplayString>
+		<DisplayString Condition="Type == 1">Aliasing</DisplayString>
+		<DisplayString Condition="Type == 2">UAV</DisplayString>
+		<Expand>
+			<ExpandedItem Condition="Type == 0">Transition</ExpandedItem>
+			<ExpandedItem Condition="Type == 1">Aliasing</ExpandedItem>
+			<ExpandedItem Condition="Type == 2">UAV</ExpandedItem>
+		</Expand>
+	</Type>
+	
+	<Type Name="bitcode::Value" Inheritable="true">
+		<DisplayString Condition="!p">undef</DisplayString>
+		<DisplayString Condition="((int)p &amp; 7) == 1">{(iso::uint64)p &gt;&gt; 3}</DisplayString>
+		<DisplayString Condition="((int)p &amp; 7) == 2">{(const char*)p - 2}</DisplayString>
+		<DisplayString Condition="((int)p &amp; 7) == 3">{(bitcode::Value*)((char*)p - 3 + 8)}</DisplayString>
+		<DisplayString Condition="((int)p &amp; 7) == 4">forward ref {(iso::uint64)p &gt;&gt; 3}</DisplayString>
+		<DisplayString Condition="((int)p &amp; 7) == 5">zero</DisplayString>
+		<!--DisplayString Condition="p->kind== 1">{(bitcode::ValueHeader&lt;iso::uint64&gt;*)p}</DisplayString!-->
+		<DisplayString Condition="p->kind== 6">{(bitcode::Eval*)p}</DisplayString>
+		<DisplayString Condition="p->kind== 7">{(bitcode::Constant*)p}</DisplayString>
+		<DisplayString Condition="p->kind== 8">{(bitcode::GlobalVar*)p}</DisplayString>
+		<DisplayString Condition="p->kind== 9">{(bitcode::Alias*)p}</DisplayString>
+		<DisplayString Condition="p->kind==10">{(bitcode::Metadata*)p}</DisplayString>
+		<DisplayString Condition="p->kind==11">{(bitcode::Instruction*)p}</DisplayString>
+		<DisplayString Condition="p->kind==12">{(bitcode::Function*)p}</DisplayString>
+		<DisplayString Condition="p->kind==13">{(bitcode::Block*)p}</DisplayString>
+		<DisplayString Condition="p->kind==14">{(bitcode::DebugInfo*)p}</DisplayString>
+		<Expand>
+			<ExpandedItem Condition="((int)p &amp; 7) == 3">(bitcode::Value*)((char*)p - 3 + 8),[*(unsigned*)((char*)p - 3)]</ExpandedItem>
+			<ExpandedItem Condition="p->kind== 6">(bitcode::Eval*)p</ExpandedItem>
+			<ExpandedItem Condition="p->kind== 7">(bitcode::Constant*)p</ExpandedItem>
+			<ExpandedItem Condition="p->kind== 8">(bitcode::GlobalVar*)p</ExpandedItem>
+			<ExpandedItem Condition="p->kind== 9">(bitcode::Alias*)p</ExpandedItem>
+			<ExpandedItem Condition="p->kind==10">(bitcode::Metadata*)p</ExpandedItem>
+			<ExpandedItem Condition="p->kind==11">(bitcode::Instruction*)p</ExpandedItem>
+			<ExpandedItem Condition="p->kind==12">(bitcode::Function*)p</ExpandedItem>
+			<ExpandedItem Condition="p->kind==13">(bitcode::Block*)p</ExpandedItem>
+			<ExpandedItem Condition="p->kind==14">(bitcode::DebugInfo*)p</ExpandedItem>
+		</Expand>
+	
+	</Type>
+	
+	<Type Name="bitcode::DebugInfo" Inheritable="false">
+		<Expand>
+			<ExpandedItem Condition="kind== 7">(DILocation*)this</ExpandedItem>
+			<ExpandedItem Condition="kind==13">(DISubrange*)this</ExpandedItem>
+			<ExpandedItem Condition="kind==15">(DIBasicType*)this</ExpandedItem>
+			<ExpandedItem Condition="kind==16">(DIFile*)this</ExpandedItem>
+			<ExpandedItem Condition="kind==17">(DIDerivedType*)this</ExpandedItem>
+			<ExpandedItem Condition="kind==18">(DICompositeType*)this</ExpandedItem>
+			<ExpandedItem Condition="kind==19">(DISubroutineType*)this</ExpandedItem>
+			<ExpandedItem Condition="kind==20">(DICompileUnit*)this</ExpandedItem>
+			<ExpandedItem Condition="kind==21">(DISubprogram*)this</ExpandedItem>
+			<ExpandedItem Condition="kind==22">(DILexicalBlock*)this</ExpandedItem>
+			<ExpandedItem Condition="kind==25">(DITemplateTypeParameter*)this</ExpandedItem>
+			<ExpandedItem Condition="kind==26">(DITemplateValueParameter*)this</ExpandedItem>
+			<ExpandedItem Condition="kind==27">(DIGlobalVariable*)this</ExpandedItem>
+			<ExpandedItem Condition="kind==28">(DILocalVariable*)this</ExpandedItem>
+			<ExpandedItem Condition="kind==29">(DIExpression*)this</ExpandedItem>
+		</Expand>
+	</Type>
+	
+
+	<Type Name="bitcode::Metadata" Inheritable="true">
+		<DisplayString>{value}</DisplayString>
 	</Type>
 
 

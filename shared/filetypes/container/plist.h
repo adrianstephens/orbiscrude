@@ -224,12 +224,12 @@ struct bplist_reader : bplist, bplist::Header, bplist::Trailer {
 	}
 
 	ISO_ptr_machine<void>	_get_element(streamptr pos, tag id);
-	ISO_ptr_machine<void>	get_element(uint64 i, tag id = 0) {
+	ISO_ptr_machine<void>	get_element(uint64 i, tag id = {}) {
 		if (table[i].b)
 			return table[i].b;
 		return table[i].b =_get_element(table[i].a, id);
 	}
-	ISO_ptr_machine<void>	get_root(tag id = 0) { return get_element(topObject, id); }
+	ISO_ptr_machine<void>	get_root(tag id = {}) { return get_element(topObject, id); }
 };
 
 struct bplist_writer : bplist, bplist::Trailer {

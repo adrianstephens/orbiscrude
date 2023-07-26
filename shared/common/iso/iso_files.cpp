@@ -1,6 +1,7 @@
 #include "iso_files.h"
 #include "iso_binary.h"
 #include "directory.h"
+#include "codec/base64.h"
 
 #ifdef USE_HTTP
 #include "comms/HTTP.h"
@@ -54,10 +55,10 @@ FileHandler *FileHandler::GetNext(FileHandler *fh) {
 	return 0;
 }
 
-FileHandler *FileHandler::GetMIME(const char *type) {
+FileHandler *FileHandler::GetMIME(const string_param &mime) {
 	for (iterator i = begin(); i != end(); ++i) {
 		if (const char *type2 = i->GetMIME()) {
-			if (istr(type2) == type)
+			if (type2 == mime)
 				return i;
 		}
 	}
@@ -76,19 +77,22 @@ FileHandler *FileHandler::GetNextMIME(FileHandler *fh) {
 
 FileHandler *FileHandler::Identify(istream_ref file, CHECK mincheck) {
 	FileHandler *fh		= 0;
-	int			best	= mincheck - 1;
-	for (iterator i = begin(); i != end(); ++i) {
-		int	c = i->Check(file);
-		if (c > best) {
-			best	= c;
-			fh		= i;
+	uint64		at_least;
+	if (file.exists() && file.read(at_least)) {
+		int			best	= mincheck - 1;
+		for (iterator i = begin(); i != end(); ++i) {
+			int	c = i->Check(file);
+			if (c > best) {
+				best	= c;
+				fh		= i;
+			}
 		}
+		file.seek(0);
 	}
-	file.seek(0);
 	return fh;
 }
 
-FileHandler *FileHandler::Identify(const filename &fn, CHECK mincheck) {
+FileHandler *FileHandler::Identify(const char *fn, CHECK mincheck) {
 	FileHandler *fh		= 0;
 	int			best	= mincheck - 1;
 	for (iterator i = begin(); i != end(); ++i) {
@@ -101,21 +105,12 @@ FileHandler *FileHandler::Identify(const filename &fn, CHECK mincheck) {
 	return fh;
 }
 
+#ifdef USE_HTTP
 
-template<int B> bool FileHandler::Read(ptr<void, B> &p, tag id, const filename &fn) {
-	ISO_TRACEF("Read %s\n", (const char*)fn);
-	Include	inc(fn);
-
-	if (fn.is_url()) {
-		auto	sep = fn.slice_to_find(':');
-		for (auto &i : DeviceHandler::all()) {
-			if (i.prefix == sep) {
-				if (p = i.Read(id, sep.end() + 1))
-					return true;
-			}
-		}
-#if defined USE_HTTP
-		auto	file = HTTPopenURL(HTTP::Context("isoeditor"), fn,
+struct HTTPDevice : DeviceHandler {
+	HTTPDevice() : DeviceHandler("http") {}
+	ptr<void>	Read(tag id, const char* spec) override {
+		auto	file = HTTPopenURL(HTTP::Context("isoeditor"), spec,
 			"Accept: text/html, application/xhtml+xml, image/jxr, */*\r\n"
 			"Accept-Language: en-US,en-GB;q=0.7,en;q=0.3\r\n"
 			"Accept-Encoding: gzip, deflate\r\n"
@@ -124,30 +119,79 @@ template<int B> bool FileHandler::Read(ptr<void, B> &p, tag id, const filename &
 
 		if (file.exists()) {
 			const char	*type = file.headers.get("Content-Type");
-			for (FileHandler *fh = GetMIME(type); fh; fh = GetNextMIME(fh)) {
+			for (auto fh = FileHandler::GetMIME(type); fh; fh = FileHandler::GetNextMIME(fh)) {
 				try {
-					if (fh->ReadT<B>(p, id, file))
-						return true;
+					if (auto p = fh->Read(id, file))
+						return p;
 					file.seek(0);
 				} catch (const char *error) {
-					if (str(error).find(istr(fn)))
+					if (str(error).find(istr(spec)))
 						rethrow;
-					throw_accum(error << " in " << fn);
+					throw_accum(error << " in " << spec);
+				}
+			}
+			memory_reader_owner	file2(malloc_block(file, file.length()));
+			if (auto fh = FileHandler::Identify(file2, FileHandler::CHECK_PROBABLE)) {
+				try {
+					if (auto p = fh->Read(id, file2))
+						return p;
+				} catch (const char *error) {
+					throw_accum(error << " in " << spec);
 				}
 			}
 		}
-		memory_reader_owner	file2(malloc_block(file, file.length()));
-		if (FileHandler *fh = Identify(file2, CHECK_PROBABLE)) {
-			try {
-				if (fh->ReadT<B>(p, id, file2))
+		return ISO_NULL;
+	}
+} device_http;
+
+#endif
+
+struct DataDevice : DeviceHandler {
+	DataDevice() : DeviceHandler("data") {}
+	ptr<void>	Read(tag id, const char* spec) override {
+		FileHandler *fh		= nullptr;
+		bool		base64	= false;
+		auto		comma	= string_find(spec, ',');
+
+		for (auto i : parts<';'>(string_find(spec, ':') + 1, comma)) {
+			if (i == "base64")
+				base64 = true;
+			else if (auto t = FileHandler::GetMIME(i))
+				fh = t;
+		}
+
+		if (base64) {
+			auto			data = transcode(base64_decoder(), comma + 1);
+			memory_reader	file(data);
+			if (!fh)
+				fh = FileHandler::Identify(file);
+			return fh ? fh->Read(id, file) : ISO_NULL;
+		}
+		
+		memory_reader	file(comma + 1);
+		if (!fh)
+			fh = FileHandler::Identify(file);
+		return fh ? fh->Read(id, file) : ISO_NULL;
+	}
+} device_data;
+
+template<int B> bool FileHandler::Read(ptr<void, B> &p, tag id, const char *fn) {
+	ISO_TRACEF("Read %s\n", fn);
+	Include	inc(fn);
+
+	auto	colon = string_find(fn, ':');
+
+	if (colon > fn + 1) {
+		auto	sep = str(fn, colon);
+		for (auto &i : DeviceHandler::all()) {
+			if (i.prefix == sep) {
+				if (p = i.Read(id, fn))//sep.end() + 1))
 					return true;
-			} catch (const char *error) {
-				throw_accum(error << " in " << fn);
 			}
 		}
-#endif
+
 	} else {
-		for (FileHandler *fh = Get(fn.ext()); fh; fh = GetNext(fh)) {
+		for (FileHandler *fh = Get(filename(fn).ext()); fh; fh = GetNext(fh)) {
 			try {
 				if (fh->ReadWithFilenameT<B>(p, id, fn))
 					return true;
@@ -199,28 +243,6 @@ template<int B> bool FileHandler::Read(ptr<void, B> &p, tag id, istream_ref file
 	return false;
 }
 
-ptr<void> FileHandler::Read(tag id, const filename &fn) {
-	ptr<void>	p;
-	Read(p, id, fn);
-	return p;
-}
-
-ptr<void> FileHandler::Read(tag id, istream_ref file, const char *ext) {
-	ptr<void>	p;
-	Read(p, id, file, ext);
-	return p;
-}
-ptr64<void> FileHandler::Read64(tag id, const filename &fn) {
-	ptr64<void>	p;
-	Read(p, id, fn);
-	return p;
-}
-
-ptr64<void> FileHandler::Read64(tag id, istream_ref file, const char *ext) {
-	ptr64<void>	p;
-	Read(p, id, file, ext);
-	return p;
-}
 FileHandlerCacheSave FileHandler::PushCache(const FileHandlerCache &_cache) {
 	return FileHandlerCacheSave(cache, _cache);
 }
@@ -238,7 +260,7 @@ const char *FileHandler::FindInCache(ptr_machine<void> p) {
 static bool FindExt(filename &fn) {
 	for (directory_iterator name(filename(fn).set_ext("*")); name; ++name) {
 		if (!name.is_dir() && FileHandler::Get(filename(name).ext())) {
-			fn = fn.dir().add_dir(name);
+			fn = fn.dir().add_dir((const char*)name);
 			return true;
 		}
 	}
@@ -308,7 +330,7 @@ static ptr<void> CachedRead(const filename &fn, bool external) {
 	ptr<void> &p = cache.get<0>()(fn);
 	if (p) {
 		if (!external && p.IsExternal())
-			FileHandler::Read(p, 0, fn);
+			FileHandler::Read(p, tag(), fn);
 		if (!p.ID())
 			p.SetID(fn.name());
 
@@ -454,7 +476,7 @@ static int ExpandExternals(const Browser2 &b, bool force) {
 		case OPENARRAY:
 			if (type->SubType()->IsPlainData())
 				return 0;
-			fallthrough
+			//fallthrough
 		case COMPOSITE:
 		case ARRAY: {
 			int	ret = 0;
@@ -533,6 +555,29 @@ const char *FileHandler::GetDescription() {
 		return buffer;
 	}
 	return 0;
+}
+
+ptr<void> FileHandler::Read(tag id, const char *fn) {
+	ptr<void>	p;
+	Read(p, id, fn);
+	return p;
+}
+
+ptr<void> FileHandler::Read(tag id, istream_ref file, const char *ext) {
+	ptr<void>	p;
+	Read(p, id, file, ext);
+	return p;
+}
+ptr64<void> FileHandler::Read64(tag id, const char *fn) {
+	ptr64<void>	p;
+	Read(p, id, fn);
+	return p;
+}
+
+ptr64<void> FileHandler::Read64(tag id, istream_ref file, const char *ext) {
+	ptr64<void>	p;
+	Read(p, id, file, ext);
+	return p;
 }
 
 ptr<void> FileHandler::ReadWithFilename(tag id, const filename &fn) {
@@ -632,7 +677,7 @@ struct Directory : VirtualDefaults {
 					return i;
 			}
 		} else {
-			crc32	c = id;
+			crc32	c = id.get_crc32();
 			for (int i = from; i < count; i++) {
 				const char *s = names[i], *e;
 				if (c == crc32(s) || ((e = str(s).find('.')) && c == const_memory_block(s, e - s)))
@@ -773,6 +818,33 @@ size_t IncludeHandler::open(const char *f, const void **data) {
 	stack = new stack_entry(f2, stack);
 	return len;
 }
+
+// no stack
+malloc_block IncludeHandler::open(const char *f) {
+	filename	f2(f);
+	bool	found = false;
+	for (filename i : parts<';'>(incs)) {
+		filename	i2;
+		FileHandler::ExpandVars(i, i2);
+		for (auto temp = filename::cleaned(f); ; temp.rem_first()) {
+			f2		= filename(i2).add_dir(temp);
+			found	= f2.exists();
+			if (found || temp.blank())
+				break;
+		}
+		if (found)
+			break;
+	}
+
+	FileInput	file(f2);
+	if (!file.exists())
+		return none;
+
+	FileHandler::AddToCache(f2);
+	size_t	len		= (size_t)file.length();
+	return malloc_block(file, len);
+}
+
 
 void IncludeHandler::close(const void *data) {
 	iso::free(const_cast<void*>(data));

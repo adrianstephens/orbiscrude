@@ -26,6 +26,12 @@ struct VSOutput {
 	float4	position	: SV_Position;
 	float3	normal		: normal;
 	float4	ambient		: AMBIENT;
+};
+
+struct VSOutput_tex {
+	float4	position	: SV_Position;
+	float3	normal		: normal;
+	float4	ambient		: AMBIENT;
 	float2	uv			: TEXCOORD0;
 };
 
@@ -52,7 +58,8 @@ DirectLighting DefaultLitBxDF(BxDFContext Context, MaterialParams mat, float fal
 	return direct;
 }
 
-VSOutput vs(float3	position:POSITION, float3 normal:NORMAL, float2 uv:TEXCOORD0) {
+
+VSOutput vs(float3 position:POSITION, float3 normal:NORMAL) {
 	float3	pos		= mul(float4(position, 1.0),	(float4x3)world);
 	float3	norm	= mul(normal,					(float3x3)world);
 
@@ -60,11 +67,41 @@ VSOutput vs(float3	position:POSITION, float3 normal:NORMAL, float2 uv:TEXCOORD0)
 	vsOutput.position	= mul(float4(pos, 1.0), ViewProj());
 	vsOutput.normal		= norm;
 	vsOutput.ambient	= 0;//DiffuseLight(pos, norm);
+	return vsOutput;
+}
+
+VSOutput vs_int(int3 position:POSITION, float3 normal:NORMAL) {
+	return vs(position, normal);
+}
+
+float3 ps(VSOutput v) : SV_Target0 {
+	float3	L	= shadowlight_dir;
+	float3	N	= v.normal;
+	float3	V	= eyeDir(v.position.xyz);
+
+	MaterialParams material = {
+		float3(1,1,1) * baseColorFactor, roughnessFactor,
+		{1, 1, 1}, metallicFactor, 0
+	};
+	
+	BxDFContext		Context = MakeBxDFContext(N, V, L);
+	DirectLighting	direct	= DefaultLitBxDF(Context, material, 1, area_light);
+	return direct.Diffuse + direct.Specular + direct.Transmission;
+}
+
+VSOutput_tex vs_tex(float3	position:POSITION, float3 normal:NORMAL, float2 uv:TEXCOORD0) {
+	float3	pos		= mul(float4(position, 1.0),	(float4x3)world);
+	float3	norm	= mul(normal,					(float3x3)world);
+
+	VSOutput_tex vsOutput;
+	vsOutput.position	= mul(float4(pos, 1.0), ViewProj());
+	vsOutput.normal		= norm;
+	vsOutput.ambient	= 0;//DiffuseLight(pos, norm);
 	vsOutput.uv			= uv;
 	return vsOutput;
 }
 
-float3 ps(VSOutput v) : SV_Target0 {
+float3 ps_tex(VSOutput_tex v) : SV_Target0 {
 #if 0
 	return SpecularLight(
 		v.position.xyz,
@@ -92,6 +129,12 @@ float3 ps(VSOutput v) : SV_Target0 {
 #endif
 }
 
-technique gltf {
+technique notex {
 	PASS(p0, vs, ps)
+};
+technique tex {
+	PASS(p0, vs_tex, ps_tex)
+};
+technique notex_int {
+	PASS(p0, vs_int, ps)
 };

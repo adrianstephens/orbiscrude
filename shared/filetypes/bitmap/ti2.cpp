@@ -424,7 +424,7 @@ void TI2::ReadImage(const block<ISO_rgba, 2> &bm, istream_ref file, int format, 
 				int	yend = min(bm.size<2>() - y0, 64);
 
 				for (int y1 = 0; y1 < yend; ++y1) {
-					ISO_rgba* dst = bm[y0 + y1] + x0;
+					ISO_rgba* dst = bm[y0 + y1].begin() + x0;
 					for (int x1 = 0; x1 < xend; ++x1) {
 						unsigned index = indices[
 							(((y1&~0x3)>>1)|(y1&1)) * 64 +
@@ -481,7 +481,7 @@ void TI2::ReadImage(const block<ISO_rgba, 2> &bm, istream_ref file, int format, 
 	} else {
 		malloc_block srce(w2);
 		for (int y = 0; y < bm.size<2>(); y++) {
-			ISO_rgba	*dest = bm[y];
+			ISO_rgba	*dest = bm[y].begin();
 			int		x;
 			file.readbuff(srce, w2);
 			switch (bpp) {

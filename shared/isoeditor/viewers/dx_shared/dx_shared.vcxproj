@@ -43,19 +43,24 @@
     <ClInclude Include="..\..\..\platforms\pc\dx\dx11_effect.h" />
     <ClInclude Include="..\..\..\platforms\pc\dx\dxgi_helpers.h" />
     <ClInclude Include="..\..\..\platforms\pc\dx\dxgi_read.h" />
+    <ClInclude Include="..\..\..\platforms\pc\dx\dx_opcodes.h" />
     <ClInclude Include="..\..\..\platforms\pc\dx\dx_shaders.h" />
+    <ClInclude Include="..\..\..\platforms\pc\dx\dx_sim.h" />
     <ClInclude Include="..\..\..\platforms\pc\dx\sim_dxbc.h" />
     <ClInclude Include="..\..\..\platforms\pc\dx\spdb.h" />
     <ClInclude Include="..\..\..\platforms\pc\x64\_maths.h" />
     <ClInclude Include="..\..\..\platforms\pc\_atomic.h" />
     <ClInclude Include="dx_gpu.h" />
+    <ClInclude Include="view_dxbc.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\filetypes\code\msf.cpp" />
     <ClCompile Include="..\..\..\platforms\pc\dx\dis_dxbc.cpp" />
     <ClCompile Include="..\..\..\platforms\pc\dx\dxgi_read.cpp" />
+    <ClCompile Include="..\..\..\platforms\pc\dx\dx_sim.cpp" />
     <ClCompile Include="..\..\..\platforms\pc\dx\sim_dxbc.cpp" />
     <ClCompile Include="..\..\..\platforms\pc\dx\spdb.cpp" />
+    <ClCompile Include="view_dxbc.cpp" />
     <ClCompile Include="dx_fields.cpp" />
     <ClCompile Include="dx_fields.h">
       <FileType>CppHeader</FileType>
@@ -110,6 +115,7 @@
   </ImportGroup>
   <ImportGroup Label="PropertySheets">
     <Import Project="$(SolutionDir)isopod.props" />
+    <Import Project="$(SDK)dxc\2021_12_08\dxc.props" />
   </ImportGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='DebugDX11|Win32'">
     <ClCompile>
@@ -164,6 +170,7 @@
       <AdditionalIncludeDirectories>$(SolutionDir);$(SharedDir)isoeditor;$(SharedDir)platforms\pc\dx11;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <SupportJustMyCode>false</SupportJustMyCode>
+      <FloatingPointModel>Fast</FloatingPointModel>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>

@@ -1,6 +1,7 @@
 #include "common.fxh"
 #include "lighting.fxh"
 #include "font.fxh"
+#include "pack.fxh"
 
 #define SHADOW_VO
 #define SHADOW_VS(v,p)
@@ -35,8 +36,9 @@ sampler_defCUBE(sky_samp,
 
 //------------------------------------
 
-float			glossiness		= 60;
-float			flip_normals	= 1;
+static const float	glossiness		= 60;
+static const float	flip_normals	= 1;
+float4			clip_tint		= {1,0,0,1};
 float4			matrices[64];
 int				mip;
 
@@ -147,21 +149,28 @@ S_Tex VS_ScreenTex(float3 position:POSITION, in float2 uv:TEXCOORD0) {
 
 S_Col VS_NoVP(float3 position:POSITION) {
 	S_Col	v;
-	v.colour	= diffuse_colour;
+	v.colour	= tint;//diffuse_colour;
 	v.pos		= float4(mul(float4(position, 1), (float4x3)world), 1);
 	return v;
 }
 
 S_Col VS_Transform(float3 position:POSITION) {
 	S_Col	v;
-	v.colour	= diffuse_colour;
+	v.colour	= tint;//diffuse_colour;
+	v.pos		= mul(float4(position, 1), worldViewProj);
+	return v;
+}
+
+S_Col VS_TransformI(int3 position:POSITION) {
+	S_Col	v;
+	v.colour	= tint;//diffuse_colour;
 	v.pos		= mul(float4(position, 1), worldViewProj);
 	return v;
 }
 
 S_Col VS_Transform4(float4 position:POSITION) {
 	S_Col	v;
-	v.colour	= diffuse_colour;
+	v.colour	= tint;//diffuse_colour;
 	v.pos		= mul(position, worldViewProj);
 	return v;
 }
@@ -181,7 +190,7 @@ S_Col VS_Transform_idx(float3 position:POSITION, indices_t idx:BLENDINDICES) {
 	iworld[2]	= matrices[i + 2];
 	iworld[3]	= float4(0,0,0,1);
 	iworld		= mul(transpose(iworld), worldViewProj);
-	v.colour	= diffuse_colour;
+	v.colour	= tint;//diffuse_colour;
 	v.pos		= mul(float4(position, 1), iworld);
 	return v;
 }
@@ -196,7 +205,7 @@ S_Col VS_TransformCol(float3 position:POSITION, float4 colour:COLOR) {
 S_ColTex VS_TransformTex(float3 position:POSITION, float2 uv:TEXCOORD0) {
 	S_ColTex	v;
 	v.uv		= uv;
-	v.colour	= diffuse_colour;
+	v.colour	= tint;//diffuse_colour;
 	v.pos		= mul(float4(position, 1), worldViewProj);
 	return v;
 }
@@ -227,7 +236,7 @@ S_Lighting VS_TransformLighting(float3 position:POSITION, float3 normal:NORMAL) 
 	v.position		= mul(float4(pos, 1.0),			ViewProj());
 	v.normal		= norm;
 	v.worldpos		= pos;
-	v.ambient		= light_ambient;//DiffuseLight(pos, norm);
+	v.ambient		= float4(0,0,0,1);//light_ambient;//DiffuseLight(pos, norm);
 	v.fog			= VSFog(pos);
 
 	SHADOW_VS(v,pos)
@@ -362,7 +371,7 @@ float4 PS_SpecularClip(S_Lighting4 v) : OUTPUT0 {
 	return FogSpecularLight(
 		v.worldpos.xyz,
 		normalise(v.normal),
-		clip ? float4(1,0,0,1) : tint,
+		clip ? clip_tint : tint,
 		v.ambient,
 		glossiness,
 		1,
@@ -448,6 +457,7 @@ technique background {
 
 technique coloured {
 	PASS(p0,VS_Transform,PS_Col)
+	PASS(p1,VS_TransformI,PS_Col)
 }
 
 technique coloured4 {
@@ -551,6 +561,7 @@ technique blend_idx {
 //-----------------------------------------------------------------------------
 //	depth buffer
 //-----------------------------------------------------------------------------
+#define PLAT_PC
 
 #if defined(PLAT_PC)// && !defined(USE_DX11)
 
@@ -809,7 +820,7 @@ float4 PS_SpecularGrid(S_Lighting4 v, float3 tangent:TANGENT0) : OUTPUT0 {
 		frac(w0)
 	);
 	float	a	= 1 - a2.x * a2.y;
-	return Blend(diffuse_colour) * a;
+	return Blend(tint) * a;
 }
 
 technique specular_grid {
@@ -863,8 +874,8 @@ static const float3	attractor	= float3(0,0,4);
 static const float		k			= 1.0;
 
 float traverseUniformGrid2(float3 o, float3 d) {
-    float	t	= 0.0;
-    for(int i = 0; i < 20; ++i) {
+	float	t	= 0.0;
+	for(int i = 0; i < 20; ++i) {
 		float3 	p	= o + d * t;
 
 		float3	z	= attractor - p;
@@ -993,7 +1004,7 @@ SamplerState rgb2yuv_sampler;
 float3 rgb2yuv(float3 color) {
 	return	float3(
 		0.18187266f	* color.r +	0.61183125f	* color.g +	0.06176484f	* color.b + 0.0625f,
-	 	-0.1002506f * color.r - 0.3372494f	* color.g + 0.4375f		* color.b + 0.5f,
+		-0.1002506f * color.r - 0.3372494f	* color.g + 0.4375f		* color.b + 0.5f,
 		0.4375f		* color.r - 0.3973838f	* color.g - 0.0401162f	* color.b + 0.5f
 	);
 }
@@ -1012,7 +1023,7 @@ COMPUTE_SHADER(32,2,1)
 void rgb2yuv_CS(uint2 groupID : S_GROUP_ID, uint2 threadID : S_GROUP_THREAD_ID, rgb2yuv_SRT srt : S_SRT_DATA) : S_TARGET_OUTPUT {
 	uint2				pos			= groupID * uint2(32, 2) + threadID;
 
-    Texture2D			srcTex		= srt.data->srcTex;
+	Texture2D			srcTex		= srt.data->srcTex;
 	RW_Texture2D<float> dstTex		= srt.data->dstTex;
 	const float4		scale		= srt.data->scale;
 	const uint			height		= srt.data->height;
@@ -1050,7 +1061,7 @@ technique rgb2yuv {
 
 #endif
 
-#if defined(USE_DX11) || defined(PLAT_PS4)
+#if 1//defined(USE_DX11) || defined(PLAT_PS4)
 
 float3	point_size = float3(1 / 50.f, 1 / 50.f, 1);
 
@@ -1074,6 +1085,12 @@ ThickPoint VS_thickpoint(float3 pos : POSITION_IN) : POSITION_IN {
 	return p;
 }
 
+ThickPoint VS_thickpointI(int3 pos : POSITION_IN) : POSITION_IN {
+	ThickPoint	p;
+	p.pos	= mul(float4(pos, 1.0), worldViewProj);
+	return p;
+}
+
 ThickPoint VS_thickpoint4(float4 pos : POSITION_IN) : POSITION_IN {
 	ThickPoint	p;
 	p.pos	= mul(pos, worldViewProj);
@@ -1083,7 +1100,7 @@ ThickPoint VS_thickpoint4(float4 pos : POSITION_IN) : POSITION_IN {
 GEOM_SHADER(4)
 void GS_thickpoint(point ThickPoint v[1] : POSITION_IN, inout TriangleStream<S_ColTex> tris) {
 	S_ColTex	p;
-	p.colour = diffuse_colour;
+	p.colour = tint;//diffuse_colour;
 
 	float4	pw	= v[0].pos;
 	if (pw.z < -pw.w)
@@ -1121,6 +1138,11 @@ technique thickpoint {
 		SET_GS(GS_thickpoint);
 		SET_PS(PS_thickpoint);
 	}
+	pass p1 {
+		SET_VS(VS_thickpointI);
+		SET_GS(GS_thickpoint);
+		SET_PS(PS_thickpoint);
+	}
 }
 technique thickpoint4 {
 	pass p0 {
@@ -1135,7 +1157,7 @@ technique thickpoint4 {
 
 void Thickline(ThickPoint v[2] : POSITION_IN, inout TriangleStream<S_ColTex> tris) {
 	S_ColTex	p;
-	p.colour = diffuse_colour;
+	p.colour = tint;//diffuse_colour;
 
 	float4 pw0		= Clip(v[0].pos, v[1].pos);
 	float4 pw1		= Clip(v[1].pos, pw0);
@@ -1193,7 +1215,7 @@ technique thickline4 {
 
 void ThicklineRound(ThickPoint v[2] : POSITION_IN, inout TriangleStream<S_ColTex> tris) {
 	S_ColTex	p;
-	p.colour		= diffuse_colour;
+	p.colour		= tint;//diffuse_colour;
 
 	float4 pw0		= Clip(v[0].pos, v[1].pos);
 	float4 pw1		= Clip(v[1].pos, pw0);
@@ -1268,7 +1290,7 @@ float2 intersect_offsets(float2 pos, float2 dir0, float2 dir1, float2 point_size
 
 void ThicklineA(ThickPoint v[4], inout TriangleStream<S_ColTex> tris) {
 	S_ColTex	p;
-	p.colour = diffuse_colour;
+	p.colour = tint;//diffuse_colour;
 
 	float4	pwa		= Clip(v[0].pos, v[1].pos);
 	float4	pw0		= Clip(v[1].pos, v[2].pos);
@@ -1352,7 +1374,8 @@ struct CircleConsts {
 	float	tess[2] : TESS_FACTOR;
 };
 
-Circle VS_circle(Circle c : POSITION_IN) {
+Circle VS_circle(float4 v : POSITION_IN) {
+	Circle c = {v};
 	return c;
 }
 
@@ -1381,7 +1404,7 @@ S_Col DS_circle(CircleConsts cc, float t : DOMAIN_LOCATION, const OutputPatch<Ci
 	sincos(t * 2 * pi, sc.y, sc.x);
 	float3	pos = c[0].v.xyz + float3(sc * c[0].v.w, 0);
 	p.pos		= mul(float4(pos, 1.0), worldViewProj);
-	p.colour	= diffuse_colour;
+	p.colour	= tint;//diffuse_colour;
 	return p;
 }
 
@@ -1403,9 +1426,10 @@ struct Ellipse {
 	float	ratio	: CIRCLE2;
 };
 
-Ellipse VS_ellipse(Ellipse e : POSITION_IN) {
-	float4	c = platform_fix(e.v.xy);
-	float4	a = platform_fix(e.v.xy + e.v.zw);
+Ellipse VS_ellipse(float4 v : POSITION0, float ratio : POSITION1) {
+	float4	c = platform_fix(v.xy);
+	float4	a = platform_fix(v.xy + v.zw);
+	Ellipse	e;
 	e.v.xy = project(c).xy;
 	e.v.zw = project(a).xy - e.v.xy;
 	return e;
@@ -1432,7 +1456,7 @@ S_Col DS_ellipse(CircleConsts cc, float t : DOMAIN_LOCATION, const OutputPatch<E
 	float2	sc;
 	sincos(t * 2 * pi, sc.y, sc.x);
 	p.pos		= float4(c[0].v.xy + sc.x * c[0].v.zw + (sc.y * c[0].ratio) * perp(c[0].v.zw), 0, 1);
-	p.colour	= diffuse_colour;
+	p.colour	= tint;//diffuse_colour;
 	return p;
 }
 
@@ -1446,13 +1470,13 @@ technique ellipsetess {
 }
 
 GEOM_SHADER(4)
-void GS_ellipse(point Ellipse e[1] : POSITION_IN, inout TriangleStream<S_ColTex> tris) {
+void GS_ellipse(point Ellipse e[1], inout TriangleStream<S_ColTex> tris) {
 	float2	c = e[0].v.xy;
 	float2	x = e[0].v.zw;
 	float2	y = e[0].ratio * perp(x);
 
 	S_ColTex	p;
-	p.colour	= diffuse_colour;
+	p.colour	= tint;//diffuse_colour;
 
 	p.uv		= float2(-1, -1);
 	p.pos		= float4(c - x - y, 0, 1);
@@ -1545,7 +1569,7 @@ void GS_thickcircleA(line ThickPoints v[2] : POSITION_IN, inout TriangleStream<S
 GEOM_SHADER(5)
 void GS_thickcircleA2(line ThickPoints v[2] : POSITION_IN, inout PointStream<S_ColTex> tris, inout PointStream<S_ColTex> points) {
 	S_ColTex	p;
-	p.colour = diffuse_colour;
+	p.colour = tint;//diffuse_colour;
 
 	p.pos	= v[1].p[0].pos;
 	p.uv	= float2(1, 0);
@@ -1572,18 +1596,304 @@ technique thickcircletessA {
 #if defined(USE_DX11) || defined(PLAT_PS4)
 //compute
 
-RW_Texture2D<float2>	dst_tex;
-Texture2D<float2>	depth_tex : t0;
-Texture2D<uint2>	stencil_tex : t1;
+RW_Texture2D<float2>	dst2;
+Texture2D<float2>		src_depth : t0;
+Texture2D<uint2>		src_stencil : t1;
 
 COMPUTE_SHADER(16,16,1)
 void copy_depth_CS(uint2 pos : DISPATCH_THREAD_ID) {
-	dst_tex[pos]	= float2(depth_tex[pos].r, stencil_tex[pos].r);
+	dst2[pos]	= float2(src_depth[pos].r, src_stencil[pos].r);
 }
 
 technique copy_depth {
 	pass p0 {
 		SET_CS(copy_depth_CS);
+	}
+};
+
+RW_Texture2D<float4>	copy_dst;
+Texture2D<float4>		copy_src;
+COMPUTE_SHADER(8,8,1)
+void copy_tex_CS(uint2 pos : DISPATCH_THREAD_ID) {
+	copy_dst[pos]	= copy_src[pos];
+}
+technique copy_tex {
+	pass p0 {
+		SET_CS(copy_tex_CS);
+	}
+};
+#endif
+
+
+//-----------------------------------------------------------------------------
+//	TestMesh
+//-----------------------------------------------------------------------------
+
+#ifdef HAS_SM6
+
+#if SHADER_MODEL >= 0x600
+struct TestPayload {
+	float3	pos;
+	float3	col;
+};
+
+MESH_SHADER(triangle,3,1,1)
+void test_MS(uint thread : GROUP_THREAD_ID, uint3 group : GROUP_ID,
+	in payload		TestPayload	payload,
+	out vertices	S_Col	Vertices[256],
+	out indices		uint3	Triangles[128]
+) {
+	SetMeshOutputCounts(3, 1);
+	
+	if (thread == 0) {
+		uint3	indices = {0,1,2};
+		Triangles[0]	= indices;
+	}
+	
+	float3	pos	= float3((thread >> 1) + group.x, (thread & 1) + group.y, 0) + payload.pos;
+	
+	//Vertices[thread].pos	= float4(pos / 2, 1);//mul(pos, worldViewProj);
+	Vertices[thread].pos	= mul(float4(pos, 1), worldViewProj);
+	Vertices[thread].colour	= float4(payload.col, 1);
+}
+
+AMPLIFICATION_SHADER(1,1,1)
+void test_AS(uint thread : GROUP_THREAD_ID, uint3 group : GROUP_ID) {
+	TestPayload	payload;
+	payload.pos = float3(group.x * 5,0,0);
+	payload.col = float3(1,group.x,group.y);
+	DispatchMesh(4, 3, 1, payload);
+}
+#endif
+
+technique test_mesh {
+	pass p0 {
+		AmplificationShader = {as_6_5, test_AS};
+		MeshShader = {ms_6_5, test_MS};
+		//SetMeshShader(CompileShader(ms_6_5, test_MS()))
+		PixelShader = {ps_6_0, PS_Col};
+	}
+};
+
+#endif
+
+//-----------------------------------------------------------------------------
+//	Meshlet
+//-----------------------------------------------------------------------------
+
+struct Meshlet {
+	uint	PrimCount, PrimOffset;
+	float4	sphere;
+	uint	cone;
+	float	apex;
+};
+
+bool IsConeDegenerate(uint packed) {
+	return (packed >> 24) == 0xff;
+}
+
+float4 UnpackCone(uint packed) {
+	return float4(unpack4u(packed)) / 255 * float4(2,2,2,1) - float4(1,1,1,0);
+}
+
+uint3 UnpackPrimitive(uint packed) {
+	return uint3(packed & 0xFF, (packed >> 8) & 0xFF, (packed >> 16) & 0xFF);
+}
+
+float3 get_proj_scale(float4x4 m) {
+	return rsqrt(square(m[0].xyz + m[0].w) + square(m[1].xyz + m[1].w) + square(m[2].xyz + m[2].w));
+}
+
+bool sphere_check(float4 sphere, float4x4 to_proj, float3 proj_scale) {
+	float4	centre	= mul(float4(sphere.xyz, 1), to_proj);
+	float4	a		= abs(centre);
+	float3	b		= a.xyz - a.w;
+	return all(b * proj_scale < sphere.w);
+}
+
+bool cone_check(float3 centre, float4 cone, float apex, float3 eye) {
+	return dot(normalize(centre + cone.xyz * apex - eye), cone.xyz) < cone.w;
+}
+
+struct MeshletVertex {
+	float3	position;
+	float3	normal;
+	float2	uv;
+};
+
+#if 0
+struct MeshletVertexOut {
+	float4	pos		: POSITION_OUT;
+	float4	colour	: COLOR;
+	uint	meshlet	: MESHLET;
+	uint	index	: INDEX;
+};
+
+MeshletVertexOut meshletVS(MeshletVertex vin, uint meshlet, uint index) {
+	MeshletVertexOut	v;
+	v.colour	= float4(
+		((meshlet >> 0) & 3) / 3.f,
+		((meshlet >> 2) & 3) / 3.f,
+		((meshlet >> 4) & 3) / 3.f,
+		1
+	);
+	//tint;//diffuse_colour;
+	//v.pos		= float4(vin.position, 1);
+	v.pos		= mul(float4(vin.position, 1), worldViewProj);
+	v.meshlet	= meshlet;
+	v.index		= index;
+	return v;
+}
+
+#else
+
+typedef S_Lighting MeshletVertexOut;
+
+MeshletVertexOut meshletVS(MeshletVertex vin, uint meshlet, uint index) {
+	return VS_TransformLighting(vin.position, vin.normal);
+}
+
+#endif
+
+StructuredBuffer<MeshletVertex> vertices	: register(t0);
+Buffer<uint>					indices		: register(t1);
+StructuredBuffer<Meshlet>		meshlets	: register(t2);
+Buffer<uint>					prims		: register(t3);
+
+
+
+#ifdef HAS_SM6
+
+#if SHADER_MODEL >= 0x600
+
+struct MeshletPayload {
+	uint meshlets[32];
+};
+
+MESH_SHADER(triangle,128,1,1)
+void meshlet_MS(
+	uint							thread	: SV_GroupThreadID,
+	uint							group	: SV_GroupID,
+	in payload MeshletPayload		payload,
+	out vertices MeshletVertexOut	out_verts[64],
+	out indices uint3				out_tris[126]
+) {
+	uint	m		= payload.meshlets[group];
+	Meshlet meshlet = meshlets[m];
+
+	SetMeshOutputCounts(64, meshlet.PrimCount);
+
+	if (thread < 64) {
+		uint index = indices.Load(m * 64 + thread);
+		out_verts[thread] = meshletVS(vertices[index], m, index);
+	}
+
+	if (thread < meshlet.PrimCount)
+		out_tris[thread] = UnpackPrimitive(prims[meshlet.PrimOffset + thread]);
+}
+
+
+// The groupshared payload data to export to dispatched mesh shader threadgroups
+groupshared MeshletPayload s_Payload;
+
+AMPLIFICATION_SHADER(32,1,1)
+void meshlet_AS(uint dtid : SV_DispatchThreadID) {
+	bool visible = false;
+	uint	num_meshlets, stride;
+	meshlets.GetDimensions(num_meshlets, stride);
+
+	if (dtid < num_meshlets) {
+		Meshlet	meshlet = meshlets[dtid];
+		float3	scale	= get_proj_scale(worldViewProj);
+		visible = sphere_check(meshlet.sphere, worldViewProj, scale) && (
+			true//IsConeDegenerate(meshlet.cone) || cone_check(meshlet.sphere.xyz, UnpackCone(meshlet.cone), meshlet.apex, eyePos())
+		);
+	}
+	
+	// Compact visible meshlets into the export payload array
+	if (visible) {
+		uint index = WavePrefixCountBits(visible);
+		s_Payload.meshlets[index] = dtid;
+	}
+
+	// Dispatch the required number of MS threadgroups to render the visible meshlets
+	DispatchMesh(WaveActiveCountBits(visible), 1, 1, s_Payload);
+}
+#endif
+
+technique meshlet {
+	pass p0 {
+		SET_AS(meshlet_AS);
+		SET_MS(meshlet_MS);
+		SET_PS(PS_Specular);
+	}
+};
+
+#else
+
+AppendStructuredBuffer<int>		visible_meshlets;
+AppendStructuredBuffer<uint4>	meshlet_indices;
+
+COMPUTE_SHADER(64,1,1)
+void meshlet_CS(uint i : SV_DispatchThreadID) {
+	uint	num_meshlets, stride;
+	meshlets.GetDimensions(num_meshlets, stride);
+	if (i < num_meshlets) {
+		Meshlet	meshlet = meshlets[i];
+		float3	scale	= get_proj_scale(worldViewProj);
+		bool	visible = sphere_check(meshlet.sphere, worldViewProj, scale)/* && (
+			IsConeDegenerate(meshlet.cone) || cone_check(meshlet.sphere.xyz, UnpackCone(meshlet.cone), meshlet.apex, eyePos())
+		)*/;
+		
+		if (visible)
+			visible_meshlets.Append(i);
+	}
+}
+
+COMPUTE_SHADER(128,1,1)
+void meshlet_CS2(StructuredBuffer<int> visible_meshlets, uint i : SV_GroupThreadID, uint g : SV_GroupID) {
+	uint	m = visible_meshlets[g];
+	Meshlet	meshlet = meshlets[m];
+	
+	if (i < meshlet.PrimCount) {
+		uint3	x = UnpackPrimitive(prims[meshlet.PrimOffset + i]) + m * 64;
+		uint4	x2 = uint4(
+			indices.Load(x.x),
+			indices.Load(x.y),
+			indices.Load(x.z),
+			m
+		);
+		meshlet_indices.Append(x2);
+	}
+
+}
+
+StructuredBuffer<uint4>	final_indices : register(t1);
+
+struct nothing {};
+
+void null_VS(uint index : SV_VertexID) {
+}
+
+GEOM_SHADER(3)
+void meshlet_GS(point nothing _[1], uint p : SV_PrimitiveID, inout TriangleStream<MeshletVertexOut> tris) {
+	uint4	i = final_indices[p];
+	tris.Append(meshletVS(vertices[i.x], i.w, i.x));
+	tris.Append(meshletVS(vertices[i.y], i.w, i.y));
+	tris.Append(meshletVS(vertices[i.z], i.w, i.z));
+}
+
+technique meshlet {
+	pass p0 {
+		ComputeShader = {cs_5_0, meshlet_CS};
+	}
+	pass p1 {
+		ComputeShader = {cs_5_0, meshlet_CS2};
+	}
+	pass p2 {
+		SET_VS(null_VS);
+		SET_GS(meshlet_GS);
+		SET_PS(PS_Col);
 	}
 };
 

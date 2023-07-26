@@ -95,7 +95,7 @@ ISO_ptr<void> ReadData1(const char *name, istream_ref file, uint32 size, bool ra
 }
 
 ISO_ptr<void> ReadData2(const char *name, istream_ref file, uint32 size, bool raw) {
-	return ReadData1(name, istream_offset(file, size).me(), size, raw);
+	return ReadData1(name, make_reader_offset(file, size), size, raw);
 }
 
 streamptr FindLength(istream_ref file) {

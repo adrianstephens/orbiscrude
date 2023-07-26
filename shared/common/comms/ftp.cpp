@@ -11,7 +11,7 @@ SOCKET FTP::Command(SOCKET sock, COMMANDS command, const char *params) const {
 	ba << "\r\n";
 
 	socklen_t	len = socklen_t(ba.length());
-	if (send(sock, ba, len, 0) != len) {
+	if (send(sock, ba.term(), len, 0) != len) {
 		SetError();
 		socket_close(sock);
 		sock = INVALID_SOCKET;
@@ -110,7 +110,7 @@ FTP::CODE FTP::GetPassiveSocket(SOCKET sock, SOCKET &sock_in) {
 			ip[1] = nums[1];
 			ip[2] = nums[2];
 			ip[3] = nums[3];
-			sock_in = IP4::socket_addr(ip, (nums[4] << 8) + nums[5]).socket();
+			sock_in = IP4::socket_addr(ip, (nums[4] << 8) + nums[5]).connect_or_close(IP4::TCP());
 		}
 	}
 	DiscardReply(sock);

@@ -317,7 +317,7 @@ protected:
 			int		rheight	= rect.Height();
 
 			if (channel == -2) {
-				ISO_rgba	*p	= slice[0];
+				ISO_rgba	*p	= slice[0].begin();
 				uint8		a	= layer.mask_default;
 				for (int n = height * width; n--; p++->a = a);
 			}
@@ -333,7 +333,7 @@ protected:
 				if (!(ok = ReadRow(file, buffer, rwidth, (PSDCOMPRESSION)compression)))
 					break;
 				if (channel < 4 && y >= 0 && y < height) {
-					uint8	*dest = (uint8*)(slice[y] + rect.left) + channel;
+					uint8	*dest = (uint8*)(slice[y].begin() + rect.left) + channel;
 					for (int x = 0; x < rwidth; x++, dest += 4) {
 						if (x + rect.left >= 0 && x + rect.left < width)
 							*dest = buffer[x];
@@ -342,7 +342,7 @@ protected:
 			}
 		}
 		if (mode == PSD_Grayscale) {
-			ISO_rgba	*p = slice[0];
+			ISO_rgba	*p = slice[0].begin();
 			for (int n = height * width; n--; p++)
 				p->g = p->b = p->r;
 		}
@@ -356,8 +356,8 @@ protected:
 	const char*		GetDescription() override { return "Photoshop Image";	}
 	int				Check(istream_ref file) override {
 		file.seek(0);
-		PSDheader	header = file.get();
-		return header.signature == '8BPS' && header.version == 1 ? CHECK_PROBABLE : CHECK_DEFINITE_NO;
+		PSDheader	header;
+		return file.read(header) && header.signature == '8BPS' && header.version == 1 ? CHECK_PROBABLE : CHECK_DEFINITE_NO;
 	}
 	ISO_ptr<void>	ReadWithFilename(tag id, const filename &fn) override {
 		return Read(id, FileInput(fn).me(), filename(fn.name()).ext() == ".layers" || ISO::root("variables")["layers"].GetInt());
@@ -678,8 +678,8 @@ class PSNFileHandler : public PSDFileHandler {
 	const char*		GetDescription() override { return "Big Photoshop Image";	}
 	int				Check(istream_ref file) override {
 		file.seek(0);
-		PSDheader	header = file.get();
-		return header.signature == '8BPS' && header.version == 2 ? CHECK_PROBABLE : CHECK_DEFINITE_NO;
+		PSDheader	header;
+		return file.read(header) && header.signature == '8BPS' && header.version == 2 ? CHECK_PROBABLE : CHECK_DEFINITE_NO;
 	}
 
 } psb;

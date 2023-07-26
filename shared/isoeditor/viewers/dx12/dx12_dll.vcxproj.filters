@@ -25,6 +25,7 @@
     <ClCompile Include="..\..\..\platforms\pc\hook_stack.cpp" />
     <ClCompile Include="..\..\..\platforms\pc\sockets.cpp" />
     <ClCompile Include="..\..\..\platforms\pc\_thread.cpp" />
+    <ClCompile Include="..\..\..\platforms\pc\dx12\dx12_helpers.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\common\base\algorithm.h">
@@ -89,5 +90,6 @@
     <ClInclude Include="..\..\..\platforms\pc\dxgi_record.h" />
     <ClInclude Include="..\..\..\platforms\pc\hook_com.h" />
     <ClInclude Include="..\..\..\platforms\pc\hook_stack.h" />
+    <ClInclude Include="..\..\..\platforms\pc\dx12\dx12_helpers.h" />
   </ItemGroup>
 </Project>

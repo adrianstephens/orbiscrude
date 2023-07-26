@@ -7,7 +7,8 @@ class IBFileHandler : public FileHandler {
 	const char*		GetExt() override { return "ib"; }
 	int				Check(istream_ref file) override {
 		file.seek(0);
-		return file.get<ISO::FILE_HEADER>().Check() ? CHECK_PROBABLE : CHECK_DEFINITE_NO;
+		ISO::FILE_HEADER	h;
+		return file.read(h) && h.Check() ? CHECK_PROBABLE : CHECK_DEFINITE_NO;
 	}
 
 	template<int B> bool	Read(ISO_ptr<void, B> &p, tag id, istream_ref file, const char *fn) {
@@ -48,20 +49,30 @@ class IBFileHandler : public FileHandler {
 		return p;
 	}
 
-	bool					Write(ISO_ptr<void> p, ostream_ref file, const char *fn, uint32 flags)	{
-		return ISO::binary_data.Write(p, file, fn, flags
-			|	(ISO::root("variables")["expandexternals"].GetInt()	? ISO::BIN_EXPANDEXTERNALS: 0)
+	uint32			GetFlags()	{
+		return	(ISO::root("variables")["expandexternals"].GetInt()	? ISO::BIN_EXPANDEXTERNALS	: 0)
 			|	(ISO::root("variables")["stringids"].GetInt()		? ISO::BIN_STRINGIDS		: 0)
 			|	(ISO::root("variables")["keepenums"].GetInt(1)		? ISO::BIN_ENUMS			: 0)
 			|	(ISO::binary_data.IsBigEndian()						? ISO::BIN_BIGENDIAN		: 0)
-		);
+		;
 	}
+
 	bool			Write(ISO_ptr<void> p, ostream_ref file) override {
-		return Write(p, file, 0, ISO::BIN_WRITEREADTYPES);
+		return ISO::binary_data.Write(p, file, 0, GetFlags() | ISO::BIN_WRITEREADTYPES);
 	}
 	bool			WriteWithFilename(ISO_ptr<void> p, const filename &fn) override {
-		return Write(p, FileOutput(fn).me(), fn,
+		return ISO::binary_data.Write(p, FileOutput(fn).me(), fn, GetFlags() | (
 			ISO::root("variables")["relativepaths"].GetInt() ? ISO::BIN_RELATIVEPATHS | ISO::BIN_WRITEREADTYPES : ISO::BIN_WRITEREADTYPES
-		);
+		));
 	}
+
+	bool			Write64(ISO_ptr64<void> p, ostream_ref file) override {
+		return ISO::binary_data.Write(p, file, 0, ISO::BIN_WRITEREADTYPES);
+	}
+	bool			WriteWithFilename64(ISO_ptr64<void> p, const filename &fn) override {
+		return ISO::binary_data.Write(p, FileOutput(fn).me(), fn, GetFlags() | (
+			ISO::root("variables")["relativepaths"].GetInt() ? ISO::BIN_RELATIVEPATHS | ISO::BIN_WRITEREADTYPES : ISO::BIN_WRITEREADTYPES
+		));
+	}
+
 } ib;

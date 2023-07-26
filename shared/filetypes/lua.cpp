@@ -122,7 +122,7 @@ LUAreader::TOKEN LUAreader::GetToken() {
 		case 'I': case 'J': case 'K': case 'L': case 'M': case 'N': case 'O': case 'P':
 		case 'Q': case 'R': case 'S': case 'T': case 'U': case 'V': case 'W': case 'X':
 		case 'Y': case 'Z': {
-			identifier = read_token(*this, char_set::identifier, c);
+			identifier = read_token(*this, char_set::wordchar, c);
 			const char **k = find(keywords, identifier);
 			return k == end(keywords)
 				? TOK_IDENTIFIER

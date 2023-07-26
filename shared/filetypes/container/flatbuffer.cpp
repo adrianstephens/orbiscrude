@@ -366,7 +366,7 @@ hash_map<crc32, tokeniser::TOKEN>	tokeniser::keywords;
 tokeniser::tokeniser(text_reader<reader_intf> &reader, schema::Schema &schema) : reader(reader), schema(schema) {
 	if (keywords.size() == 0) {
 		for (int i = 0; i < num_elements(_keywords); i++)
-			keywords[_keywords[i]] = TOKEN(_TOK_KEYWORDS + i);
+			keywords[crc32(_keywords[i])] = TOKEN(_TOK_KEYWORDS + i);
 	}
 	Next();
 }
@@ -414,7 +414,7 @@ tokeniser::TOKEN tokeniser::GetToken() {
 			case 'Q': case 'R': case 'S': case 'T': case 'U': case 'V': case 'W': case 'X':
 			case 'Y': case 'Z':
 				identifier = read_string(reader, c);
-				if (TOKEN *k = keywords.check(identifier))
+				if (TOKEN *k = keywords.check(crc32(identifier)))
 					return *k;
 				return TOK_IDENTIFIER;
 
@@ -488,7 +488,7 @@ schema::Type tokeniser::Type() {
 			return type;
 		}
 		case TOK_IDENTIFIER:
-			if (auto *t = schema.types.check(identifier))
+			if (auto *t = schema.types.check(crc32(identifier)))
 				return next_return(*t);
 
 		default:
@@ -516,7 +516,7 @@ void tokeniser::Parse() {
 			case TOK_STRUCT: {
 				bool	was_table = token == TOK_TABLE;
 				Next();
-				auto&	type = schema.types.put(Identifier(), was_table ? schema::Type::TABLE : schema::Type::STRUCT);
+				auto&	type = schema.types.put(crc32(Identifier()), was_table ? schema::Type::TABLE : schema::Type::STRUCT);
 				MetaData();
 				expect(TOK_OPEN_BRACE);
 
@@ -540,7 +540,7 @@ void tokeniser::Parse() {
 			// enum_decl
 			case TOK_ENUM: {
 				Next();
-				auto&	type = schema.types.put(Identifier(), schema::Type::ENUM);
+				auto&	type = schema.types.put(crc32(Identifier()), schema::Type::ENUM);
 
 				if (token == TOK_COLON) {
 					Next();
@@ -570,7 +570,7 @@ void tokeniser::Parse() {
 
 			case TOK_UNION: {
 				Next();
-				auto&	type = schema.types.put(Identifier(), schema::Type::UNION);
+				auto&	type = schema.types.put(crc32(Identifier()), schema::Type::UNION);
 
 				MetaData();
 				expect(TOK_OPEN_BRACE);
@@ -583,7 +583,7 @@ void tokeniser::Parse() {
 						Next();
 						value = Integer();
 					}
-					if (auto *p = schema.types.check(id))
+					if (auto *p = schema.types.check(crc32(id)))
 						array.emplace_back(*p, value++);
 
 					if (token != TOK_COMMA)
@@ -598,7 +598,7 @@ void tokeniser::Parse() {
 			// root_decl
 			case TOK_ROOT_TYPE:
 				Next();
-				schema.root = schema.types[Identifier()];
+				schema.root = schema.types[crc32(Identifier())];
 				expect(TOK_SEMICOLON);
 				break;
 

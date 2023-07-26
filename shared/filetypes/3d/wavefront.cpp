@@ -81,6 +81,10 @@ struct WaveFrontReader {
 	ISO_ptr<Model3>			model;
 
 
+	filename GetFilename(const char *s) {
+		return dir.relative(unescape(str(s)));
+	}
+
 	ISO_ptr<SubMesh> AddMesh(tag id, uint32 num_verts, uint32 num_indices, const ISO::TypeOpenArray *vertarray_type, ISO_ptr<void> technique, ISO_ptr<void> parameters) {
 		ISO_ptr<SubMesh>	sm(id);
 		sm->indices.Create(num_indices);
@@ -113,6 +117,7 @@ anything WaveFrontReader::LoadMaterials(istream_ref file) {
 
 		while ((c = *s) && c != ' ' && c != '\t')
 			s++;
+
 		if (c == 0)
 			continue;
 		*s++ = 0;
@@ -136,17 +141,17 @@ anything WaveFrontReader::LoadMaterials(istream_ref file) {
 		} else if (line == str("Ks")) {
 			mtl->Append(ISO_ptr<float3p>("Ks", ReadFloat3(s)));
 		} else if (line == str("map_Ka")) {
-			mtl->Append(ISO_ptr<ISOTexture>("map_Ka", ISO::MakePtrExternal(0, dir.relative(s))));
+			mtl->Append(ISO_ptr<ISOTexture>("map_Ka", ISO::MakePtrExternal(0, GetFilename(s))));
 		} else if (line == str("map_Kd")) {
-			mtl->Append(ISO_ptr<ISOTexture>("map_Kd", ISO::MakePtrExternal(0, dir.relative(s))));
+			mtl->Append(ISO_ptr<ISOTexture>("map_Kd", ISO::MakePtrExternal(0, GetFilename(s))));
 		} else if (line == str("map_Ks")) {
-			mtl->Append(ISO_ptr<ISOTexture>("map_Ks", ISO::MakePtrExternal(0, dir.relative(s))));
+			mtl->Append(ISO_ptr<ISOTexture>("map_Ks", ISO::MakePtrExternal(0, GetFilename(s))));
 		} else if (line == str("map_Bump")) {
-			mtl->Append(ISO_ptr<ISOTexture>("map_Bump", ISO::MakePtrExternal(0, dir.relative(s))));
+			mtl->Append(ISO_ptr<ISOTexture>("map_Bump", ISO::MakePtrExternal(0, GetFilename(s))));
 		} else if (line == str("bump")) {
 			ISO_ptr<void>	p = ISO::MakePtr(ISO::user_types.Find("NormalMap"), "map_Bump");
 			ISO::Browser2	b(p);
-			b[0].Set(ISO::MakePtrExternal(0, dir.relative(s)));
+			b[0].Set(ISO::MakePtrExternal(0, GetFilename(s)));
 			mtl->Append(ISO_ptr<ISOTexture>("map_Bump", p));
 		}
 	}
@@ -204,7 +209,7 @@ const ISO::Type *WaveFrontReader::vertexarray_types[] = {
 };
 
 void WaveFrontReader::AddMeshes(tag id) {
-	if (!faces)
+	if (faces.empty())
 		return;
 
 #ifdef PLAT_PC
@@ -317,10 +322,9 @@ void WaveFrontReader::AddMeshes(tag id) {
 	}
 
 	uint32	*pi = remap_i.begin();
-	VertexCacheOptimizerForsyth(pi, remap_i.size32() / 3, num_verts, pi);
+//	VertexCacheOptimizerForsyth(pi, remap_i.size32() / 3, num_verts, pi);
 
-	MeshBuilder	builder;
-	builder.ReserveVerts(num_verts);
+	MeshBuilder	builder(0, num_verts);
 	auto		vertarray_type	= new ISO::TypeOpenArray(vert_type);
 
 	for (auto i = remap_i.begin(); i < remap_i.end(); i += 3) {
@@ -329,7 +333,7 @@ void WaveFrontReader::AddMeshes(tag id) {
 		if ((vb0 = builder.TryAdd(v0)) < 0 || (vb1 = builder.TryAdd(v1)) < 0 || (vb2 = builder.TryAdd(v2)) < 0) {
 			auto	sm = AddMesh(id, builder.NumVerts(), builder.NumFaces(), vertarray_type, technique, parameters);
 			builder.Purge(sm, verts, vert_size);
-			sm->UpdateExtents();
+			sm->UpdateExtent();
 			model->submeshes.Append(sm);
 
 			vb0 = builder.TryAdd(v0);
@@ -341,7 +345,7 @@ void WaveFrontReader::AddMeshes(tag id) {
 
 	auto sm = AddMesh(id, builder.NumVerts(), builder.NumFaces(), vertarray_type, technique, parameters);
 	builder.Purge(sm, verts, vert_size);
-	sm->UpdateExtents();
+	sm->UpdateExtent();
 	model->submeshes.Append(sm);
 }
 
@@ -364,7 +368,7 @@ ISO_ptr<void> WaveFrontReader::Read() {
 			id	= {};
 			if (model && model->submeshes.Count()) {
 				model->UpdateExtents();
-				CheckHasExternals(model, ISO::DUPF_DEEP);
+				CheckHasExternals(model, ISO::TRAV_DEEP);
 				if (!result)
 					result.Create();
 				result->Append(model);
@@ -372,7 +376,7 @@ ISO_ptr<void> WaveFrontReader::Read() {
 			model.Create(skip_whitespace(line + 1));
 
 		} else if (line.begins("mtllib ")) {
-			mtllib	= LoadMaterials(FileInput(dir.relative(line + 7)).me());
+			mtllib	= LoadMaterials(FileInput(GetFilename(line + 7)));
 
 		} else if (line.begins("usemtl ")) {
 			AddMeshes(id);
@@ -424,7 +428,7 @@ ISO_ptr<void> WaveFrontReader::Read() {
 
 	if (model && model->submeshes.Count()) {
 		model->UpdateExtents();
-		CheckHasExternals(model, ISO::DUPF_DEEP);
+		CheckHasExternals(model, ISO::TRAV_DEEP);
 		if (!result)
 			return model;
 		result->Append(model);
@@ -473,7 +477,7 @@ string WaveFrontWriter::GetFilename(ISO_ptr_machine<void> p, const char *categor
 
 	filename	fn2 = fn.dir().add_dir(p.ID().get_tag()).add_ext("*");
 	for (auto d = directory_iterator(fn2); d; ++d) {
-		filename	fn3 = fn.dir().add_dir(d);
+		filename	fn3 = fn.dir().add_dir((const char*)d);
 		if (auto fh = FileHandler::Get(fn3.ext())) {
 			if (fh->GetCategory() == str("bitmap"))
 				return fn3.name_ext_ptr();
@@ -579,7 +583,7 @@ bool WaveFrontWriter::WriteSubmesh(SubMesh *sm) {
 	bool	havet	= false, haven = false;
 
 	for (auto e : sm->VertComponents()) {
-		auto	usage = USAGE2(e.id).usage;
+		auto	usage = USAGE2(e.id.get_crc32()).usage;
 		switch (usage) {
 			case USAGE_POSITION:
 				break;
@@ -667,6 +671,7 @@ class WaveFrontFileHandler : FileHandler {
 		return make_text_reader(file).read_line(line) && line[0] == '#' || line[0] == 'v' ? CHECK_POSSIBLE : CHECK_DEFINITE_NO;
 	}
 	ISO_ptr<void>	ReadWithFilename(tag id, const filename &fn)			override { return WaveFrontReader(FileInput(fn).me(), fn.dir()).Read(); }
+	ISO_ptr64<void>	ReadWithFilename64(tag id, const filename &fn)			override { return WaveFrontReader(FileInput(fn).me(), fn.dir()).Read(); }
 	ISO_ptr<void>	Read(tag id, istream_ref file)							override { return WaveFrontReader(file, "").Read(); }
 	bool			WriteWithFilename(ISO_ptr<void> p, const filename &fn)	override {
 		ISO_ptr<Model3> model = ISO_conversion::convert<Model3>(FileHandler::ExpandExternals(p), ISO_conversion::RECURSE | ISO_conversion::CHECK_INSIDE);

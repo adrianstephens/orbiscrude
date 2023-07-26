@@ -51,7 +51,10 @@ class BIFFileHandler : FileHandler {
 
 	const char*		GetExt() override { return "bif"; }
 	ISO_ptr<void>	ReadWithFilename(tag id, const filename &fn) override;
+	ISO_ptr64<void>	ReadWithFilename64(tag id, const filename &fn) override { return ReadWithFilename(id, fn); }
 	bool			WriteWithFilename(ISO_ptr<void> p, const filename &fn) override;
+public:
+	BIFFileHandler()	{}
 } bif;
 
 const char*	BIFFileHandler::tags[] = {
@@ -269,7 +272,7 @@ ISO_ptr<void> BIFFileHandler::ReadWithFilename(tag id, const filename &fn) {
 				if (files == 4)
 					return ISO_NULL;
 //				path.Absolute(param, fn[files++]);
-				filenames[files++] = filename(fn).relative(param);
+				filenames[files++] = fn.dir().relative(param);
 				break;
 
 			case TAG_WIDTH:
@@ -298,14 +301,13 @@ ISO_ptr<void> BIFFileHandler::ReadWithFilename(tag id, const filename &fn) {
 				break;
 
 			case TAG_ORDER: {
-				char	channels[5];
+				const char	channels[] = "rgbayuv";
 				char	c, *p;
 				int		i = 0, maxch = 0;
-				strcpy(channels, "rgba");
-				while ((c = *param++) && (p = (char*)memchr(channels, c, 4))) {
+				while ((c = *param++) && (p = (char*)memchr(channels, c, strlen(channels)))) {
 					int	ch = int(p - channels);
-					if (ch > maxch)
-						maxch = ch;
+					if ((ch & 3) > maxch)
+						maxch = ch & 3;
 					order[i++] = ch;
 					*p = 0;
 				}
@@ -521,13 +523,32 @@ ISO_ptr<void> BIFFileHandler::ReadWithFilename(tag id, const filename &fn) {
 
 						case 2: {//plane interleave
 							for (int c = 0; c < planes; c++) {
-								for (int y = 0; y < height; y++) {
-									Read(file2, buffer, width, bitspersample, ascii, msb);
+								int		shift	= order[c] >= 5;
+								int		height1 = height >> shift;
+								for (int y = 0; y < height1; y++) {
+									int				width1 = width >> shift;
+									unsigned char	*dest = (unsigned char*)bm->ScanLine(upsidedown ? height1 - 1 - y : y);
+									dest += planes == 2 && order[c] == 1 ? 3 : (order[c] & 3);
+
+									Read(file2, buffer, width1, bitspersample, ascii, msb);
+
 									unsigned char	*srce = buffer;
-									unsigned char	*dest = (unsigned char*)bm->ScanLine(upsidedown ? height - 1 - y : y) + (planes == 2 && order[c] == 1 ? 3 : order[c]);
-									for (int x = 0; x < width; x++, dest += 4)
+									for (int x = 0; x < width1; x++, dest += 4)
 										*dest = *srce++;
+
 									file2.seek_cur(leftpad + rightpad);
+
+								}
+							}
+							if (order[0] >= 4) {
+								for (int y = height; y--;) {
+									auto	uv	= bm->ScanLine(y / 2) + width / 2;
+									for (auto p = bm->ScanLine(y), e = p + width; p < e;) {
+										e -= 2;
+										--uv;
+										e[0] = ISO_rgba::YUV(e[0].r, uv->g, uv->b);
+										e[1] = ISO_rgba::YUV(e[1].r, uv->g, uv->b);
+									}
 								}
 							}
 							break;

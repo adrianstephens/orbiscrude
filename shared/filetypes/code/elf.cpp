@@ -957,7 +957,7 @@ template<bool be, int bits> ISO_ptr<void> ELF<be,bits>::Read(tag id, istream_ref
 			Phdr	&p		= ph[i];
 			int		j;
 			for (j = 0; j < num_elements(pnames) - 1 && p.p_type >= pnames[j + 1].id; j++);
-			const char *id	= pnames[j].name;
+			tag		id	= pnames[j].name;
 			if (p.p_type > pnames[j].id)
 				id = (buffer_accum<256>(id) << "+0x" << hex(p.p_type - pnames[j].id));
 			(*iso_segs)[i]		= ISO::MakePtr(id, move(pb[i]));
@@ -1412,7 +1412,7 @@ class SELFFileHandler : public FileHandler {
 		SCE_header		h;
 		if (file.read(h) && h.magic == h.MAGIC) {
 			file.seek(h.elf_offset);
-			return elf.Read(id, istream_offset(file));
+			return elf.Read(id, make_reader_offset(file));
 		}
 		return ISO_NULL;
 	}

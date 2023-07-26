@@ -348,8 +348,8 @@ void GTF::Convert(uint32 width, uint32 height, uint32 depth,
 using namespace iso;
 
 class GTFFileHandler : public BitmapFileHandler, GTF {
-	ISO_ptr<void>			Read(tag id, istream_ref file, CellGtfTextureAttribute_be &attr);
-	uint32					Write(ISO_ptr<void> p, ostream_ref file, size_t offset);
+	ISO_ptr<void>	Read1(tag id, istream_ref file, CellGtfTextureAttribute_be &attr);
+	uint32			Write(ISO_ptr<void> p, ostream_ref file, size_t offset);
 
 	const char*		GetExt() override { return "gtf"; }
 	ISO_ptr<void>	Read(tag id, istream_ref file) override;
@@ -361,7 +361,7 @@ ISO_ptr<void> GTFFileHandler::Read(tag id, istream_ref file) {
 
 	if (header.numTexture == 1) {
 		CellGtfTextureAttribute_be	attr = file.get();
-		return Read(id, file, attr);
+		return Read1(id, file, attr);
 	}
 
 	char				name[16];
@@ -370,12 +370,12 @@ ISO_ptr<void> GTFFileHandler::Read(tag id, istream_ref file) {
 		file.seek(sizeof(CellGtfFileHeader_be) + i * sizeof(CellGtfTextureAttribute_be));
 		CellGtfTextureAttribute_be	attr = file.get();
 		sprintf(name, "%i", native_endian(attr.id));
-		a->Append(Read(id, file, attr));
+		a->Append(Read1(id, file, attr));
 	}
 	return a;
 }
 
-ISO_ptr<void> GTFFileHandler::Read(tag id, istream_ref file, CellGtfTextureAttribute_be &attr) {
+ISO_ptr<void> GTFFileHandler::Read1(tag id, istream_ref file, CellGtfTextureAttribute_be &attr) {
 	malloc_block	buffer(attr.textureSize);
 	file.seek(attr.offsetToTex);
 	file.readbuff(buffer, attr.textureSize);
@@ -535,8 +535,7 @@ bool GTFFileHandler::Write(ISO_ptr<void> p, ostream_ref file) {
 	uint32	total		= 0;
 	header.version		= 0x02000000;
 
-	if (p.IsType<anything>()) {
-		anything	*a		= p;
+	if (auto a = p.test_cast<anything>()) {
 		int			n		= a->Count();
 		header.numTexture	= n;
 		size_t		offset	= align(sizeof(CellGtfFileHeader_be) + n * sizeof(CellGtfTextureAttribute_be), 128);

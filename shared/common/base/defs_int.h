@@ -19,6 +19,7 @@ template<typename T, int N, int S = 0>	constexpr T kbits				= kbit<T, S + N> - k
 //-----------------------------------------------------------------------------
 //	constants
 //-----------------------------------------------------------------------------
+
 template<int N>	struct __int	{ template<typename R> static constexpr R as() { return (R)N; } };
 template<int N> struct constant_type<__int<N>>	{ typedef int type; };
 template<int N> using constant_int	= constant<__int<N>>;
@@ -42,8 +43,8 @@ constexpr uint32	operator"" _u16(const char* s, size_t len)	{ return s[1] + (s[0
 constexpr uint32	operator"" _u32(const char* s, size_t len)	{ return s[3] + (s[2] << 8) + (s[1] << 16) + (s[0] << 24); }
 constexpr uint64	operator"" _u64(const char* s, size_t len)	{ return (uint64(operator""_u32(s, len)) << 32) + operator""_u32(s + 4, len - 4); }
 #else
-constexpr uint32	operator"" _u16(const char* s, size_t len)	{ return s[0] + (s[1] << 8); }
-constexpr uint32	operator"" _u32(const char* s, size_t len)	{ return s[0] + (s[1] << 8) + (s[2] << 16) + (s[3] << 24); }
+constexpr uint32	operator"" _u16(const char* s, size_t len)	{ return (uint8)s[0] + (s[1] << 8); }
+constexpr uint32	operator"" _u32(const char* s, size_t len)	{ return (uint8)s[0] + ((uint8)s[1] << 8) + ((uint8)s[2] << 16) + ((uint8)s[3] << 24); }
 constexpr uint64	operator"" _u64(const char* s, size_t len)	{ return operator""_u32(s, 4) + (uint64(operator""_u32(s + 4, len - 4)) << 32); }
 #endif
 
@@ -68,57 +69,59 @@ template<char... C>	struct int_reader128<'0', 'X', C...>	: digits_reader128<16, 
 template<char... C>	struct int_reader128<'0', 'b', C...>	: digits_reader128<2,  0, 0, C...> {};
 template<char... C>	struct int_reader128<'0', 'B', C...>	: digits_reader128<2,  0, 0, C...> {};
 
-template<char... C> auto	operator"" _k()	{ return constant_int<int_reader<C...>::value>(); }
+template<char... C> constexpr auto	operator"" _k()		{ return constant_int<int_reader<C...>::value>(); }
+template<char... C> constexpr auto	operator"" _kk()	{ return meta::constant<int, int_reader<C...>::value>(); }
 template<int K>		auto	literal_int = constant_int<K>();
 
 //-----------------------------------------------------------------------------
 //	compile-time logs and powers
 //-----------------------------------------------------------------------------
 
-template<int I, bool = ((I & (I - 1)) == 0)>	constexpr int pow2_ceil = pow2_ceil<I + (I & -I)>;
-template<int I>	constexpr int pow2_ceil<I, true> = I;
+template<int I, bool = ((I & (I - 1)) == 0)>	constexpr int pow2_ceil		= pow2_ceil<I + (I & -I)>;
+template<int I, bool = ((I & (I - 1)) == 0)>	constexpr int pow2_floor	= pow2_floor<I - (I & -I)>;
+template<int I>	constexpr int pow2_ceil<I, true>	= I;
+template<int I>	constexpr int pow2_floor<I, true>	= I;
 
-template<int B, int N> 		constexpr uint64 kpow 		= B * kpow<B, N - 1>;
+template<int B, int N> 		constexpr uint64 kpow 		= kpow<B, N / 2> * kpow<B, N - N / 2>;
+template<int B> 			constexpr uint64 kpow<B, 1>	= B;
 template<int B> 			constexpr uint64 kpow<B, 0>	= 1;
-#define POW(B, N)		kpow<B, N>
 
 template<uint64 X, int N=32>constexpr int klog2			= (X >> N) ? N + klog2<(X >> N), N / 2> : klog2<X, N / 2>;
 template<uint64 X>			constexpr int klog2<X, 0>	= 0;
-#define LOG2(X)			klog2<X>
-#define LOG2_CEIL(X)	klog2<X - 1> + 1
+template<uint64 X>			constexpr int klog2_ceil	= klog2<X - 1> + 1;
 
 template<typename T> constexpr size_t log2alignment	= klog2<alignof(T)>;
 
-template<uint64 B, uint64 N, bool OK = (N / B >= B)> struct _LOG_BASE {
-	typedef _LOG_BASE<B * B, N> P;
+template<uint64 B, uint64 N, bool OK = (N / B >= B)> struct _log {
+	typedef _log<B * B, N> P;
 	static const uint64
 		value		= P::value * 2 + (P::remainder >= B),
 		remainder	= P::remainder >= B ? P::remainder / B : P::remainder;
 };
-template<uint64 B, uint64 N> struct _LOG_BASE<B, N, false> {
+template<uint64 B, uint64 N> struct _log<B, N, false> {
 	static const uint64
 		value		= N >= B,
 		remainder	= N >= B ? N / B : N;
 };
-template<uint64 B, uint64 N>	constexpr uint64	klog		= _LOG_BASE<B,N>::value;
-template<uint64 B, uint64 N>	constexpr uint64	klog_ceil	= _LOG_BASE<B,N>::value + (_LOG_BASE<B,N>::remainder != 0);
+template<uint64 B, uint64 N>	constexpr uint64	klog		= _log<B,N>::value;
+template<uint64 B, uint64 N>	constexpr uint64	klog_ceil	= _log<B,N>::value + (_log<B,N>::remainder != 0);
 
 // fractional part of log
-template<uint64 B, uint64 N, uint64 D, int BITS> struct _FLOG_BASE {
+template<uint64 B, uint64 N, uint64 D, int BITS> struct _logfract {
 	static constexpr uint64 shift_sq(uint64 x, int s) { return s < 0 ? (x * x) >> -s : (x * x) << s; }
 	enum {
 		test	= N >= B * D,
 		s		= 30 - klog2<N> * 2,
-		value	= _FLOG_BASE<B, shift_sq(N, s), shift_sq(test ? D * B : D, s), BITS - 1>::value | (test << BITS),
+		value	= _logfract<B, shift_sq(N, s), shift_sq(test ? D * B : D, s), BITS - 1>::value | (test << BITS),
 	};
 };
-template<uint64 B, uint64 N, uint64 D> struct _FLOG_BASE<B, N, D, 0> { enum { value = N >= B * D }; };
-#define FLOG_BASE(B, N, BITS)	_FLOG_BASE<B,N,1,BITS>::value
+template<uint64 B, uint64 N, uint64 D> struct _logfract<B, N, D, 0> { enum { value = N >= B * D }; };
 
-template<uint64 B, uint64 N>	constexpr uint64	klog_round	= (_FLOG_BASE<B,N,1,1>::value + 1) / 2;
+template<uint64 B, uint64 N, uint64 BITS>	constexpr uint64	klog_fract = _logfract<B, N, 1, BITS>::value;
+template<uint64 B, uint64 N>				constexpr uint64	klog_round = (klog_fract<B, N, 1> + 1) / 2;
 
-template<typename T> constexpr T constexpr_gcd1(T a, T b)	{ return b % a ? constexpr_gcd1(b % a, a) : a; }
-template<typename T> constexpr T constexpr_gcd(T a, T b) 	{ return a > b ? constexpr_gcd1(b, a) : constexpr_gcd1(a, b); }
+template<typename T> constexpr T _constexpr_gcd(T a, T b)	{ return b % a ? _constexpr_gcd(b % a, a) : a; }
+template<typename T> constexpr T constexpr_gcd(T a, T b) 	{ return a > b ? _constexpr_gcd(b, a) : _constexpr_gcd(a, b); }
 
 //-----------------------------------------------------------------------------
 //	integer types
@@ -145,7 +148,7 @@ template<int BYTES>		using uint_t			= typename T_uint_type<pow2_ceil<BYTES>>::ty
 template<int BITS>		using uint_bits_t		= uint_t<(BITS + 7) / 8>;
 template<typename T>	using uint_for_t		= uint_t<sizeof(T)>;
 template<typename T>	constexpr uint_for_t<T>	as_unsigned(T x)	{ return (uint_for_t<T>&)x; }
-template<typename T, typename TMIN>	using	uint_type_tmin	= uint_t<meta::max<sizeof(T), sizeof(TMIN)>>;
+template<typename T, typename TMIN>	using	uint_type_tmin	= uint_t<meta::max_v<sizeof(T), sizeof(TMIN)>>;
 
 template<typename T, bool S, typename=void> struct T_signed	: T_type<T> {};
 template<> struct T_signed<uint8,  true>		: T_type<int8>		{};
@@ -330,7 +333,7 @@ template<typename T> constexpr uint32 _count_bits2(T i) { return (((i + (i >> 4)
 template<typename T> constexpr uint32 _count_bits1(T i) { return _count_bits2<T>((i & (T(~T(0)) / 5)) + ((i >> 2) & (T(~T(0)) / 5))); }
 template<uint64 X> constexpr uint32 count_bits_v	= _count_bits1(X - ((X >> 1) & (~uint64(0) / 3)));
 
-#if defined(__GNUC__) || defined PLAT_CLANG
+#if defined __GNUC__ || defined PLAT_CLANG
 //------------------------------------
 //	gcc/clang
 //------------------------------------
@@ -362,7 +365,7 @@ constexpr int						lowest_set_index(uint64 x)		{ return __builtin_ffsll(x) - 1; 
 template<typename T> constexpr enable_if_t<!same_v<uint_for_t<T>, T>, int> leading_zeros(T x)	{ return leading_zeros(uint_for_t<T>(x)); }
 template<typename T> constexpr int	highest_set_index(T x)			{ return BIT_COUNT<T> - 1 - leading_zeros(x); }
 
-#elif defined(PLAT_X360)
+#elif defined PLAT_X360
 //------------------------------------
 //	X360
 //------------------------------------
@@ -375,7 +378,7 @@ template<typename T> constexpr int	leading_zeros(T x)				{ return leading_zeros(
 template<typename T> constexpr int	highest_set_index(T x)			{ return BIT_COUNT<T> - 1 - leading_zeros(x); }
 template<typename T> constexpr int	lowest_set_index(T x)			{ return highest_set_index(x & -x); }
 
-#elif defined(_M_IX86) || defined(_M_X64)
+#elif defined _M_IX86 || defined _M_X64
 
 //------------------------------------
 //	MSVC
@@ -388,7 +391,7 @@ template<typename T> force_inline int count_bits(T x)				{ return count_bits(uin
 inline int							lowest_set_index(uint32 x)		{ DWORD i; return _BitScanForward(&i, x) ? i : -1;	}
 inline int							highest_set_index(uint32 x)		{ DWORD i; return _BitScanReverse(&i, x) ? i : -1;	}
 
-#if defined(_M_IA64) || defined(_M_X64)
+#if defined _M_IA64 || defined _M_X64
 inline int							lowest_set_index(uint64 x)		{ DWORD i; return _BitScanForward64(&i, x) ? i : -1;}
 inline int							highest_set_index(uint64 x)		{ DWORD i; return _BitScanReverse64(&i, x) ? i : -1;}
 #else
@@ -430,9 +433,8 @@ template<typename T> constexpr int		lowest_clear_index(T x)		{ return lowest_set
 template<typename T> constexpr int		highest_clear_index(T x)	{ return highest_set_index(~x); }
 
 template<typename T> constexpr uint32	log2_floor(T x)				{ return highest_set_index(x); }
-
-template<typename T> constexpr uint32	log2_ceil(T x)				{ return log2_floor(x - 1) + 1; }
-template<typename T> constexpr enable_if_t<is_int<T>, uint32> log2(T x)	{ return log2_floor(x - 1) + 1; }
+template<typename T> constexpr uint32	log2_ceil(T x)				{ return x ? log2_floor(x - 1) + 1 : 0; }
+template<typename T> constexpr enable_if_t<is_int<T>, uint32> log2(T x)	{ return log2_ceil(x); }
 template<typename T> constexpr bool		is_pow2(T x)				{ return (x & (x - 1)) == 0; }
 template<typename T> constexpr T		next_pow2(T x)				{ return T(1) << (highest_set_index(x - 1) + 1); }
 
@@ -943,11 +945,13 @@ template<typename T> struct num_traits<double_int<T>> {
 };
 
 template<typename T> struct double_int {
-	T lo, hi;
+	typedef	uint_for_t<T>	U;
+	U	lo;
+	T	hi;
 	constexpr double_int()									{}
 	constexpr double_int(const _zero&)	: lo(zero), hi(zero){}
-	constexpr double_int(T i)			: lo(i), hi(zero)	{}
-	constexpr double_int(T lo, T hi)	: lo(lo), hi(hi)	{}
+	constexpr double_int(T i)			: lo(i), hi(zero)	{}//hi(i < 0 ? -1 : 0)	{}
+	constexpr double_int(U lo, T hi)	: lo(lo), hi(hi)	{}
 	explicit operator bool()					const	{ return lo || hi; }
 	explicit operator T()						const	{ return lo; }
 	template<typename I> explicit operator I()	const	{ return (I)lo; }
@@ -1002,7 +1006,7 @@ template<typename T> struct double_int {
 	friend constexpr double_int	rotate_left(double_int x, uint32 y)	{ return {double_rotate_left_hi(x.lo, x.hi, y), double_rotate_left_hi(x.hi, x.lo, y)}; }
 };
 
-template<typename T> constexpr auto make_double_int(T t) { return (double_int<uint_t<sizeof(T) / 2>>&)t; }
+template<typename T> constexpr auto make_double_int(T t) { return force_cast<double_int<uint_t<sizeof(T) / 2>>>(t); }
 
 template<typename T, typename B> double_int<T> operator*(const double_int<T> &a, const B b) {
 	T	r0, r1	= mulc(a.lo, (T)b, r0);

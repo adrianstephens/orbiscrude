@@ -8,10 +8,8 @@
 #include "allocators/lf_allocator.h"
 #include "allocators/lf_pool.h"
 #include "base/vector.h"
-//#include "base/soft_float.h"
 #include "base/block.h"
 #include "base/hash.h"
-//#include "windows/window.h"
 #include "com.h"
 #include "crc32.h"
 #include "dx/dxgi_helpers.h"
@@ -23,6 +21,10 @@
 #define ISO_HAS_HULL
 #define ISO_HAS_STREAMOUT
 #define ISO_HAS_GRAHICSBUFFERS
+#define ISO_HAS_MESHSHADER
+
+class ID3D12ShaderReflection;
+class ID3D12ShaderReflectionConstantBuffer;
 
 namespace iso {
 
@@ -63,6 +65,7 @@ enum Memory {
 
 	MEM_CUBE				= 0x400,
 	MEM_VOLUME				= 0x800,
+	MEM_FORCE2D				= 0xc00,
 
 	MEM_CASTABLE			= 0x1000,
 };
@@ -109,6 +112,7 @@ enum TexFormat {
 
 inline DXGI_FORMAT	GetDXGI(TexFormat f)	{ return DXGI_FORMAT(f & 255); }
 inline uint32		GetSwizzle(TexFormat f) { return f >> 8;; }
+inline uint32		ByteSize(TexFormat f)	{ return DXGI_COMPONENTS(GetDXGI(f)).Bytes(); }
 
 enum PrimType {
 	PRIM_UNKNOWN			= D3D_PRIMITIVE_TOPOLOGY_UNDEFINED,
@@ -117,6 +121,7 @@ enum PrimType {
 	PRIM_LINESTRIP			= D3D_PRIMITIVE_TOPOLOGY_LINESTRIP,
 	PRIM_TRILIST			= D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
 	PRIM_TRISTRIP			= D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
+	PRIM_QUADSTRIP			= PRIM_TRISTRIP,
 
 	//emulated
 	PRIM_QUADLIST			= 0x1000,
@@ -300,10 +305,11 @@ enum FillMode {
 //-----------------------------------------------------------------------------
 
 typedef	DXGI_FORMAT	ComponentType;
-template<typename T> ComponentType	GetComponentType(const T&)	{ return (ComponentType)_ComponentType<T>::value; }
-template<typename T> ComponentType	GetComponentType()			{ return (ComponentType)_ComponentType<T>::value; }
-template<typename T> TexFormat		GetTexFormat()				{ return TexFormat(_ComponentType<T>::value | (D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING << 8)); }
-template<typename T> ComponentType	GetBufferFormat()			{ return ComponentType(_BufferFormat<_ComponentType<T>::value, sizeof(T)>::value); }
+template<typename T> constexpr ComponentType	GetComponentType(const T&)	{ return (ComponentType)_ComponentType<T>::value; }
+template<typename T> constexpr ComponentType	GetComponentType()			{ return (ComponentType)_ComponentType<T>::value; }
+template<typename T> constexpr TexFormat		GetTexFormat()				{ return TexFormat(_ComponentType<T>::value | (D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING << 8)); }
+template<typename T> constexpr ComponentType	GetBufferFormat()			{ return ComponentType(_BufferFormat<_ComponentType<T>::value, sizeof(T)>::value); }
+template<typename T> constexpr bool				ValidTexFormat()			{ return _ComponentType<T>::value != DXGI_FORMAT_UNKNOWN; }
 
 //-----------------------------------------------------------------------------
 //	Resources
@@ -370,23 +376,11 @@ inline point GetSize(const D3D12_RESOURCE_DESC &desc) {
 }
 
 struct ResourceData {
-	static D3D12_RANGE	empty_range;
 	ID3D12Resource		*res;
 	void				*p;
-
-	ResourceData(ID3D12Resource *res, int sub = 0, bool read = false) : res(res) {
-		CheckResult(res->Map(sub, read ? NULL : &empty_range, &p));
-	}
-	~ResourceData() {
-		res->Unmap(0, NULL);
-	}
-};
-
-template<typename T> struct TypedResourceData : ResourceData {
-	TypedResourceData(ID3D12Resource *res, bool read = false) : ResourceData(res, read)	{}
-	operator T*()	const { return (T*)p; }
-	T*	get()		const { return (T*)p; }
-
+	ResourceData(ID3D12Resource *res, int sub = 0, bool read = false) : res(res) { CheckResult(res->Map(sub, read ? NULL : dx12::RANGE(none), &p));  }
+	~ResourceData()								{ res->Unmap(0, NULL); }
+	template<typename T> operator T*()	const	{ return (T*)p; }
 };
 
 //-----------------------------------------------------------------------------
@@ -394,47 +388,43 @@ template<typename T> struct TypedResourceData : ResourceData {
 //-----------------------------------------------------------------------------
 
 class _Buffer : public ResourceHandle2 {
+	template<typename T> struct TypedData : ResourceData, block<T,1> {
+		TypedData(ID3D12Resource *res, size_t size, bool read) : ResourceData(res, read), block<T,1>((T*)p, size) {}
+	};
+
 protected:
-	bool		Bind(DXGI_FORMAT format, uint32 stride, uint32 num);
+	bool		Bind(TexFormat format, uint32 stride, uint32 num);
 public:
-	bool		Init(uint32 size, Memory loc);
-	bool		Init(const void *data, uint32 size, Memory loc);
-	void*		Begin()				const;
-	void		End()				const;
+	bool		Init(uint32 size, Memory loc = MEM_DEFAULT);
+	bool		Init(const void *data, uint32 size, Memory loc = MEM_DEFAULT);
 	uint32		Size()				const		{ return get()->GetDesc().Width; }
 	Resource*	operator->()		const		{ return get();	}
 	operator	Resource*()			const		{ return get();	}
-	template<typename T> TypedResourceData<T>	Data()				{ return get()->get(); }
-	template<typename T> TypedResourceData<T>	WriteData()	const	{ return get()->get(); }
+	template<typename T> TypedData<T>	Data(size_t size, bool read) const	{ return {get()->get(), size, read}; }
+	ResourceData	Data(ID3D12GraphicsCommandList *ctx = 0)		const	{ return {get()->get(), true}; }
+	ResourceData	WriteData(ID3D12GraphicsCommandList *ctx = 0)	const	{ return {get()->get(), false}; }
 };
 
-template<typename T> class Buffer : public _Buffer {
-public:
-	Buffer()					{}
-	Buffer(const T *t, uint32 n, Memory loc = MEM_DEFAULT)				{ Init(t, n, loc);	}
-	template<int N> Buffer(const T (&t)[N], Memory loc = MEM_DEFAULT)	{ Init(t, loc);		}
-
-	bool	Init(const T *t, uint32 n, Memory loc = MEM_DEFAULT) {
-		return _Buffer::Init(t, n * sizeof(T), loc) && Bind(GetBufferFormat<T>(), sizeof(T), n);
-	}
-	template<int N> bool	Init(const T (&t)[N], Memory loc = MEM_DEFAULT) {
-		return Init(&t[0], N, loc);
-	}
-	bool	Init(uint32 n, Memory loc = MEM_DEFAULT) {
-		return _Buffer::Init(n * sizeof(T), loc) && Bind(GetBufferFormat<T>(), sizeof(T), n);
-	}
-	TypedResourceData<const T>	Data(ID3D12GraphicsCommandList *ctx = 0)		const	{ return _Buffer::Data<T>(); }
-	TypedResourceData<T>		WriteData(ID3D12GraphicsCommandList *ctx = 0)	const	{ return _Buffer::WriteData<T>(); }
-	T*		Begin(ID3D12GraphicsCommandList *ctx = 0)	const { return (T*)_Buffer::Begin(); }
-	void	End(ID3D12GraphicsCommandList *ctx = 0)		const {	_Buffer::End(); }
-	uint32	Size()										const { return _Buffer::Size() / sizeof(T); }
-};
-
-class DataBuffer : _Buffer {
+class DataBuffer : public _Buffer {
 public:
 	DataBuffer() {}
-	template<typename T> DataBuffer(const Buffer<T> &b)	: _Buffer(b) {}
-	template<typename T> operator Buffer<T>&()	const	{ return *(Buffer<T>*)this; }
+
+	bool	Init(TexFormat format, int width, Memory loc = MEM_DEFAULT) {
+		auto	bpp = ByteSize(format);
+		return _Buffer::Init(width * bpp, loc) && Bind(format, bpp, width);
+	}
+	bool	Init(const void *data, TexFormat format, int width, Memory loc = MEM_DEFAULT) {
+		auto	bpp = ByteSize(format);
+		return _Buffer::Init(data, width * bpp, loc) && Bind(format, bpp, width);
+	}
+	bool	Init(stride_t stride, int width, Memory loc = MEM_DEFAULT) {
+		return _Buffer::Init(width * stride, loc) && Bind(TEXF_UNKNOWN, stride, width);
+	}
+	bool	Init(const void *data, stride_t stride, int width, Memory loc = MEM_DEFAULT) {
+		return _Buffer::Init(data, width * stride, loc) && Bind(TEXF_UNKNOWN, stride, width);
+	}
+	template<typename T> auto	Data(ID3D12GraphicsCommandList *ctx = 0)		const { return _Buffer::Data<const T>(Size(), true); }
+	template<typename T> auto	WriteData(ID3D12GraphicsCommandList *ctx = 0)	const { return _Buffer::Data<T>(Size(), false); }
 };
 
 template<D3D12_RESOURCE_STATES S> class _BufferGPU : public _Buffer {
@@ -467,11 +457,11 @@ public:
 	bool					Init(const T *t, uint32 n, Memory loc = MEM_DEFAULT)	{ return _BufferGPU<S>::Init(t, n * sizeof(T), loc); }
 	template<int N> bool	Init(const T (&t)[N], Memory loc = MEM_DEFAULT)			{ return _BufferGPU<S>::Init(&t, sizeof(t), loc); }
 	bool	Init(uint32 n, Memory loc = MEM_DEFAULT)	{ return _BufferGPU<S>::Init(n * sizeof(T), loc);	}
-	T*		Begin(uint32 n, Memory loc = MEM_DEFAULT)	{ return Init(n, loc) ? Begin() : NULL;	}
-	T*		Begin()							const		{ return (T*)_Buffer::Begin();	}
+//	T*		Begin()							const		{ return (T*)_Buffer::Begin();	}
 	uint32	Count()							const		{ return Size() / sizeof(T); }
-	TypedResourceData<const T>	Data(ID3D12GraphicsCommandList *ctx = 0)		const	{ return _Buffer::Data<T>(); }
-	TypedResourceData<T>		WriteData(ID3D12GraphicsCommandList *ctx = 0)	const	{ return _Buffer::WriteData<T>(); }
+	auto	Data(ID3D12GraphicsCommandList *ctx = 0)		const	{ return _Buffer::Data<const T>(Count(), true); }
+	auto	WriteData(ID3D12GraphicsCommandList *ctx = 0)	const	{ return _Buffer::Data<T>(Count(), false); }
+	auto	Begin(uint32 n, Memory loc = MEM_DEFAULT)	{ Init(n, loc); return WriteData(); }
 };
 
 template<typename T> using VertexBuffer = _TypedGPUBuffer<T, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER>;
@@ -519,8 +509,8 @@ public:
 		return rect(zero, GetSize());
 	}
 
-	template<typename T> TypedResourceData<const T>	Data(ID3D12GraphicsCommandList *ctx = 0)		const	{ return {get()->get(), sub, GetSize(), true}; }
-	template<typename T> TypedResourceData<T>		WriteData(ID3D12GraphicsCommandList *ctx = 0)	const	{ return {get()->get(), sub, GetSize(), false}; }
+	template<typename T> auto	Data(ID3D12GraphicsCommandList *ctx = 0)		const	{ return Temp<const T>(get()->get(), sub, GetSize(), true); }
+	template<typename T> auto	WriteData(ID3D12GraphicsCommandList *ctx = 0)	const	{ return Temp<T>(get()->get(), sub, GetSize(), false); }
 	
 	operator ID3D12Resource*() const { return get()->get(); }
 
@@ -590,8 +580,8 @@ public:
 	operator	Surface()			const		{ return GetSurface(0); }
 	Resource*	operator->()		const		{ return get();	}
 	operator	Resource*()			const		{ return get();	}
-	template<typename T> Temp<const T>	Data(ID3D12GraphicsCommandList *ctx = 0)		const	{ return get()->get(); }
-	template<typename T> Temp<T>		WriteData(ID3D12GraphicsCommandList *ctx = 0)	const	{ return get()->get(); }
+	template<typename T>	auto Data(ID3D12GraphicsCommandList *ctx = 0)		const	{ return  Temp<const T>(get()->get(), Size()); }
+	template<typename T>	auto WriteData(ID3D12GraphicsCommandList *ctx = 0)	const	{ return  Temp<T>(get()->get(), Size()); }
 };
 /*
 class bitmap;
@@ -668,22 +658,32 @@ struct ShaderReg {
 };
 
 class ShaderParameterIterator {
+	typedef dx::DXBC::BlobT<dx::DXBC::ResourceDef>	RDEF;
+	union Binding {
+		RDEF::Binding							rdef;
+		dx::PSV_Resources::ResourceBindInfo<0>	psv;
+	};
+
 	const DX11Shader	&shader;
 	int					stage;
 	int					cbuff_index;
-	dx::RD11			*rdef;
-	range<stride_iterator<dx::RDEF::Variable> >	vars;
-	range<stride_iterator<dx::RDEF::Binding> >	bindings;
+	const dx::RD11*		rdef;
+	range<stride_iterator<RDEF::Variable>>	vars;
+	range<stride_iterator<Binding>>			bindings;
 	const char			*name;
 	const void			*val;
 	D3D11_SAMPLER_DESC	sampler;
 	ShaderReg			reg;
 	fixed_string<64>	temp_name;
 
+	ID3D12ShaderReflection*					refl	= nullptr;
+	ID3D12ShaderReflectionConstantBuffer*	cb;
+
 	int				ArrayCount(const char *begin, const char *&end);
 	void			Next();
 public:
 	ShaderParameterIterator(const DX11Shader &s) : shader(s), stage(-1), vars(empty), bindings(empty) { Next(); }
+	~ShaderParameterIterator();
 	ShaderParameterIterator& Reset();
 	ShaderParameterIterator& operator++()	{ Next(); return *this;		}
 
@@ -745,6 +745,7 @@ struct ConstBuffer {
 		ISO_ASSERT(offset >= 0 && size > 0 && offset + size <= mem.length());
 		if (gpu) {
 			if (memcmp((uint8*)mem + offset, data, size) == 0)
+				//return true;
 				return false;
 			gpu = 0;
 		}
@@ -788,25 +789,10 @@ public:
 		DOUBLES,
 	};
 
-	template<int N> struct Barriers : static_array<D3D12_RESOURCE_BARRIER, N> {
-		inline void			Transition(ID3D12Resource *res, D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES after) {
-			D3D12_RESOURCE_BARRIER	&b	= push_back();
-			b.Type						= D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-			b.Flags						= D3D12_RESOURCE_BARRIER_FLAG_NONE;
-			b.Transition.pResource		= res;
-			b.Transition.StateBefore	= before;
-			b.Transition.StateAfter		= after;
-			b.Transition.Subresource	= D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-		}
-		inline void			UAVBarrier(ID3D12Resource *res) {
-			D3D12_RESOURCE_BARRIER	&b	= push_back();
-			b.Type						= D3D12_RESOURCE_BARRIER_TYPE_UAV;
-			b.Flags						= D3D12_RESOURCE_BARRIER_FLAG_NONE;
-			b.UAV.pResource				= res;
-		}
+	template<int N> struct Barriers : dx12::Barriers<N> {
 		inline void			Transition(ID3D12GraphicsCommandList *cmd_list, Resource *r, D3D12_RESOURCE_STATES s) {
 			static auto reads =
-					D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
+				D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER
 				|	D3D12_RESOURCE_STATE_INDEX_BUFFER
 				|	D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
 				|	D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
@@ -814,10 +800,10 @@ public:
 				|	D3D12_RESOURCE_STATE_COPY_SOURCE
 				|	D3D12_RESOURCE_STATE_DEPTH_READ;
 			static auto read_writes =
-					D3D12_RESOURCE_STATE_UNORDERED_ACCESS
+				D3D12_RESOURCE_STATE_UNORDERED_ACCESS
 				|	D3D12_RESOURCE_STATE_DEPTH_WRITE;
 			static auto writes =
-					D3D12_RESOURCE_STATE_COPY_DEST
+				D3D12_RESOURCE_STATE_COPY_DEST
 				|	D3D12_RESOURCE_STATE_RENDER_TARGET
 				|	D3D12_RESOURCE_STATE_STREAM_OUT;
 
@@ -825,20 +811,15 @@ public:
 				Flush(cmd_list);
 
 			if (r->states != s) {
-				if ((s & reads) && (r->states & s))
-					return;
-				Transition(*r, r->states, s);
+				if (s & reads) {
+					if (r->states & s)
+						return;
+					s |= r->states & reads;
+				}
+				dx12::Barriers<N>::Transition(*r, r->states, s);
 				r->states = s;
 			} else if (s == D3D12_RESOURCE_STATE_UNORDERED_ACCESS) {
-				UAVBarrier(*r);
-			}
-		}
-		void Flush(ID3D12GraphicsCommandList *cmd_list) {
-			if (uint32 n = size()) {
-				for (auto &i : *this)
-					cmd_list->ResourceBarrier(1, &i);
-				//cmd_list->ResourceBarrier(n, *this);
-				clear();
+				dx12::Barriers<N>::UAV(*r);
 			}
 		}
 	};
@@ -869,14 +850,14 @@ public:
 			shader	= 0;
 		}
 	};
-
+#if 0
 	struct CommandContext {
 		com_ptr<ID3D12CommandAllocator>		allocator;
 		com_ptr<ID3D12GraphicsCommandList>	list;
 
 		bool	Init(ID3D12Device *device, D3D12_COMMAND_LIST_TYPE type) {
-			return CheckResult(device->CreateCommandAllocator(type,  IID_PPV_ARGS(&allocator)))
-				&& CheckResult(device->CreateCommandList(0, type, allocator, nullptr, IID_PPV_ARGS(&list)));
+			return CheckResult(device->CreateCommandAllocator(type,  COM_CREATE(&allocator)))
+				&& CheckResult(device->CreateCommandList(0, type, allocator, nullptr, COM_CREATE(&list)));
 		}
 		void	Reset() {
 			allocator->Reset();
@@ -890,19 +871,27 @@ public:
 			queue->ExecuteCommandLists(1, &list0);
 		}
 	};
+#else
+	using CommandContext = dx12::CommandListWithAlloc;
+#endif
 
 	struct CommandContext2 : e_link<CommandContext2>, CommandContext {
 		uint64							fence_value;
 		dynamic_array<ResourceHandle2>	resources;
 
 		CommandContext2(ID3D12Device *device, D3D12_COMMAND_LIST_TYPE type) : fence_value(0) {
-			Init(device, type);
-			Close();
+			CommandContext::init(device, type);
+			list->Close();
 		}
-		void Reset() {
+		void Begin() {
 			resources.clear();
 			fence_value = ~uint64(0);
 			CommandContext::Reset();
+		}
+		void ResetKeepClosed() {
+			resources.clear();
+			fence_value = 0;//~uint64(0);
+			alloc->Reset();
 		}
 		void PendingRelease(ResourceHandle2 &r) {
 			if (r) {
@@ -938,7 +927,7 @@ public:
 			fence.wait(value);
 		}
 		void	Submit(CommandContext2 *cmd) {
-			cmd->Submit(get());
+			cmd->Execute(get());
 			cmd->fence_value = InsertSignal();
 			cmd_contexts.push_back(cmd);
 		}
@@ -946,7 +935,7 @@ public:
 			auto	x = InsertSignal();
 			WaitSignal(x);
 			for (auto &i : cmd_contexts)
-				i.Reset();
+				i.ResetKeepClosed();
 		}
 	};
 
@@ -988,8 +977,9 @@ public:
 	void				BeginScene(GraphicsContext &ctx);
 	void				EndScene(GraphicsContext &ctx);
 
-	ID3D12Resource*		MakeTextureResource(TexFormat format, int width, int height, int depth, int mips, Memory loc, void *data = 0, int pitch = 0);
-	_Texture			MakeTexture(TexFormat format, int width, int height, int depth, int mips, Memory loc, void *data = 0, int pitch = 0);
+	ID3D12Resource*		MakeTextureResource(TexFormat format, int width, int height, int depth, int mips, Memory loc, const void *data = 0, int pitch = 0);
+	Resource			MakeTexture(TexFormat format, int width, int height, int depth, int mips, Memory loc, const void *data = 0, int pitch = 0);
+	Resource			MakeDataBuffer(TexFormat format, uint32 count, stride_t stride, Memory loc, const void *data);
 };
 
 extern Graphics graphics;
@@ -1051,17 +1041,14 @@ public:
 	void				PopMarker()					{ PIXEndEvent(cmd->list); }
 
 	void	Blit(const Surface &dest, const Surface &srce, const point &dest_pos, const rect &srce_rect) {
-		D3D12_BOX	box = {
-			(uint32)srce_rect.a.x,	(uint32)srce_rect.a.y,	0,
-			(uint32)srce_rect.b.x,	(uint32)srce_rect.b.y,	1
-		};
-
-		dx12::TEXTURE_COPY_LOCATION	dest_loc(*dest.get(), dest.CalcSubresource());//0, dx12::SUBRESOURCE_FOOTPRINT(dest.get()->GetDesc(), 0));
-		dx12::TEXTURE_COPY_LOCATION	srce_loc(*srce.get(), srce.CalcSubresource());//0, dx12::SUBRESOURCE_FOOTPRINT(srce.get()->GetDesc(), 0));
-
 		cmd->list->CopyTextureRegion(
-			&dest_loc, dest_pos.x, dest_pos.y, 0,
-			&srce_loc, &box
+			dx12::TEXTURE_COPY_LOCATION(*dest.get(), dest.CalcSubresource()),	//0, dx12::SUBRESOURCE_FOOTPRINT(dest.get()->GetDesc(), 0));
+			dest_pos.x, dest_pos.y, 0,
+			dx12::TEXTURE_COPY_LOCATION(*srce.get(), srce.CalcSubresource()),	//0, dx12::SUBRESOURCE_FOOTPRINT(srce.get()->GetDesc(), 0));
+			dx12::BOX(
+				srce_rect.a.x, srce_rect.a.y,
+				srce_rect.b.x, srce_rect.b.y
+			)
 		);
 	}
 	void	Blit(const Surface &dest, const Surface &srce, const point &dest_pos = zero)	{
@@ -1077,7 +1064,7 @@ public:
 	void	SetShader(const DX12Shader &s);
 	void	SetShaderConstants(ShaderReg reg, const void *values);
 
-	void	Dispatch(uint32 dimx, uint32 dimy, uint32 dimz) {
+	void	Dispatch(uint32 dimx, uint32 dimy = 1, uint32 dimz = 1) {
 		stage.Flush(graphics.device, cmd->list, 1, true);
 		barriers.Flush(cmd->list);
 		cmd->list->Dispatch(dimx, dimy, dimz);
@@ -1114,6 +1101,11 @@ struct PackedGraphicsState {
 			desc.LogicOp				= D3D12_LOGIC_OP(logic_op);
 			desc.RenderTargetWriteMask	= write_mask;
 		}
+		operator dx12::RENDER_TARGET_BLEND_DESC() const {
+			D3D12_RENDER_TARGET_BLEND_DESC	desc;
+			GetDesc(desc);
+			return desc;
+		}
 		void	reset() {
 			src_dst_blends			= Blend(BLEND_ONE, BLEND_INV_SRC_COLOR);
 			src_dst_blends_alpha	= Blend(BLEND_ONE, BLEND_ZERO);
@@ -1140,6 +1132,11 @@ struct PackedGraphicsState {
 			desc.AntialiasedLineEnable	= AntialiasedLineEnable;
 			desc.ForcedSampleCount		= (1 << log2ForcedSampleCount) >> 1;
 			desc.ConservativeRaster		= D3D12_CONSERVATIVE_RASTERIZATION_MODE(ConservativeRaster);
+		}
+		operator dx12::RASTERIZER_DESC() const {
+			dx12::RASTERIZER_DESC	desc;
+			GetDesc(desc);
+			return desc;
 		}
 		void	reset() {
 			FillMode				= FILL_SOLID;
@@ -1170,6 +1167,11 @@ struct PackedGraphicsState {
 			FrontFace.GetDesc(desc.FrontFace);
 			BackFace.GetDesc(desc.BackFace);
 		}
+		operator dx12::DEPTH_STENCIL_DESC() const {
+			D3D12_DEPTH_STENCIL_DESC	desc;
+			GetDesc(desc);
+			return desc;
+		}
 		void	reset() {
 			DepthWriteMask		= true;
 			DepthFunc			= DT_LESS;
@@ -1189,7 +1191,7 @@ struct PackedGraphicsState {
 	uint8						blend_enable, logic_enable, SampleCount;
 	uint8						AlphaToCoverageEnable:1, IndependentBlendEnable:1, IBStripCutValue:2, PrimitiveTopologyType:3;
 	uint8						NumRenderTargets;
-	uint8						RTVFormats[8], DSVFormat;
+	compact<DXGI_FORMAT,8>		RTVFormats[8], DSVFormat;
 
 	void	reset() {
 		clear(*this);
@@ -1246,6 +1248,24 @@ struct PackedGraphicsState {
 		desc.SampleDesc.Count		= SampleCount;
 		desc.SampleDesc.Quality		= SampleQuality;
 		desc.SampleMask				= SampleMask;
+	}
+	operator dx12::RT_FORMATS() const {
+		D3D12_RT_FORMAT_ARRAY	a = {};
+		for (int i = 0; i < NumRenderTargets; i++)
+			a.RTFormats[i] = RTVFormats[i];
+		a.NumRenderTargets = NumRenderTargets;
+		return a;
+	}
+	operator dx12::BLEND_DESC() const {
+		D3D12_BLEND_DESC	desc = {};
+		desc.AlphaToCoverageEnable	= AlphaToCoverageEnable;
+		desc.IndependentBlendEnable	= IndependentBlendEnable;
+		for (int i = 0; i < NumRenderTargets; i++)
+			blend[i].GetDesc(desc.RenderTarget[i]);
+		return desc;
+	}
+	operator DXGI_SAMPLE_DESC() const {
+		return {SampleCount, SampleQuality };
 	}
 };
 
@@ -1391,7 +1411,11 @@ public:
 	void				ClearZ();
 	void				SetMSAA(MSAA _msaa)	{}
 
-	inline void	Transition(Resource *r, D3D12_RESOURCE_STATES s)	{
+	bool				Enabled(ShaderStage stage) const {
+		return !!stages[stage].shader;
+	}
+
+	inline void	Transition(Resource *r, D3D12_RESOURCE_STATES s) {
 		barriers.Transition(cmd->list, r, s);
 	}
 	inline void	 FlushTransitions() {
@@ -1399,20 +1423,17 @@ public:
 	}
 
 	void	Blit(const Surface &dest, const Surface &srce, const point &dest_pos, const rect &srce_rect) {
-		D3D12_BOX	box = {
-			(uint32)srce_rect.a.x,	(uint32)srce_rect.a.y,	0,
-			(uint32)srce_rect.b.x,	(uint32)srce_rect.b.y,	1
-		};
-
-		dx12::TEXTURE_COPY_LOCATION	dest_loc(*dest.get(), dest.CalcSubresource());//0, dx12::SUBRESOURCE_FOOTPRINT(dest.get()->GetDesc(), 0));
-		dx12::TEXTURE_COPY_LOCATION	srce_loc(*srce.get(), srce.CalcSubresource());//0, dx12::SUBRESOURCE_FOOTPRINT(srce.get()->GetDesc(), 0));
-
 		Transition(srce.get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
 		Transition(dest.get(), D3D12_RESOURCE_STATE_COPY_DEST);
 		FlushTransitions();
 		cmd->list->CopyTextureRegion(
-           &dest_loc, dest_pos.x, dest_pos.y, 0,
-           &srce_loc, &box
+			dx12::TEXTURE_COPY_LOCATION(*dest.get(), dest.CalcSubresource()),	//0, dx12::SUBRESOURCE_FOOTPRINT(dest.get()->GetDesc(), 0));
+			dest_pos.x, dest_pos.y, 0,
+			dx12::TEXTURE_COPY_LOCATION(*srce.get(), srce.CalcSubresource()),	//0, dx12::SUBRESOURCE_FOOTPRINT(srce.get()->GetDesc(), 0));
+			dx12::BOX(
+				srce_rect.a.x, srce_rect.a.y,
+				srce_rect.b.x, srce_rect.b.y
+			)
 		);
 	}
 	void	Blit(const Surface &dest, const Surface &srce, const point &dest_pos = zero)	{
@@ -1428,12 +1449,15 @@ public:
 	Surface	GetRenderTarget(int i = 0);
 	Surface	GetZBuffer();
 
-	void	SetBuffer(ShaderStage stage,	Resource *r, int i = 0)				{ SetSRV(stage, r, i); }
+	void	SetBuffer(ShaderStage stage,	Resource *r, int i = 0)				{ SetSRV0(stage, r, i); }
 	void	SetTexture(ShaderStage stage,	Resource *r, int i = 0)				{ SetSRV(stage, r, i); }
 	void	SetRWBuffer(ShaderStage stage,	Resource *r, int i = 0)				{ SetUAV(stage, r, i); }
 	void	SetRWTexture(ShaderStage stage,	Resource *r, int i = 0)				{ SetUAV(stage, r, i); }
 	void	SetTexture(Texture &tex, int i = 0)									{ SetTexture(SS_PIXEL, tex, i); }
 	void	SetConstBuffer(ShaderStage stage, ConstBuffer &buffer, int i = 0)	{ stages[stage].SetCB(&buffer, i); }
+
+	void	SetBuffer(ShaderStage stage,	Resource *r, TexFormat format, int i = 0)	{ SetSRV0(stage, r, i); }
+	void	SetRWBuffer(ShaderStage stage,	Resource *r, TexFormat format, int i = 0)	{ SetUAV(stage, r, i); }
 
 	void	MapStreamOut(uint8 b0, uint8 b1, uint8 b2, uint8 b3);
 	void	SetStreamOut(int i, void *start, uint32 size, uint32 stride);
@@ -1483,7 +1507,8 @@ public:
 		DrawIndexedVertices(prim, min_index, num_verts, start, Prim2Verts(prim, count));
 	}
 
-	void	Dispatch(uint32 dimx, uint32 dimy, uint32 dimz);
+	void	Dispatch(uint32 dimx, uint32 dimy = 1, uint32 dimz = 1);
+	void	DrawMesh(uint32 dimx, uint32 dimy = 1, uint32 dimz = 1);
 
 	// shaders
 	void	SetShader(const DX12Shader &s);
@@ -1607,6 +1632,7 @@ class _ImmediateStream {
 protected:
 #if 1
 	static	_VertexBuffer	vb;
+	static	void*			vbp;
 	static	int				vbi, vbsize;
 #endif
 	GraphicsContext &ctx;
@@ -1616,7 +1642,6 @@ protected:
 
 	_ImmediateStream(GraphicsContext &ctx, PrimType prim, int count, uint32 vert_size);
 	void			Draw();
-
 };
 
 template<class T> class ImmediateStream : _ImmediateStream {

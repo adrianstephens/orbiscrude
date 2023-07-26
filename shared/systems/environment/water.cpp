@@ -19,7 +19,7 @@ struct Water : public DeleteOnDestroy<Water> {
 
 	VertexBuffer<float2p>	vb;
 	IndexBuffer<uint16>		ib;
-	Buffer<float4>			waves;
+	DataBufferT<float4>		waves;
 
 	// RENDERING OPTIONS
 	float	gridSize, nyquistMin, nyquistMax;
@@ -61,8 +61,8 @@ Texture		*Water::bottom_tex;
 void Water::InitStatic() {
 	data			= ISO::root("data")["water_data"];
 	ocean_pass		= *data["shader"][0];
-	water_tex		= data["texture"][0];
-	bottom_tex		= data["texture"][2];
+	water_tex		= (Texture*)(void*)data["texture"][0];
+	bottom_tex		= (Texture*)(void*)data["texture"][2];
 
 	nbWaves			= 60;
 	//lambdaMin		= 0.1f;//0.02f;
@@ -226,7 +226,7 @@ void Water::operator()(RenderEvent *re, uint32 extra) {
 	float		heightOffset	= -meanHeight;
 	float		time			= re->consts.time;
 	float		fnbWaves		= nbWaves;
-	DataBuffer	buffer(waves);
+//	DataBuffer	buffer(waves);
 
 	float4x4	screenToCamera	= re->consts.iproj;
 //	float4x4	screenToCamera	= re->view * fr2b * inverse(hardware_fix(identity));
@@ -242,7 +242,7 @@ void Water::operator()(RenderEvent *re, uint32 extra) {
 		{"nyquistMin",		&nyquistMin		},
 		{"nyquistMax",		&nyquistMax		},
 		{"seaColor",		&seaColor		},
-		{"waves",			&buffer			},
+		{"waves",			&waves			},
 		{"water_tex",		water_tex		},
 		{"bottom_tex",		bottom_tex		},
 		{"time",			&time			},

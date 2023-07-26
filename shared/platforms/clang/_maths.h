@@ -16,7 +16,7 @@ static const double	ln2 = 0.693147180559945309417232121458;
 // doubles
 //-------------------------------------
 
-//force_inline double	abs			(double a)				{ return __builtin_fabs(a); }
+force_inline double	abs			(double a)				{ return __builtin_fabs(a); }
 force_inline double	sqrt		(double a)				{ return __builtin_sqrt(a); }
 force_inline double	floor		(double a)				{ return __builtin_floor(a); }
 force_inline double	ceil		(double a)				{ return __builtin_ceil(a); }
@@ -56,7 +56,7 @@ force_inline double	ln			(double f)				{ return log(f); }
 // floats
 //-------------------------------------
 
-//force_inline float	abs			(float a)				{ return __builtin_fabsf(a); }
+force_inline float	abs			(float a)				{ return __builtin_fabsf(a); }
 force_inline float	sqrt		(float a)				{ return __builtin_sqrtf(a); }
 force_inline float	floor		(float a)				{ return __builtin_floorf(a); }
 force_inline float	ceil		(float a)				{ return __builtin_ceilf(a); }
@@ -83,8 +83,8 @@ force_inline float	rsqrt		(float f)				{ return 1 / sqrt(f);		}
 
 force_inline float	trunc		(float f)				{ return iorf(f).trunc().f(); }
 force_inline float	round		(float f)				{ return iorf(f).round_ne().f(); }
-//force_inline float)trunc		(float f)				{ return copysign(floor(abs(f)), f);		}
-//force_inline float)round		(float f)				{ return copysign(floor(abs(f) + 0.5f), f);	}
+//force_inline float trunc		(float f)				{ return copysign(floor(abs(f)), f);		}
+//force_inline float round		(float f)				{ return copysign(floor(abs(f) + 0.5f), f);	}
 force_inline float	frac		(float f)				{ return f - trunc(f);		}
 
 force_inline void	sincos(float x, float *s, float *c)	{ *s = sin(x); *c = cos(x); }

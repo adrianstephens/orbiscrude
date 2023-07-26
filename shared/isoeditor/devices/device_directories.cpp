@@ -19,7 +19,7 @@ class BusyDialog : public win::Dialog<BusyDialog> {
 	time	start, last;
 
 public:
-	LRESULT	Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+	LRESULT	Proc(win::MSG_ID message, WPARAM wParam, LPARAM lParam) {
 		switch (message) {
 			case WM_INITDIALOG:
 				break;
@@ -123,7 +123,7 @@ count_string no_trailing_slash(const char *v) {
 
 HANDLE	OpenVolume(const char *vol) {
 	return CreateFileA(
-		buffer_accum<256>("\\\\.\\") << no_trailing_slash(vol)
+		(buffer_accum<256>("\\\\.\\") << no_trailing_slash(vol)).term()
 		, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE
 		, NULL
 		, OPEN_EXISTING
@@ -379,7 +379,7 @@ struct NTFSJournalDevice : app::DeviceT<NTFSJournalDevice> {
 	struct Volume : app::DeviceCreateT<Volume> {
 		string name;
 		ISO_ptr<void>	operator()(const win::Control &main) {
-			Win32Handle	h = CreateFileA(buffer_accum<256>("\\\\.\\") << name.slice(0, -1), FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
+			Win32Handle	h = CreateFileA((buffer_accum<256>("\\\\.\\") << name.slice(0, -1)).term(), FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL);
 			if (!h)
 				return ISO_NULL;
 			return ISO_ptr<NTFSJournal>(str(buffer_accum<256>("NTFS Journal for ") << name), h);
@@ -757,7 +757,7 @@ struct FilesDevice : app::DeviceT<FilesDevice> {
 
 	static Dir	*GetDir(Dir *d, const char *fn, busy_update update) {
 		for (directory_iterator i(filename(fn).add_dir("*.*")); i; ++i) {
-			auto	fn2 = filename(fn).add_dir(i);
+			auto	fn2 = filename(fn).add_dir((const char*)i);
 			if (i.is_dir()) {
 				if (i[0] != '.')
 					d->subdirs.push_back(GetDir(new Dir(filename(fn2).name_ext_ptr()), fn2, update));
@@ -828,7 +828,8 @@ struct FilesDevice : app::DeviceT<FilesDevice> {
 					if (rec->magic == NTFS::MFT_RECORD::FILE && rec->flags.test(NTFS::MFT_RECORD::IN_USE) && rec->PatchUSA(mft_record_size)) {
 						NTFS::ATTRIBUTE<NTFS::AT_STANDARD_INFORMATION>	*si = 0;
 						NTFS::ATTRIBUTE<NTFS::AT_FILENAME>				*fn	= 0;
-						uint64						filesize = 0;
+						uint64	filesize = 0;
+
 						for (auto i = rec->begin(), e = rec->end(); i != e && i->type != NTFS::AT_UNUSED && i->type != NTFS::AT_END; ++i) {
 							switch (i->type) {
 								case NTFS::AT_STANDARD_INFORMATION:
@@ -845,7 +846,8 @@ struct FilesDevice : app::DeviceT<FilesDevice> {
 								case NTFS::AT_INDEX_ROOT:
 								case NTFS::AT_DATA:
 									filesize = i->is_non_resident
-										? UsedClusters(i->mapping_pairs()) * cluster_size
+										//? UsedClusters(i->mapping_pairs()) * cluster_size
+										? i->non_resident.initialized_size
 										: i->resident.value_length;
 									break;
 
@@ -1098,7 +1100,7 @@ struct NTFSVolumeCopier {
 		uint32		attributes;
 		Entry() : parent(0) {}
 		Entry(const NTFSVolume::element &e)
-			: name(str(e.fn->filename, e.fn->filename_length))
+			: name(e.fn->filename, e.fn->filename_length)
 			, parent(e.fn->parent_directory)
 			, size(e.fn->data_size)
 			, creation_time(e.fn->creation_time)
@@ -1146,7 +1148,7 @@ struct NTFSVolumeCopier {
 	}
 
 	NTFSVolumeCopier(const char *from) {
-		Win32Handle	fh = CreateFileA(buffer_accum<256>("\\\\.\\") << from
+		Win32Handle	fh = CreateFileA((buffer_accum<256>("\\\\.\\") << from).term()
 			, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE
 			, NULL
 			, OPEN_EXISTING

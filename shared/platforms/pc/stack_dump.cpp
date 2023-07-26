@@ -152,7 +152,7 @@ ProcessSymbols::PDB2::PDB2(istream_ref file) {
 
 		// change file offsets to point to global pdb names
 
-		if (auto file_stream = GetFirstSubStream<CV::DEBUG_S_FILECHKSMS>(mod.SubStreams())) {
+		if (auto file_stream = CV::GetFirstSubStream<CV::DEBUG_S_FILECHKSMS>(mod.SubStreams())) {
 			for (auto &substream : mod.SubStreams()) {
 				switch (substream.type) {
 					case CV::DEBUG_S_LINES: {
@@ -315,7 +315,7 @@ ProcessSymbols::ObjSymbols ProcessSymbols::PDB2::GetSymbols(const SC2 &sc, PDB_t
 		coff::RAW_COFF	raw(obj.obj);
 		auto	sect = raw.Section(sc.isect_coff);
 		if (str(sect.Name) == ".debug$S")
-			return GetFirstSubStream<CV::DEBUG_S_SYMBOLS>(make_next_range<const CV::SubSection>(raw.GetMem(sect) + 4))->entries();
+			return CV::GetFirstSubStream<CV::DEBUG_S_SYMBOLS>(make_next_range<const CV::SubSection>(raw.GetMem(sect) + 4))->entries();
 	}
 
 	types = this;
@@ -389,7 +389,7 @@ void ProcessSymbols::ModuleInfo::SetDebug(const const_memory_block &data, const 
 //-----------------------------------------------------------------------------
 
 ProcessSymbols::ModuleInfo *ProcessSymbols::AddModule(const char *fn, uint64 base, uint64 end, bool mapped, const get_memory_t &mem) {
-	auto	&mod	= modules.put({base, end}, fn);
+	auto	&mod	= modules.emplace({base, end}, fn);
 	mod.base		= base;
 
 	malloc_block	data(0x1000);
@@ -419,10 +419,10 @@ ProcessSymbols::ModuleInfo* ProcessSymbols::AddModule(HANDLE file, uint64 base) 
 	RawModule	raw(mf);
 	uint64		end		= raw.calc_end();
 
-	filename	fn;
+	char	fn[512];
 	GetMappedFileName(GetCurrentProcess(), mf, fn, sizeof(fn));
 
-	auto	&mod	= modules.put(interval<uint64>(base, base + end), fn.fix().begin());
+	auto	&mod	= modules.emplace(interval<uint64>(base, base + end), filename::cleaned(fn));
 	mod.base		= base;
 
 	if (auto p = raw.SectionByName(".pdata"))
@@ -444,7 +444,7 @@ ProcessSymbols::PDB2 *ProcessSymbols::GetPdb(ModuleInfo *mod) const {
 		return nullptr;
 
 	if (!mod->pdb && !mod->cantload) {
-		if (!exists(mod->fn_pdb)) {
+		if (!is_file(mod->fn_pdb)) {
 			bool	got = false;
 			for (auto path : parts<';'>(search_path)) {
 				if (path.begins("srv*")) {
@@ -480,10 +480,13 @@ ProcessSymbols::PDB2 *ProcessSymbols::GetPdb(ModuleInfo *mod) const {
 						break;
 					}
 					if (!got) {
-						for (auto d = directory_recurse(path, mod->fn_pdb.name_ext()); d; ++d) {
-							mod->fn_pdb	= d;
-							got		= true;
-							break;
+						filename	pattern(mod->fn_pdb.name_ext());
+						for (auto d = directory_recurse(path, pattern); d; ++d) {
+							if (is_file((filename)d)) {
+								mod->fn_pdb	= d;
+								got		= true;
+								break;
+							}
 						}
 					}
 				}
@@ -496,13 +499,13 @@ ProcessSymbols::PDB2 *ProcessSymbols::GetPdb(ModuleInfo *mod) const {
 			}
 		}
 	
-		ISO_TRACEF("Loading symbols ") << mod->fn_pdb << '\n';
+		ISO_OUTPUTF("Loading symbols ") << mod->fn_pdb << '\n';
 		mod->pdb = new ProcessSymbols::PDB2(FileInput(mod->fn_pdb));
 	}
 	return mod->pdb;
 }
 
-void *ProcessSymbols::GetFunctionTableEntry(uint64 addr) const {
+void *ProcessSymbols::GetFunctionTableEntry(uint64 addr) {
 	if (auto mod = GetModule(addr))
 		return mod->GetFunctionTableEntry(uint32(addr - mod->base));
 	return 0;
@@ -610,7 +613,7 @@ void ProcessSymbols::SetOptions(uint32 _options, const char *_search_path)  {
 //	CallStackDumper
 //-----------------------------------------------------------------------------
 
-CallStackFrame::CallStackFrame(uint64 pc, ProcessSymbols &syms) : pc(pc), line(0), symbol_displacement(0), line_displacement(0) {
+CallStackFrame::CallStackFrame(uint64 pc, ProcessSymbols &syms) : pc(pc), line_displacement(0), symbol_displacement(0), line(0) {
 	const char	*src_fn, *mod_fn;
 	if (auto sym = syms.SymFromAddr(pc, &symbol_displacement, &line, &src_fn, &mod_fn)) {
 		symbol	= demangle_vc(sym->name);
@@ -666,7 +669,7 @@ range<virtual_iterator<const CallStackDumper::Module>> CallStackDumper::GetModul
 void CallStackDumper::Dump(const uint64 *addr, uint32 num_frames) {
 	buffer_accum<512>	ba;
 	while (num_frames-- && *addr)
-		ISO_OUTPUT(GetFrame(*addr++).Dump(ba.reset() << "    ") << '\n');
+		ISO_OUTPUT((GetFrame(*addr++).Dump(ba.reset() << "    ") << '\n').term());
 }
 
 

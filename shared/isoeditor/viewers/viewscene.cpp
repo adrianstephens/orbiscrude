@@ -17,9 +17,9 @@
 
 using namespace app;
 
-void DrawTextBox(GraphicsContext &ctx, const point &pos, const char *text) {
-	static iso::Font *font	= ISO::root("data")["viewer_font"];
-	static pass *font_dist	= *ISO::root("data")["default"]["font_dist_outline"][0];
+void DrawTextBox(GraphicsContext &ctx, const point &pos, string_ref text) {
+	static iso::TexFont *font	= ISO::root("data")["viewer_font"];
+	static pass *font_dist		= *ISO::root("data")["default"]["font_dist_outline"][0];
 
 	FontPrinter	fontprinter(ctx, font);
 	auto	ext = fontprinter.CalcRect(text);
@@ -109,7 +109,7 @@ class ViewScene : public aligned<Window<ViewScene>, 128>, public WindowTimer<Vie
 	}
 
 	float	GetMouseZ(const point &pt, int &i) const {
-		ctx.Wait(fence);
+		fence.Wait();
 		auto	over	= cpu_depth.Data()[pt.y][pt.x];
 //		if ((i = over >> 24) && (over << 8))
 //			return float(over << 8) / exp2(32.f);
@@ -159,7 +159,7 @@ class ViewScene : public aligned<Window<ViewScene>, 128>, public WindowTimer<Vie
 			ISO_ptr<void>	&p	= *(ISO_ptr<void>*)*(ISO::Browser*)medium.hGlobal;
 			scene->root->children.Append(p);
 
-			if (CheckHasExternals(p, ISO::DUPF_DEEP)) {
+			if (CheckHasExternals(p, ISO::TRAV_DEEP)) {
 				ISO::Type	*type = ISO::getdef<Model3>();
 				p = (save(type->flags, type->flags & ~ISO::TypeUser::CHANGE), FileHandler::ExpandExternals(p));
 			}
@@ -179,7 +179,7 @@ class ViewScene : public aligned<Window<ViewScene>, 128>, public WindowTimer<Vie
 	}
 public:
 
-	LRESULT Proc(UINT message, WPARAM wParam, LPARAM lParam);
+	LRESULT Proc(MSG_ID message, WPARAM wParam, LPARAM lParam);
 	ViewScene(MainWindow &_main, const WindowPos &wpos, const ISO_ptr_machine<void> p);
 };
 
@@ -212,8 +212,8 @@ ViewScene::ViewScene(MainWindow &_main, const WindowPos &wpos, ISO_ptr_machine<v
 	view_loc.trans4	= focus_pos - ~view_loc.rot * float3{0, move_scale, 0};
 	target_loc		= view_loc;
 
-	world.AddEntity("ambient", Light(ent::Light2::AMBIENT, colour(0.25f,0.25f,0.25f), 1000, 0));
-	world.AddEntity("directional", Light(ent::Light2::DIRECTIONAL | ent::Light2::SHADOW, colour(1,1,1), 1000, 0));
+	world.AddEntityByID("ambient", Light(ent::Light2::AMBIENT, colour(0.25f,0.25f,0.25f), 1000, 0));
+	world.AddEntityByID("directional", Light(ent::Light2::DIRECTIONAL | ent::Light2::SHADOW, colour(1,1,1), 1000, 0));
 
 	Create(wpos, get_id(p), CHILD | VISIBLE, CLIENTEDGE);
 	RegisterDragDrop(*this, this);
@@ -221,7 +221,7 @@ ViewScene::ViewScene(MainWindow &_main, const WindowPos &wpos, ISO_ptr_machine<v
 	Timer::Start(0.01f);
 }
 
-LRESULT ViewScene::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+LRESULT ViewScene::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 		case WM_SIZE: {
 			Point	size	= Point(lParam);
@@ -347,7 +347,7 @@ LRESULT ViewScene::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 				light.range		= 1000;
 				light.spread	= 0;
 				light.matrix	= (float3x4)float3x3(lightdir);
-				world.SetItem("directional", &light);
+				world.SetItem("directional"_crc32, &light);
 				//light_object.SetMatrix(float3x3(light));
 
 			} else {
@@ -434,7 +434,7 @@ void ViewScene::DrawScene(GraphicsContext &ctx) {
 	ctx.SetZBuffer(depth);
 
 	colour	bgcol(0.5f,0.5f,0.5f);
-	if (auto *bg = world.GetItem<Light>("background")) {
+	if (auto *bg = world.GetItem<Light>("background"_crc32)) {
 		bgcol = bg->col;
 	}
 
@@ -490,8 +490,8 @@ void ViewScene::DrawScene(GraphicsContext &ctx) {
 		DrawPlane(&render_event, z_axis);
 	}
 
-	*GetShaderParameter("shadowlight_dir") = shader_consts.iview * float3{0, 0, -1};
-	*GetShaderParameter("shadowlight_col") = colour(1, 1, 1);
+	*GetShaderParameter("shadowlight_dir"_crc32) = shader_consts.iview * float3{0, 0, -1};
+	*GetShaderParameter("shadowlight_col"_crc32) = colour(1, 1, 1);
 
 	if (mouse_obj) {// && (GetAsyncKeyState(VK_SHIFT) & 0x8000)) {
 		ctx.SetDepthTestEnable(false);

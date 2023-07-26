@@ -502,7 +502,7 @@ public:
 					ba << ']' << onlyif(op.wb, '!');
 			}
 
-			state->lines.push_back((const char*)ba);
+			state->lines.push_back(ba);
 		}
 		return state;
 	}
@@ -980,7 +980,7 @@ public:
 					put_shift(ba, op.shift, SHIFTOP(op.shiftop));
 			}
 
-			state->lines.push_back((const char*)ba);
+			state->lines.push_back(ba);
 		}
 		return state;
 	}
@@ -1636,7 +1636,7 @@ public:
 				}
 			}
 
-			state->lines.push_back((const char*)ba);
+			state->lines.push_back(ba);
 		}
 		return state;
 	}

@@ -62,7 +62,6 @@ struct ISO_rgba {
 		return ISO_rgba(clamp((298 * y + 409 * v + 128) >> 8, 0, 255), clamp((298 * y - 100 * u - 208 * v + 128) >> 8, 0, 255), clamp((298 * y + 516 * u + 128) >> 8, 0, 255));
 	}
 
-
 	ISO_rgba() {}
 	ISO_rgba(int r, int g, int b, int a = 255)	: r(r), g(g), b(b), a(a) {}
 	ISO_rgba(int i)								: r(i), g(i), b(i), a(i) {}
@@ -139,6 +138,7 @@ struct ISO_rgba {
 	friend ISO_rgba PreMultipliedBlend(const ISO_rgba& a, const ISO_rgba& b)	{ return b.a ? ISO_rgba((a.r * (255 - b.a)) / 255 + b.r, (a.g * (255 - b.a)) / 255 + b.g, (a.b * (255 - b.a)) / 255 + b.b, max(a.a, b.a)) : a; }
 	friend void assign(ISO_rgba& p, const HDRpixel& v)							{ p = v; }
 	friend void assign(HDRpixel& p, const ISO_rgba& v)							{ p = v; }
+	template<typename P> friend enable_if_t<num_elements_v<P> == 4> assign(ISO_rgba& v, const P& p) { v = HDRpixel(to<float>(p)); }
 
 	friend ISO_rgba InterpCol(const ISO_rgba &ca, const ISO_rgba &cb, int sa, int sb) {
 		int	t	= sa + sb;
@@ -302,7 +302,9 @@ template<typename T, int N> void _GetMip(block<T, N>& b, int n) {
 	b.cut(0, max(b.size() >> n, 1));
 	_GetMip((block<T, N - 1>&)b, n);
 }
-template<typename T> void				_GetMip(block<T, 1>& b, int n) { b.cut((((b.size() << n) - b.size()) >> n), max(b.size() >> (n + 1), 1)); }
+template<typename T> void _GetMip(block<T, 1>& b, int n) {
+	b.cut((((b.size() << n) - b.size()) >> n), max(b.size() >> (n + 1), 1));
+}
 template<typename T, int N> block<T, N> GetMip(const block<T, N>& b, int n) {
 	block<T, N> b2 = b;
 	_GetMip(b2, n);
@@ -326,7 +328,9 @@ template<typename T> void _GetMip2(block<T, 2>& b, int n1, int n2) {
 		_GetMip2((block<T, 1>&)b, n1, n2);
 	}
 }
-template<typename T> void				_GetMip2(block<T, 1>& b, int n1, int n2) { b.cut((((b.size() << n1) - b.size()) >> n1), max(b.size() >> (n1 + n2 + 1), 1)); }
+template<typename T> void _GetMip2(block<T, 1>& b, int n1, int n2) {
+	b.cut((((b.size() << n1) - b.size()) >> n1), max(b.size() >> (n1 + n2 + 1), 1));
+}
 template<typename T, int N> block<T, N> GetMip2(const block<T, N>& b, int n1, int n2) {
 	block<T, N> b2 = b;
 	_GetMip2(b2, n1, n2);
@@ -352,19 +356,19 @@ enum {
 	BMF_NOMIP		 = 1 << 6,
 
 	// actually in mips
-	BMF_SCANNED = 1 << 8,
-	BMF_ALPHA   = 1 << 9,
-	BMF_GREY	= 1 << 10,
+	BMF_SCANNED		= 1 << 8,
+	BMF_ALPHA		= 1 << 9,
+	BMF_GREY		= 1 << 10,
 
 	// passed in to Create
-	BMF_MIPS  = 1 << 14,
-	BMF_CLEAR = 1 << 15,
+	BMF_MIPS		= 1 << 14,
+	BMF_CLEAR		= 1 << 15,
 
 	// stored in mips
-	BMF2_MIPMASK = 15,
-	BMF2_SCANNED = 1 << 4,
-	BMF2_ALPHA   = 1 << 5,
-	BMF2_GREY	= 1 << 6,
+	BMF2_MIPMASK	= 15,
+	BMF2_SCANNED	= 1 << 4,
+	BMF2_ALPHA		= 1 << 5,
+	BMF2_GREY		= 1 << 6,
 };
 
 enum TextureType {
@@ -387,6 +391,8 @@ template<int B> class _bitmap {
 	uint8						flags;
 	mutable uint8				mips;
 	ISO_openarray<ISO_rgba, B>	clut, texels;
+	
+	void		_Scan() const;
 
 public:
 	_bitmap() : width(0), height(0), depth(0), flags(0), mips(0) {}
@@ -394,21 +400,11 @@ public:
 	template<int B2> _bitmap(const _bitmap<B2>& b)	: width(b.width), height(b.height), depth(b.depth), flags(b.flags), mips(b.mips), clut(b.clut), texels(b.texels) {}
 	template<int B2> _bitmap(_bitmap<B2>&& b)		: width(b.width), height(b.height), depth(b.depth), flags(b.flags), mips(b.mips), clut(move(b.clut)), texels(move(b.texels)) {}
 
-	ISO_rgba*	Create(int _width, int _height, uint32 _flags = 0, int _depth = 1);
+	ISO_rgba*		Create(int _width, int _height, uint32 _flags = 0, int _depth = 1);
 	block<ISO_rgba, 1>	CreateClut(uint32 _clutsize) { return {clut.Create(_clutsize).begin(), _clutsize}; }
-	void		SetDepth(int _depth) {
-		 height = Height() / _depth;
-		 depth  = _depth;
-	}
-	void		SetMips(int _mips) {
-		mips = clamp(_mips - 1, 0, BMF2_MIPMASK);
-	}
-	void		_Scan() const;
-	int			Scan() const {
-		 if (!(mips & BMF2_SCANNED))
-			 _Scan();
-		 return Flags();
-	}
+	void			SetDepth(int _depth)	{ height = Height() / _depth; depth  = _depth; }
+	void			SetMips(int _mips)		{ mips = clamp(_mips - 1, 0, BMF2_MIPMASK);	}
+	int				Scan()			const	{ if (!(mips & BMF2_SCANNED)) _Scan(); return Flags(); }
 	int				Flags()			const	{ return flags | ((mips & ~BMF2_MIPMASK) << 4); }
 	void			SetFlags(uint32 i)		{ flags |= i; }
 	void			ClearFlags(uint32 i)	{ flags &= ~i; }
@@ -443,15 +439,15 @@ public:
 	}
 	iso_export void Crop(int x, int y, int w, int h, ISO_rgba c = ISO_rgba(0, 0, 0));
 
-	ISO_rgba GetTexel(				const ISO_rgba* p) const { return clut ? (flags & BMF_SEPALPHA ? ISO_rgba(clut[p->r], p->a) : clut[p->r]) : *p; }
-	ISO_rgba GetTexel(int x, int y)	const { return GetTexel(ScanLine(y) + x); }
+	ISO_rgba GetTexel(const ISO_rgba* p)	const { return clut ? (flags & BMF_SEPALPHA ? ISO_rgba(clut[p->r], p->a) : clut[p->r]) : *p; }
+	ISO_rgba GetTexel(int x, int y)			const { return GetTexel(ScanLine(y) + x); }
 
-	operator block<ISO_rgba, 2>()	const { return make_block(unconst(texels.begin()), width, Height()); }
-	block<ISO_rgba, 2> All()		const { return *this; }
-	block<ISO_rgba, 2> Mip(int n)	const { return GetMip(All(), n); }
-	block<ISO_rgba, 2> Base()		const { return Mips() ? Mip(0) : All(); }
-	block<ISO_rgba, 2> Slice(int n)	const { return Block(0, BaseHeight() * n, width, BaseHeight()); }
-	block<ISO_rgba, 3> All3D()		const { return make_block(unconst(texels.begin()), width, BaseHeight(), depth); }
+	operator block<ISO_rgba, 2>()			const { return make_block(unconst(texels.begin()), width, Height()); }
+	block<ISO_rgba, 2> All()				const { return *this; }
+	block<ISO_rgba, 2> Mip(int n)			const { return GetMip(All(), n); }
+	block<ISO_rgba, 2> Base()				const { return Mips() ? Mip(0) : All(); }
+	block<ISO_rgba, 2> Slice(int n)			const { return Block(0, BaseHeight() * n, width, BaseHeight()); }
+	block<ISO_rgba, 3> All3D()				const { return make_block(unconst(texels.begin()), width, BaseHeight(), depth); }
 	block<ISO_rgba, 2> Block(int x, int y, int w, int h) const {
 		return All().template sub<1>(x, w).template sub<2>(y, h);
 	}
@@ -472,12 +468,14 @@ public:
 };
 
 template<int B> ISO_rgba* _bitmap<B>::Create(int _width, int _height, uint32 _flags, int _depth) {
+	uint64	total	= _width * _height;
 	if (_flags & BMF_MIPS) {
 		mips = iso::MaxMips(_width, _height);
 		_width *= 2;
 	} else {
 		mips = 0;
 	}
+
 	width  = _width;
 	height = _height / _depth;
 	depth  = _depth;
@@ -491,7 +489,9 @@ template<int B> ISO_rgba* _bitmap<B>::Create(int _width, int _height, uint32 _fl
 
 template<int B> void _bitmap<B>::_Scan() const {
 	uint16 f = BMF_GREY;
-	if (int m = Mips()) {
+	if (clut) {
+		f = iso::Scan(ClutBlock(), f);
+	} else if (int m = Mips()) {
 		for (int i = 0; i < m; i++)
 			f = iso::Scan(Mip(i), f);
 	} else {
@@ -687,6 +687,7 @@ struct channels {
 	constexpr channels(uint32 i = 0) : i(i) {}
 	constexpr channels(uint8 r, uint8 g, uint8 b, uint8 a, uint32 f = 0) : i(r | (g << 8) | (b << 16) | (a << 24) | f) {}
 	constexpr operator uint32() const { return i; }
+	constexpr int	bitdepth(int i) const { return array[i] & SIZE_MASK; }
 };
 
 struct vbitmap_format : channels {
@@ -703,8 +704,11 @@ struct vbitmap_format : channels {
 	template<typename T> struct get_s;
 	using channels::channels;
 
-	uint8  channel_bits(int i) const { return array[i] & SIZE_MASK; }
-	bool   is_compressed() const { return !!(i & ALL_COMP); }
+	constexpr uint8	channel_bits(int i)	const { return array[i] & SIZE_MASK; }
+	constexpr uint8	max_channel_bits()	const { return max(channel_bits(0), channel_bits(1), channel_bits(2), channel_bits(3)); }
+	constexpr bool	is_compressed()		const { return !!(i & ALL_COMP); }
+	constexpr bool	is_hdr()			const { return (i & FLOAT) || max_channel_bits() > 8; }
+
 	uint32 bits() const {
 		if (is_compressed())
 			return i == DXT1 ? 64 : 128;
@@ -712,19 +716,21 @@ struct vbitmap_format : channels {
 		t += t >> 16;
 		return (t + (t >> 8)) & 0xff;
 	}
+	
 	uint32 channels() const {
 		uint32 t = ((0x80808080 - (i & 0x3f3f3f3f)) & 0x40404040) >> 6;
 		t		 = t + (t >> 16);
 		return (t + (t >> 8)) & 7;
 	}
-	template<typename T> static inline vbitmap_format get() { return get_s<T>::get(); }
-	template<typename T> bool						  is() const { return i == get<T>().i; }
+
+	template<typename T> static inline vbitmap_format get()			{ return get_s<T>::get(); }
+	template<typename T> bool						  is() const	{ return i == get<T>().i; }
 };
 
-template<> inline vbitmap_format vbitmap_format::get<ISO_rgba>() { return vbitmap_format(8, 8, 8, 8); }
-template<> inline vbitmap_format vbitmap_format::get<uint8>() { return vbitmap_format(); }
-template<> inline vbitmap_format vbitmap_format::get<HDRpixel>() { return vbitmap_format(32, 32, 32, 32, FLOAT); }
-template<> inline vbitmap_format vbitmap_format::get<YUYV>() { return vbitmap_format(16 | COMPRESSED, 8, 8, 0); }
+template<> inline vbitmap_format vbitmap_format::get<ISO_rgba>()	{ return vbitmap_format(8, 8, 8, 8); }
+template<> inline vbitmap_format vbitmap_format::get<uint8>()		{ return vbitmap_format(); }
+template<> inline vbitmap_format vbitmap_format::get<HDRpixel>()	{ return vbitmap_format(32, 32, 32, 32, FLOAT); }
+template<> inline vbitmap_format vbitmap_format::get<YUYV>()		{ return vbitmap_format(16 | COMPRESSED, 8, 8, 0); }
 
 template<typename FORMAT> struct vbitmap_format::get_s<Texel<FORMAT> > {
 	static inline vbitmap_format get() { return vbitmap_format(FORMAT::RBITS, FORMAT::GBITS, FORMAT::BBITS, FORMAT::ABITS); }
@@ -743,8 +749,8 @@ struct vbitmap {
 		static bool  get(void* data, const vbitmap_loc& in, vbitmap_format fmt, void* dest, uint32 stride, uint32 width, uint32 height) { return ((T*)data)->get(in, fmt, dest, stride, width, height); }
 		static void* get_raw(void* data, uint32 plane, vbitmap_format* fmt, uint32* stride, uint32* width, uint32* height) { return ((T*)data)->get_raw(plane, fmt, stride, width, height); }
 	};
-	template<typename T> vbitmap(T* t, vbitmap_format _format = 0) : vget(thunk<T>::get), vget_raw(thunk<T>::get_raw), width(0), height(0), depth(1), mips(0), flags(0), format(_format) {}
-	template<typename T> vbitmap(T* t, vbitmap_format _format, uint32 _width, uint32 _height, uint32 _depth = 1) : vget(thunk<T>::get), vget_raw(thunk<T>::get_raw), width(_width), height(_height), depth(_depth), mips(0), flags(0), format(_format) {}
+	template<typename T> vbitmap(T* t, vbitmap_format format = 0) : vget(thunk<T>::get), vget_raw(thunk<T>::get_raw), width(0), height(0), depth(1), mips(0), flags(0), format(format) {}
+	template<typename T> vbitmap(T* t, vbitmap_format format, uint32 width, uint32 height, uint32 depth = 1) : vget(thunk<T>::get), vget_raw(thunk<T>::get_raw), width(width), height(height), depth(depth), mips(0), flags(0), format(format) {}
 
 	void		SetDepth(int _depth) { depth = _depth; }
 	void		SetMips(int _mips) { mips = _mips; }
@@ -768,25 +774,15 @@ struct vbitmap_loc {
 	vbitmap& v;
 	uint32   x, y, z, m;
 
-	vbitmap_loc(vbitmap& _v) : v(_v), x(0), y(0), z(0), m(0) {}
-	vbitmap_loc set_x(int i) {
-		x += i;
-		return *this;
-	}
-	vbitmap_loc set_y(int i) {
-		y += i;
-		return *this;
-	}
-	vbitmap_loc set_z(int i) {
-		z += i;
-		return *this;
-	}
-	vbitmap_loc set_mip(int i) {
-		m += i;
-		return *this;
-	}
+	vbitmap_loc(vbitmap& v) : v(v), x(0), y(0), z(0), m(0) {}
+	vbitmap_loc set_x(int i)	{ x += i; return *this; }
+	vbitmap_loc set_y(int i)	{ y += i; return *this; }
+	vbitmap_loc set_z(int i)	{ z += i; return *this; }
+	vbitmap_loc set_mip(int i)	{ m += i; return *this; }
 
-	template<typename T> bool get(const block<T, 2>& out) const { return v.vget(&v, *this, vbitmap_format::get<T>(), out[0], out.template pitch<2>(), out.template size<1>(), out.template size<2>()); }
+	template<typename T> bool get(const block<T, 2>& out) const {
+		return v.vget(&v, *this, vbitmap_format::get<T>(), out[0].begin(), out.template pitch<2>(), out.template size<1>(), out.template size<2>());
+	}
 };
 
 ISO_ptr<vbitmap> MakeVBitmap(ISO_ptr<void> p, vbitmap_format fmt);

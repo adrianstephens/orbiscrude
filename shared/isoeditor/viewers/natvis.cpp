@@ -848,6 +848,39 @@ bool iso::DumpValue(string_accum &sa, ast::node *node, FORMAT::FLAGS format, NAT
 	return false;
 }
 
+int iso::Visibility(ast::node* node, ast::get_memory_t get_mem, ast::test_memory_t test_mem) {
+
+	if (auto lit = node->cast<ast::lit_node>()) {
+		uint64	addr	= lit->v;
+		auto	type	= lit->type;
+		auto	flags	= lit->flags;
+		bool	ref		= !!(flags & ast::ADDRESS);
+
+		if (auto rtype = IsReference(type)) {
+			if (ref)
+				get_mem(addr, &addr, sizeof(addr));
+			ref		= true;
+			type	= rtype;
+		}
+
+		if (ref || type->type == C_type::ARRAY) {
+			if (flags & ast::LOCALMEM)
+				return 2;
+
+			size_t	size	= type->size(), size2;
+			auto	addr2	= test_mem(addr, true, size2);
+			if (addr2 <= addr && addr2 + size2 >= addr + size)
+				return 2;
+
+			addr2	= test_mem(addr, false, size2);
+			return int(addr2 <= addr + size && addr2 + size2 > addr);
+		}
+	}
+
+	return 2;
+
+}
+
 dynamic_array<NATVIS::ExpandedAST> iso::Expand(ast::noderef node, NATVIS *natvis, ast::get_memory_t get_mem, ast::get_variable_t get_var) {
 	dynamic_array<NATVIS::ExpandedAST> exp;
 

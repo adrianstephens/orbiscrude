@@ -30,12 +30,12 @@ struct member {
 template<typename T, typename = void> struct member_type {
 	typedef T	type;
 };
-template<typename T> struct member_type<T, typename T_enable_if<T_isclass<T>::value>::type> {
+template<typename T> struct member_type<T, enable_if_t<is_class<T>>> {
 	template<typename U> static U g(void(T::*p)(U));
 	static T g(void*);
 	typedef decltype(g(&T::operator=))	type;
 };
-template<typename T> struct member_type<T, typename T_void<decltype(&T::operator=)>::type> {
+template<typename T> struct member_type<T, void_t<decltype(&T::operator=)>> {
 	template<typename U> static U g(void(T::*p)(U));
 	static T g(void*);
 	typedef decltype(g(&T::operator=))	type;
@@ -184,7 +184,7 @@ template<typename T, typename V = void> struct activator {
 	typedef IInspectable*	(*type)();
 	static constexpr type value() { return nullptr; }
 };
-template<typename T> struct activator<T, typename T_void<decltype(new T)>::type> {
+template<typename T> struct activator<T, void_t<decltype(new T)>> {
 	typedef IInspectable*	(*type)();
 	static constexpr type value() { return []() { return query<IInspectable>(new T); }; }
 };
@@ -192,7 +192,7 @@ template<typename T> struct activator<T, typename T_void<decltype(new T)>::type>
 template<typename T, typename V = void> struct base_name {
 	static constexpr auto value = nullptr;
 };
-template<typename T> struct base_name<T, typename T_void<typename T::base_type>::type> : name<typename T::base_type> {};
+template<typename T> struct base_name<T, void_t<typename T::base_type>> : name<typename T::base_type> {};
 
 template<typename T> struct type_id_t {
 	static	type_id	_type_id;

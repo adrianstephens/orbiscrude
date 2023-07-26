@@ -22,7 +22,7 @@ public:
 	void		Prepend(Strip *strip)	{ insert(begin(), strip);	total += strip->size(); }
 
 	StripList() : total(0)	{}
-	StripList(iso::range<iso::array<iso::uint16,3>*> faces, iso::range<iso::stride_iterator<iso::float3p>> verts, iso::int32 maxstriplen = 0x7fffffff);
+	StripList(iso::range<iso::array<iso::uint32,3>*> faces, iso::range<iso::stride_iterator<iso::float3p>> verts, iso::int32 maxstriplen = 0x7fffffff);
 	~StripList();
 };
 

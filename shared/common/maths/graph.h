@@ -9,6 +9,14 @@
 
 namespace iso {
 
+//template<typename N>	decltype(auto)	outgoing(const N &n);
+//template<typename N>	decltype(auto)	incoming(const N &n);
+
+//template<typename N> struct default_inout {
+//	static decltype(auto)	outgoing(const N &n)	{ using iso::outgoing; return outgoing(n); }
+//	static decltype(auto)	incoming(const N &n)	{ using iso::incoming; return incoming(n); }
+//};
+
 //-----------------------------------------------------------------------------
 //	graph_edges
 //-----------------------------------------------------------------------------
@@ -114,6 +122,13 @@ template<class N> struct graph_edges : graph_edges0<N*> {
 	}
 };
 
+
+template<typename N> struct default_inout {
+	static decltype(auto)	outgoing(const N &n)	{ using iso::outgoing; return outgoing(n); }
+	static decltype(auto)	incoming(const N &n)	{ using iso::incoming; return incoming(n); }
+};
+
+
 //-----------------------------------------------------------------------------
 //	graph
 //-----------------------------------------------------------------------------
@@ -218,27 +233,32 @@ public:
 // Kruskal MinimumSpanningTree:  O(e log(e))	(Prim's algorithm is recommended when e=~n^2)
 // Given a graph 'unconnected' consisting solely of nodes, computes the minimum spanning tree 'undirected' over the nodes under the cost metric f
 //-----------------------------------------------------------------------------
-template<typename T, typename F> bool kruskal_mst(graph<T> &undirected, graph<T> &unconnected, F&& f) {
+template<typename G, typename F> bool kruskal_mst(G &&nodes, F&& f) {
+	typedef element_t<G>	T;
+
 	struct Edge {
 		T		v1, v2;
 		float	w;
 		Edge(const T &v1, const T &v2, float w) : v1(v1), v2(v2), w(w) {}
 	};
 
-	dynamic_array<Edge> edges;
-	for (auto &v1 : unconnected.nodes) {
+	priority_queue<dynamic_array<Edge>> edges;
+	
+	for (auto &v1 : nodes) {
 		for (auto &v2 : outgoing(v1)) {
-			if (v1 >= v2)
-				edges.emplace_back(v1, v2, f(v1, v2));
+			if (g.index_of(v2) <= g.index_of(v1))
+				edges.container().emplace_back(v1, v2, f(v1, v2));
 		}
 	}
 
-	sort(edges, [](const Edge &a, const Edge &b) { return a.w < b.w; });
 
+	//sort(edges, [](const Edge &a, const Edge &b) { return a.w < b.w; });
 	union_find<T>	uf;
 	size_t			added 			= 0;
-	size_t			num_vertices	= unconnected.num_vertices();
-	for (const Edge &i : edges) {
+	size_t			num_vertices	= num_elements(unconnected);
+
+	edges.make_heap();
+	for (auto &i : edges) {
 		if (uf.unify(i.v1, i.v2)) {
 			i.v1.add_edge(i.v2);
 			if (++added == num_vertices - 1)
@@ -247,11 +267,10 @@ template<typename T, typename F> bool kruskal_mst(graph<T> &undirected, graph<T>
 	}
 	return false;
 }
+
 // Returns an undirected graph that is the MST of undirected, or empty if g is not connected
-template<typename T, typename F> graph<T> kruskal_mst(const graph<T> &undirected, F&& f) {
-	graph<T>	unconnected;
-	for (const T& v : undirected.nodes())
-		unconnected.add(v);
+template<typename G, typename F> G kruskal_mst(G &undirected, F&& f) {
+	G	unconnected = undirected;
 
 	if (!kruskal_mst(undirected, unconnected, f))
 		unconnected.clear();
@@ -266,28 +285,27 @@ template<typename T, typename F> graph<T> kruskal_mst(const graph<T> &undirected
 // Prim's algorithm, complexity O(n^2)
 //-----------------------------------------------------------------------------
 
-template<typename T, typename F> graph<int> prim_mst(graph<T> &undirected, int num, F&& f) {
-	const float k_inf = 1e30f;
+template<typename F> auto prim_mst(int num, F&& f) {
+	float	inf = 1e38f;
 	dynamic_array<float>	lowcost(num);
 	dynamic_array<int>		closest(num);
-
-	graph<int> g(int_range(num));
 
 	for (int i = 1; i < num; i++) {
 		lowcost[i] = f(0, i);
 		closest[i] = 0;
 	}
 
+	dynamic_array<graph_node<int>>	g(int_range(num));
+
 	for (int i = 1; i < num; i++) {
 		auto	minj	= argmin(slice(lowcost, 1));
-		ISO_ASSERT(*minj < k_inf);
-		*minj = k_inf;
+		*minj			= inf;
 
 		int		mini	= lowcost.index_of(minj);
-		g.nodes[mini]->add_edge(g.nodes[closest[mini]]);
+		g[mini].add_edge(&g[closest[mini]]);
 
 		for (int j = 1; i < num; i++) {
-			if (lowcost[j] != k_inf) {
+			if (lowcost[j] != inf) {
 				float pnd = f(mini, j);
 				if (pnd < lowcost[j]) {
 					lowcost[j] = pnd;
@@ -303,24 +321,24 @@ template<typename T, typename F> graph<int> prim_mst(graph<T> &undirected, int n
 // Kahn's algorithm
 //-----------------------------------------------------------------------------
 
-template<typename G> auto kahn_sort(G &&g) {
-	typedef typename G::node_t	N;
-	dynamic_array<N*>	L;	// list that will contain the sorted elements
-	dynamic_array<N*>	S;	// Set of all nodes with no incoming edge
+template<typename G> auto kahn_sort(G &&graph) {
+	typedef element_t<G>	N;
+	dynamic_array<N*>		L;	// list that will contain the sorted elements
+	dynamic_array<N*>		S;	// Set of all nodes with no incoming edge
 
-	for (auto &i : g.nodes) {
-		if (i->outgoing.empty())
+	for (auto &i : graph) {
+		if (outgoing(i).empty())
 			S.push_back(i);
 	}
 
 	while (!S.empty()) {
 		auto	n = S.pop_back_value();		// remove a node n from S
 		L.push_back(n);						// add n to tail of L
-		while (!n->incoming.empty()) {		// for each node m with an edge e from n to m do
-			auto	m = n->incoming.front();
+		while (!incoming(n).empty()) {		// for each node m with an edge e from n to m do
+			auto	m = incoming(n).front();
 			m->remove_edge(n);				// remove edge e from the graph
 			//	if m has no other incoming edges then
-			if (m->outgoing.empty())
+			if (outgoing(m).empty())
 				S.push_back(m);
 		}
 	}
@@ -332,16 +350,17 @@ template<typename G> auto kahn_sort(G &&g) {
 //shortest paths
 //-----------------------------------------------------------------------------
 
-template<typename G, typename F> auto shortest_paths(G &&g, typename G::node_t *from, F &&f) {
-	typedef typename G::node_t	N;
-	dynamic_array<float>	d(g.num_vertices(), 0.f);		// shortest path distances
-	dynamic_array<N*>		P(g.num_vertices(), nullptr);	// predecessors
+template<typename G, typename F> auto shortest_paths(const G &nodes, F &&f) {
+	typedef element_t<G>	N;
+	size_t	n = num_elements(nodes);
+	dynamic_array<float>	d(n, 0.f);		// shortest path distances
+	dynamic_array<N*>		P(n, nullptr);	// predecessors
 
 	//Loop over the vertices u as ordered in V, [starting from s]:
-	for (auto &u : g.nodes) {
+	for (auto &u : nodes) {
 		//For each vertex v directly following u (i.e., there exists an edge from u to v)
-		for (auto& v : u->outgoing.empty()) {
-			auto	w = f(u, v);			//Let w be the weight of the edge from u to v
+		for (auto& v : outgoing(u)) {
+			auto	w = f(u, v);			// Let w be the weight of the edge from u to v
 			if (d[v] > d[u] + w) {			// Relax the edge
 				d[v] = d[u] + w;
 				P[v] = u;
@@ -355,6 +374,7 @@ template<typename G, typename F> auto shortest_paths(G &&g, typename G::node_t *
 //-----------------------------------------------------------------------------
 // Colour a graph (heuristically since optimal is NP-hard)
 //-----------------------------------------------------------------------------
+
 template<typename G, typename T> int graph_colour(const G &nodes, hash_map<T, int> &colours) {
 	int num_colors = 0;
 
@@ -398,22 +418,22 @@ template<typename G, typename T> int graph_colour(const G &nodes, hash_map<T, in
 //	postorder - container adapter for postorder traversal
 //-----------------------------------------------------------------------------
 
-template<class T, class S = small_set<const T*, 8> > struct postorder {
-	typedef noref_t<decltype(outgoing(declval<const T>()))>	C;
+template<class N, typename IO = default_inout<N>, class S = small_set<const N*, 8>> struct postorder : IO {
+	typedef noref_t<decltype(outgoing(declval<const N>()))>	C;
 	typedef iterator_t<C>					I;
 public:
 	struct entry : range<I> {
-		const T	*t;
-		entry(const T *t) : range<I>(outgoing(*t)), t(t) {}
+		const N	*n;
+		entry(range<I> r, const N *n) : range<I>(r), n(n) {}
 	};
 	dynamic_array<entry>	stack;
 	S						visited;
 
 	void traverse_child() {
 		while (!stack.back().empty()) {
-			T *t = stack.back().pop_front_value();
-			if (!visited.check_insert(t))
-				stack.push_back(t);
+			N *n = stack.back().pop_front_value();
+			if (!visited.check_insert(n))
+				stack.emplace_back(IO::outgoing(*n), n);
 		}
 	}
 	size_t next() {
@@ -422,26 +442,24 @@ public:
 			traverse_child();
 		return stack.size();
 	}
-	const T* get() const {
-		return stack.back().t;
+	const N* get() const {
+		return stack.back().n;
 	}
 
 	struct iterator {
-		typedef T					*element, *&reference;
-		typedef forward_iterator_t	iterator_category;
 		postorder	&p;
 		size_t		depth;
 		iterator(postorder &p, size_t depth) : p(p), depth(depth) {}
 		bool operator==(const iterator &b)	const	{ return depth == b.depth; }
 		bool operator!=(const iterator &b)	const	{ return !(*this == b); }
-		const T*	operator*()				const	{ return p.get(); }
-		const T*	operator->()			const	{ return p.get(); }
+		const N*	operator*()				const	{ return p.get(); }
+		const N*	operator->()			const	{ return p.get(); }
 		iterator&	operator++()					{ depth = p.next(); return *this; }
 	};
 
-	postorder(const T *t) {
-		visited.insert(t);
-		stack.push_back(t);
+	postorder(const N *root, const IO& inout = {}) : IO(inout) {
+		visited.insert(root);
+		stack.emplace_back(IO::outgoing(*root), root);
 		traverse_child();
 	}
 
@@ -449,10 +467,14 @@ public:
 	iterator	end()	const { return iterator(*unconst(this), 0); }
 };
 
-template<class T> postorder<T> make_postorder(T *t) {
-	return postorder<T>(t);
+template<class N> auto make_postorder(N *t) {
+	return postorder<N>(t);
+}
+template<class N, typename IO> auto make_postorder(N *t, const IO& inout) {
+	return postorder<N, IO>(t, inout);
 }
 
+/*
 template<class N> void assign_graph_orders(N *n, uint32 &k) {
 	n->order = 1;
 	for (auto i = n->edges; i; ++i) {
@@ -499,49 +521,47 @@ template<class N> void dijkstra(const dynamic_array<N*> &nodes) {
 	};
 
 }
-
+*/
 //-----------------------------------------------------------------------------
 //	DominatorTree
 //	Based on: "A Simple, Fast Dominance Algorithm" by Cooper, Harvey and Kennedy
 //-----------------------------------------------------------------------------
-template<typename N> class DominatorTree {
+
+template<typename N, typename IO = default_inout<N>> class DominatorTree : public IO {
 public:
 	struct Info {
 		const N					*node;
-		int						pre_order;
 		int						post_order;
-		Info					*idom;	// Immediate dominator
+		Info					*idom;	// Immediate dominator (i.e. parent of the tree)
+		dynamic_array<Info*>	doms;	// immediately dominated blocks (i.e. children of the tree)
 		dynamic_array<Info*>	preds;	// predecessor blocks (in CFG)
-		dynamic_array<Info*>	doms;	// dominated blocks
 
-		Info(const N *_node) : node(_node), idom(0) {}
+		Info(const N *node) : node(node), idom(0) {}
 
 		friend const dynamic_array<Info*>& outgoing(const Info &t) { return t.doms; }
 	};
 
+	dynamic_array<Info>			pre_order;
+	dynamic_array<Info*>		post_order;
 	hash_map<const N*, Info*>	info_map;
-	dynamic_array<Info*>		infos;
 	Info*						info_root;
 
 private:
-	static size_t count_nodes(const N *n) {
-		return num_elements(make_postorder(n));
-	}
-	void init_info(const N *n, Info *info, uint32 &order) {
-		info->pre_order = ++order;
-		for (auto &i : outgoing(*n)) {
-			Info *info2	= info_map[i];
-			if (!info2) {
-				info_map[i]	= info2 = new Info(i);
-				init_info(i, info2, order);
+	static bool _dominates(const Info *a, const Info *b) {
+	#if 0
+		return a->pre_order <= b->pre_order && a->post_order >= b->post_order;
+	#else
+		if (a->post_order >= b->post_order) {
+			for (const Info *i = b; i; i = i->idom) {
+				if (i == a)
+					return true;
 			}
-			info2->preds.push_back(info);
 		}
-		info->post_order = ++order;
-		infos.push_back(info);
+		return false;
+	#endif
 	}
 
-	Info *intersect(Info *info1, Info *info2) {
+	static Info *intersect(Info *info1, Info *info2) {
 		if (info1) {
 			while (info1 != info2) {
 				while (info1->post_order < info2->post_order) {
@@ -559,63 +579,62 @@ private:
 		return info2;
 	}
 
-	void find_dominators(uint32 &order) {
+	void	init_info(const N *n, Info *info) {
+		for (auto &i : IO::outgoing(*n)) {
+			Info *info2	= info_map[i];
+			if (!info2) {
+				info2		= &pre_order.emplace_back(i);
+				info_map[i]	= info2;
+				init_info(i, info2);
+			}
+			info2->preds.push_back(info);
+		}
+		info->post_order = post_order.size32();
+		post_order.push_back(info);
+	}
+
+	void create(const N *root) {
+		size_t n0 = num_elements(make_postorder(root, *(IO*)this));
+		pre_order.reserve(n0);
+		info_map[root]	= info_root = &pre_order.emplace_back(root);
+		init_info(root, info_root);
+		ISO_ASSERT(n0 == post_order.size());
+
 		info_root->idom	= info_root;
-		bool changed;
-		do {
+		for (bool changed = true; changed;) {
 			changed = false;
-			// Iterate over the list in reverse order, i.e., forward on CFG edges.
-			for (auto &i : reversed(infos)) {
+			// Iterate over the list in reverse order, i.e., forward on CFG edges
+			for (auto &i : reversed(post_order)) {
 				Info *new_idom = 0;
 
 				for (auto &p : i->preds)
 					new_idom = intersect(new_idom, p);
 
-				// Check if the idom value has changed.
+				// Check if the idom value has changed
 				if (new_idom && new_idom != i->idom) {
 					i->idom = new_idom;
 					changed = true;
 				}
 			}
-		} while (changed);
-		info_root->idom	= 0;
-	}
-
-	static bool _dominates(const Info *a, const Info *b) {
-	#if 0
-		return a->pre_order <= b->pre_order && a->post_order >= b->post_order;
-	#else
-		if (a->post_order >= b->post_order) {
-			for (const Info *i = b; i; i = i->idom) {
-				if (i == a)
-					return true;
-			}
 		}
-		return false;
-	#endif
-	}
 
-	void create(const N *root) {
-		uint32	order	= 0;
-		info_map[root]	= info_root = new Info(root);
-		init_info(root, info_root, order);
-		find_dominators(order);
+		info_root->idom	= 0;
 
-		for (auto i : infos) {
+		// make tree child links
+		for (auto i : post_order) {
 			if (Info *idom = i->idom)
 				idom->doms.push_back(i);
 		}
 	}
 
 public:
-	DominatorTree(const N *root) {
-		size_t n0 = count_nodes(root);
+	DominatorTree(const N *root, IO&& inout = {}) : IO(move(inout)) {
 		create(root);
-		ISO_ASSERT(n0 == infos.size());
 	}
 
 	void	recreate(const N *root) {
-		infos.clear();
+		pre_order.clear();
+		post_order.clear();
 		info_map.clear();
 		create(root);
 	}
@@ -633,9 +652,9 @@ public:
 	}
 
 	bool is_acyclic() const {
-		for (auto i : infos) {
+		for (auto i : post_order) {
 			uint32	iorder = i->post_order;
-			for (auto j : outgoing(*i->node)) {
+			for (auto j : IO::outgoing(*i->node)) {
 				if (iorder >= get_info(j)->post_order)
 					return false;
 			}
@@ -669,9 +688,11 @@ public:
 	const N *nearest_common_dominator(const N *a, const N *b) const {
 		return get_node(nearest_common_dominator(get_info(a), get_info(b)));
 	}
+
 	const N *idom(const N *a) const {
 		return get_node(get_info(a)->idom);
 	}
+	
 	bool single_entering_block(Info *n) const {
 		return count(n->preds, [this, n](Info *i) { return !dominates(n, i); }) == 1;
 	}
@@ -679,9 +700,8 @@ public:
 		return single_entering_block(get_info(n));
 	}
 
-	hash_set_with_key<const N*> dominated_nodes(N *head) const {
+	auto dominated_nodes(N *head) const {
 		hash_set_with_key<const N*>		result;
-
 		if (const Info *i = get_info(head)) {
 			dynamic_array<const Info*>	work_list;
 			work_list.push_back(i);
@@ -697,20 +717,19 @@ public:
 		return result;
 	}
 
-	hash_set_with_key<const N*> dominance_frontier(const N *head) const {
+	auto dominance_frontier(const N *head) const {
 		hash_set_with_key<const N*>		result;
-
-		if (const Info *i = get_info(head)) {
+		if (const Info *i0 = get_info(head)) {
 			dynamic_array<const Info*>	work_list;
-			work_list.push_back(i);
+			work_list.push_back(i0);
 
 			while (!work_list.empty()) {
 				const Info	*i	= work_list.pop_back_retref();
 				for (auto &j : i->doms)
 					work_list.push_back(j);
 
-				for (auto &j : outgoing(*i->node)) {
-					if (!dominates(i, get_info(j)))
+				for (auto &j : IO::outgoing(*i->node)) {
+					if (!dominates(i0, get_info(j)))
 						result.insert(j);
 				}
 			}
@@ -718,9 +737,8 @@ public:
 		return result;
 	}
 
-	hash_set_with_key<const N*> back_edges(const N *head) const {
+	auto back_edges(const N *head) const {
 		hash_set_with_key<const N*>		result;
-
 		if (const Info *i = get_info(head)) {
 			for (auto &j : i->preds) {
 				if (dominates(i, j))
@@ -729,9 +747,9 @@ public:
 		}
 		return result;
 	}
-	hash_set_with_key<const N*> back_edges2(const N *head) const {
+	auto back_edges2(const N *head) const {
 		hash_set_with_key<const N*>		result;
-		for (auto &j : incoming(*head)) {
+		for (auto &j : IO::incoming(*head)) {
 			if (dominates(head, j))
 				result.insert(j);
 		}

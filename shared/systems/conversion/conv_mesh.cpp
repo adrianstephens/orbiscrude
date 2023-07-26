@@ -13,6 +13,7 @@
 #include "filetypes/3d/model_utils.h"
 #include "vector_iso.h"
 #include "utilities.h"
+#include "scenegraph.h"
 
 using namespace iso;
 //-----------------------------------------------------------------------------
@@ -235,7 +236,7 @@ ISO_ptr<void> MergeModels(const anything &children) {
 
 	if (mm.model->submeshes) {
 		mm.model->UpdateExtents();
-		CheckHasExternals(mm.model, ISO::DUPF_DEEP);
+		CheckHasExternals(mm.model, ISO::TRAV_DEEP);
 	}
 
 	if (mm.splitter->hirez) {
@@ -302,18 +303,16 @@ ISO_ptr<Model3> MakeNormals(ISO_ptr<Model3> model, float threshold) {
 		NormalRecord	*norms	= new NormalRecord[nverts];
 
 		GetFaceNormals(fnorms,
-			make_prim_iterator(
+			make_range_n(make_prim_iterator(
 				Prim2Vert::trianglelist(),
 				make_indexed_iterator(stride_iterator<float3p>(submesh->verts, ((ISO::TypeOpenArray*)submesh->verts.GetType())->subsize), make_const(&submesh->indices[0][0]))
-			),
-			ntris
+			), ntris)
 		);
 		AddNormals(norms, fnorms,
-			make_prim_iterator(
+			make_range_n(make_prim_iterator(
 				Prim2Vert::trianglelist(),
 				&submesh->indices[0][0]
-			),
-			ntris
+			), ntris)
 		);
 
 		delete[] fnorms;
@@ -386,18 +385,17 @@ ISO_ptr<Model3> ReindexModel(ISO_ptr<Model3> model, float weight_threshold, floa
 	for (auto i = model->submeshes.begin(), e = model->submeshes.end(); i != e; ++i) {
 		SubMesh			*sm	= *i;
 		ISO::Browser2	b1(sm->verts);
-		uint16			*faces		= &sm->indices[0][0];
-		int				nfaces		= sm->indices.Count();
+		auto			faces		= make_range_n(&sm->indices[0][0], sm->indices.Count() * 3);
 		int				nverts		= b1.Count();
 
-		uint32	score0	= GetCacheCost(faces, nfaces);
+		uint32	score0	= GetCacheCost(faces);
 
-		VertexCacheOptimizerForsyth(faces, nfaces, nverts, faces);
-		uint32	score3	= GetCacheCost(faces, nfaces);
+		VertexCacheOptimizerForsyth(faces, nverts, faces.begin());
+		uint32	score3	= GetCacheCost(faces);
 
-		MeshOptimise(faces, nfaces, nverts, MeshCacheParams(32));
-		uint32	score1	= GetCacheCost(faces, nfaces);
-		uint32	score2	= VertexCacheOptimizerHillclimber(faces, nfaces, nverts, faces, 10);
+		MeshOptimise(faces, nverts, MeshCacheParams(32));
+		uint32	score1	= GetCacheCost(faces);
+		uint32	score2	= VertexCacheOptimizerHillclimber(faces, nverts, faces.begin(), 10);
 	#if 0
 		Indexer<uint16>		indexer(nverts);
 		indexer.ProcessFirst(b1, equal_to());//keygen<ISO::Browser2>());
@@ -613,7 +611,7 @@ ISO_ptr<Model3> OptimiseSkinModel(ISO_ptr<Model3> model, float weight_threshold,
 				memcpy(submesh2->indices.Create(ntris2), &submesh1->indices[i1], ntris2 * sizeof(SubMesh::face));
 				submesh1->indices.Resize(ntris1);
 			} else {
-				submesh2->indices = submesh1->indices.Dup();
+				submesh2->indices = copy(submesh1->indices);
 				submesh1.Clear();
 			}
 
@@ -642,7 +640,7 @@ ISO_ptr<Model3> OptimiseSkinModel(ISO_ptr<Model3> model, float weight_threshold,
 			if (submesh1) {
 				submesh1->verts = submesh2->verts;
 				ISO::Browser(submesh1->verts).Resize(nverts1);
-				submesh1->UpdateExtents();
+				submesh1->UpdateExtent();
 
 				verts1	= ISO::Browser(submesh1->verts)[0];
 				nverts	= nverts1;
@@ -651,7 +649,7 @@ ISO_ptr<Model3> OptimiseSkinModel(ISO_ptr<Model3> model, float weight_threshold,
 
 			submesh2->verts = MakePtr(new ISO::TypeOpenArray(verttype2, vertsize2));
 			*(ISO_openarray<void>*)submesh2->verts = verts2;
-			submesh2->UpdateExtents();
+			submesh2->UpdateExtent();
 			newmodel->submeshes.Append(submesh2);
 		}
 
@@ -693,7 +691,7 @@ ISO_ptr<Model3> OptimiseSkinModel(ISO_ptr<Model3> model, float weight_threshold,
 			newmodel->submeshes.Append(submesh1);
 	}
 	if (newmodel) {
-		CheckHasExternals(newmodel, ISO::DUPF_DEEP);
+		CheckHasExternals(newmodel, ISO::TRAV_DEEP);
 		return newmodel;
 	}
 	return model;
@@ -745,25 +743,25 @@ struct ShapeMesh : ISO_ptr<SubMesh> {
 		operator position3() const { return position3(position); }
 	};
 
-	ShapeMesh(tag id) : ISO_ptr<SubMesh>(id) {
+	ShapeMesh(tag id = {}) : ISO_ptr<SubMesh>(id) {
 		get()->technique = ISO::root("data")["simple"]["lite"];
 	}
 	~ShapeMesh() {
-		get()->UpdateExtents();
+		//get()->UpdateExtent();
 	}
 
-	vertex	*BeginVerts(uint32 n) {
-		auto	verts	= ISO::MakePtr<ISO_openarray<vertex> > (0, n);
+	auto	BeginVerts(uint32 n) {
+		auto	verts	= ISO::MakePtr<ISO_openarray<vertex>>(0, n);
 		get()->verts	= verts;
-		return verts->begin();
+		return make_range_n(verts->begin(), n);
 	}
 
-	uint16	*BeginPrims(uint32 n) {
-		return &get()->indices.Create(n)[0][0];
+	auto	BeginPrims(uint32 n) {
+		return make_range_n(&get()->indices.Create(n)[0][0], n * 3);
 	}
 };
 
-ISO_DEFUSERCOMPV(ShapeMesh::vertex, position, normal);
+ISO_DEFUSERCOMPFV(ShapeMesh::vertex, ISO::TypeUser::WRITETOBIN, position, normal);
 
 
 ISO_ptr<SubMesh> SphereMesh(int n, float r) {
@@ -771,9 +769,10 @@ ISO_ptr<SubMesh> SphereMesh(int n, float r) {
 		n = 16;
 	if (r == 0)
 		r = 1;
-	ShapeMesh	mesh(0);
+	ShapeMesh	mesh;
 	SphereVerts(mesh, n, r);
-	return move(mesh);
+	mesh->UpdateExtent();
+	return mesh;
 }
 ISO_ptr<SubMesh> TorusMesh(int n, int m, float r_outer, float r_inner) {
 	if (n == 0)
@@ -784,7 +783,7 @@ ISO_ptr<SubMesh> TorusMesh(int n, int m, float r_outer, float r_inner) {
 		r_outer = r_inner == 0 ? 1 : r_inner * 2;
 	if (r_inner == 0)
 		r_inner = r_outer / 2;
-	ShapeMesh	mesh(0);
+	ShapeMesh	mesh;
 	TorusVerts(mesh, n, m, r_outer, r_inner);
 	return move(mesh);
 }
@@ -795,7 +794,7 @@ ISO_ptr<SubMesh> CylinderMesh(int n, float r, float h) {
 		r = 1;
 	if (h == 0)
 		h = 1;
-	ShapeMesh	mesh(0);
+	ShapeMesh	mesh;
 	CylinderVerts(mesh, n, r, h);
 	return move(mesh);
 }
@@ -806,7 +805,7 @@ ISO_ptr<SubMesh> ConeMesh(int n, float r, float h) {
 		r = 1;
 	if (h == 0)
 		h = 1;
-	ShapeMesh	mesh(0);
+	ShapeMesh	mesh;
 	ConeVerts(mesh, n, r, h);
 	return move(mesh);
 }
@@ -817,7 +816,7 @@ ISO_ptr<SubMesh> BoxMesh(float3p dims) {
 		dims.y = dims.x;
 	if (dims.z == 0)
 		dims.z = dims.y;
-	ShapeMesh	mesh(0);
+	ShapeMesh	mesh;
 	BoxVerts(mesh, float3(dims));
 	return move(mesh);
 }
@@ -855,8 +854,8 @@ struct AABBTree3 {
 	dynamic_array<uint32>	all_indices;
 	Node	*root;
 
-	AABBTree3(range<const array<uint16, 3>*> indices, stride_iterator<float3p> verts) : all_indices(int_range(indices.size32())) {
-		dynamic_array<position3>	centroids = transformc(indices, [&verts](const uint16 *i) {
+	AABBTree3(range<const SubMesh::face*> indices, stride_iterator<float3p> verts) : all_indices(int_range(indices.size32())) {
+		dynamic_array<position3>	centroids = transformc(indices, [&verts](const uint32 *i) {
 			return (float3(verts[i[0]]) + float3(verts[i[1]]) + float3(verts[i[2]])) / 3;
 		});
 
@@ -984,7 +983,7 @@ bool collect(const AABBTree3 &tree, param(position3) pos, callback_ref<bool(cons
 	return false;
 }
 
-bool contains(const AABBTree3 &tree, array<uint16, 3> *i, stride_iterator<float3p> v, param(position3) pos) {
+bool contains(const AABBTree3 &tree, SubMesh::face *i, stride_iterator<float3p> v, param(position3) pos) {
 	float	winding = 0;
 
 	collect(tree, pos, [&winding, v, i](const AABBTree3::Node* node, param(position3) pos) {
@@ -1001,7 +1000,7 @@ bool contains(const AABBTree3 &tree, array<uint16, 3> *i, stride_iterator<float3
 	return winding > 0.9f;
 }
 
-auto get_intersections(const AABBTree3 &a, const AABBTree3 &b, array<uint16, 3> *ia, stride_iterator<float3p> va, array<uint16, 3> *ib, stride_iterator<float3p> vb) {
+auto get_intersections(const AABBTree3 &a, const AABBTree3 &b, SubMesh::face *ia, stride_iterator<float3p> va, SubMesh::face *ib, stride_iterator<float3p> vb) {
 	dynamic_array<pair<uint32,uint32>>	intersections;
 	collect(a, b, [va, vb, ia, ib, &intersections](const AABBTree3::Node *nodea, const AABBTree3::Node *nodeb) {
 		for (auto xa : nodea->indices) {
@@ -1025,7 +1024,7 @@ struct edge {
 	edge() : next(0,0) {}
 };
 
-auto cut_mesh(const AABBTree3 &btree, const pair<uint32,uint32> *i, const pair<uint32,uint32> *e, uint32 na, array<uint16, 3> *ia, stride_iterator<float3p> va, array<uint16, 3> *ib, stride_iterator<float3p> vb) {
+auto cut_mesh(const AABBTree3 &btree, const pair<uint32,uint32> *i, const pair<uint32,uint32> *e, uint32 na, SubMesh::face *ia, stride_iterator<float3p> va, SubMesh::face *ib, stride_iterator<float3p> vb) {
 	dynamic_array<triangle3>	cut_tris;
 
 	for (int xa = 0; xa < na; ++xa) {
@@ -1296,7 +1295,7 @@ void CSGToMesh(SubMesh *sm, const SubMesh *sma, const SubMesh *smb, const csg &c
 		ic = convex_to_tris(ic, indices);
 	}
 	sm->NumVerts(uint32(vc - vc0));
-	sm->UpdateExtents();
+	sm->UpdateExtent();
 }
 
 ISO_ptr<SubMesh> UnionMesh(ISO_ptr<SubMesh> a, ISO_ptr<SubMesh> b) {
@@ -1317,8 +1316,8 @@ ISO_ptr<SubMesh> SubtractMesh(ISO_ptr<SubMesh> a, ISO_ptr<SubMesh> b) {
 
 	auto		va = a->VertComponentData<float3p>(0);
 	auto		vb = b->VertComponentData<float3p>(0);
-	array<uint16, 3> *ia = a->indices;
-	array<uint16, 3> *ib = b->indices;
+	auto		ia = a->indices.begin();
+	auto		ib = b->indices.begin();
 
 	AABBTree3	atree(a->indices, va);
 	AABBTree3	btree(b->indices, vb);
@@ -1364,7 +1363,7 @@ ISO_ptr<SubMesh> SubtractMesh(ISO_ptr<SubMesh> a, ISO_ptr<SubMesh> b) {
 		ic = convex_to_tris(ic, indices);
 	}
 	sm->NumVerts(uint32(vc - vc0));
-	sm->UpdateExtents();
+	sm->UpdateExtent();
 
 #else
 
@@ -1423,7 +1422,7 @@ ISO_ptr<SubMesh> BitmapToMesh(ISO_ptr<bitmap> bm, int grid) {
 		}
 	}
 
-	m->UpdateExtents();
+	m->UpdateExtent();
 	return m;
 }
 
@@ -1620,7 +1619,7 @@ ISO_ptr<SubMesh> RemoveEdges(ISO_ptr<SubMesh> sm, float min_len) {
 			++faces2;
 		}
 	}
-	sm2->UpdateExtents();
+	sm2->UpdateExtent();
 	return sm2;
 }
 
@@ -1871,7 +1870,7 @@ ISO_ptr<SubMesh> SimplifyMesh(ISO_ptr<SubMesh> sm, float factor) {
 	Simplify	simp(sm->VertComponentRange<float3p>(0), sm->NumFaces());
 
 	for (auto e : sm->VertComponents()) {
-		switch (USAGE2(e.id).usage) {
+		switch (USAGE2(e.id.get_crc32()).usage) {
 			case USAGE_COLOR:
 				ISO::Conversion::batch_convert(
 					sm->_VertComponentData(e.offset), e.type.get(),
@@ -1898,11 +1897,39 @@ ISO_ptr<SubMesh> SimplifyMesh(ISO_ptr<SubMesh> sm, float factor) {
 //	uv remapping
 //-----------------------------------------------------------------------------
 
-ISO_ptr<Model3> ToMercator(ISO_ptr<Model3> m) {
+ISO_ptr<Model> RemoveUV(ISO_ptr<Model> m) {
+	ISO_ptr<Model> m2(0);
 
+	for (SubMesh* sm : m->submeshes) {
+
+		auto	vert_type	= sm->VertComposite();
+		auto	vert_type2	= new(vert_type->Count()) ISO::TypeComposite;
+
+		for (auto &e : *vert_type) {
+			if (USAGE2(vert_type->GetID(&e)) != USAGE_TEXCOORD)
+				vert_type2->Add(e.type, e.id);
+		}
+		if (vert_type2->Count() != vert_type->Count()) {
+			ISO_ptr<SubMesh>	sm2(0);
+			sm2->verts		= Duplicate(sm->verts);
+			sm2->indices	= Duplicate(sm->indices);
+			sm2->parameters	= Duplicate(sm->parameters);
+			sm2->technique	= sm->technique;
+			m2->submeshes.Append(sm2);
+
+		} else {
+			delete vert_type2;
+			m2->submeshes.Append(ISO::GetPtr(sm));
+		}
+	}
+	return m2;
+
+}
+
+
+ISO_ptr<Model3> ToMercator(ISO_ptr<Model3> m) {
 	ISO_ptr<Model3> m2(0);
-	for (auto i : m->submeshes) {
-		SubMesh* sm = i;
+	for (SubMesh* sm : m->submeshes) {
 		ISO_ptr<SubMesh>	sm2(0);
 		sm2->verts		= Duplicate(sm->verts);
 		sm2->indices	= Duplicate(sm->indices);
@@ -1931,9 +1958,9 @@ ISO_ptr<Model3> ToMercator(ISO_ptr<Model3> m) {
 		int			nverts2	= 0;
 		auto		verts	= sm->VertDataIterator();
 		auto		verts2	= sm2->VertDataIterator();
-		field_access<float3p>	pos		= sm2->VertComponent("position")->offset;
-		field_access<float3p>	norm	= sm2->VertComponent("normal")->offset;
-		field_access<float2p>	uv		= sm2->VertComponent("texcoord0")->offset;
+		field_access<float3p>	pos		= sm2->VertComponent(USAGE_POSITION)->offset;
+		field_access<float3p>	norm	= sm2->VertComponent(USAGE_NORMAL)->offset;
+		field_access<float2p>	uv		= sm2->VertComponent(USAGE_TEXCOORD)->offset;
 		
 		auto		uv2		= verts2 + uv;
 		uint32		checks	= 0;
@@ -1988,7 +2015,7 @@ ISO_ptr<Model3> ToMercator(ISO_ptr<Model3> m) {
 		}
 
 		sm2->NumVerts(nverts2);
-		sm2->UpdateExtents();
+		sm2->UpdateExtent();
 
 		ISO::Browser(sm2->parameters).SetMember("map_Kd", tex2);
 	}
@@ -2148,11 +2175,155 @@ ISO_ptr<Model3> StitchMesh(ISO_ptr<Model3> m) {
 }
 
 //-----------------------------------------------------------------------------
+//	Meshlet
+//-----------------------------------------------------------------------------
+
+struct Meshlet {
+	uint32	PrimCount, PrimOffset;
+	float4p	sphere;
+	xint32	cone;
+	float	apex;
+};
+struct MeshletPrim {
+	uint32 i0 : 8, i1 : 8, i2 : 8, spare : 8;
+};
+struct MeshletParams {
+	ISODataBuffer	meshlets;
+	ISODataBuffer	prims;
+};
+ISO_DEFUSERCOMPV(Meshlet, PrimCount, PrimOffset, sphere, cone, apex);
+ISO_DEFUSER(MeshletPrim, xint32);
+ISO_DEFCOMPV(MeshletParams, meshlets, prims);
+
+struct MeshletTechnique {
+	ISO_ptr<iso::technique>	technique;
+	MeshletTechnique(const ISO_ptr<iso::technique> &technique) : technique(technique) {}
+};
+
+ISO_DEFUSERCOMPFV(MeshletTechnique, ISO::TypeUser::CHANGE | ISO::TypeUser::WRITETOBIN, technique);
+
+
+ISO_ptr<technique> FixTechnique(const MeshletTechnique &p) {
+	return p.technique;
+}
+
+ISO_ptr<Model> MakeMeshlets(ISO_ptr<Model3> model, uint32 max_verts, uint32 max_prims) {
+	if (max_prims == 0)
+		max_prims = 126;
+	if (max_verts == 0)
+		max_verts = 64;
+
+
+	ISO_ptr<Model>	model2(model.ID());
+	model2->minext	= model->minext;
+	model2->maxext	= model->maxext;
+
+	for (SubMesh *sm : model->submeshes) {
+		auto centre			= sm->GetExtent().centre();
+		auto verts			= sm->VertComponentRange<float3p>(0);
+		auto meshlets		= Meshletize(max_verts, max_prims, make_range_n(make_const(&sm->indices[0][0]), sm->NumFaces() * 3), verts);
+
+		auto culls	= make_temp_array(transformc(meshlets, [verts](const InlineMeshlet &i) { return i.ComputeCullData(verts); }));
+		auto occ	= make_temp_array(transformc(culls, [centre](const InlineMeshlet::CullData &i) { return i.OcclusionPotential(centre); }));
+
+		temp_array<uint32>	order = int_range(occ.size());
+		sort(make_indexed_container(occ, order));
+
+		ISO_ptr<SubMeshN<64>>	sm2("");//, sm->VertsType(), sm->NumVerts(), meshlets.size32());
+		model2->submeshes.Append(sm2);
+
+		sm2->flags	|= SubMeshBase::RAWVERTS;
+		sm2->verts	= Duplicate(sm->verts);
+		sm2->minext	= sm->minext;
+		sm2->maxext	= sm->maxext;
+
+		//ISO_ptr<MeshletTechnique>	t("meshlet", sm->technique);
+		//CheckHasExternals(t, ISO::TRAV_DEEP);
+		//sm2->technique	= (ISO_ptr<void>)t;
+		//sm2->technique	= ISO::root()["data"]["default"]["meshlet"];
+
+		sm2->technique.CreateExternal("D:\\dev\\shared\\common\\default.fx;meshlet");
+		sm2->NumFaces(meshlets.size32());
+
+		uint32	num_prims	= 0;
+		for (auto& i : meshlets)
+			num_prims += i.primitives.size32();
+
+		ISO_ptr<ISO_openarray<Meshlet>>		meshlets2("meshlets", meshlets.size32());
+		ISO_ptr<ISO_openarray<uint32>>		meshlet_prims("prims", num_prims);
+
+		Meshlet	*m			= meshlets2->begin();
+		MeshletPrim	*mp		= (MeshletPrim*)meshlet_prims->begin();
+		auto	x			= sm2->indices.begin();
+		uint32	vert_offset	= 0;
+		uint32	prim_offset	= 0;
+
+		hash_map<uint32, uint32>	vert_mapping;
+
+		for (auto& i : make_indexed_container(meshlets, make_const(order))) {
+		//for (auto& i : meshlets) {
+
+			for (auto &j : i.primitives) {
+				int	a = min(j.i0, j.i1, j.i2);
+				int	b = max(j.i0, j.i1, j.i2);
+				ISO_ASSERT(b - a < 32);
+			}
+
+			for (auto &j : i.primitives)
+				*mp++	= {j.i0, j.i1, j.i2, 0};
+
+			m->PrimOffset	= prim_offset;
+			prim_offset		+= (m->PrimCount = i.primitives.size32());
+
+			auto	cull	= i.ComputeCullData(verts);
+			auto	qaxis	= clamp((cull.axis + one) * 255 / 2, zero, 255);
+			auto	error	= reduce_add(abs((qaxis / 255 * 2 - 1) - cull.axis));
+			auto	qw		= min((cull.spread + error) * 255 + 1, 255);
+			//m->sphere		= as_vec(cull.bound);
+			m->sphere		= concat(cull.bound.centre(), cull.bound.radius());
+			m->cone			= as<uint32>(to<uint8>(concat(qaxis, qw)));
+			m->apex			= cull.apex;
+			++m;
+
+		#if 1
+			auto	x2 = x->begin();
+			for (auto j : i.unique_indices) {
+				uint32	m;
+				if (vert_mapping[j].exists()) {
+					m = vert_mapping[j];
+				} else {
+					m = vert_mapping[j] = vert_mapping.size();
+					sm2->VertBlock()[m] = sm->VertBlock()[j];
+				}
+				*x2++ = m;
+			}
+		#else
+			copy(i.unique_indices, *x);
+		#endif
+			for (int j = i.unique_indices.size32(); j < max_verts; j++)
+				(*x)[j] = -1;
+			++x;
+		}
+
+		ISO_ptr<MeshletParams>	parameters("p");
+		parameters->meshlets	= meshlets2;
+		parameters->prims		= meshlet_prims;
+		sm2->parameters			= parameters;
+	}
+
+	CheckHasExternals(model2, ISO::TRAV_DEEP);
+	return model2;
+}
+
+
+//-----------------------------------------------------------------------------
 //	init
 //-----------------------------------------------------------------------------
 
 static initialise init(
 	ISO::getdef<SubMesh>(),
+	ISO::getdef<SubMesh16>(),
+	ISO::getdef<ShapeMesh::vertex>(),
 
 	ISO_get_cast(DefaultSceneModel),
 	ISO_get_cast(DefaultSceneNode),
@@ -2160,6 +2331,7 @@ static initialise init(
 	ISO_get_cast(DefaultTechnique),
 //	ISO_get_cast(DefaultPass),
 	ISO_get_cast(ModelFromSubMesh),
+	ISO_get_cast(FixTechnique),
 
 	ISO_get_operation(MergeModels),
 	ISO_get_operation(OptimiseSkinModel),
@@ -2178,5 +2350,7 @@ static initialise init(
 	ISO_get_operation(SimplifyMesh),
 	ISO_get_operation(RemoveEdges),
 	ISO_get_operation(ToMercator),
-	ISO_get_operation(StitchMesh)
+	ISO_get_operation(StitchMesh),
+
+	ISO_get_operation(MakeMeshlets)
 );

@@ -7,9 +7,15 @@ namespace iso {
 
 template<typename C> constexpr auto			begin(C &&c)		->decltype(c.begin())	{ return c.begin(); }
 template<typename C> constexpr auto			end(C &&c)			->decltype(c.end())		{ return c.end(); }
+template<typename C> constexpr auto			front(C &&c)		->decltype(c.front())	{ return c.front(); }
+template<typename C> constexpr auto			back(C &&c)			->decltype(c.back())	{ return c.back(); }
+template<typename C> constexpr auto			is_empty(C &&c)		->decltype(c.empty())	{ return c.empty(); }
 
 template<typename T>		constexpr T*	begin(T *p)			{ return p; }
 template<typename T, int N>	constexpr T*	end(T (&p)[N])		{ return p + N; }
+template<typename T>		constexpr T&	front(T *p)			{ return p[0]; }
+template<typename T, int N>	constexpr T&	back(T (&p)[N])		{ return p[N - 1]; }
+template<typename T, int N>	constexpr bool	is_empty(T (&p)[N])	{ return false; }
 
 template<typename C> constexpr auto			global_begin(C &&c)	->decltype(begin(c))	{ return begin(c); }
 template<typename C> constexpr auto			global_end(C &&c)	->decltype(end(c))		{ return end(c); }
@@ -25,16 +31,10 @@ struct forward_iterator_t		: public input_iterator_t			{};//has ++
 struct bidirectional_iterator_t : public forward_iterator_t			{};//has ++,--
 struct random_access_iterator_t : public bidirectional_iterator_t	{};//has ++,--,+,-
 
-template<typename T, typename V = void> static constexpr bool has_begin_v = false;
+template<typename T, typename V = void> static constexpr bool has_begin_v							= false;
 template<typename T> static constexpr bool has_begin_v<T, void_t<decltype(begin(declval<T>()))>>	= true;
-template<typename T, typename V = void> static constexpr bool has_end_v = false;
+template<typename T, typename V = void> static constexpr bool has_end_v								= false;
 template<typename T> static constexpr bool has_end_v<T, void_t<decltype(end(declval<T>()))>>		= true;
-
-template<typename T, typename V = void> struct T_has_begin	: T_false {};
-template<typename T> struct T_has_begin<T, void_t<decltype(begin(declval<T>()))>>	: T_true {};
-
-template<typename T, typename V = void> struct T_has_end	: T_false {};
-template<typename T> struct T_has_end<T, void_t<decltype(end(declval<T>()))>>		: T_true {};
 
 template<typename T, typename V = void> struct T_iterator_category_deduce	: T_type<not_iterator_t> {};
 template<typename T> struct T_iterator_category_deduce<T, enable_if_t<T_has_deref<T>::value && T_has_inc<T>::value>>
@@ -44,68 +44,23 @@ template<typename T, typename V = void> struct T_iterator_category : T_iterator_
 template<typename T>					struct T_iterator_category<T, void_t<typename T::iterator_category>>	: T_type<typename T::iterator_category> {};
 template<typename T> using iterator_category = typename T_iterator_category<T>::type;
 
-template<typename I, typename = void>	struct iterator_traits_reference1										{ typedef void reference; };
-template<typename I>					struct iterator_traits_reference1<I, void_t<decltype(*declval<I>())>>	{ typedef decltype(*declval<I>()) reference; };
-template<typename I, typename = void>	struct iterator_traits_reference : iterator_traits_reference1<const I>	{};
-template<typename I>					struct iterator_traits_reference<I, void_t<typename I::reference>>		{ typedef typename I::reference reference; };
+template<typename I, typename = void>	struct iterator_reference										: T_type<decltype(declval<I>()[0])>	{};
+template<typename I>					struct iterator_reference<I, void_t<decltype(*declval<I>())>>	: T_type<decltype(*declval<I>())>	{};
+template<typename I>					struct iterator_element		: T_type<noref_cv_t<typename iterator_reference<I>::type>> {};
 
-template<typename I, typename = void>	struct iterator_traits_element									{ typedef noref_t<typename iterator_traits_reference<I>::reference> element; };
-template<typename I>					struct iterator_traits_element<I, void_t<typename I::element>>	{ typedef typename I::element element; };
+template<typename C, typename=void> struct container_iterator;
+template<typename C> struct container_iterator<C, enable_if_t<has_begin_v<C>>>	: T_type<noref_cv_t<decltype(begin(declval<C>()))>> {};
 
-template<typename I> struct iterator_traits : iterator_traits_element<I>, iterator_traits_reference<I> {
-	typedef typename T_iterator_category<I>::type iterator_category;
-};
+template<typename T> using iterator_t				= typename container_iterator<T>::type;
+template<typename T> using it_element_t				= typename iterator_element<T>::type;
+template<typename T> using it_reference_t			= typename iterator_reference<T>::type;
+template<typename T> using element_t				= it_element_t	<iterator_t<T>>;
+template<typename T> using reference_t				= it_reference_t<iterator_t<T>>;
+template<typename I> using iterator_category		= typename T_iterator_category<I>::type;
+template<typename I> constexpr bool is_iterator_v	= !same_v<iterator_category<I>, not_iterator_t>;
 
-template<typename T> struct iterator_traits<T*> {
-	typedef random_access_iterator_t iterator_category;
-	typedef T			element;
-	typedef T&			reference;
-};
-
-template<typename T> struct iterator_traits<const T> {
-	typedef typename iterator_traits<T>::iterator_category iterator_category;
-	typedef const typename iterator_traits<T>::element		element;
-	typedef	const typename iterator_traits<T>::reference	reference;
-};
-template<typename T> struct iterator_traits<T&> : iterator_traits<T> {};
-
-template<typename C, typename V=void> struct container_traits_iterator								: T_type<decltype(begin(declval<C>()))> {};
-template<typename C> struct container_traits_iterator<C, void_t<typename C::iterator>>				: T_type<typename C::iterator>			{};
-template<typename C, typename V=void> struct container_traits_const_iterator						: T_type<decltype(begin(declval<const C>()))> {};
-template<typename C> struct container_traits_const_iterator<C, void_t<typename C::const_iterator>>	: T_type<typename C::const_iterator>	{};
-
-template<typename C> struct container_traits {
-	typedef typename container_traits_iterator<C>::type			iterator;	
-	typedef typename container_traits_const_iterator<C>::type	const_iterator;
-	typedef typename iterator_traits<iterator>::element			element;	
-	typedef typename iterator_traits<iterator>::reference		reference;
-};
-template<typename C> struct container_traits<const C> {
-	typedef	typename container_traits<C>::const_iterator		iterator, const_iterator;
-	typedef typename iterator_traits<iterator>::element			element;
-	typedef typename iterator_traits<iterator>::reference		reference;
-};
-template<typename T> struct container_traits<T&> : container_traits<T> {};
-
-template<typename T> struct container_traits<T*> {
-	typedef T			element;
-	typedef	T&			reference;
-	typedef	T*			iterator;
-	typedef	const T*	const_iterator;
-};
-
-template<typename T> struct container_traits<T[]>					: container_traits<T*> {};
-template<typename T, int N> struct container_traits<T[N]>			: container_traits<T*> {};
-template<typename T, int N> struct container_traits<T(&)[N]>		: container_traits<T*> {};
-template<typename T, int N> struct container_traits<const T[N]>		: container_traits<const T*> {};
-template<typename T> struct container_traits<constructable<T>>		: container_traits<T> {};
-
-template<typename T> using iterator_t		= typename container_traits<T>::iterator;
-template<typename T> using element_t		= typename container_traits<T>::element;
-template<typename T> using reference_t		= typename container_traits<T>::reference;
-template<typename T> using it_element_t		= typename iterator_traits<T>::element;
-template<typename T> using it_reference_t	= typename iterator_traits<T>::reference;
-template<typename I> constexpr bool is_iterator_v		= !same_v<typename T_iterator_category<I>::type, not_iterator_t>;
+template<typename I> constexpr enable_if_t<is_iterator_v<I>, noref_t<I>>	begin(I &&i)		{ return i; }
+template<typename I> constexpr enable_if_t<is_iterator_v<I>, I>				begin(const I &i)	{ return i; }
 
 template<class C> constexpr bool is_empty(const C &c)	{ return begin(c) == end(c); }
 
@@ -117,13 +72,17 @@ template<typename I> size_t _distance(I first, const I &last, input_iterator_t) 
 	}
 	return n;
 }
-template<typename I> constexpr size_t _distance(const I &first, const I &last, random_access_iterator_t) {
+template<typename I> auto _distance(I first, I last, not_iterator_t) {
 	return last - first;
 }
-template<typename I> constexpr size_t distance(const I &first, const I &last) {
-	return _distance(first, last, typename iterator_traits<I>::iterator_category());
+
+template<typename I> constexpr size_t _distance(const I &first, const identity_t<I> &last, random_access_iterator_t) {
+	return last - first;
 }
-template<typename I> constexpr uint32 distance32(const I &first, const I &last) {
+template<typename I> constexpr size_t distance(const I &first, const identity_t<I> &last) {
+	return _distance(first, last, iterator_category<I>());
+}
+template<typename I> constexpr uint32 distance32(const I &first, const identity_t<I> &last) {
 	return uint32(distance(first, last));
 }
 
@@ -136,7 +95,7 @@ template<typename I, typename J> constexpr I nth(const I &first, J i, random_acc
 	return I(first + i);
 }
 template<typename I, typename J> constexpr I nth(const I &first, J i) {
-	return nth(first, i, typename iterator_traits<I>::iterator_category());
+	return nth(first, i, iterator_category<I>());
 }
 
 template<typename I> I last(const I &begin, const I &end, input_iterator_t) {
@@ -149,7 +108,7 @@ template<typename I> constexpr I last(const I &begin, I end, bidirectional_itera
 	return *--end;
 }
 template<typename I> constexpr I last(const I &begin, const I &end) {
-	return last(begin, end, typename iterator_traits<I>::iterator_category());
+	return last(begin, end, iterator_category<I>());
 }
 
 template<typename C> constexpr inline size_t num_elements(const C &c) {
@@ -158,6 +117,9 @@ template<typename C> constexpr inline size_t num_elements(const C &c) {
 
 template<typename C> inline size_t index_of(const C &c, const iterator_t<const C> &i) {
 	return distance(begin(c), i);
+}
+template<typename C> inline size_t index_of(const C &c, reference_t<const C> i) {
+	return distance(begin(c), &i);
 }
 
 //-----------------------------------------------------------------------------
@@ -200,7 +162,7 @@ template<class T> inline void copy(const T *s, T *e, T *d)	{ copy_n(s, d, e - s)
 template<class S, class D> inline void copy(S &&s, D &&d)	{ check_copy_size(s, d); copy(begin(s), end(s), begin(d)); }
 template<class T> inline void rcopy(T *d, T *e, T *s)		{ copy_n(s, d, e - d); }
 template<class T> inline void rcopy(T *d, T *e, const T *s)	{ copy_n(s, d, e - d); }
-template<class S, class D> inline void rcopy(D &&d, S &&s)	{ check_copy_size(d, s); copy_n(s, begin(d), num_elements(d)); }
+template<class S, class D> inline void rcopy(D &&d, S &&s)	{ check_copy_size(d, s); copy_n(begin(s), begin(d), num_elements(d)); }
 
 // move
 template<class S, class D> inline void move_n(S s, D d, size_t n) {
@@ -275,7 +237,34 @@ template<class I, class V> inline void fill(I i, I e, const V &v) {
 }
 
 template<class C, class V> inline void fill(C&& c, const V &v) {
-	fill(c.begin(), c.end(), v);
+	fill(begin(c), end(c), v);
+}
+
+// compare
+template<class I1, class I2> bool equal_n(I1 i1, I2 i2, size_t n) {
+	for (; n--; ++i1, ++i2) {
+		if (any(*i1 != *i2))
+			return false;
+	}
+	return true;
+}
+
+template<class I1, class I2> int compare_n(I1 i1, I2 i2, size_t n) {
+	for (; n--; ++i1, ++i2) {
+		if (int r = simple_compare(*i1, *i2))
+			return r;
+	}
+	return 0;
+}
+
+template<class I1, class I2> int compare(I1 i1, I1 end1, I2 i2, I2 end2) {
+	for (; i2 != end2; ++i1, ++i2) {
+		if (i1 == end1)
+			return -1;
+		if (int r = simple_compare(*i1, *i2))
+			return r;
+	}
+	return i1 == end1 ? 0 : 1;
 }
 
 //-----------------------------------------------------------------------------
@@ -309,7 +298,7 @@ template<typename R, typename T = noref_t<decltype(get(declval<R>()))>> struct r
 };
 template<typename R, typename T> struct ref_helper2<R, const T> {
 	const T	t;
-	constexpr ref_helper2(R&& r) : t(r) {}
+	constexpr ref_helper2(R&& r) : t(forward<R>(r)) {}
 	constexpr const T* operator->() { return &t; }
 };
 
@@ -318,30 +307,35 @@ template<typename P> ref_helper2<P> make_ref_helper2(P&& p) {
 }
 
 //-----------------------------------------------------------------------------
+//	auto_iterator
+//-----------------------------------------------------------------------------
+
+template<typename T, typename I> struct auto_iterator {
+	I	i;
+	operator T()		{ return T(*i++); }
+	auto_iterator(I i) : i(i) {}
+};
+
+template<typename T, typename I> auto_iterator<T, I> make_auto_iterator(I i)	{ return i; }
+template<typename T, typename C> auto make_auto_iteratorc(C&& c)				{ return make_auto_iterator<T>(begin(c)); }
+
+//-----------------------------------------------------------------------------
 //	iterator_wrapper
 //-----------------------------------------------------------------------------
 
-template<typename T, typename I, typename C = typename iterator_traits<I>::iterator_category> struct iterator_wrapper {
+template<typename T, typename I, typename C = iterator_category<I>> struct iterator_wrapper {
 protected:
 	I	i;
 	constexpr T*		me()			{ return static_cast<T*>(this); }
 	constexpr const T*	me()	const	{ return static_cast<const T*>(this); }
 public:
-	using iterator_category	= C;
-//	using element			= typename iterator_traits<I>::element;
-//	using reference			= typename iterator_traits<I>::reference;
-
-	constexpr iterator_wrapper()			: i()			{}
+	constexpr iterator_wrapper()			: i()				{}
 	constexpr iterator_wrapper(I &&i)		: i(forward<I>(i))	{}
-	constexpr iterator_wrapper(const I &i)	: i(i)			{}
-	constexpr const I&	inner()			const	{ return i; }
-
+	constexpr iterator_wrapper(const I &i)	: i(i)				{}
+	
+	constexpr const I&		inner()			const	{ return i; }
 	constexpr decltype(auto) operator*()	const	{ return *i; }
 	constexpr I				operator->()	const	{ return i; }
-	constexpr T&			operator++()			{ ++i; return *me(); }
-	constexpr T				operator++(int)			{ auto t = *me(); ++*me(); return t; }
-	constexpr T&			operator--()			{ --i; return *me(); }
-	constexpr T				operator--(int)			{ auto t = *me(); --*me(); return t; }
 
 	constexpr bool			operator==(const iterator_wrapper &b)	const	{ return i == b.i; }
 	constexpr bool			operator!=(const iterator_wrapper &b)	const	{ return i != b.i; }
@@ -350,16 +344,64 @@ public:
 	constexpr bool			operator> (const iterator_wrapper &b)	const	{ return i >  b.i; }
 	constexpr bool			operator>=(const iterator_wrapper &b)	const	{ return i >= b.i; }
 
-	// random-access iterators only
+	constexpr T&			operator++()			{ ++i; return *me(); }
+	constexpr T				operator++(int)			{ auto t = *me(); ++*me(); return t; }
+
+//	friend auto	operator-(const iterator_wrapper &a, const iterator_wrapper &b) { return a.i - b.i; }
+};
+
+template<typename T, typename I> struct iterator_wrapper<T, I, bidirectional_iterator_t> : iterator_wrapper<T, I, forward_iterator_t> {
+	using iterator_wrapper<T, I, forward_iterator_t>::iterator_wrapper;
+	constexpr T&			operator--()			{ --i; return *me(); }
+	constexpr T				operator--(int)			{ auto t = *me(); --*me(); return t; }
+};
+
+template<typename T, typename I> struct iterator_wrapper<T, I, random_access_iterator_t> : iterator_wrapper<T, I, bidirectional_iterator_t> {
+	using iterator_wrapper<T, I, bidirectional_iterator_t>::iterator_wrapper;
 	constexpr T&			operator+=(intptr_t x)			{ i += x; return *me(); }
 	constexpr T				operator+ (intptr_t x)	const	{ return T(*me()) += x; }
 	constexpr T&			operator-=(intptr_t x)			{ i -= x; return *me(); }
 	constexpr T				operator- (intptr_t x)	const	{ return T(*me()) -= x; }
 	constexpr decltype(auto) operator[](intptr_t x)	const	{ return *(*me() + x); }
-
-//	friend auto	operator-(const iterator_wrapper &a, const iterator_wrapper &b) { return a.i - b.i; }
-	auto	operator-(const iterator_wrapper &b) const	{ return i - b.i; }
+	auto	operator-(const iterator_wrapper &b)	const	{ return i - b.i; }
 };
+
+//-----------------------------------------------------------------------------
+//	move_iterator
+//-----------------------------------------------------------------------------
+
+template<class I> struct move_iterator : iterator_wrapper<move_iterator<I>, I> {
+	using reference	= noref_t<it_reference_t<I>>&&;
+	using iterator_wrapper<move_iterator<I>, I>::iterator_wrapper;
+	constexpr reference operator*()				const	{ return move(*this->i); }
+	constexpr reference	operator[](size_t x)	const	{ return move(this->i[x]); }
+};
+
+template<typename T> move_iterator<T>	make_move_iterator(T i)		{ return i; }
+template<typename T> auto				move_container(T&& c)		{ return make_range(make_move_iterator(begin(c)), make_move_iterator(end(c))); }
+
+//-----------------------------------------------------------------------------
+//	back_insert_iterator - wrap pushes to back of container as output iterator
+//-----------------------------------------------------------------------------
+
+template<class C> class back_insert_iterator {
+	C& c;
+
+public:
+	using iterator_category = output_iterator_t;
+
+	back_insert_iterator(C& c) : c(c) {}
+
+	template<typename V> back_insert_iterator& operator=(V &&v) {
+		c.push_back(forward<V>(v));
+		return *this;
+	}
+	back_insert_iterator& operator*()		{ return *this; }
+	back_insert_iterator& operator++()		{ return *this; }
+	back_insert_iterator  operator++(int)	{ return *this; }
+};
+
+template<class C> back_insert_iterator<C> back_inserter(C& c) { return c; }
 
 //-----------------------------------------------------------------------------
 //	with_iterator - gives range-based-for access to iterator
@@ -367,37 +409,32 @@ public:
 
 template<typename T> struct with_iterator_s {
 	T	t;
-	typedef noref_cv_t<decltype(t.begin())> I;
+	typedef iterator_t<T> I;
 
-	struct iterator {
-		I	i;
-		iterator(I i) : i(i) {}
-		iterator&	operator++()					{ ++i; return *this; }
-		const I&	operator*()				const	{ return i; }
-		I&			operator*()						{ return i; }
-		bool operator==(const iterator &b)	const	{ return i == b.i; }
-		bool operator!=(const iterator &b)	const	{ return i != b.i; }
+	struct iterator : iterator_wrapper<iterator, I> {
+		iterator(I i) : iterator_wrapper<iterator, I>(i) {}
+		const I&	operator*()				const	{ return this->i; }
+		I&			operator*()						{ return this->i; }
 	};
-	typedef iterator	const_iterator;
 
 	with_iterator_s(T &&t) : t(forward<T>(t)) {}
-	iterator begin()	const { return t.begin(); }
-	iterator end()		const { return t.end(); }
+	iterator begin()	const { using iso::begin; return begin(t); }
+	iterator end()		const { using iso::end; return end(t); }
 };
 
 template<typename T> with_iterator_s<T> with_iterator(T&& t) { return forward<T>(t); }
 
 template<typename T> struct with_index_s {
 	T	t;
-	typedef noref_cv_t<decltype(t.begin())> I;
+	typedef iterator_t<T> I;
 
 	struct element {
 		T	&t;
 		I	i;
 		element(T &t, I i) : t(t), i(i) {}
 		auto&	operator*()		const	{ return *i; }
-		auto&	operator->()	const	{ return *i; }
-		size_t	index()			const	{ return t.index_of(i); }
+		decltype(auto)	operator->()	const	{ return i; }
+		auto	index()			const	{ return index_of(t, i); }
 	};
 
 	struct iterator : element {
@@ -408,8 +445,8 @@ template<typename T> struct with_index_s {
 	};
 
 	with_index_s(T &&t) : t(forward<T>(t)) {}
-	iterator begin()	{ return iterator(t, t.begin()); }
-	iterator end()		{ return iterator(t, t.end()); }
+	iterator begin()	{ using iso::begin; return iterator(t, begin(t)); }
+	iterator end()		{ using iso::end; return iterator(t, end(t)); }
 };
 
 template<typename T> with_index_s<T>	with_index(T&& t)	{ return forward<T>(t); }
@@ -420,14 +457,18 @@ template<typename T> with_index_s<T>	with_index(T&& t)	{ return forward<T>(t); }
 
 template<typename I> class range;
 
-template<typename I> constexpr I							slice_a0(I a, I b, I a1)			{ return a1; }
-template<typename I> constexpr I							slice_a0(I a, I b, uint32 a1)		{ return nth(a, a1); }
-template<typename I, typename T> can_add_t<I, T, I>			slice_a0(I a, I b, T a1)			{ return (a1 < 0 ? b : a) + a1; }
+template<typename I> constexpr I							min_it(I a, I b)					{ return a < b ? a : b; }
+template<typename I> constexpr I							max_it(I a, I b)					{ return b < a ? a : b; }
+
+template<typename I> constexpr I							slice_a0(I a, I b, I a1)			{ return min_it(a1, b); }
+template<typename I> constexpr I							slice_a0(I a, I b, uint32 a1)		{ return min_it(nth(a, a1), b); }
+template<typename I, typename T> can_add_t<I, T, I>			slice_a0(I a, I b, T a1)			{ return a1 < 0 ? max_it(a, b + a1) : min_it(a + a1, b); }
 template<typename I, typename A> range<I>					slice_a(I a, I b, A&& a1)			{ return {slice_a0(a, b, forward<A>(a1)), b}; }
 
-template<typename I> constexpr range<I>						slice_b(I a, I b, I b1)				{ return range<I>(a, b1); }
-template<typename I> constexpr range<I>						slice_b(I a, I b, uint32 b1)		{ return range<I>(a, nth(a, b1)); }
-template<typename I, typename T> can_add_t<I, T, range<I>>	slice_b(I a, I b, T b1)				{ return range<I>(a, (b1 <= 0 ? b : a) + b1); }
+template<typename I> constexpr I							slice_b0(I a, I b, I b1)			{ return b1; }
+template<typename I> constexpr I							slice_b0(I a, I b, uint32 b1)		{ return nth(a, b1); }
+template<typename I, typename T> can_add_t<I, T, I>			slice_b0(I a, I b, T b1)			{ return b1 <= 0 ? max_it(a, b + b1) : min_it(a + b1, b); }
+template<typename I, typename B> range<I>					slice_b(I a, I b, B&& b1)			{ return {a, slice_b0(a, b, forward<B>(b1))}; }
 
 template<typename I, typename A, typename B> range<I>		slice_ab(I a, I b, A&& a1, B&& b1)	{ return slice_b(slice_a0(a, b, forward<A>(a1)), b, forward<B>(b1)); }
 
@@ -439,9 +480,8 @@ template<typename I> class range {
 protected:
 	I	a, b;
 public:
-	typedef	typename iterator_traits<I>::element	element;
-	typedef	typename iterator_traits<I>::reference	reference;
-	typedef	I	iterator, const_iterator;
+	typedef	it_element_t<I>		element_t;
+	typedef	it_reference_t<I>	reference_t;
 
 	struct range_assign {
 		const range&	r;
@@ -458,57 +498,62 @@ public:
 	};
 
 	constexpr range()								: a(), b()			{}
-	constexpr range(_none&)							: a(), b()			{}
+	constexpr range(const _none&)					: a(), b()			{}
 	constexpr range(const I &a, const I &b)			: a(a), b(b)		{}
-//	constexpr range(const I &a, size_t n)			: a(a), b(a + n)	{}
-	template<int N, typename V = enable_if_t<!same_v<element, void>, element>> constexpr range(noref_t<V> (&a)[N])	: a(a), b(a + N)	{}
-	template<typename C, typename = enable_if_t<has_end_v<C>>> range(C &&c) : a(global_begin(c)), b(global_end(c)) {}
 	constexpr range(I &&a, I &&b)					: a(move(a)), b(move(b))	{}
+	//constexpr range(const I &a, size_t n)			: a(a), b(a + n)	{}
+	template<int N, typename V = enable_if_t<!same_v<element_t, void>, element_t>> constexpr range(noref_t<V> (&a)[N])	: a(a), b(a + N)	{}
+	template<typename C, typename = enable_if_t<has_end_v<C>>> range(C &&c) : a(global_begin(c)), b(global_end(c)) {}
 
 	constexpr range_assign		operator*()			const	{ return *this;	}
-	constexpr decltype(auto)	operator[](int i)	const	{ return *nth(a, i);	}
+	constexpr decltype(auto)	operator[](int i)	const	{ return *nth(a, i); }
+	constexpr explicit operator bool()				const	{ return a != b; }
 	bool				empty()						const	{ return a == b; }
 	constexpr const I&	begin()						const	{ return a; }
 	constexpr const I&	end()						const	{ return b; }
 	constexpr size_t	size()						const	{ return distance(a, b); }
 	constexpr uint32	size32()					const	{ return distance32(a, b); }
 
-	reference			back()						const	{ return b[-1]; }
+	decltype(auto)		back()						const	{ return b[-1]; }
 	void				pop_back()							{ --b; }
-	reference			pop_back_value()					{ return *--b; }
-	reference			front()						const	{ return *a; }
+	decltype(auto)		pop_back_value()					{ return *--b; }
+	decltype(auto)		front()						const	{ return *a; }
 	void				pop_front()							{ ++a; }
-	reference			pop_front_value()					{ return *a++; }
+	decltype(auto)		pop_front_value()					{ return *a++; }
 
 	template<typename T> void	push_back(T &&t)			{ *b++ = forward<T>(t); }
 
 	constexpr bool		contains(const range &r)	const	{ return !(r.a < a) && !(r.b > b); }
-	constexpr bool		contains(const I i)			const	{ return i && !(i < a) && i < b; }
-	constexpr bool		contains(reference e)		const	{ return !(&e < a) && &e < b; }
-	constexpr intptr_t	index_of(const I i)			const	{ return contains(i) ? distance(a, i) : -1; }
-	constexpr intptr_t	index_of(reference e)		const	{ return &e - a; }
+	constexpr bool		contains(const I &i)		const	{ return !(i < a) && i < b; }
+	constexpr bool		contains(reference_t e)		const	{ return !(&e < a) && &e < b; }
+	constexpr intptr_t	index_of(const I &i)		const	{ return contains(i) ? distance(a, i) : -1; }
+	constexpr intptr_t	index_of(reference_t e)		const	{ return &e - a; }
 
-	I		erase_unordered(I i) {
+	const I&	erase_unordered(const I &i) {
 		ISO_ASSERT(contains(i));
 		if (i != --b)
 			*i = *b;
 		return i;
 	}
-	I		erase(I i) {
+	const I&	erase(const I& i) {
 		ISO_ASSERT(contains(i));
 		--b;
 		copy_n(i + 1, i, b - i);
 		return i;
 	}
-	I		erase(I first, I last) {
+	const I&	erase(const I& first, const I& last) {
 		ISO_ASSERT(last >= first && first >= a && last <= b);
 		b	-= last - first;
 		copy_n(last, first, b - first);
 		return first;
 	}
+	I			erase(const range &r) {
+		return erase(r.a, r.b);
+	}
 
-	constexpr I			inc_wrap(I i)	const	{ ++i; return i == b ? a : i; }
-	constexpr I			dec_wrap(I i)	const	{ if (i == a) i = b; return --i; }
+	constexpr I	inc_wrap(I i)				const	{ return ++i == b ? a : i; }
+	constexpr I	dec_wrap(I i)				const	{ if (i == a) i = b; return --i; }
+	constexpr I	fix_wrap(I i)				const	{ return i + (i < a ? b - a : i >= b ? a - b : 0); }
 
 	template<typename A>	auto			slice(A&& a1)			const	{ return slice_a(a, b, forward<A>(a1)); }
 	template<typename B>	auto			slice_to(B&& b1)		const	{ return slice_b(a, b, forward<B>(b1)); }
@@ -517,24 +562,26 @@ public:
 	range&									trim_length(uint32 n)			{ b = nth(a, n); return *this; }
 	template<typename T> can_add_t<I, T, range&>	trim_back(T t)			{ b -= t; return *this; }
 
-	friend constexpr range	operator&(const range &a, const range &b)	{ return range(max(a.a, b.a), min(a.b, b.b)); }
-	friend constexpr bool	operator<(const range &a, const range &b)	{ return a.a < b.a || (!(b.a < a.a) && a.b < b.b); }
+	//friends
+	friend constexpr range	operator&(const range &a, const range &b)	{ return {max_it(a.a, b.a), min_it(a.b, b.b)}; }
+	friend constexpr bool	overlaps(const range &a, const range &b)	{ return !(b.a > a.b) && !(b.b < a.a); }
 	template<typename W> friend bool write(W &w, const range &a)		{ return writen(w, a.a, a.size()); }
 	template<typename R> friend bool read(R &r, const range &a)			{ return readn(r, a.a, a.size()); }
+	template<typename R> friend bool read(R &r, range &a)				{ return readn(r, a.a, a.size()); }
+
+	template<typename R> bool read(R &r)				{ return readn(r, a, size()); }
 };
 
-template<typename I> constexpr bool overlaps(const range<I> &x, const range<I> &y)	{ return !(y.a > x.b) && !(y.b < x.a); }
-
-template<typename I>		constexpr auto	make_range(const I &a, const I &b)	{ return range<I>(a, b); }
+template<typename I>		constexpr auto		make_range(const I &a, const I &b)	{ return range<I>(a, b); }
 template<typename I>		constexpr range<I>	make_range_n(const I &a, size_t n)	{ return range<I>(a, nth(a, n)); }
-template<typename T, int N> constexpr auto	make_range(T (&a)[N])				{ return range<T*>(&a[0], &a[N]);	}
-template<typename T>		constexpr auto	make_range_n(T (&a)[], size_t n)	{ return range<T*>(&a[0], &a[n]);	}
-template<typename T, int N>	constexpr auto	make_range_n(T (&a)[N], size_t n)	{ return range<T*>(&a[0], &a[n]);	}
-template<typename I>		constexpr auto	make_range(I &&a, I &&b)			{ return range<noref_t<I>>(forward<I>(a), forward<I>(b)); }
-template<typename I>		constexpr auto	make_range_n(I &&a, size_t n)		{ return make_range(forward<I>(a), nth(a, n)); }
-template<typename C>		constexpr auto	make_rangec(C &c)					{ return make_range(begin(c), end(c)); }
+template<typename I>		constexpr auto		make_range(I &&a, I &&b)			{ return range<noref_t<I>>(forward<I>(a), forward<I>(b)); }
+template<typename I>		constexpr auto		make_range_n(I &&a, size_t n)		{ return make_range(forward<I>(a), nth(a, n)); }
 
-template<typename T, typename C> auto element_cast(C &&c)	{ return make_range(element_cast<T>(begin(c)), element_cast<T>(end(c))); }
+template<typename T, int N> constexpr auto		make_range(T (&a)[N])				{ return range<T*>(&a[0], &a[N]);	}
+template<typename T>		constexpr auto		make_range_n(T (&a)[], size_t n)	{ return range<T*>(&a[0], &a[n]);	}
+template<typename T, int N>	constexpr auto		make_range_n(T (&a)[N], size_t n)	{ return range<T*>(&a[0], &a[n]);	}
+template<typename C>		constexpr auto		make_rangec(C &c)					{ return make_range(begin(c), end(c)); }
+template<typename C>		constexpr auto		make_rangec(const C &c)				{ return make_range(begin(c), end(c)); }
 
 //-----------------------------------------------------------------------------
 //	cached_range - cached range for quicker indexing
@@ -544,7 +591,6 @@ template<typename I> struct cached_range;
 
 template<typename I> struct cached_iterator {
 	const cached_range<I>	*r;
-	typedef	typename iterator_traits<I>::reference	reference;
 	size_t		i;
 
 	cached_iterator(const cached_range<I> *r, size_t i) : r(r), i(i) {}
@@ -552,7 +598,7 @@ template<typename I> struct cached_iterator {
 	bool		operator!=(const cached_iterator &b)	const { return i != b.i; }
 	intptr_t	operator-(const cached_iterator &b)		const { return i - b.i; }
 
-	reference			operator*()		const	{ return *r->get_nth(i); }
+	decltype(auto)		operator*()		const	{ return *r->get_nth(i); }
 	auto				operator->()	const	{ return r->get_nth(i); }
 	I					iterator()		const	{ return r->get_nth(i); }
 
@@ -564,34 +610,40 @@ template<typename I> struct cached_iterator {
 };
 
 template<typename I> struct cached_range : range<I> {
-	using typename range<I>::reference;
-
+	using	range<I>::a;
 	struct saved {
 		int		pos;
 		I		i;
-		saved(int pos, I i) : pos(pos), i(i) {}
+		saved(int pos, const I &i) : pos(pos), i(i) {}
 	};
 	mutable saved	prev;
 	mutable saved	pow2;
 	size_t			n;
 
-	template<typename C> cached_range(C &&c) : range<I>(c.begin(), c.end()), prev(0, this->a), pow2(0, this->a), n(num_elements(c)) {}
+	template<typename C> cached_range(C &&c) : range<I>(c.begin(), c.end()), prev(0, a), pow2(0, a), n(num_elements(c)) {}
 
 	I	get_nth(size_t i) const {
-		saved	from = i < prev.pos
-			? (i < pow2.pos ? saved(0, this->a) : pow2)
-			: (pow2.pos > prev.pos && i >= pow2.pos ? pow2 : prev);
+		if (i != prev.pos) {
+			if (i < prev.pos) {
+				if (i < pow2.pos)
+					pow2 = saved(0, a);
+				prev = pow2;
+			}
 
-		if (prev.pos != i && prev.pos && (prev.pos & (prev.pos - 1)) == 0)
-			pow2 = prev;
-
-		prev	= saved(i, nth(from.i, i - from.pos));
+			if (i > pow2.pos * 2) {
+				size_t	j = size_t(1) << log2_floor(i);
+				pow2	= saved(j, nth(prev.i, j - prev.pos));
+				prev	= saved(i, nth(pow2.i, i - j));
+			} else {
+				prev	= saved(i, nth(prev.i, i - prev.pos));
+			}
+		}
 		return prev.i;
 	}
 
-	reference	operator[](int i)	const	{ return *get_nth(i); }
-	cached_iterator<I>	begin()		const	{ return {this, 0}; }
-	cached_iterator<I>	end()		const	{ return {this, n}; }
+	decltype(auto)	operator[](int i)	const	{ return *get_nth(i); }
+	cached_iterator<I>	begin()			const	{ return {this, 0}; }
+	cached_iterator<I>	end()			const	{ return {this, n}; }
 	friend constexpr size_t num_elements(const cached_range &c) { return c.n; }
 };
 
@@ -602,32 +654,28 @@ template<typename C> cached_range<iterator_t<C>> make_cached_range(C &&c) { retu
 //-----------------------------------------------------------------------------
 
 template<typename I, int N> struct split_range : range<I> {
-	typedef range<I>		element;
-	typedef const element&	reference;
 	using	range<I>::a;
 	using	range<I>::b;
+	typedef const range<I>&	reference;
 
 	struct iterator : range<I> {
 		typedef random_access_iterator_t iterator_category;
-		typedef range<I>		element;
-		typedef const element&	reference;
 		using		range<I>::a;
 		using		range<I>::b;
 		I			end;
-		iterator(const I &a, const I &end) : range<I>(a, nth(a, N)), end(end) { if (b > end) b = end; }
+		iterator(const I &a, const I &end) : range<I>(a, min_it(nth(a, N), end)), end(end) {}
 		iterator(const I &end) : range<I>(end, end), end(end)		{}
-		iterator&			operator++()							{ a = b; b = nth(b, N); if (b > end) b = end; return *this; }
+		iterator&			operator++()							{ a = exchange(b, min_it(nth(b, N), end)); return *this; }
 		constexpr bool		operator!=(const iterator &b)	const	{ return a != b.a; }
 		constexpr int		operator-(const iterator &b)	const	{ return (a - b.a + N - 1) / N; }
 		iterator			operator+(int i)				const	{ return iterator(a + i * N, end); }
 		constexpr reference	operator*()						const	{ return *this; }
 	};
-	typedef iterator const_iterator;
 
-	iterator	begin() const { return iterator(a, b); }
-	iterator	end()	const { return iterator(b); }
-	size_t		size()	const { return (range<I>::size() + N - 1) / N; }
-	element		operator[](int i)	const	{ return *(begin() + i);	}
+	iterator	begin()				const { return iterator(a, b); }
+	iterator	end()				const { return iterator(b); }
+	size_t		size()				const { return (range<I>::size() + N - 1) / N; }
+	reference	operator[](int i)	const { return *(begin() + i);	}
 
 	split_range(const range<I> &r) : range<I>(r) {}
 };
@@ -644,9 +692,15 @@ template<typename C, typename I> inline auto prev_wrap(const C &c, const I &i) {
 
 template<typename I> struct wrap_iterator : range<I> {
 	I	i;
-	wrap_iterator(I i, I a, I b) : range<I>(a, b), i(i) {}
-	wrap_iterator&	operator++()			{ if (++i == this->b) i = this->a; return *this; }
-	wrap_iterator&	operator--()			{ if (i == this->a) i = this->b; --i; return *this; }
+	wrap_iterator(I i,range<I> r) : range<I>(r),	i(i) {}
+	wrap_iterator(I i, I a, I b) : range<I>(a, b),	i(i) {}
+	wrap_iterator&	operator++()			{ i = this->inc_wrap(i); return *this; }
+	wrap_iterator&	operator--()			{ i = this->dec_wrap(i); return *this; }
+	auto			operator++(int)			{ return exchange(i, this->inc_wrap(i)); }
+	auto			operator--(int)			{ return exchange(i, this->dec_wrap(i)); }
+	wrap_iterator	operator+(intptr_t x)	const	{ return {this->fix_wrap(i + x), *this}; }
+	wrap_iterator	operator-(intptr_t x)	const	{ return {this->fix_wrap(i - x), *this}; }
+
 	decltype(auto)	operator*()		const	{ return *i; }
 	I				operator->()	const	{ return i; }
 	operator placement()			const	{ return i; }
@@ -658,7 +712,6 @@ template<typename I> class circular_buffer : range<I> {
 	int		num;
 	using	range<I>::a;
 	using	range<I>::b;
-	using typename range<I>::reference;
 
 	constexpr I		wrap(I g)		{ return (g - a) % (b - a) + a; }
 
@@ -716,7 +769,7 @@ public:
 		*wrap(g + num++) = forward<T>(t);
 		return true;
 	}
-	reference	push_back() {
+	decltype(auto)	push_back() {
 		ISO_ASSERT(!full());
 		return *wrap(g + num++);
 	}
@@ -728,26 +781,12 @@ public:
 	}
 };
 
-//-----------------------------------------------------------------------------
-//	move_iterator
-//-----------------------------------------------------------------------------
-
-template<class I> struct move_iterator : iterator_wrapper<move_iterator<I>, I> {
-	using reference	= noref_t<typename iterator_traits<I>::reference>&&;
-	using iterator_wrapper<move_iterator<I>, I>::iterator_wrapper;
-	constexpr reference operator*()				const	{ return move(*this->i); }
-	constexpr reference	operator[](size_t x)	const	{ return move(this->i[x]); }
-};
-
-template<typename T> move_iterator<T>	make_move_iterator(T i)		{ return i; }
-template<typename T> auto				move_container(T&& c)		{ return make_range(make_move_iterator(begin(c)), make_move_iterator(end(c))); }
 
 //-----------------------------------------------------------------------------
 //	reverse_iterator
 //-----------------------------------------------------------------------------
 
 template<typename I> struct reverse_iterator {
-	typedef typename iterator_traits<I>::iterator_category	iterator_category;
 	I		i;
 	reverse_iterator()				{}
 	reverse_iterator(I i)	: i(i)	{}
@@ -782,7 +821,7 @@ template<typename I> struct reverse_iterator {
 template<class I> reverse_iterator<I> 	make_reverse_iterator(I i) 						{ return --i; }
 template<class I> I 					make_reverse_iterator(reverse_iterator<I> i) 	{ return ++i.i; }
 
-template<class C>	force_inline auto	reversed(C &&c)	{ return make_range(make_reverse_iterator(c.end()), make_reverse_iterator(c.begin()));	}
+template<class C>	force_inline auto	reversed(C &&c)	{ return make_range(make_reverse_iterator(end(c)), make_reverse_iterator(begin(c)));	}
 
 template<class T> inline enable_if_t<is_trivially_copyable_v<T>> copy(reverse_iterator<T*> s, reverse_iterator<T*> e, reverse_iterator<T*> d) {
 	size_t	size = intptr_t(&*s) - intptr_t(&*e);
@@ -843,19 +882,19 @@ protected:
 public:
 	constexpr int_iterator(I i)	: i(i)	{}
 	int_iterator&			operator++()						{ i = I(i + 1); return *this; }
-	int_iterator			operator++(int)						{ I j = i; i = I(i + 1); return j; }
+	int_iterator			operator++(int)						{ return exchange(i, I(i + 1)); }
 	int_iterator&			operator--()						{ i = I(i - 1); return *this; }
-	int_iterator			operator--(int)						{ I j = i; i = I(i - 1); return j; }
+	int_iterator			operator--(int)						{ return exchange(i, I(i - 1)); }
 	int_iterator&			operator+=(intptr_t j)				{ i = I(i + j); return *this; }
 	int_iterator&			operator-=(intptr_t j)				{ i = I(i - j); return *this; }
 	constexpr I				operator*()					const	{ return i; 	}
-	constexpr int_iterator	operator+(intptr_t j)		const	{ return I(i + j);	}
-	constexpr int_iterator	operator-(intptr_t j)		const	{ return I(i - j);	}
-	constexpr I				operator[](intptr_t j)		const	{ return I(i + j);	}
+	constexpr int_iterator	operator+(intptr_t j)		const	{ return I(i + j); }
+	constexpr int_iterator	operator-(intptr_t j)		const	{ return I(i - j); }
+	constexpr I				operator[](intptr_t j)		const	{ return I(i + j); }
 
-	constexpr auto	operator-(const int_iterator &b)	const	{ return i - b.i;	}
-	constexpr bool	operator==(const int_iterator &b)	const	{ return i == b.i;	}
-	constexpr bool	operator!=(const int_iterator &b)	const	{ return i != b.i;	}
+	constexpr auto	operator- (const int_iterator &b)	const	{ return i - b.i; }
+	constexpr bool	operator==(const int_iterator &b)	const	{ return i == b.i; }
+	constexpr bool	operator!=(const int_iterator &b)	const	{ return i != b.i; }
 	constexpr bool	operator< (const int_iterator &b)	const	{ return i <  b.i; }
 	constexpr bool	operator<=(const int_iterator &b)	const	{ return i <= b.i; }
 	constexpr bool	operator> (const int_iterator &b)	const	{ return i >  b.i; }
@@ -865,10 +904,10 @@ public:
 template<typename I> force_inline int_iterator<I> make_int_iterator(I i) {
 	return int_iterator<I>(i);
 }
-template<typename T> force_inline range<int_iterator<T> > int_range(T a, T b) {
+template<typename T> force_inline range<int_iterator<T> > int_range(T a, identity_t<T> b) {
 	return range<int_iterator<T> >(a, b);
 }
-template<typename T> force_inline range<int_iterator<T> > int_range_inc(T a, T b) {
+template<typename T> force_inline range<int_iterator<T> > int_range_inc(T a, identity_t<T> b) {
 	return range<int_iterator<T> >(a, T((int)b + 1));
 }
 template<typename T> force_inline range<int_iterator<T> > int_range(T b) {
@@ -883,28 +922,26 @@ template<typename C, typename X> class indexed_element {
 	C		c;
 	X		x;
 public:
-//	typedef typename iterator_traits<C>::reference	reference;
-//	typedef typename iterator_traits<C>::element	element;
 	typedef decltype(declval<C>()[0])	element;
 
 	indexed_element(C &&c, X x) : c(forward<C>(c)), x(x)	{}
-	decltype(auto)	get()							const	{ return c[x];	}
-	operator		element()						const	{ return get();	}
-	decltype(auto)	operator*()						const	{ return get();	}
-	auto			operator->()					const	{ return &c[x];	}
-	X				index()							const	{ return x; }
+	decltype(auto)	get()						const	{ return c[x];	}
+	operator		element()					const	{ return get();	}
+	decltype(auto)	operator*()					const	{ return get();	}
+	auto			operator->()				const	{ return &c[x];	}
+	X				index()						const	{ return x; }
 
-	template<typename B> auto& operator=(B &&b)	{ c[x] = forward<B>(b); return *this; }
-	auto&	operator=(const indexed_element &b)	{ x = b.x; return *this; }
+	template<typename B, typename=enable_if_t<!same_v<B, indexed_element>>> auto& operator=(B &&b) {
+		c[x] = forward<B>(b); return *this;
+	}
+	auto&		operator=(const indexed_element &b)		{ x = b.x; return *this; }
 
-	//auto		operator-()							const	{ return -c[x]; }
-	//auto		operator+()							const	{ return c[x]; }
-	bool		operator==(const element &b)		const	{ return c[x] == b; }
-	bool		operator!=(const element &b)		const	{ return c[x] != b; }
-	bool		operator< (const element &b)		const	{ return c[x] <  b; }
-	bool		operator<=(const element &b)		const	{ return c[x] <= b; }
-	bool		operator>=(const element &b)		const	{ return c[x] >= b; }
-	bool		operator> (const element &b)		const	{ return c[x] >  b; }
+	auto		operator==(const element &b)	const	{ return c[x] == b; }
+	auto		operator!=(const element &b)	const	{ return c[x] != b; }
+	auto		operator< (const element &b)	const	{ return c[x] <  b; }
+	auto		operator<=(const element &b)	const	{ return c[x] <= b; }
+	auto		operator>=(const element &b)	const	{ return c[x] >= b; }
+	auto		operator> (const element &b)	const	{ return c[x] >  b; }
 
 	friend void swap(indexed_element a, indexed_element b)	{ swap(a.x, b.x); }
 	friend decltype(auto)	get(const indexed_element &a)	{ return a.get(); }
@@ -912,70 +949,74 @@ public:
 	friend decltype(auto)	get(indexed_element &&a)		{ return a.get(); }
 };
 
+
+//template<typename C, typename X> decltype(auto) deindex(C &c, X x)			{ return c[x]; }
+template<typename C, typename X> indexed_element<C&, X&> deindex(C &c, X &x)	{ return {c, x}; }
+template<typename C, typename X> decltype(auto) deindex(C &c, const X &x)		{ return c[x]; }
+/*
 template<typename C, typename X> struct indexed_helper {
-	typedef	decltype(declval<C>()[0])				reference;
-	static decltype(auto) deindex(C &c, X x)				{ return c[x]; }
+	static decltype(auto) deindex(C &c, X x)			{ return c[x]; }
 };
 template<typename C, typename X> struct indexed_helper<C, X&> {
-	typedef	indexed_element<C, X&>					reference;
-	static decltype(auto) deindex(C &c, X &x)			{ return reference(c, x); }
+	static indexed_element<C, X&> deindex(C &c, X &x)	{ return {c, x}; }
 };
 template<typename C, typename X> struct indexed_helper<C, const X&> {
-	typedef	decltype(declval<C>()[0])				reference;
 	static decltype(auto) deindex(C &c, const X &x)		{ return c[x]; }
 };
-
+*/
 template<typename C, typename I> class indexed_iterator : public iterator_wrapper<indexed_iterator<C, I>, I> {
 	template<typename C2, typename I2> friend class indexed_iterator;
+	template<typename C2, typename I2> friend class indexed_container;
 	typedef iterator_wrapper<indexed_iterator<C, I>, I>	B;
-	typedef typename iterator_traits<I>::reference	index_t;
-	typedef indexed_helper<C, index_t>				helper;
-	typedef indexed_helper<const C, index_t>		const_helper;
-//	typedef typename const_helper::reference		const_reference;
+	typedef it_reference_t<I>						index_t;
+//	typedef indexed_helper<C, index_t>				helper;
+//	typedef indexed_helper<const C, const index_t>	const_helper;
 	using	B::i;
 	C		c;
 public:
-	typedef typename iterator_traits<C>::element	element;
-	typedef typename helper::reference				reference;
-
 	indexed_iterator(C &&c, const I &i) : B(i), c(forward<C>(c))	{}
 	template<typename C2, typename I2> indexed_iterator(const indexed_iterator<C2, I2> &b) : B(b.i), c(b.c) {}
 	indexed_iterator&	operator=(const indexed_iterator &b)	{ B::operator=(b); return *this; }
-	auto				operator->()							{ return &c[*i];	}
-	decltype(auto)		operator*()								{ return helper::deindex(c, *i); }
-	decltype(auto)		operator[](int j)						{ return helper::deindex(c, i[j]); }
-	auto				operator->()				const		{ return &c[*i];	}
-	decltype(auto)		operator*()					const		{ return const_helper::deindex(c, *i); }
-	decltype(auto)		operator[](int j)			const		{ return const_helper::deindex(c, i[j]); }
+	auto				operator->()							{ return &c[*i]; }
+	decltype(auto)		operator*()								{ return deindex(c, *i); }
+	decltype(auto)		operator[](int j)						{ return deindex(c, i[j]); }
+	auto				operator->()				const		{ return make_const(&c[*i]); }
+	decltype(auto)		operator*()					const		{ return deindex(c, make_const(*i)); }
+	decltype(auto)		operator[](int j)			const		{ return deindex(c, make_const(i[j])); }
 	auto				index()						const		{ return *i; }
 
 	operator placement()	{ return &c[*i]; }
+	
+	template<typename U> friend constexpr auto	element_cast(indexed_iterator i)	{ return make_indexed_iterator(element_cast<U>(i.c), i.i); }
 };
+
+template<typename C, typename I>	struct iterator_element<indexed_iterator<C, I>> : iterator_element<C> {};
 
 template<typename C, typename I> force_inline indexed_iterator<C,I> make_indexed_iterator(C &&c, const I &i) {
 	return indexed_iterator<C,I>(forward<C>(c), i);
 }
 
 template<typename C, typename CI> class indexed_container {
+public:
 	template<typename C2, typename CI2> friend class indexed_container;
-	typedef typename container_traits<CI>::iterator			I;
-	typedef typename container_traits<CI>::const_iterator	constI;
+	typedef iterator_t<CI>			I;
+	typedef iterator_t<const noref_t<CI>>	constI;
 	C		c;
 	CI		i;
 public:
-	typedef	indexed_iterator<C&,I>				iterator;
-	typedef	indexed_iterator<const C&,constI>	const_iterator;
+	typedef	indexed_iterator<C&,I>					iterator;
+	typedef	indexed_iterator<const C&, constI>		const_iterator;
 
 	indexed_container(C &&c, CI &&i) : c(forward<C>(c)), i(forward<CI>(i))	{}
 	template<typename C2, typename CI2> indexed_container(const indexed_container<C2, CI2> &b) : c(b.c), i(b.i)	{}
 	template<typename C2, typename CI2> indexed_container& operator=(const indexed_container<C2, CI2> &b) { i = b.i; return *this; }
 
-	decltype(auto)	operator[](int j)			{ return c[i[j]]; }
-	decltype(auto)	operator[](int j)	const	{ return c[i[j]]; }
-	auto			begin()						{ using iso::begin;	return iterator(c, begin(i)); }
-	auto			end()						{ using iso::end;	return iterator(c, end(i)); }
-	auto			begin()				const	{ using iso::begin;	return const_iterator(c, begin(i)); }
-	auto			end()				const	{ using iso::end;	return const_iterator(c, end(i)); }
+	decltype(auto)	operator[](int j)			{ return deindex(c, i[j]); }
+	decltype(auto)	operator[](int j)	const	{ return deindex(c, make_const(i[j])); }
+	iterator		begin()						{ using iso::begin;	return {c, begin(i)}; }
+	iterator		end()						{ using iso::end;	return {c, end(i)}; }
+	const_iterator	begin()				const	{ using iso::begin;	return {c, begin(i)}; }
+	const_iterator	end()				const	{ using iso::end;	return {c, end(i)}; }
 	auto			size()				const	{ return i.size(); }
 	auto			size32()			const	{ return i.size32(); }
 	decltype(auto)	back()				const	{ using iso::end;	return c[end(i)[-1]]; }
@@ -983,6 +1024,8 @@ public:
 	decltype(auto)	back()						{ using iso::end;	return c[end(i)[-1]]; }
 	decltype(auto)	front()						{ using iso::begin;	return c[*begin(i)]; }
 	bool			empty()				const	{ return i.empty(); }
+	void			pop_back()					{ i.pop_back(); }
+
 	const CI&		indices()			const	{ return i; }
 	const C&		direct()			const	{ return c; }
 
@@ -1008,11 +1051,9 @@ template<typename C> force_inline auto make_indexed_container_n(C &&c, size_t n)
 template<typename T> force_inline T *next(T *p) { return p->next(); }
 
 template<typename T> struct next_iterator : comparisons<next_iterator<T> > {
-	typedef random_access_iterator_t iterator_category;
-	typedef T	element, &reference;
-	T	mutable	*p;
-	int			i;
-	mutable int	pi;
+	T	mutable	*p;	// pointer
+	int			i;	// intended index or -ve if unknown
+	mutable int	pi;	// index of pointer
 
 	T *getp() const {
 		while (pi < i) {
@@ -1022,9 +1063,9 @@ template<typename T> struct next_iterator : comparisons<next_iterator<T> > {
 		return p;
 	}
 
-	constexpr next_iterator(T *p = 0) : p(p), i(0), pi(0)	{}
-	constexpr next_iterator(T *p, int i) : p(p), i(i), pi(i) {}
-	constexpr next_iterator(T *p, int i, int pi) : p(p), i(i), pi(pi) {}
+	constexpr next_iterator(T *p = 0)				: p(p), i(0), pi(0)	{}
+	constexpr next_iterator(T *p, int i)			: p(p), i(i), pi(i) {}
+	constexpr next_iterator(T *p, int i, int pi)	: p(p), i(i), pi(pi) {}
 	next_iterator&		operator++()					{ ++i; return *this; }
 	next_iterator&		operator+=(size_t n)			{ getp(); i += int(n); return *this; }
 	next_iterator		operator+(size_t n)		const	{ T *p = getp(); return next_iterator(p, int(i + n), pi); }
@@ -1071,7 +1112,7 @@ template<typename T> force_inline auto make_next_range(T *begin, T *end) {
 	return range<next_iterator<T>>(begin, next_iterator<T>(end, -1));
 }
 template<typename T> force_inline auto make_range_n(const next_iterator<T> &a, size_t n) {
-	return range<next_iterator<T> >(a, next_iterator<T>(a.p, n, 0));
+	return range<next_iterator<T>>(a, next_iterator<T>(a.p, n, 0));
 }
 
 //-----------------------------------------------------------------------------
@@ -1098,6 +1139,7 @@ template<typename F, F f, typename I> field_iterator<noref_cv_t<I>, F, f> _make_
 template<typename F> struct field_access {
 	uint32	offset;
 	constexpr field_access(uint32 offset) : offset(offset) {}
+	template<typename C> constexpr field_access(F C::*field) : offset(T_get_member_offset(field)) {}
 	constexpr F&		operator[](void* p)			const	{ return *(F*)((char*)p + offset); }
 	constexpr const F&	operator[](const void* p)	const	{ return *(const F*)((const char*)p + offset); }
 };
@@ -1121,46 +1163,80 @@ public:
 	constexpr auto		operator-(intptr_t x)						const	{ return fixed_stride_iterator(*this) -= x; }
 };
 
-template<int S, typename T> fixed_stride_iterator<T,S> column(T(*t)[S]) { return t[0]; }
-template<int S, typename T> fixed_stride_iterator<T,S> column(T *t)		{ return t; }
+template<typename T, int S> using fixed_stride_iterator2 = fixed_stride_iterator<T, S * sizeof(T)>;
+
+
+template<int S, typename T> fixed_stride_iterator<T,S * sizeof(T)>	column(T(*t)[S])	{ return t[0]; }
+template<int S, typename T> fixed_stride_iterator<T,S>				column(T *t)		{ return t; }
+
+template<typename T, int S> using maybe_stride_t = if_t<sizeof(T) == S, T*, fixed_stride_iterator<T,S>>;
+template<typename T, typename A>		maybe_stride_t<T, sizeof(A)>	element_cast(A *a)							{ return (T*)a; }
+template<typename T, typename A, int S> maybe_stride_t<T, S>			element_cast(fixed_stride_iterator<A, S> a)	{ return (T*)a.inner(); }
+
+template<typename T, typename A, int N>	auto element_cast_array(A (&a)[N]) { return make_range_n(element_cast<T>(&a[0]), N); }
 
 template<typename T> class stride_iterator;
 
 template<> class stride_iterator<void> {
 public:
-	void	*p;
+	void	*i;
 	int		s;
-	constexpr stride_iterator(void *p = 0, int s = 0) : p(p), s(s) {}
+	constexpr stride_iterator(void *i = 0, int s = 0) : i(i), s(s) {}
 	constexpr int		stride()		const	{ return s; }
-	constexpr explicit operator void*()	const	{ return p; }
-	constexpr explicit operator bool()	const	{ return !!p; }
-	constexpr void*		operator*()		const	{ return p; }
+	constexpr explicit operator void*()	const	{ return i; }
+	constexpr explicit operator bool()	const	{ return !!i; }
+	constexpr void*		operator*()		const	{ return i; }
 	
-	auto&	operator++()						{ p = ((char*)p + s); return *this;		}
-	auto&	operator--()						{ p = ((char*)p - s); return *this;		}
-	auto&	operator+=(intptr_t x)				{ p = ((char*)p + x * s); return *this;	}
-	auto&	operator-=(intptr_t x)				{ p = ((char*)p - x * s); return *this;	}
+	auto&	operator++()						{ i = ((char*)i + s); return *this;		}
+	auto&	operator--()						{ i = ((char*)i - s); return *this;		}
+	auto&	operator+=(intptr_t x)				{ i = ((char*)i + x * s); return *this;	}
+	auto&	operator-=(intptr_t x)				{ i = ((char*)i - x * s); return *this;	}
 	auto	operator+(intptr_t x)		const	{ return stride_iterator(*this) += x;	}
 	auto	operator-(intptr_t x)		const	{ return stride_iterator(*this) -= x;	}
 
-	bool				operator!=(const stride_iterator& b)	const	{ return p != b.p; }
-	constexpr intptr_t	operator-(const stride_iterator &j)		const	{ return s ? intptr_t(((char*)p - (char*)j.p) / s) : 0; }
-	template<typename F> constexpr auto		operator+(const field_access<F> &f)		const	{ return stride_iterator<F>(&f[p], s); }
-	template<typename F> constexpr F&		operator->*(const field_access<F>& f)	const	{ return f[p]; }
-	friend constexpr intptr_t operator-(const void* a, const stride_iterator &b)			{ return intptr_t(((char*)a - (char*)b.p) / b.s); }
+	bool				operator!=(const stride_iterator& b)	const	{ return i != b.i; }
+	constexpr intptr_t	operator-(const stride_iterator &j)		const	{ return s ? intptr_t(((char*)i - (char*)j.i) / s) : 0; }
+	template<typename F> constexpr auto		operator+(const field_access<F> &f)		const	{ return stride_iterator<F>(&f[i], s); }
+	template<typename F> constexpr F&		operator->*(const field_access<F>& f)	const	{ return f[i]; }
+	friend constexpr intptr_t operator-(const void* a, const stride_iterator &b)			{ return intptr_t(((char*)a - (char*)b.i) / b.s); }
+};
+
+template<> class stride_iterator<const void> {
+public:
+	const void	*i;
+	int			s;
+	constexpr stride_iterator(const void *i = 0, int s = 0) : i(i), s(s) {}
+	constexpr int		stride()				const	{ return s; }
+	constexpr explicit operator const void*()	const	{ return i; }
+	constexpr explicit operator bool()			const	{ return !!i; }
+	constexpr const void*		operator*()		const	{ return i; }
+
+	auto&	operator++()						{ i = ((const char*)i + s); return *this;		}
+	auto&	operator--()						{ i = ((const char*)i - s); return *this;		}
+	auto&	operator+=(intptr_t x)				{ i = ((const char*)i + x * s); return *this;	}
+	auto&	operator-=(intptr_t x)				{ i = ((const char*)i - x * s); return *this;	}
+	auto	operator+(intptr_t x)		const	{ return stride_iterator(*this) += x;	}
+	auto	operator-(intptr_t x)		const	{ return stride_iterator(*this) -= x;	}
+
+	bool				operator!=(const stride_iterator& b)	const	{ return i != b.i; }
+	constexpr intptr_t	operator-(const stride_iterator &j)		const	{ return s ? intptr_t(((const char*)i - (const char*)j.i) / s) : 0; }
+	template<typename F> constexpr auto		operator+(const field_access<const F> &f)	const	{ return stride_iterator<const F>(&f[i], s); }
+	template<typename F> constexpr const F&	operator->*(const field_access<const F>& f)	const	{ return f[i]; }
+	friend constexpr intptr_t operator-(const void* a, const stride_iterator &b)				{ return intptr_t(((const char*)a - (const char*)b.i) / b.s); }
 };
 
 template<typename T> class stride_iterator : public iterator_wrapper<stride_iterator<T>, T*> {
+protected:
 	typedef iterator_wrapper<stride_iterator<T>, T*>	B;
-	template<typename T2> friend class stride_iterator;
 	using	B::i;
 	int		s;
 public:
+	using B::operator-;
 	constexpr stride_iterator()									: B(0), s(0)				{}
 	constexpr stride_iterator(T *p, int s)						: B(p), s(s)				{}
-	constexpr stride_iterator(const stride_iterator<void> &i)	: B((T*)i.p), s(i.s)		{}
+	constexpr stride_iterator(const stride_iterator<void> &i)	: B((T*)i.i), s(i.s)		{}
 	template<typename T2> constexpr stride_iterator(T2 *p)	: B((T*)p), s(sizeof(T2))	{}
-	template<typename T2> explicit constexpr stride_iterator(const stride_iterator<T2> &i) : B((T*)i.i), s(i.s) {}
+	template<typename T2> explicit constexpr stride_iterator(const stride_iterator<T2> &i) : B((T*)(const void*)i), s(i.stride()) {}
 
 	template<typename C, T C::* f> stride_iterator(field_iterator<C*, T C::*, f> i) : B(&*i), s(sizeof(C)) {}
 	template<int S> stride_iterator(fixed_stride_iterator<T, S> i) : B(&*i), s(S) {}
@@ -1174,79 +1250,52 @@ public:
 	stride_iterator&	operator-=(intptr_t x)				{ i = (T*)((char*)i - x * s); return *this;	}
 
 	constexpr intptr_t	operator-(const stride_iterator &b)	const		{ return s ? ((char*)i - (char*)b.i) / s : 0; }
-	constexpr auto		operator-(intptr_t x)				const		{ return stride_iterator(*this) -= x; }
+//	constexpr auto		operator-(intptr_t x)				const		{ return stride_iterator(*this) -= x; }
 	friend constexpr intptr_t operator-(T* a, const stride_iterator &b)	{ return intptr_t(((char*)a - (char*)b.i) / b.s); }
 
 	constexpr int		stride()		const	{ return s; }
-	constexpr explicit operator void*()	const	{ return i; }
+	constexpr explicit operator const void*()	const	{ return i; }
 	constexpr explicit operator bool()	const	{ return !!i; }
-	template<typename U> friend constexpr stride_iterator<U>	element_cast(stride_iterator i)	{ return stride_iterator<U>((U*)i.i, i.s); }
+	auto&				shift(intptr_t n)		{ i = (T*)((uint8*)i + n); return *this; }
+
+	template<typename U> friend constexpr auto	element_cast(stride_iterator i)	{ return stride_iterator<U>((U*)i.i, i.s); }
+	
+	// for blocks (might need a separate byte_stride_iterator)
+	friend constexpr int		intra_pitch(const stride_iterator &i)			{ return i.stride(); }
+	friend void					intra_move(stride_iterator &i, intptr_t n)		{ i.shift(n); }
+	friend constexpr intptr_t	intra_diff(const stride_iterator &a, const stride_iterator &b)	{ return (uint8*)a.i - (uint8*)b.i; }
 };
 
 template<typename T> constexpr stride_iterator<T> strided(T *p, int s)					{ return stride_iterator<T>(p, s);	}
-template<typename T> constexpr stride_iterator<T> strided(const stride_iterator<T> &p, int s) { return stride_iterator<T>(p, p.stride() * s);	}
+//template<typename T> constexpr stride_iterator<T> strided(const stride_iterator<T> &p, int s) { return stride_iterator<T>(&*p, p.stride() * s);	}
 template<typename T> constexpr stride_iterator<T> make_stride_iterator(T *p, int s)		{ return stride_iterator<T>(p, s);	}
-template<typename T> constexpr stride_iterator<T> begin(stride_iterator<T> &i)			{ return i; }
-template<typename T> constexpr stride_iterator<T> begin(const stride_iterator<T> &i)	{ return i; }
+
+//needed because is_iterator_v fails (?)
+//template<typename T> constexpr stride_iterator<T> begin(stride_iterator<T> &i)			{ return i; }
+//template<typename T> constexpr stride_iterator<T> begin(const stride_iterator<T> &i)	{ return i; }
+
 template<typename T, typename A> auto element_cast(const stride_iterator<A> &c)			{ return stride_iterator<T>(c); }
+template<typename T, typename F, F T::*f> auto get_field(const stride_iterator<T> &c)	{ return stride_iterator<F>(&c->*f, c.stride()); }
+template<typename T> auto get_sub(const stride_iterator<T> &c, uint32 i)				{ return make_stride_iterator(&(*c)[i], c.stride()); }
+template<typename T> auto get_sub(const range<stride_iterator<T>> &c, uint32 i)			{ return make_range(get_sub(c.begin(), i), get_sub(c.end(), i)); }
 
 //-----------------------------------------------------------------------------
-//	after - something that exists after another
+//	param_iterator - holds a fixed parameter along with iterator
 //-----------------------------------------------------------------------------
-
-template<typename T> void *get_after(const T *t) {
-	return (void*)(t + 1);
-}
-
-template<typename T, typename B> struct after {
-	T&		get()		const	{ return *(T*)align(get_after((B*)this), alignof(T)); }
-	operator T&()		const	{ return get(); }
-	T*		operator&()	const	{ return &get(); }
-	T*		operator->()const	{ return &get(); }
-	template<typename T2> T&	operator=(const T2 &t2) { T &t = get(); t = t2; return t; }
-	friend T&	get(const after &a)	{ return a; }
-	friend T&	put(after &a)		{ return a; }
-};
-
-template<typename T, typename B> inline void *get_after(const after<T,B> *t) {
-	return get_after(&t->get());
-}
-
-//-----------------------------------------------------------------------------
-//	param_iterator
-//-----------------------------------------------------------------------------
-
-template<typename T, typename P> struct param_element {
-//	typedef noref_t<T>	element;
-	T			t;
-	P			p;
-	param_element() {}
-	constexpr param_element(T &&t, const P &p) : t(forward<T>(t)), p(p) {}
-	template<typename T2, typename P2> constexpr param_element(const param_element<T2, P2> &b) : t(b.t), p(b.p) {}
-	operator			decltype(auto)()			{ return t; }
-	auto				operator->()				{ return &t; }
-	constexpr operator	decltype(auto)()	const	{ return t; }
-	constexpr auto		operator->()		const	{ return &t; }
-//	template<typename C, typename F> constexpr auto get(F C::*f)		{ return param_element<copy_const_t<T,F&>, P>(t.*f, p); }
-//	template<typename C, typename F> constexpr auto get(F C::*f) const	{ return param_element<const F&, P>(t.*f, p); }
-};
-
-template<typename T, typename P, typename C, typename F> constexpr auto get_field(param_element<T,P> &a, F C::*f)		{ return param_element<copy_const_t<T,F&>, P>(a.t.*f, a.p); }
-template<typename T, typename P, typename C, typename F> constexpr auto get_field(const param_element<T,P> &a, F C::*f) { return param_element<const F&, P>(a.t.*f, a.p); }
-
-template<typename T, typename P> force_inline auto make_param_element(T &&t, P &&p) {
-	return param_element<T,param_holder_t<P&&>>(forward<T>(t), forward<P>(p));
-}
 
 template<typename I, typename P> struct param_iterator : iterator_wrapper<param_iterator<I,P>, I> {
 	typedef	iterator_wrapper<param_iterator<I,P>, I>	B;
-	typedef param_element<typename iterator_traits<I>::reference, P> element, reference;
+	typedef param_element<it_reference_t<I>, P> element, reference;
 	P			p;
 	constexpr param_iterator(I &&i, const P &p) : B(move(i)), p(p) {}
 	constexpr param_iterator(const I &i, const P &p) : B(i), p(p) {}
 	constexpr element	operator*()			const	{ return element(*B::i, p); }
 	constexpr element	operator->()		const	{ return element(*B::i, p); }
 	constexpr element	operator[](int j)	const	{ return element(B::i[j], p); }
+
+	friend constexpr int		intra_pitch(const param_iterator<I,P> &i)			{ return intra_pitch(i.i); }
+	friend void					intra_move(param_iterator<I,P> &i, intptr_t n)		{ intra_move(i.i, n); }
+	friend constexpr intptr_t	intra_diff(const param_iterator<I,P> &a, const param_iterator<I,P> &b)	{ return intra_diff(a.i, b.i); }
 };
 
 template<typename I, typename P> force_inline auto make_param_iterator(I &&i, P &&p) {
@@ -1257,21 +1306,13 @@ template<typename R, typename P> force_inline auto with_param(R &&r, P &&p) {
 	return make_range(make_param_iterator(r.begin(), forward<P>(p)), make_param_iterator(r.end(), forward<P>(p)));
 }
 
-template<typename T, typename P> const T&	get(const param_element<T, P> &a)	{ return a.t; }
-//template<typename T, typename P> auto		get(param_element<T, P> &&a)->decltype(get(make_const(a)))	{ return get(make_const(a)); }
-//template<typename T, typename P> decltype(get(declval<const param_element<T, P>&>()))	get(param_element<T, P> &a)	{ return get(make_const(a)); }
-//template<typename T, typename P> auto&&		get(param_element<T, P> &a)								{ return get(make_const(a)); }
-
-template<typename T, typename P1, typename P2>	auto	get(param_element<param_element<T,P1>, P2> &a)			{ return make_param_element(get(a.t), a.p); }
-template<typename T, typename P1, typename P2>	auto	get(const param_element<param_element<T,P1>, P2> &a)	{ return make_param_element(get(a.t), a.p); }
-template<typename I, typename P>				auto	get(param_element<range<I>, P> &a)						{ return range<param_iterator<I, P> >(param_iterator<I,P>(a.t.begin(), a.p), param_iterator<I,P>(a.t.end(), a.p)); }
-template<typename I, typename P>				auto	get(const param_element<range<I>, P> &a)				{ return range<param_iterator<I, P> >(param_iterator<I,P>(a.t.begin(), a.p), param_iterator<I,P>(a.t.end(), a.p)); }
-template<typename T, typename B, typename P>	auto	get(const param_element<after<T,B>&, P> &a)				{ return param_element<T&, P>(a.t, a.p); }
+template<typename I, typename P> auto	get(param_element<range<I>, P> &a)			{ return range<param_iterator<I, P> >(param_iterator<I,P>(a.t.begin(), a.p), param_iterator<I,P>(a.t.end(), a.p)); }
+template<typename I, typename P> auto	get(const param_element<range<I>, P> &a)	{ return range<param_iterator<I, P> >(param_iterator<I,P>(a.t.begin(), a.p), param_iterator<I,P>(a.t.end(), a.p)); }
 
 
 template<typename I, typename P> struct param_iterator2 : iterator_wrapper<param_iterator2<I,P>, I> {
 	typedef	iterator_wrapper<param_iterator2<I,P>, I>	B;
-	typedef param_element<typename iterator_traits<I>::reference, P> element0;
+	typedef param_element<it_reference_t<I>, P> element0;
 	typedef decltype(get(move(declval<element0>())))	element, reference;
 	P			p;
 	constexpr param_iterator2(const I &i, const P &p) : B((I&&)i), p(p) {}
@@ -1294,8 +1335,9 @@ template<typename R, typename P> force_inline auto with_param2(R &&r, P &&p) {
 //-----------------------------------------------------------------------------
 
 template<class C, class F> struct filtered_container {
-	typedef typename container_traits<C>::const_iterator I;
+	typedef iterator_t<const C> I;
 	C	c;
+	I	e;
 	F	f;
 
 	struct iterator : iterator_wrapper<iterator, I, forward_iterator_t> {
@@ -1312,10 +1354,10 @@ template<class C, class F> struct filtered_container {
 		iterator&	operator=(const iterator& b)	{ B::i = b.i; return *this; }
 	};
 
-	filtered_container(C&& c, const F& f)	: c(forward<C>(c)), f(f) {}
-	filtered_container(C&& c, F&& f)		: c(forward<C>(c)), f(f) {}
-	iterator begin()	const { return iterator(f, c.begin(), c.end()); }
-	iterator end()		const { return iterator(f, c.end(), c.end()); }
+	filtered_container(C&& c, const F& f)	: c(forward<C>(c)), e(global_end(c)), f(f) {}
+	filtered_container(C&& c, F&& f)		: c(forward<C>(c)), e(global_end(c)), f(f) {}
+	iterator begin()	const { using iso::begin; using iso::end; return iterator(f, begin(c), e); }
+	iterator end()		const { using iso::end; return iterator(f, e, e); }
 };
 
 template<class C, class F> auto filter(C &&c, F &&f) { return filtered_container<C,F>(forward<C>(c), forward<F>(f)); }
@@ -1323,74 +1365,88 @@ template<class C, class F> auto filter(C &&c, F &&f) { return filtered_container
 //-----------------------------------------------------------------------------
 //	transformed_container (or use linq)
 //-----------------------------------------------------------------------------
+#if 0
+struct any_argument {
+	template<typename T> operator T&&() const;
+};
 
-template<typename I, typename F, int N = params_t<F>::count> struct transform_iterator : iterator_wrapper<transform_iterator<I,F>, I> {
-	typedef iterator_wrapper<transform_iterator<I,F>, I>	B;
+template<typename F, typename P, typename = void> struct can_accept : T_false {};
+template<typename F, typename...P> struct can_accept<F, type_list<P...>, decltype(declval<F>()(declval<P>()...), void())> : T_true {};
+
+template<typename T, int N> struct T_repeat_type;
+template<typename T, int N> using repeat_type = typename T_repeat_type<T, N>::type;
+
+template<typename T, int N> struct T_repeat_type : meta::TL_concat<repeat_type<T, N / 2>, repeat_type<T, N - N / 2>> {};
+template<typename T> struct T_repeat_type<T, 0> : T_type<type_list<>> {};
+template<typename T> struct T_repeat_type<T, 1> : T_type<type_list<T>> {};
+
+
+template<typename F, typename T, int N, typename = void> struct params_count_helper : params_count_helper<F, T, N + 1> {};
+template<typename F, typename T, int N> struct params_count_helper<F, T, N, enable_if_t<can_accept<F, repeat_type<T, N>>::value>> { static constexpr size_t num = N; };
+template<typename F, typename T, int N> struct params_count_helper<F, T, N, enable_if_t<(N > 50)>> { static constexpr size_t num = 0; };
+
+template<typename F, typename T> constexpr size_t params_count = params_count_helper<F, T, 0>::num;
+
+template<typename I, typename F, int N = params_count<F, it_reference_t<I>>> struct transform_iterator : iterator_wrapper<transform_iterator<I, F, N>, I> {
+	typedef iterator_wrapper<transform_iterator<I, F, N>, I>	B;
 	F	f;
 	transform_iterator(const I &i, F &&f) : B(i), f(forward<F>(f)) {}
+	transform_iterator(transform_iterator&&) = default;
 
 	template<size_t... J>auto helper(index_list<J...>) { return f(B::i[J]...); }
 	auto				operator*()				{ return helper(meta::make_index_list<N>()); }
 	transform_iterator&	operator++()			{ return B::operator+=(N);}
 	transform_iterator&	operator--()			{ return B::operator-=(N);}
+	friend auto begin(const transform_iterator &i) { return i; }
 };
-
-template<typename I, typename F> struct transform_iterator<I, F, 1> : iterator_wrapper<transform_iterator<I,F>, I> {
-	typedef iterator_wrapper<transform_iterator<I,F>, I>	B;
+#else
+template<typename I, typename F, int N = 1> struct transform_iterator : iterator_wrapper<transform_iterator<I, F, N>, I> {
+	typedef iterator_wrapper<transform_iterator<I, F, N>, I>	B;
 	F	f;
-	transform_iterator& operator=(const transform_iterator &b) { B::operator=(b); return *this; }
 	transform_iterator(const I &i, F &&f) : B(i), f(forward<F>(f)) {}
+	transform_iterator(transform_iterator&&) = default;
+	template<size_t... J>auto helper(index_list<J...>) { return f(B::i[J]...); }
+	auto				operator*()				{ return helper(meta::make_index_list<N>()); }
+	transform_iterator&	operator++()			{ return B::operator+=(N);}
+	transform_iterator&	operator--()			{ return B::operator-=(N);}
+	friend auto& begin(const transform_iterator &i) { return i; }
+};
+#endif
+
+template<typename I, typename F> struct transform_iterator<I, F, 1> : iterator_wrapper<transform_iterator<I, F, 1>, I> {
+	typedef iterator_wrapper<transform_iterator<I, F, 1>, I>	B;
+	F	f;
+	transform_iterator(const I &i, F &&f) : B(i), f(forward<F>(f)) {}
+
 	auto	operator*()			{ return f(B::operator*()); }
 	auto	operator*()	const	{ return f(B::operator*()); }
 	auto	operator->()		{ return make_ref_helper(f(B::operator*())); }
+	//needed because is_iterator_v fails (?)
+//	friend auto& begin(const transform_iterator &i) { return i; }
 };
 
-template<class C, class F> struct transformed_container {
-	C	c;
-	F	f;
+template<int N = 1, class I, class F> transform_iterator<I, F, N> transform(const I &i, F &&f)	{ return {i, forward<F>(f)}; }
 
-	typedef typename container_traits<C>::const_iterator I;
-	typedef transform_iterator<I, F&>		iterator;
-	typedef transform_iterator<I, const F&>	const_iterator;
-
+template<class C, class F, int N> struct transformed_container {
+	C			c;
+	mutable F	f;
 	template<typename C1, typename F1> transformed_container(C1&& c, F1&& f) : c(forward<C1>(c)), f(forward<F1>(f)) {}
-	template<typename C1, typename F1> transformed_container(transformed_container<C1,F1> &&b) : c(move(b.c)), f(move(b.f)) {}
-	iterator		begin()			{ return {c.begin(), f}; }
-	iterator		end()			{ return {c.end(), f}; }
-	const_iterator	begin()	const	{ return {c.begin(), f}; }
-	const_iterator	end()	const	{ return {c.end(), f}; }
-	size_t			size()	const	{ return c.size(); }
-	auto			front()	const	{ return f(c.front()); }
-	auto			back()	const	{ return f(c.back()); }
-
+	template<typename C1, typename F1> transformed_container(transformed_container<C1,F1,N> &&b) : c(move(b.c)), f(move(b.f)) {}
+	auto			begin()		const	{ using iso::begin; return transform<N>(begin(c), forward<F>(f)); }
+	auto			end()		const	{ using iso::end;	return transform<N>(end(c), forward<F>(f)); }
+	size_t			size()		const	{ return num_elements(c); }
+	auto			front()		const	{ return *begin(); }
+	auto			back()		const	{ return f(c.back()); }
+	bool			empty()		const	{ return size() == 0; }
+	auto operator[](intptr_t i)	const	{ return *nth(begin(), i); }
+	
+	template<typename W> bool	write(W&& w)	const	{ return writen(w, begin(), size()); }
 	friend constexpr size_t num_elements(const transformed_container &c) { return num_elements(c.c) / params_t<F>::count; }
 };
 
-template<class I, class F> auto transform(const I &i, F &&f)	{ return transform_iterator<I, F>(i, forward<F>(f)); }
-template<class C, class F> auto transformc(C &&c, F &&f)		{ return transformed_container<C, F>(forward<C>(c), forward<F>(f)); }
+//template<class C, class F> auto transformc(C &&c, F &&f)		{ return transformed_container<C, F>(forward<C>(c), forward<F>(f)); }
+template<int N = 1, class C, class F> auto transformc(C &&c, F &&f)		{ return transformed_container<C, F, N>(forward<C>(c), forward<F>(f)); }
 
-//-----------------------------------------------------------------------------
-//	back_insert_iterator - wrap pushes to back of container as output iterator
-//-----------------------------------------------------------------------------
-
-template<class C> class back_insert_iterator {
-	C& c;
-
-public:
-	using iterator_category = output_iterator_t;
-
-	back_insert_iterator(C& c) : c(c) {}
-
-	template<typename V> back_insert_iterator& operator=(V &&v) {
-		c.push_back(forward<V>(v));
-		return *this;
-	}
-	back_insert_iterator& operator*()		{ return *this; }
-	back_insert_iterator& operator++()		{ return *this; }
-	back_insert_iterator  operator++(int)	{ return *this; }
-};
-
-template<class C> back_insert_iterator<C> back_inserter(C& c) { return c; }
 
 //-----------------------------------------------------------------------------
 //	virtual_iterator
@@ -1416,9 +1472,9 @@ template<typename T> struct virtual_iterator {
 	void	*p;
 	vtable	*vt;
 
-	virtual_iterator() : p(0) {}
-	virtual_iterator(virtual_iterator &&i)		: p(i.p),				vt(i.vt) { i.p = 0; }
-	virtual_iterator(const virtual_iterator &i)	: p(i.vt->vdup(i.p)),	vt(i.vt) {}
+	virtual_iterator() : p(nullptr) {}
+	virtual_iterator(virtual_iterator &&i)		: p(exchange(i.p, nullptr)),	vt(i.vt) {}
+	virtual_iterator(const virtual_iterator &i)	: p(i.vt->vdup(i.p)),			vt(i.vt) {}
 
 	template<typename I> virtual_iterator(const I &i) : p(new I(i)), vt(&vtableT<I>::table) {}
 	~virtual_iterator()	{ if (p) vt->vdel(p); }
@@ -1452,7 +1508,6 @@ template<typename T> struct virtual_container : temp_holder, range<virtual_itera
 //	repeat
 //-----------------------------------------------------------------------------
 
-
 template<typename T> struct repeat_s {
 	T		t;
 	int		n;
@@ -1478,27 +1533,21 @@ template<typename T> inline repeat_s<T> repeat(T &&t, int n) {
 
 template<typename T> struct scalar_s {
 	T	t;
-	typedef T		element;
 
 	scalar_s(T &&t) : t(forward<T>(t)) {}
-	scalar_s(const T &t) : t(t) {}
-	operator T()	const	{ return t; }
 	auto&			operator++()		const	{ return *this; }
-	auto&			operator*()			const	{ return t; }
+	auto&			operator+(int j)	const	{ return *this; }
+	const T&		operator*()			const	{ return t; }
 	ref_helper<T&>	operator->()		const	{ return t; }
-	auto&			operator[](int i)	const	{ return t; }
-	auto&			begin()				const	{ return *this; }
-	auto&			end()				const	{ return *this; }
-	template<typename...P> auto	operator()(P&&... p) const	{ return t; }
-	friend constexpr size_t num_elements(const scalar_s&)	{ return ~size_t(0); }
+	const T&		operator[](int i)	const	{ return t; }
+	template<typename...P> auto&	operator()(P&&...)	const	{ return t; }
 };
 
 template<typename T> scalar_s<T> scalar(T &&t) {
 	return forward<T>(t);
 }
-template<typename T> scalar_s<T> scalar(const T &t) {
-	return t;
-}
+
+template<typename T, typename C> auto element_cast(C &&c)	{ return make_range(element_cast<T>(begin(c)), element_cast<T>(end(c))); }
 
 }//namespace iso
 

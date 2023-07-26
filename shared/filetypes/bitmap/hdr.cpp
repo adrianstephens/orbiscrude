@@ -32,8 +32,8 @@ void BoxFilter(const block<HDRpixel, 2> &srce, const block<HDRpixel, 2> &dest, b
 	int	w0 = max(srce.size<1>(), 1u),	h0 = max(srce.size<2>(), 1u);
 	int	w1 = max(w0 >> 1, 1),		h1 = max(h0 >> 1, 1);
 	for (int y = 0; y < h1; y++) {
-		HDRpixel	*s0 = srce[y * 2], *s1 = srce[y * 2 + int(y * 2 < h0 - 1)];
-		HDRpixel	*d = dest[y * 1];
+		HDRpixel	*s0 = srce[y * 2].begin(), * s1 = srce[y * 2 + int(y * 2 < h0 - 1)].begin();
+		HDRpixel	*d = dest[y * 1].begin();
 		for (int x = w1; x--; d++, s0 += 2, s1 += 2)
 			*d = (s0[0] + s0[1] + s1[0] + s1[1]) / 4;
 	}
@@ -47,9 +47,9 @@ void BoxFilter(const block<HDRpixel, 3> &srce, const block<HDRpixel, 3> &dest, b
 		block<HDRpixel, 2>	srce2a	= srce[d * 2], srce2b = srce[d * 2 + int(d * 2 < d0 - 1)];
 		block<HDRpixel, 2>	dest2	= dest[d * 1];
 		for (int y = 0; y < h1; y++) {
-			HDRpixel	*s0	= srce2a[y * 2], *s1 = srce2a[y * 2 + (y * 2 < h0 - 1)];
-			HDRpixel	*s2	= srce2b[y * 2], *s3 = srce2b[y * 2 + (y * 2 < h0 - 1)];
-			HDRpixel	*d	= dest2[y];
+			HDRpixel	*s0	= srce2a[y * 2].begin(), *s1 = srce2a[y * 2 + (y * 2 < h0 - 1)].begin();
+			HDRpixel	*s2	= srce2b[y * 2].begin(), *s3 = srce2b[y * 2 + (y * 2 < h0 - 1)].begin();
+			HDRpixel	*d	= dest2[y].begin();
 			for (int x = w1; x--; d++, s0 += 2, s1 += 2, s2 += 2, s3 += 2)
 				*d = (s0[0] + s0[1] + s1[0] + s1[1] + s2[0] + s2[1] + s3[0] + s3[1]) / 8;
 		}
@@ -140,10 +140,15 @@ ISO_ptr<HDRbitmap> vbitmap2HDR(vbitmap &vb) {
 }
 
 ISO_ptr<bitmap2> vbitmap2bitmap2(vbitmap &vb) {
-	return vb.format & vbitmap_format::FLOAT
+	return vb.format.is_hdr()
 		? ISO_ptr<bitmap2>(0, vbitmap2HDR(vb))
 		: ISO_ptr<bitmap2>(0, vbitmap2bitmap(vb));
 }
+
+ISO_ptr<bitmap> anim2bitmap(bitmap_anim &a) {
+	return a[0].a;
+}
+
 } // namespace iso
 
 using namespace iso;
@@ -153,5 +158,6 @@ initialise HDRinit(
 	ISO_get_cast(bitmap2HDR),
 	ISO_get_cast(vbitmap2bitmap),
 	ISO_get_cast(vbitmap2HDR),
-	ISO_get_cast(vbitmap2bitmap2)
+	ISO_get_cast(vbitmap2bitmap2),
+	ISO_get_cast(anim2bitmap)
 );

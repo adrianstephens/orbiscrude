@@ -28,18 +28,26 @@ namespace iso {
 		};
 	#ifdef GRAPHICS_H
 		void	Init(void *physram) {
-			ISO_openarray<D3D11_INPUT_ELEMENT_DESC>	ve2 = move(ve);
+			pass	*p	= (*technique)[0];
 			void		*verts	= (void*)((uint8*)physram + vb_offset);
 			uint16		*inds	= (uint16*)((uint8*)physram + ib_offset);
-			(uint32&)ve			= vb_offset = ib_offset = 0;
+			vb_offset = ib_offset = 0;
 
-			if (prim == 0)
-				prim = PRIM_TRILIST;
+			if (p->Has(SS_VERTEX)) {
+				ISO_openarray<D3D11_INPUT_ELEMENT_DESC>	ve2 = move(ve);
+				if (prim == 0)
+					prim = PRIM_TRILIST;
 
-			pass		*p		= (*technique)[0];
-			vd.get().Init(ve2, ve2.Count(), p->sub[SS_VERTEX].raw());
-			vb.get().Init(verts, vb_size);
-			ib.get().Init(inds, ib_size);
+				(uint32&)ve	= 0;
+				vd.get().Init(ve2, ve2.Count(), p->sub[SS_VERTEX].raw());
+				vb.get().Init(verts, vb_size);
+				ib.get().Init(inds, ib_size);
+			} else {
+			#ifdef USE_DX12
+				static_cast<DataBuffer&>(static_cast<_Buffer&>(vb.get())).Init(verts, stride_t(stride), vb_size / stride);
+				static_cast<DataBuffer&>(static_cast<_Buffer&>(ib.get())).Init(inds, GetTexFormat<uint32>(), ib_size);
+			#endif
+			}
 		}
 		void	DeInit() {
 			//((VertexDescription&)ve).~VertexDescription();
@@ -47,15 +55,28 @@ namespace iso {
 			//((IndexBuffer<uint16>&)ib_offset).~IndexBuffer<uint16>();
 		}
 		void	Render(GraphicsContext &ctx) {
-			ctx.SetVertexType(*&vd);
-			ctx.SetVertices(0, vb, _stride);
-			ctx.SetIndices(ib);
-			ctx.DrawIndexedPrimitive((PrimType)prim, 0, vb_size / _stride, 0, ib_size / 3);
+			pass	*p	= (*technique)[0];
+			if (p->Has(SS_VERTEX)) {
+				ctx.SetVertexType(*&vd);
+				ctx.SetVertices(0, vb, _stride);
+				ctx.SetIndices(ib);
+				ctx.DrawIndexedPrimitive((PrimType)prim, 0, vb_size / _stride, 0, ib_size / 3);
+			#ifdef USE_DX12
+			} else if (p->Has(SS_MESH)) {
+				ctx.SetBuffer(SS_MESH, vb.get(), 0);
+				ctx.SetBuffer(SS_MESH, ib.get(), GetTexFormat<uint32>(), 1);
+				ctx.DrawMesh(div_round_up(ib_size, 64 * 32));
+			#endif
+			} else {
+				ctx.SetBuffer(SS_COMPUTE, vb.get(), 0);
+				ctx.SetBuffer(SS_COMPUTE, ib.get(), GetTexFormat<uint32>(), 1);
+				ctx.Dispatch((ib_size + 63) / 64);
+			}
 		}
 	#endif
 		DX11SubMesh()	{ clear(*this); }
 		~DX11SubMesh()	{}
 	};
-}
+} //namespace iso
 
 #endif	// MODEL_DEFS_H

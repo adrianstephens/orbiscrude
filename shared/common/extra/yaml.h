@@ -89,7 +89,7 @@ public:
 
 	void		Begin(const char *tag, const void *key, CONSTRUCT c)		{ d.vBegin(d.me, tag, key, c); }
 	void*		End(CONSTRUCT c)											{ return d.vEnd(d.me, c); }
-	void*		Value(const char *tag, const void *key, const char *val)	{ return d.vValue(d.me, tag, key, val); }
+	void*		Value(const char *tag, const void *key, string_ref val)		{ return d.vValue(d.me, tag, key, val); }
 	void		Entry(const void *key, void *val)							{ d.vEntry(d.me, key, val); }
 
 public:

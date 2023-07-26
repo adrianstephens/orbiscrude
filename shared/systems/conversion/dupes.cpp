@@ -150,7 +150,7 @@ void* ISO_dupes::CheckPtr(const ISO_ptr_machine<void> &p) {
 
 	if (TypeType(type) != ISO::VIRTUAL) {
 		for (size_t i = 0, n = ptrs.size(); i < n; i++) {
-			if (ptrs[i].GetType()->SameAs(type, ISO::MATCH_NOUSERRECURSE) && CompareData(type, p, ptrs[i], 0) && CheckIDs(p, ptrs[i])) {
+			if (ptrs[i].GetType()->SameAs(type, ISO::MATCH_NOUSERRECURSE) && CompareData(type, p, ptrs[i]) && CheckIDs(p, ptrs[i])) {
 #ifdef DEBUG_DUPES
 				debug.output(p, ptrs[i]);
 #endif
@@ -231,7 +231,7 @@ bool ISO_dupes::CheckInside(const ISO::Type *type, void *data, ISO_route &route)
 						ref->set(data, mapping[p]);
 					} else if (void *p2 = CheckPtr(p, route)) {
 						ref->set(data, ISO::GetPtr<64>(p2));
-						p.User() = (void*)ISO::store_string(route);
+						p.User() = (void*)ISO::store_string(route.term());
 					}
 				}
 			}
@@ -252,7 +252,7 @@ void* ISO_dupes::CheckPtr(const ISO_ptr_machine<void> &p, ISO_route &route) {
 
 	if (TypeType(type) != ISO::VIRTUAL) {
 		for (size_t i = 0, n = ptrs.size(); i < n; i++) {
-			if (ptrs[i].GetType()->SameAs(type, ISO::MATCH_NOUSERRECURSE) && CompareData(type, p, ptrs[i], 0) && CheckIDs(p, ptrs[i])) {
+			if (ptrs[i].GetType()->SameAs(type, ISO::MATCH_NOUSERRECURSE) && CompareData(type, p, ptrs[i]) && CheckIDs(p, ptrs[i])) {
 				mapping[p] = ptrs[i];
 				if (p.ID() && (!ptrs[i].ID() || ((ptrs[i].Flags() & ISO::Value::ALWAYSMERGE) && !(p.Flags() & ISO::Value::ALWAYSMERGE))))
 					ptrs[i].SetID(p.ID());
@@ -375,7 +375,7 @@ bool Patching::CheckPtr(ISO_ptr<void> &p1, ISO_ptr<void> &p2) {
 	if (same) {
 		if (!p1)
 			return true;
-		if (str((const char*)route, string_find((const char*)route, ';')) == p1.External()) {
+		if (str(route.term(), string_find(route.term(), ';')) == p1.External()) {
 			p1.Header()->addref();
 			return true;
 		}
@@ -406,7 +406,7 @@ bool Patching::CheckPtr(ISO_ptr<void> &p1, ISO_ptr<void> &p2) {
 	}
 
 	if (!p1.GetType()->IsPlainData() || p1.GetType()->GetSize() > 16) {
-		p1.CreateExternal(route);
+		p1.CreateExternal(route.term());
 		p2 = p1;
 	}
 	return true;
@@ -572,7 +572,7 @@ ISO_ptr<void> SharedExternals2(const ISO_openarray<string> &filenames) {
 		buckets[bits].push_back(dupes[i]);
 	}
 	ISO_ptr<void> p = GatherFlat(buckets);
-	CheckHasExternals(p, ISO::DUPF_DEEP);
+	CheckHasExternals(p, ISO::TRAV_DEEP);
 
 	ISO_route	route("");
 	dupes.CheckPtr(p, route);

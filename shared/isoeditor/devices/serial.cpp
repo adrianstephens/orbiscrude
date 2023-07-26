@@ -139,7 +139,7 @@ struct serial_tester {
 				ISO_TRACEF(str(pr, n));
 				pr += n;
 
-				while (char *nl = string_find(receive_buffer, '\n', pr)) {
+				while (char *nl = string_find(receive_buffer, pr, '\n')) {
 					string	line = str(receive_buffer, nl);
 					int		rem = pr - (nl + 1);
 					pr = receive_buffer + rem;
@@ -204,7 +204,7 @@ class SerialTTY : public win::Subclass<SerialTTY, win::D2DEditControl> {
 	Semaphore	semaphore;
 	Mutex		mutex;
 public:
-	LRESULT Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+	LRESULT Proc(win::MSG_ID message, WPARAM wParam, LPARAM lParam) {
 		switch (message) {
 			case WM_CHAR: {
 				auto		w		= with(mutex);

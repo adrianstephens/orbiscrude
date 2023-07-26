@@ -3,6 +3,11 @@
 #include "codec/codec_stream.h"
 #include "base/bits.h"
 
+#if 0//def ISO_EDITOR
+#include "E:\Github\giflib\lib\gif_lib.h"
+#pragma comment(lib, "D:\dev\shared\x64\Debug\giflib2.lib")
+#endif
+
 //-----------------------------------------------------------------------------
 //	CompuServe GIF
 //-----------------------------------------------------------------------------
@@ -163,6 +168,31 @@ class GIFFileHandler : BitmapFileHandler {
 	int				Check(istream_ref file)	override { file.seek(0); return file.get<GIFHEAD>().valid() ? CHECK_PROBABLE : CHECK_DEFINITE_NO; }
 	ISO_ptr<void>	Read(tag id, istream_ref file) override;
 	bool			Write(ISO_ptr<void> p, ostream_ref file) override;
+#if 0//def ISO_EDITOR
+	ISO_ptr64<void>	ReadWithFilename64(tag id, const filename &fn) override {
+		int	Error;
+		auto gif = DGifOpenFileName(fn, &Error);
+		DGifSlurp(gif);
+
+		ISO_ptr<bitmap_anim>	anim(id);
+		for (auto &i : make_range_n(gif->SavedImages, gif->ImageCount)) {
+			ISO_ptr<bitmap>			bm(none, i.ImageDesc.Width, i.ImageDesc.Height);
+			auto	p = gif->SColorMap->Colors;
+			for (auto& c : bm->CreateClut(1 << gif->SColorMap->BitsPerPixel)) {
+				c.r = p->Red;
+				c.g = p->Green;
+				c.b = p->Blue;
+				c.a = 255;
+				++p;
+			}
+			copy(make_block(i.RasterBits, i.ImageDesc.Width, i.ImageDesc.Height), bm->All());
+			anim->Append(make_pair(bm, 1));
+		}
+
+		return anim;
+	}
+#endif
+
 } gif;
 
 ISO_ptr<void> GIFFileHandler::Read(tag id, istream_ref file) {
@@ -234,22 +264,26 @@ ISO_ptr<void> GIFFileHandler::Read(tag id, istream_ref file) {
 
 		malloc_block	raw		= ReadBlocks(file);
 		LZW_decoder<false, false, 12>	lzw(nbits);
-		malloc_block	line_block(image.width);
-		uint8			*line = line_block;
 		size_t			src_offset = 0;
 
 		if (image.interleaved) {
+			malloc_block	line_block(image.width);
 			for (int p = 0; p < 4; p++) {
 				for (int d = p ? (16 >> p) : 8, y = (8 >> p) & 7; y < image.height; y += d)
 					src_offset += ReadLine(bm->ScanLine(y + image.top) + image.left, line_block, raw + src_offset, lzw);
 			}
+		} else if (false && image.left == 0 && image.width == head.screenwidth) {
+			malloc_block	line_block(image.width * image.height);
+			ReadLine(bm->ScanLine(image.top), line_block, raw, lzw);
+
 		} else {
+			malloc_block	line_block(image.width);
 			for (int y = 0; y < image.height; y++)
 				src_offset += ReadLine(bm->ScanLine(y + image.top) + image.left, line_block, raw + src_offset, lzw);
 		}
 	}
 
-	ISO_OUTPUTF("time=") << time << '\n';
+	ISO_OUTPUTF("time=") << (float)time << '\n';
 
 	return p;
 }
@@ -340,7 +374,7 @@ bool GIFFileHandler::Write(ISO_ptr<void> p, ostream_ref file) {
 
 		} else {
 			for (y = height; y--;) {
-				uint8		*d = buffer[y];
+				uint8		*d = buffer[y].begin();
 				ISO_rgba	*s = bm->ScanLine(y);
 				int			x;
 				for (x = 0; x < width; x++) {
@@ -355,7 +389,7 @@ bool GIFFileHandler::Write(ISO_ptr<void> p, ostream_ref file) {
 			minx = maxy == 0 ? 0 : width;
 			maxx = 0;
 			for (y = 0; y < maxy; y++) {
-				uint8		*d = buffer[y];
+				uint8		*d = buffer[y].begin();
 				ISO_rgba	*s = bm->ScanLine(y);
 				int			x;
 				for (x = 0; x < minx; x++) {
@@ -392,11 +426,11 @@ bool GIFFileHandler::Write(ISO_ptr<void> p, ostream_ref file) {
 			if (interleaved) {
 				for (int p = 0; p < 4; p++) {
 					for (int d = p ? (16 >> p) : 8, y = miny + ((8 >> p) & 7); y < maxy; y += d)
-						lzw.writebuff(buffer[y] + minx, maxx - minx);
+						lzw.writebuff(buffer[y].begin() + minx, maxx - minx);
 				}
 			} else {
 				for (int y = miny; y < maxy; y++)
-					lzw.writebuff(buffer[y] + minx, maxx - minx);
+					lzw.writebuff(buffer[y].begin() + minx, maxx - minx);
 			}
 		}
 

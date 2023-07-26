@@ -197,7 +197,7 @@ bool PDFReader::ReadValue(tag name, ISO_ptr<void> &p0) {
 				ISO_ptr<anything>	p(name);
 				p0 = p;
 				ISO_ptr<void>	t;
-				while (ReadValue(0, t)) {
+				while (ReadValue(none, t)) {
 					p->Append(t);
 				}
 				c = GetChar();

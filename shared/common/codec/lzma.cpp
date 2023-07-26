@@ -263,8 +263,8 @@ const uint8* Decoder::process(uint8*& dst, uint8* dst_end, const uint8* src, con
 		}
 	}
 
-	if (code)
-		return nullptr;
+//	if (code)
+//		return nullptr;
 
 	return src;
 }

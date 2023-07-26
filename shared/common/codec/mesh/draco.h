@@ -1,5 +1,6 @@
 #include "utilities.h"
 #include "base/hash.h"
+#include "base/interval.h"
 #include "comms/leb128.h"
 
 #undef DIFFERENCE

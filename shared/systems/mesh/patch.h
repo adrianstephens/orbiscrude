@@ -1,8 +1,8 @@
 #ifndef PATCH_H
 #define PATCH_H
 
+#include "maths/geometry.h"
 #include "common/shader.h"
-#include "maths/bezier.h"
 
 namespace iso {
 

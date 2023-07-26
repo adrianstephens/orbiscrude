@@ -2,24 +2,33 @@
 #define STRINGS_H
 
 #include "functions.h"
+#include "tuple.h"
 #include "bits.h"
+
+#define ISO_OUTPUTF(...)	iso::trace_accum(__VA_ARGS__)
+#define ISO_OUTPUTFI(...)	iso::trace_accum().formati(__VA_ARGS__)
 
 #ifdef ISO_RELEASE
 #define ISO_TRACEF(...)		iso::dummy_accum()
 #define ISO_TRACEFI(...)	iso::dummy_accum()
-#define ISO_PRINTVAR(x)
 #else
-#define ISO_TRACEF(...)		iso::trace_accum(__VA_ARGS__)
-#define ISO_TRACEFI(...)	iso::trace_accum().formati(__VA_ARGS__)
-#define ISO_PRINTVAR(x)		ISO_TRACEF(#x "=") << x << '\n'
+#define ISO_TRACEF(...)		ISO_OUTPUTF(__VA_ARGS__)
+#define ISO_TRACEFI(...)	ISO_OUTPUTFI(__VA_ARGS__)
 #endif
 
+#define VAR(x)		#x "=" << x << ';'
+#define VAR2(n, x)	n "=" << x << ';'
+
 #define ISO_ALWAYS_ASSERTF(exp, ...)	DO({ if (!(exp)) { iso::_iso_assert_msg(__FILE__, __LINE__, format_string(__VA_ARGS__)); _iso_break(); } })
-#define ISO_ALWAYS_ASSUMEF(exp, ...)	DO({ if (!(exp)) iso::trace_accum(__VA_ARGS__); })
+#define ISO_ALWAYS_ASSUMEF(exp, ...)	DO({ if (!(exp)) ISO_TRACEF(__VA_ARGS__); })
+
+#define ISO_ALWAYS_ASSERTFI(exp, ...)	DO({ if (!(exp)) { iso::_iso_assert_msg(__FILE__, __LINE__, formati_string(__VA_ARGS__)); _iso_break(); } })
+#define ISO_ALWAYS_ASSUMEFI(exp, ...)	DO({ if (!(exp)) ISO_TRACEFI(__VA_ARGS__); })
 
 #define ISO_ASSERTF(exp, ...)	ISO_NOT_RELEASE_STMT(ISO_ALWAYS_ASSERTF(exp, __VA_ARGS__))
+#define ISO_ASSERTFI(exp, ...)	ISO_NOT_RELEASE_STMT(ISO_ALWAYS_ASSERTFI(exp, __VA_ARGS__))
 #define ISO_ASSUMEF(exp, ...)	ISO_NOT_RELEASE_STMT(ISO_ALWAYS_ASSUMEF(exp, __VA_ARGS__))
-#define ISO_OUTPUTF(...)		iso::trace_accum(__VA_ARGS__)
+#define ISO_ASSUMEFI(exp, ...)	ISO_NOT_RELEASE_STMT(ISO_ALWAYS_ASSUMEFI(exp, __VA_ARGS__))
 
 #define throw_accum(x) iso_throw(((iso::toggle_accum&)(iso::toggle_accum() << x)).detach()->begin())
 
@@ -36,7 +45,7 @@ template<typename T> struct char_type {
 	operator uint32()	const	{ return t; }
 };
 
-template<typename T> struct T_swap_endian_type<char_type<T> >			{ typedef char_type<T_swap_endian<T> > type; };
+template<typename T> struct T_swap_endian_type<char_type<T>> { typedef char_type<T_swap_endian<T> > type; };
 
 typedef char_type<uint8>	char8;
 typedef T_if<sizeof(wchar_t)==2, wchar_t, char16_t>::type	char16;
@@ -49,12 +58,12 @@ typedef LE(char32)	char32le;
 
 template<typename T>	struct T_ischar							: T_false {};
 template<typename T>	struct T_ischar<T&>						: T_ischar<T> {};
-template<typename T>	struct T_ischar<constructable<T> >		: T_ischar<T> {};
-template<typename T>	struct T_ischar<T_swap_endian_type<T> >	: T_ischar<T> {};
-template<typename T>	struct T_ischar<char_type<T> >			: T_true {};
+template<typename T>	struct T_ischar<const T>				: T_ischar<T> {};
+template<typename T>	struct T_ischar<constructable<T>>		: T_ischar<T> {};
+template<typename T>	struct T_ischar<T_swap_endian<T>>		: T_ischar<T> {};
+template<typename T>	struct T_ischar<char_type<T>>			: T_true {};
 template<>				struct T_ischar<char>					: T_true {};
-//template<>				struct T_ischar<char16>				: T_true {};
-//template<>				struct T_ischar<char32>				: T_true {};
+template<>				struct T_ischar<unsigned char>			: T_true {};
 template<>				struct T_ischar<wchar_t>				: T_true {};
 template<>				struct T_ischar<char16_t>				: T_true {};
 template<>				struct T_ischar<char32_t>				: T_true {};
@@ -63,8 +72,11 @@ template<typename T> constexpr bool is_char = T_ischar<T>::value;
 
 iso_export uint32	legalise_utf8(const char *srce, char *dest, size_t maxlen);
 iso_export size_t	_format(char *dest, const char *format, va_list valist);
-iso_export size_t	_format(char *dest, const char *format, ...);
 iso_export size_t	_format(char *dest, size_t maxlen, const char *format, va_list valist);
+iso_export size_t	_format(wchar_t *dest, const wchar_t *format, va_list valist);
+iso_export size_t	_format(wchar_t *dest, size_t maxlen, const wchar_t *format, va_list valist);
+
+iso_export size_t	_format(char *dest, const char *format, ...);
 iso_export size_t	_format(char *dest, size_t maxlen, const char *format, ...);
 
 template<typename C> class accum;
@@ -156,7 +168,7 @@ template<typename T> size_t chars_count(const T *srce, const T *end, bool strict
 
 template<typename T, typename I> size_t chars_count(I srce, I end, bool strict = true) {
 	size_t	n = 0;
-	while (srce != end)
+	while (srce < end)
 		n += char_count<T>(*srce++, strict);
 	return n;
 }
@@ -172,7 +184,7 @@ template<typename T> size_t chars_count(const char *srce, bool strict = true) {
 }
 template<typename T> size_t chars_count(const char *srce, const char *end, bool strict = true) {
 	size_t	n = 0;
-	while (srce != end) {
+	while (srce < end) {
 		srce += char_length(*srce);
 		++n;
 	}
@@ -206,7 +218,7 @@ template<typename T, typename F> size_t chars_copy(T *dest, const F *srce, size_
 }
 template<typename T, typename I> size_t chars_copy(T *dest, I srce, I end, size_t maxlen = 0, bool strict = true) {
 	T	*d	= dest, *de = maxlen ? d + maxlen : (T*)~uintptr_t(0);
-	while (d < de && srce != end)
+	while (d < de && srce < end)
 		d += put_char(*srce++, d, strict);
 	return d - dest;
 }
@@ -233,14 +245,6 @@ template<typename C> enable_if_t<(sizeof(C) > 1), size_t> chars_copy(C *dest, co
 template<typename T, typename I> size_t chars_copy(T *dest, I srce, size_t len, size_t maxlen, bool strict = true) {
 	return chars_copy(dest, srce, srce + len, maxlen, strict);
 }
-/*
-template<typename T, int N, typename I> size_t chars_copy(T (&dest)[N], I srce, I end, bool strict = true) {
-	return chars_copy(dest, srce, end, N, strict);
-}
-template<typename T, int N, typename I> size_t chars_copy(T (&dest)[N], I srce, size_t len, bool strict = true) {
-	return chars_copy(dest, srce, srce + len, N, strict);
-}
-*/
 
 //-----------------------------------------------------------------------------
 //	character tests
@@ -258,6 +262,7 @@ constexpr bool	is_alphanum(char c)					{ return between(c, '0', 'z') && (c <= '9
 constexpr bool	is_wordchar(char c)					{ return is_alphanum(c) || c == '_'; }
 constexpr bool	is_punct(char c)					{ return is_graph(c) && !is_alphanum(c); }
 constexpr bool	is_hex(char c)						{ return between(c, '0', 'f') && (c <= '9' || c >= 'a' || between(c, 'A', 'F')); }
+constexpr bool	is_ascii(char c)					{ return uint8(c) < 128; }
 
 constexpr char	to_upper(char c)					{ return is_lower(c) ? c - ('a' - 'A') : c; }
 constexpr char	to_lower(char c)					{ return is_upper(c) ? c + ('a' - 'A') : c; }
@@ -296,26 +301,46 @@ template<typename C> void to_upper(C *dest, const C *srce) {
 class char_set : bitarray<256> {
 	typedef	bitarray<256> B;
 public:
-	static char_set whitespace, digit, upper, lower, alpha, alphanum, identifier, ascii, control;
+	static char_set
+		cntrl,
+		print,
+		graph,
+		whitespace,
+		digit,
+		upper,
+		lower,
+		alpha,
+		alphanum,
+		wordchar,
+		punct,
+		hex,
+		ascii;
+
 	using B::count_set;
 	using B::next;
 
 	char_set()									{}
-	char_set(const B &b)		: B(b)			{}
+	char_set(const B &b)				: B(b)	{}
 	char_set(char c)							{ set((uint8)c); }
 	char_set(char s, char e)					{ slice((uint8)s, (uint8)e - (uint8)s + 1).set_all(); }
+	char_set(_not<const char_set&> b)	: B((~b).B::operator~()) {}
+	char_set(_not<char_set> b)			: B((~b).B::operator~()) {}
 	explicit char_set(const char *s)			{ while (*s) set((uint8)*s++);	}
-	char_set&	operator+=(const char_set &b)	{ B::operator+=(b); return *this; }
-	char_set&	operator-=(const char_set &b)	{ B::operator-=(b); return *this; }
-	char_set&	operator*=(const char_set &b)	{ B::operator*=(b); return *this; }
-	char_set	operator~()		const			{ return B(B::operator~());	}
 
-	bool		test(char c)	const			{ return B::test((uint8)c); }
+	bool		test(char c)		const		{ return B::test((uint8)c); }
+	bool		operator()(char c)	const		{ return B::test((uint8)c); }
 
-	friend char_set	operator|(const char_set &a, const char_set &b)		{ return char_set(a) += b; }
+	char_set&	operator+=(const char_set &b)	{ B::operator+=((const B&)b); return *this; }
+	char_set&	operator-=(const char_set &b)	{ B::operator-=((const B&)b); return *this; }
+	char_set&	operator*=(const char_set &b)	{ B::operator*=((const B&)b); return *this; }
+	auto		operator~()		const&			{ return make_not(*this); }
+	auto		operator~()		&&				{ return make_not(move(*this)); }
+
 	friend char_set	operator+(const char_set &a, const char_set &b)		{ return char_set(a) += b; }
 	friend char_set	operator-(const char_set &a, const char_set &b)		{ return char_set(a) -= b; }
-	friend char_set	operator*(const char_set &a, const char_set &b)		{ return char_set(a) *= b; }
+
+	template<typename X> friend char_set	operator|(const char_set &a, const X &b)		{ return char_set(a) += b; }
+	template<typename X> friend char_set	operator*(const char_set &a, const X &b)		{ return char_set(a) *= b; }
 };
 
 //-----------------------------------------------------------------------------
@@ -328,27 +353,16 @@ template<typename T> struct case_insensitive {
 	operator T()	const			{ return to_lower(t); }
 };
 
+template<typename T>	struct T_ischar<case_insensitive<T>> : T_ischar<T> {};
+
 template<typename T> inline auto make_case_insensitive(T t)					{ return case_insensitive<T>(t); }
 template<typename T> inline auto make_case_insensitive(T *t)				{ return (case_insensitive<T>*)t; }
 template<typename T> inline auto make_case_insensitive(const T *t)			{ return (const case_insensitive<T>*)t; }
 template<typename T> inline auto make_case_insensitive(const range<T> &t)	{ return make_range(make_case_insensitive(t.begin()), make_case_insensitive(t.end())); }
 template<typename T> inline auto make_case_insensitive(range<T> &t)			{ return make_range(make_case_insensitive(t.begin()), make_case_insensitive(t.end())); }
-//template<typename T, int N> inline auto make_case_insensitive(T (&t)[N])	{ return (case_insensitive<T>(&)[N])t; };
-
-template<typename T> struct char_traits {
-	typedef	T							case_sensitive;
-	typedef	iso::case_insensitive<T>	case_insensitive, case_other;
-};
-template<typename T> struct char_traits<case_insensitive<T> > {
-	typedef	T							case_sensitive, case_other;
-	typedef	iso::case_insensitive<T>	case_insensitive;
-};
-
-template<typename T> struct char_traits<const T> : char_traits<T> {};
 
 typedef case_insensitive<char>		ichar;
 typedef case_insensitive<char16>	ichar16;
-
 
 template<typename C> uint32	put_char(char32 c, case_insensitive<C>* dest, bool strict = true) {
 	return put_char(c, &dest->t);
@@ -366,7 +380,10 @@ template<typename A, typename B> inline bool char_match(const A &a, const B &b) 
 	return simple_compare(a, b) == 0;
 }
 template<typename A> inline bool char_match(const A &a, const char_set &set) {
-	return set.test(a);
+	return set(a);
+}
+template<typename A, typename S> inline bool char_match(const A &a, _not<S> set) {
+	return !(~set)(a);
 }
 
 //-----------------------------------------------------------------------------
@@ -450,7 +467,7 @@ template<typename T> inline size_t	string_term(T *d, size_t n)		{ if (d) d[n] = 
 
 template<typename A, typename B> inline int string_cmp(const A *a, const B *b) {
 	if (!a || !b)
-		return a ? 1 : b ? -1 : 0;
+		return a && *a ? 1 : b && *b ? -1 : 0;
 	for (;;) {
 		A	ca = *a++;
 		B	cb = *b++;
@@ -514,7 +531,7 @@ template<typename A, typename B> inline int string_cmp(const A *a, const B *b, c
 
 // find char or char_set (forward)
 
-template<typename T, typename S> T *string_find(T *p, S c, T *e) {
+template<typename T, typename S> T *string_find(T *p, T *e, S c) {
 	while (p < e) {
 		if (char_match(*p, c))
 			return p;
@@ -532,27 +549,27 @@ template<typename T, typename S> T *string_find(T *p, S c) {
 	}
 	return 0;
 }
-template<typename T, typename S> inline T *string_find(T *p, S c, const _none&) {
+template<typename T, typename S> inline T *string_find(T *p, const _none&, S c) {
 	return string_find(p, c);
 }
 
 // find string (forward)
 
-template<typename T, typename S> T *string_find(T *p, S *s, T *e) {
+template<typename T, typename S> T *string_find(T *p, T *e, S *s) {
 	if (p) {
-		size_t	len = string_len(s);
-		for (e -= len; p <= e; p++) {
-			if (string_cmp(p, s, len) == 0)
+		size_t	slen = string_len(s);
+		for (e -= slen; p <= e; p++) {
+			if (string_cmp(p, s, slen) == 0)
 				return p;
 		}
 	}
 	return 0;
 }
-template<typename T, typename S> inline	T *string_find(T *p, S *s, T *pe, S *se) {
+template<typename T, typename S> inline	T *string_find(T *p, T *pe, S *s, S *se) {
 	if (p) {
-		size_t	len = se - s;
-		for (pe -= len; p <= pe; p++) {
-			if (string_cmp(p, s, len) == 0)
+		size_t	slen = se - s;
+		for (pe -= slen; p <= pe; p++) {
+			if (string_cmp(p, s, slen) == 0)
 				return p;
 		}
 	}
@@ -560,21 +577,21 @@ template<typename T, typename S> inline	T *string_find(T *p, S *s, T *pe, S *se)
 }
 
 template<typename T, typename S> inline	T *string_find(T *p, S *s) {
-	return string_find(p, s, string_end(p));
+	return string_find(p, string_end(p), s);
 }
-template<typename T, typename S> inline T *string_find(T *p, S *s, const _none&) {
-	return string_find(p, s, string_end(p));
+template<typename T, typename S> inline T *string_find(T *p, const _none&, S *s) {
+	return string_find(p, string_end(p), s);
 }
-template<typename T, typename S> inline T *string_find(T *p, S *s, const _none&, const _none&) {
-	return string_find(p, s, string_end(p));
+template<typename T, typename S> inline T *string_find(T *p, const _none&, S *s, const _none&) {
+	return string_find(p, string_end(p), s);
 }
-template<typename T, typename S> inline T *string_find(T *p, S *s, const _none&, S *se) {
-	return string_find(p, s, string_end(p), se);
+template<typename T, typename S> inline T *string_find(T *p, const _none&, S *s, S *se) {
+	return string_find(p, string_end(p), s, se);
 }
 
 // find char or char_set (reverse)
 
-template<typename T, typename S> T *string_rfind(T *p, S c, T *e) {
+template<typename T, typename S> T *string_rfind(T *p, T *e, S c) {
 	while (p < e) {
 		if (char_match(*--e, c))
 			return e;
@@ -584,7 +601,7 @@ template<typename T, typename S> T *string_rfind(T *p, S c, T *e) {
 
 // find string (reverse)
 
-template<typename T, typename S> T *string_rfind(T *p, S *s, T *e) {
+template<typename T, typename S> T *string_rfind(T *p, T *e, S *s) {
 	size_t	len = string_len(s);
 	for (e -= len; e >= p; e--) {
 		if (string_cmp(e, s, len) == 0)
@@ -593,42 +610,67 @@ template<typename T, typename S> T *string_rfind(T *p, S *s, T *e) {
 	return 0;
 }
 
-// find number of matches of char or char_set
+// find number of matches of char or char_set or string
 
-template<typename T, typename S> int string_count(const T *s, S c, const T *e) {
+template<typename T, typename S> int string_count(const T *p, const T *e, S c) {
 	int	n = 0;
-	while (const T *p = string_find(s, c, e)) {
-		s = p + 1;
+	while (const T *i = string_find(p, e, c)) {
+		p = i + 1;
 		++n;
 	}
 	return n;
 }
-template<typename T, typename S> int string_count(const T *s, S c) {
+template<typename T, typename S> int string_count(const T *p, S c) {
 	int	n = 0;
-	while (const T *p = string_find(s, c)) {
-		s = p + 1;
+	while (const T *i = string_find(p, c)) {
+		p = i + 1;
 		++n;
 	}
 	return n;
 }
+template<typename T, typename S> int string_count(const T *p, const _none&, S c) {
+	return string_count(p, c);
+}
+
+// find number of matches of string
+
+template<typename T, typename S> int string_count(const T *p, const T *e, S *s) {
+	int	n = 0;
+	size_t	slen = string_len(s);
+	while (const T *i = string_find(p, e, s)) {
+		p = i + slen;
+		++n;
+	}
+	return n;
+}
+template<typename T, typename S> int string_count(const T *p, S *s) {
+	int	n = 0;
+	size_t	slen = string_len(s);
+	while (const T *i = string_find(p, s)) {
+		p = i + slen;
+		++n;
+	}
+	return n;
+}
+template<typename T, typename S> int string_count(const T *p, const _none&, S *s) {
+	return string_count(p, s);
+}
+
 
 // string_copy
 
-template<typename S, typename D> size_t	string_copy(D *d, const S *s, size_t maxlen = 0)	{ return string_term(d, chars_copy(d, s, maxlen)); }
-template<typename I, typename D> size_t	string_copy(D *d, I s, I e, size_t maxlen = 0)		{ return string_term(d, chars_copy(d, s, e, maxlen)); }
-template<typename D, typename I> size_t	string_copy(D *d, I s, size_t n, size_t maxlen = 0)	{ return string_copy(d, s, s + n, maxlen); }
+template<typename S, typename D> size_t	string_copy(D *d, const S *s, size_t maxlen = 0)		{ return string_term(d, chars_copy(d, s, maxlen)); }
+template<typename I, typename D> size_t	string_copy(D *d, I s, I e, size_t maxlen = 0)			{ return string_term(d, chars_copy(d, s, e, maxlen)); }
+template<typename I, typename D> size_t	string_copy(D *d, I s, const _none&, size_t maxlen = 0)	{ return string_term(d, chars_copy(d, s, maxlen)); }
+template<typename D, typename I> size_t	string_copy(D *d, I s, size_t n, size_t maxlen = 0)		{ return string_copy(d, s, s + n, maxlen); }
+
+// replace
 
 template<typename C> void replace(C *dest, const C *srce, const C *from, const C *to) {
-	size_t		flen	= string_len(from);
-	//size_t		tlen	= string_len(to);
-
+	size_t	flen	= string_len(from);
 	while (const C *found = string_find(srce, from)) {
 		dest += chars_copy(dest, srce, found);
-		//memcpy(dest, srce, (found - srce) * sizeof(C));
-		//dest += found - srce;
 		dest += chars_copy(dest, to);
-		//memcpy(dest, to, tlen * sizeof(C));
-		//dest += tlen;
 		srce = found + flen;
 	}
 	string_copy(dest, srce);
@@ -641,12 +683,24 @@ template<typename C> void replace(C *s, const C from, const C to) {
 		++s;
 	}
 }
+template<typename I, typename C> void replace(I s, I e, const C from, const C to) {
+	while (s != e) {
+		if (*s == from)
+			*s = to;
+		++s;
+	}
+}
+template<typename C> void replace(C *s, const _none&, const C from, const C to) {
+	replace(s, from, to);
+}
 
+// string_slice
+/*
 template<typename I> constexpr string_base<range<I>> string_slice(int s, int n, I b, I e)	{
 	return range<I>(b ? (s < 0 ? e : b) + s : b, b ? (n < 0 ? e : b) + n : b);
 }
 template<typename I> constexpr string_base<range<I>> string_slice(int s, int n, I b, const _none&)	{
-	return string_slice(s, n, b, b && (s < 0 || n < 0) ? string_end(b) : b);
+	return string_slice(s, n, b, string_end(b));
 }
 template<typename I> constexpr string_base<range<I>> string_slice(int s, I b, I e) {
 	return range<I>(e ? (s < 0 ? e : b) + s : e, e);
@@ -654,19 +708,19 @@ template<typename I> constexpr string_base<range<I>> string_slice(int s, I b, I 
 template<typename I> constexpr string_base<I> string_slice(int s, I b, const _none&) {
 	return (s < 0 ? string_end(b) : b) + s;
 }
-
+*/
 // check whole string matches set
 
 inline bool string_check(const char *s, const char_set &set) {
 	while (char c = *s++) {
-		if (!set.test(c))
+		if (!set(c))
 			return false;
 	}
 	return true;
 }
 inline bool string_check(const char *s, size_t n, const char_set &set) {
 	while (n--) {
-		if (!set.test(*s++))
+		if (!set(*s++))
 			return false;
 	}
 	return true;
@@ -685,71 +739,21 @@ iso_export uint32 string_hash(const char *s, size_t n);
 iso_export uint32 string_hash(const char16 *s, size_t n);
 
 //-----------------------------------------------------------------------------
-//	read_to/read_line
-//-----------------------------------------------------------------------------
-/*
-template<typename R> bool read_to(R &r, const char_set &set, char *p, uint32 n) {
-	int		c = r.getc();
-	if (c == -1)
-		return false;
-
-	char	*e = p + n - 1;
-	while (c && c != -1 && !set.test(c)) {
-		if (p == e)
-			return false;
-		*p++ = c;
-		c = r.getc();
-	}
-
-	*p = 0;
-	return true;
-}
-
-template<typename R> bool read_line(R &r, char *p, uint32 n) {
-	int	c;
-	do c = r.getc(); while (c == '\r' || c == '\n');
-
-	if (c == 0 || c == -1)
-		return false;
-
-	char *e = p + n - 1;
-	while (c && c != -1 && c != '\n' && c != '\r') {
-		if (p == e)
-			return false;
-		*p++ = c;
-		c = r.getc();
-	}
-
-	*p = 0;
-	return true;
-}
-
-template<typename R, int N> bool read_to(R &r, const char_set &set, char (&p)[N]) {
-	return read_to(r, set, p, N);
-}
-
-template<typename R, int N> bool read_line(R &r, char (&p)[N]) {
-	return read_line(r, p, N);
-}
-*/
-//-----------------------------------------------------------------------------
 //	string_getter - for deferred copying of strings from functions
 //-----------------------------------------------------------------------------
 
 template<typename T> struct string_getter {
 	T	t;
-
 	template<typename T1> string_getter(T1 &&t) : t(forward<T1>(t)) {}
-	size_t	len()							const	{ return t.string_len(); }			// default impl
-	size_t	get(char *s, size_t len)		const	{ return t.string_get(s, len); }	// default impl
-	size_t	get(char16 *s, size_t len)		const	{ return t.string_get(s, len); }	// default impl
+	size_t	len()										const { return t.string_len(); }		// default impl
+	template<typename C> size_t	get(C *s, size_t len)	const { return t.string_get(s, len); }	// default impl
 
-	template<typename S>	bool operator==(const S &s)	{ return s == *this; }
-	template<typename S>	bool operator!=(const S &s)	{ return s != *this; }
-	template<typename S>	bool operator< (const S &s)	{ return s >  *this; }
-	template<typename S>	bool operator<=(const S &s)	{ return s >= *this; }
-	template<typename S>	bool operator> (const S &s)	{ return s <  *this; }
-	template<typename S>	bool operator>=(const S &s)	{ return s <= *this; }
+	template<typename S> bool operator==(const S &s) { return s == *this; }
+	template<typename S> bool operator!=(const S &s) { return s != *this; }
+	template<typename S> bool operator< (const S &s) { return s >  *this; }
+	template<typename S> bool operator<=(const S &s) { return s >= *this; }
+	template<typename S> bool operator> (const S &s) { return s <  *this; }
+	template<typename S> bool operator>=(const S &s) { return s <= *this; }
 };
 
 // string_getter helper for char/char16 transforms
@@ -779,17 +783,17 @@ inline from_string_getter from_string(const char *s) { return s; }
 //	string traits
 //-----------------------------------------------------------------------------
 
-template<typename S> struct string_traits : container_traits<S> {
-	typedef iterator_t<S>	iterator, start_type;
-	static constexpr start_type		start(S &s)				{ return begin(s);	}
-	static constexpr iterator		begin(S &s)				{ using iso::begin; return begin(s);	}
-	static constexpr iterator		end(S &s)				{ return string_end(begin(s));	}
-	static constexpr _none			terminator(const S &s)	{ return none; }
-	static constexpr size_t			len(const S &s)			{ return string_len(begin(s));	}
+template<typename S, typename=void> struct string_traits {
+	typedef element_t<S> element;
+	static constexpr auto			start(S &s)				{ return begin(s);	}
+	static constexpr auto			begin(S &s)				{ using iso::begin; return begin(s);	}
+	static constexpr auto			end(S &s)				{ return string_end(begin(s));	}
+	static constexpr auto			terminator(const S &s)	{ return none; }
+	static constexpr auto			len(const S &s)			{ return string_len(begin(s));	}
 };
 
 template<typename T, int N> struct string_traits<T(&)[N]> {
-	typedef T element, *iterator, *start_type;
+	typedef T element;
 	static constexpr T*				start(T *s)				{ return s;	}
 	static constexpr T*				begin(T *s)				{ return s;	}
 	static constexpr T*				end(T *s)				{ return s + N;	}
@@ -797,38 +801,36 @@ template<typename T, int N> struct string_traits<T(&)[N]> {
 	static constexpr size_t			len(T *s)				{ return N;	}
 };
 
-template<typename T> struct string_traits<range<T*> > : container_traits<range<T*> > {
-	typedef range<T*>	S;
-	typedef void		start_type;
-	typedef T*			iterator;
-	static constexpr _none			start(const S &s)		{ return none;		}
-	static constexpr iterator		begin(S &s)				{ return s.begin();	}
-	static constexpr T*				end(const S &s)			{ return s.end();	}
-	static constexpr T*				terminator(const S &s)	{ return s.end();	}
-	static constexpr size_t			len(const S &s)			{ return s.size();	}
+template<typename T> struct string_traits<range<T*> > {
+	typedef T				element;
+	typedef range<T*>		S;
+	static constexpr auto			start(const S &s)		{ return none;		}
+	static constexpr auto			begin(S &s)				{ return s.begin();	}
+	static constexpr auto			end(const S &s)			{ return s.end();	}
+	static constexpr auto			terminator(const S &s)	{ return s.end();	}
+	static constexpr auto			len(const S &s)			{ return s.size();	}
 };
-template<typename T> struct string_traits<const range<T*> > : container_traits<const range<T*> > {
+template<typename T> struct string_traits<const range<T*> > {
+	typedef T				element;
 	typedef const range<T*>	S;
-	typedef void			start_type;
-	typedef T*				iterator;
-	static constexpr _none			start(S &s)				{ return none;		}
-	static constexpr iterator		begin(S &s)				{ return s.begin();	}
-	static constexpr T*				end(S &s)				{ return s.end();	}
-	static constexpr T*				terminator(S &s)		{ return s.end();	}
-	static constexpr size_t			len(S &s)				{ return s.size();	}
+	static constexpr auto			start(S &s)				{ return none;		}
+	static constexpr auto			begin(S &s)				{ return s.begin();	}
+	static constexpr auto			end(S &s)				{ return s.end();	}
+	static constexpr auto			terminator(S &s)		{ return s.end();	}
+	static constexpr auto			len(S &s)				{ return s.size();	}
 };
 
 //-----------------------------------------------------------------------------
 //	string_base
 //-----------------------------------------------------------------------------
 
-template<class W, int N>				inline bool	write_early(W &w, const char (&s)[N])	{ return w.writebuff(s, N - 1) == N - 1; }
-template<class W>						inline bool	write(W &w, const char *s)				{ return !s || check_writebuff(w, s, string_len(s)); }	//ambiguous w/above
-template<class W>						inline bool	write(W &w, char *s)					{ return !s || check_writebuff(w, s, string_len(s)); }
+template<class W, int N>	inline bool	write_early(W &w, const char (&s)[N])	{ return w.writebuff(s, N - 1) == N - 1; }
+template<class W>			inline bool	write(W &w, const char *s)				{ return !s || check_writebuff(w, s, string_len(s)); }	//ambiguous w/above
+template<class W>			inline bool	write(W &w, char *s)					{ return !s || check_writebuff(w, s, string_len(s)); }
 
-template<class W, int N>				inline bool	write_early(W &w, const char16 (&s)[N])	{ return w.writebuff(s, N - 1) == N - 1; }
-template<class W>						inline bool	write(W &w, const char16 *s)			{ return !s || check_writebuff(w, s, string_len(s)); }	//ambiguous w/above
-template<class W>						inline bool	write(W &w, char16 *s)					{ return !s || check_writebuff(w, s, string_len(s)); }
+template<class W, int N>	inline bool	write_early(W &w, const char16 (&s)[N])	{ return w.writebuff(s, N - 1) == N - 1; }
+template<class W>			inline bool	write(W &w, const char16 *s)			{ return !s || check_writebuff(w, s, string_len(s)); }	//ambiguous w/above
+template<class W>			inline bool	write(W &w, char16 *s)					{ return !s || check_writebuff(w, s, string_len(s)); }
 
 template<typename B> class string_base {
 protected:
@@ -837,56 +839,64 @@ protected:
 	typedef	string_traits<const B>	const_traits;
 
 public:
-	typedef typename traits::element			element;
-	typedef	typename traits::iterator			iterator;
-	typedef	typename const_traits::iterator		const_iterator;
+	typedef typename traits::element								element;
+	typedef	decltype(traits::begin(declval<B>()))					iterator;
+	typedef	decltype(const_traits::begin(declval<const B>()))		const_iterator;
+
 
 	constexpr string_base()											{}
 	constexpr string_base(const B &p) : p(p)						{}
 	B&							representation()					{ return p; }
 	constexpr const B&			representation()			const	{ return p; }
 
-	constexpr size_t			length()					const	{ return const_traits::len(p);	}
-	constexpr uint32			size32()					const	{ return uint32(const_traits::len(p));	}
+	constexpr size_t			length()					const	{ return const_traits::len(p); }
+	constexpr auto				size()						const	{ return const_traits::len(p); }
+	constexpr uint32			size32()					const	{ return uint32(const_traits::len(p)); }
+
 	constexpr auto				begin()						const	{ return const_traits::begin(p);}
-	constexpr auto				end()						const	{ return const_traits::end(p);	}
-	constexpr auto				begin()								{ return traits::begin(p);		}
-	constexpr auto				end()								{ return traits::end(p);		}
-	auto						front()						const	{ return *begin(); }
-	auto						back()						const	{ return end()[-1]; }
+	constexpr auto				end()						const	{ return const_traits::end(p); }
+	constexpr auto				term()						const	{ return const_traits::terminator(p); }
+	constexpr operator			auto()						const	{ return const_traits::start(p); }
 	constexpr auto				operator[](intptr_t i)		const	{ return begin()[i]; }
+
+	constexpr auto				begin()								{ return traits::begin(p); }
+	constexpr auto				end()								{ return traits::end(p); }
+	constexpr auto				term()								{ return traits::terminator(p); }
+	constexpr operator			auto()								{ return traits::start(p); }
 	constexpr auto&				operator[](intptr_t i)				{ return begin()[i]; }
 
+	auto						front()						const	{ return *begin(); }
+	auto						back()						const	{ return end()[-1]; }
 	constexpr bool				blank()						const	{ return length() == 0; }
 	constexpr bool				empty()						const	{ return length() == 0; }
 	constexpr bool				operator!()					const	{ return length() == 0; }
 
-	constexpr operator typename const_traits::start_type()	const	{ return const_traits::start(p); }
-	operator typename traits::start_type()							{ return traits::start(p); }
-
-	template<typename S> auto	find(const S &s)					{ return string_find(begin(), s, traits::terminator(p)); }
-	template<typename S> auto	rfind(const S &s)					{ return string_rfind(begin(), s, end()); }
-	template<typename S> auto	find(const S &s)			const	{ return string_find(begin(), s, const_traits::terminator(p)); }
-	template<typename S> auto	rfind(const S &s)			const	{ return string_rfind(begin(), s, end()); }
+	template<typename S> auto	find(const S &s)					{ return string_find(begin(), term(), s); }
+	template<typename S> auto	rfind(const S &s)					{ return string_rfind(begin(), end(), s); }
+	template<typename S> auto	find(const S &s)			const	{ return string_find(begin(), term(), s); }
+	template<typename S> auto	rfind(const S &s)			const	{ return string_rfind(begin(), end(), s); }
+	template<typename S> auto	find_count(const S &s)		const	{ return string_count(begin(), term(), s); }
 
 	template<typename S> bool	begins(const S &s)			const	{ return string_cmp(begin(), iso::begin(s), string_len(s)) == 0; }
 	template<typename S> bool	ends(const S &s)			const	{ size_t len = string_len(s); return len <= length() && string_cmp(end() - len, iso::begin(s), len) == 0; }
 
-	auto						slice(int s)						{ return string_slice(s, begin(), traits::terminator(p)); }
-	auto						slice(int s)				const	{ return string_slice(s, begin(), traits::terminator(p)); }
-	auto						slice(int s, int n)					{ return string_slice(s, n, begin(), traits::terminator(p)); }
-	constexpr auto				slice(int s, int n)			const	{ return string_slice(s, n, begin(), traits::terminator(p)); }
+	auto						slice(int a);
+	auto						slice(int a)				const;
+	auto						slice(int a, int b)					{ return str(slice_ab(begin(), end(), a, b)); }
+	constexpr auto				slice(int a, int b)			const	{ return str(slice_ab(begin(), end(), a, b)); }
+	constexpr auto				slice(int s, const_iterator e)	const	{ return slice(s).slice_to(e); }
 	constexpr auto				slice(const_iterator s)		const	{ return str(range<const_iterator>(s, end())); }
 	constexpr auto				slice_to(const_iterator e)	const	{ return str(range<const_iterator>(begin(), e ? e : end())); }
 	template<typename S> auto	slice_to_find(const S &s)	const	{ return slice_to(find(s)); }
 
-	bool						check(const char_set &set)				const	{ return string_check(begin(), set, const_traits::terminator(p)); }
+	template<typename S> bool	check(const S &set)			const	{ return string_check(begin(), set, const_traits::terminator(p)); }
 
-	template<typename B2> int	compare_to(const string_base<B2> &s2)	const	{ return -s2.compare_to(begin(), const_traits::terminator(p)); }
-	template<typename C> int	compare_to(const C *s2)					const	{ return string_cmp(begin(), s2, const_traits::terminator(p)); }
-	template<typename C> int	compare_to(const C *s2, const _none&)	const	{ return string_cmp(begin(), s2, const_traits::terminator(p)); }
-	template<typename C> int	compare_to(const C *s2, const C *e2)	const	{ return string_cmp(begin(), s2, const_traits::terminator(p), e2); }
-	int							compare_to(const_iterator s2)			const	{ return string_cmp(begin(), s2, const_traits::terminator(p)); }
+	template<typename B2> int	compare_to(const string_base<B2> &s2)	const	{ return -s2.compare_to(begin(), term()); }
+	template<typename C> int	compare_to(const C *s2)					const	{ return string_cmp(begin(), s2, term()); }
+	template<typename C> int	compare_to(const C *s2, const _none&)	const	{ return string_cmp(begin(), s2, term()); }
+	template<typename C> int	compare_to(const C *s2, const C *e2)	const	{ return string_cmp(begin(), s2, term(), e2); }
+//	int							compare_to(const_iterator s2)			const	{ return string_cmp(begin(), s2, term()); }
+	int							compare_to(const element *s2)			const	{ return string_cmp(begin(), s2, term()); }
 
 	template<typename T> int	compare_to(const string_getter<T> &s2)	const	{
 		size_t	len	= s2.len();
@@ -908,8 +918,9 @@ public:
 	friend						size_t	string_len(const string_base &s)						{ return s.length(); }
 	template<typename D> friend	size_t	string_copy(D *d, const string_base &s)					{ return string_copy(d, s.begin(), s.end()); }
 	template<typename D> friend	size_t	chars_count(const string_base &s)						{ return chars_count<D>(s.begin(), s.end()); }
-	template<typename T> friend	T*		string_find(T *p, const string_base &s, const _none&)	{ return string_find(p, s.begin(), none, s.end());	}
-	template<typename T> friend	T*		string_find(T *p, const string_base &s, T *e)			{ return string_find(p, s.begin(), e, s.end());	}
+	template<typename T> friend	T*		string_find(T *p, const _none&, const string_base &s)	{ return string_find(p, string_end(p), s.begin(), s.end());	}
+	template<typename T> friend	T*		string_find(T *p, T *e, const string_base &s)			{ return string_find(p, e, s.begin(), s.end());	}
+	friend						void	replace(string_base &s, element from, element to)		{ replace(s.begin(), s.term(), from, to); }
 };
 
 template<typename B, typename T>			inline int	compare(const string_base<B> &s1, const T &s2)		{ return s1.compare_to(s2); }
@@ -928,6 +939,8 @@ template<typename B, typename T>			inline bool operator< (const T *s1, const str
 template<typename B, typename T>			inline bool operator<=(const T *s1, const string_base<B> &s2)	{ return compare(s2, s1) >= 0; }
 template<typename B, typename T>			inline bool operator> (const T *s1, const string_base<B> &s2)	{ return compare(s2, s1) <  0; }
 template<typename B, typename T>			inline bool operator>=(const T *s1, const string_base<B> &s2)	{ return compare(s2, s1) <= 0; }
+
+//template<typename C, typename T>			bool operator==(const accum<C> &s1, T &&s2);
 
 template<typename T> struct is_string : yesno {
 	template<typename B> static yes test(const string_base<B>*);
@@ -963,7 +976,7 @@ public:
 	constexpr					string_paramT(const _none&)						: B(0) {}
 	constexpr					string_paramT(string_param_storage<C> p)		: B(p) {}
 	constexpr					string_paramT(alloc_string<C> &&s)				: B({s.detach(), true}) {}
-	constexpr					string_paramT(builder<C> &&s)					: B({s.detach(), true}) {}
+	constexpr					string_paramT(builder<C> &&s)					: B(s.detach0()) {}
 	constexpr					string_paramT(string_paramT &&s)				: B(s)			{ s.p.b = false; }
 	constexpr					string_paramT(const C *s)						: B(s)			{}
 	constexpr					string_paramT(const string_base<C*> &s)			: B(s.begin())	{}
@@ -971,10 +984,10 @@ public:
 	template<int N> constexpr	string_paramT(string_base<C[N]> &s)				: B(s.begin())	{}
 	template<int N> constexpr	string_paramT(const string_base<const C[N]> &s)	: B(s.begin())	{}
 
-	template<typename T>		string_paramT(const T *s)						{ string_copy(alloc(chars_count<C>(s)), s); }
+	template<typename T, typename=enable_if_t<is_char<T>>>	string_paramT(const T *s)	{ string_copy(alloc(chars_count<C>(s)), s); }
 	template<typename T>		string_paramT(const string_base<T> &s)			{ init(s); }
 	template<typename T>		string_paramT(const string_getter<T> &s)		{ init(string(s)); }
-
+	
 	template<typename F, typename = exists_t<decltype(declval<F>()(declval<accum<C>&>())), accum<C>&>> string_paramT(F &&f) : string_paramT(builder<C>(f)) {}
 
 //	string_paramT(accum<C> &s);
@@ -982,7 +995,6 @@ public:
 
 	string_paramT&	operator=(string_paramT &&b) { raw_swap(*this, b); return *this; }
 
-	//template<typename T>		string_paramT(const string_base<T> &s, enable_if_t<T_same<typename string_base<T>::element, C>::value,int> dummy = 0) : B(s.begin()), mem(0) {}
 	~string_paramT()	{ if (B::p.b) free((void*)B::p.a.get()); }
 	C*		detach()	{ return B::p.b ? (C*)exchange(B::p, nullptr).a.get() : strdup(B::p); }
 
@@ -1008,7 +1020,7 @@ template<typename T> struct named : string_paramT<char>, T {
 //-----------------------------------------------------------------------------
 
 template<typename C> struct char_string_traits {
-	typedef C				element, *start_type, *iterator;
+	typedef C				element;
 	static C				*begin(C &s)			{ return &s; }
 	static C				*start(C &s)			{ return &s; }
 	static C				*end(C &s)				{ return &s + 1; }
@@ -1016,28 +1028,23 @@ template<typename C> struct char_string_traits {
 	static inline size_t	len(const C &s)			{ return 1; }
 };
 
+#if 1
+template<typename C> struct string_traits<C, enable_if_t<is_char<C>>> : char_string_traits<C>	{};
+#else
+template<> struct string_traits<char>			: char_string_traits<char>			{};
+template<> struct string_traits<char16>			: char_string_traits<char16>		{};
+template<> struct string_traits<ichar>			: char_string_traits<char>			{};
+template<> struct string_traits<ichar16>		: char_string_traits<ichar16>		{};
 template<> struct string_traits<const char>		: char_string_traits<const char>	{};
 template<> struct string_traits<const char16>	: char_string_traits<const char16>	{};
 template<> struct string_traits<const ichar>	: char_string_traits<const char>	{};
 template<> struct string_traits<const ichar16>	: char_string_traits<const ichar16> {};
+#endif
 
-#if 1
 typedef string_base<char>		char_string;
 typedef string_base<char16>		char_string16;
 typedef string_base<ichar>		ichar_string;
 typedef string_base<ichar16>	ichar_string16;
-#else
-template<typename T> class char_stringT : public string_base<T> {
-public:
-	constexpr char_stringT()		{}
-	constexpr char_stringT(T t)		: string_base<T>(t)	{}
-};
-
-typedef char_stringT<char>		char_string;
-typedef char_stringT<char16>	char_string16;
-typedef char_stringT<ichar>		ichar_string;
-typedef char_stringT<ichar16>	ichar_string16;
-#endif
 
 //-----------------------------------------------------------------------------
 //	count_string (no terminator)
@@ -1053,11 +1060,7 @@ public:
 	explicit constexpr			count_stringT(T *p)				: B(range<T*>(p, string_end(p)))	{}
 	constexpr					count_stringT(T *p, size_t n)	: B(range<T*>(p, p + n))			{}
 	constexpr					count_stringT(T *p, T *e)		: B(range<T*>(p, e))				{}
-//	constexpr					count_stringT(const count_stringT<const typename char_traits<T>::case_other> &b)
-//		: B(range<T*>((T*)b.begin(), (T*)b.end()))	{}
 	template<typename S> explicit count_stringT(const string_base<S> &b) : B(range<T*>((T*)b.begin(), (T*)b.end()))	{}
-//	template<int N>				count_stringT(const string_base<noconst_t<T>[N]> &b) : B(range<T*>((T*)b.begin(), (T*)b.end()))	{}
-
 
 	constexpr bool				operator!()				const	{ return this->p.size() == 0;	}
 	constexpr explicit			operator bool()			const	{ return !!*this; }
@@ -1112,7 +1115,7 @@ typedef string_bufferT<char16>	string_buffer16;
 template<typename T> struct embedded { T t; };
 
 template<typename C> struct string_traits<embedded<C> > {
-	typedef C				element, *start_type, *iterator;
+	typedef C				element;
 	static C				*begin(embedded<C> &s)				{ return &s.t; }
 	static C				*start(embedded<C> &s)				{ return &s.t; }
 	static C				*end(embedded<C> &s)				{ return string_end(&s.t); }
@@ -1120,7 +1123,6 @@ template<typename C> struct string_traits<embedded<C> > {
 	static inline size_t	len(const embedded<C> &s)			{ return string_len(&s.t); }
 };
 template<typename C> struct string_traits<const embedded<C> > : string_traits<embedded<C> > {
-	typedef const C			*start_type, *iterator;
 	static const C			*begin(const embedded<C> &s)		{ return &s.t; }
 	static const C			*start(const embedded<C> &s)		{ return &s.t; }
 	static const C			*end(const embedded<C> &s)			{ return string_end(&s.t); }
@@ -1160,7 +1162,7 @@ template<typename U, typename C> void *get_after(const _pascal_string<U, C, 0> *
 
 template<typename U, typename C, int N> struct string_traits<_pascal_string<U,C,N> > {
 	typedef _pascal_string<U,C,N>	S;
-	typedef C				element, *start_type, *iterator;
+	typedef C				element;
 	static C				*begin(S &s)			{ return s.buffer; }
 	static C				*start(S &s)			{ return s.buffer; }
 	static C				*end(S &s)				{ return s.buffer + s.len; }
@@ -1169,7 +1171,7 @@ template<typename U, typename C, int N> struct string_traits<_pascal_string<U,C,
 };
 template<typename U, typename C, int N> struct string_traits<const _pascal_string<U,C,N> > : string_traits<_pascal_string<U,C,N> > {
 	typedef const _pascal_string<U,C,N>	S;
-	typedef const C			element, *start_type, *iterator;
+	typedef const C			element;
 	static const C			*begin(S &s)			{ return s.buffer; }
 	static const C			*start(S &s)			{ return s.buffer; }
 	static const C			*end(S &s)				{ return s.buffer + s.len; }
@@ -1204,23 +1206,26 @@ public:
 	constexpr alloc_string(const _none&)	: B(0)				{}
 	constexpr alloc_string(alloc_string &&s): B(s.detach())		{}
 	alloc_string(string_paramT<C> &&s)		: B(s.detach())		{}
-	alloc_string(builder<C> &&s)			: B(s.detach())		{}
+	alloc_string(builder<C> &&s)			: alloc_string(s.detach())		{}
 	alloc_string(const alloc_string &s)							{ init(s.begin(), s.end()); }
+
 	alloc_string(const C *s)									{ init(s); }
 	alloc_string(const from_string_getter &s)					{ init(s.s); }
-	template<typename S> alloc_string(const S *s)				{ init(s); }
-	template<typename S> alloc_string(const S *s, const S *e)	{ init(s, e); }
-	template<typename S> alloc_string(const S *s, size_t n)		{ init(s, s + n); }
+	template<typename S, typename=enable_if_t<is_char<S>>> alloc_string(const S *s)				{ init(s); }
+	template<typename S, typename=enable_if_t<is_char<S>>> alloc_string(const S *s, const S *e)	{ init(s, e); }
+	template<typename S, typename=enable_if_t<is_char<S>>> alloc_string(const S *s, size_t n)	{ init(s, s + n); }
 	template<typename T> alloc_string(const string_getter<T> &s) {
 		size_t n = s.len();
 		s.get(_alloc(n), n);
 	}
-	template<typename T, typename=enable_if_t<has_begin_v<T> && has_end_v<T>>> alloc_string(const T &c) {
+	template<typename T, typename=enable_if_t<is_char<decltype(*(global_end(declval<const T&>()), global_begin(declval<const T&>())))>>> alloc_string(const T& c) {
+	//template<typename T, typename=exists_t<decltype(*global_begin(declval<const T&>()))>> alloc_string(const T& c) {
+	//template<typename T, typename=enable_if_t<has_begin_v<T> && has_end_v<T> && is_char<element_t<T>>>> alloc_string(const T &c) {
+	//template<typename T, typename=enable_if_t<has_begin_v<T> && has_end_v<T>>> alloc_string(const T &c) {
 		using iso::begin; using iso::end;
 		init(begin(c), end(c));
 	}
-//	template<typename R> static alloc_string get(R &r, size_t n)			{ alloc_string s(n); r.readbuff(s.p, n * sizeof(C)); return s; }
-	template<typename R, typename=is_reader_t<R>>				alloc_string(R &&r, size_t n)	: alloc_string(n)	{  r.readbuff(p, n * sizeof(C)); }
+	template<typename R, typename=is_reader_t<R>>				alloc_string(R &&r, size_t n)	: alloc_string(n)	{ readn(r, p, n); }
 
 	~alloc_string()												{ free(p); }
 
@@ -1229,7 +1234,7 @@ public:
 	alloc_string&	operator=(const from_string_getter &s)		{ auto p0 = p; init(s.s); free(p0); return *this; }
 	alloc_string&	operator=(alloc_string &&s)					{ swap(p, s.p); return *this; }
 	alloc_string&	operator=(string_paramT<C> &&s)				{ free(p); p = s.detach(); return *this; }
-	alloc_string&	operator=(accum<C> &s);
+//	alloc_string&	operator=(accum<C> &s);
 	template<typename S> alloc_string& operator=(const S *s)	{ free(p); init(s); return *this; }
 	template<typename T> alloc_string& operator=(const string_getter<T> &s) {
 		free(p);
@@ -1246,31 +1251,32 @@ public:
 	}
 
 	C*				extend(size_t n)					{ auto n0 = B::length(); if (_realloc(n0 + n)) p[n0 + n] = 0; return p + n0; }
-	alloc_string&	append(const C *s, size_t n)		{ memcpy(extend(n), s, n * sizeof(C)); return *this; }
-	alloc_string&	append(const C *s)					{ return append(s, string_len(s)); }
-	alloc_string&	push_back(C c)						{ return append(&c, 1); }
-	alloc_string&	operator+=(const C *s)				{ return append(s); }
-	alloc_string&	operator+=(C c)						{ return append(&c, 1); }
 	alloc_string&	alloc(size_t n)						{ free(p); _alloc(n); return *this; }
 	alloc_string&	resize(size_t n)					{ if (_realloc(n)) p[n] = 0; return *this; }
 	alloc_string&	clear()								{ free(p); p = 0; return *this; }
-
 	C*				detach()							{ return exchange(p, nullptr); }
+	operator malloc_block()	&&							{ auto len = length(); return malloc_block::own(exchange(p, nullptr), len * sizeof(element)); }
+
+	alloc_string&	push_back(C c)						{ *extend(1) = c; return *this; }
+	alloc_string&	operator+=(C c)						{ return push_back(c); }
+
+	template<typename C2>	alloc_string& append(const C2 *s, const C2 *e)	{
+		auto	n1	= chars_count<C>(s, e);
+		auto	n2	= string_copy(extend(n1), s, e);
+		ISO_ASSERT(n1 == n2);
+		return *this;
+	}
+	template<typename C2>	alloc_string& append(const C2 *s)					{ return append(s, string_end(s)); }
+	template<typename T>	alloc_string& append(const string_base<T> &s)		{ return append(s.begin(), s.end()); }
+	template<typename C2>	alloc_string& operator+=(const C2 *s)				{ return append(s, string_end(s)); }
+	template<typename T>	alloc_string& operator+=(const string_base<T> &s)	{ return append(s.begin(), s.end()); }
 
 	operator accum<C>();
 
-	template<typename T> alloc_string& append(const string_base<T> &s)		{ return append(s.begin(), s.length()); }
-	template<typename T> alloc_string& operator+=(const string_base<T> &s)	{ return append(s.begin(), s.length()); }
-
 	template<typename R> bool	read(R &r);
-	template<typename W> bool	write(W &w) const {
-		return p ? check_writebuff(w, p, (B::length() + 1) * sizeof(C)) : w.write(C(0));
-	}
-
-	template<typename R> static alloc_string get(R &r, size_t n)			{ alloc_string s(n); r.readbuff(s.p, n * sizeof(C)); return s; }
-	template<typename R> bool read(R &r, size_t n, bool clear = true)		{ size_t o = clear ? 0 : B::length(); resize(o + n); return check_readbuff(r, p + o, n * sizeof(C)); }
-//	template<typename R> bool read_line(R &r, bool clear = true);
-//	template<typename R> bool read_to(R &r, const char_set &set, bool clear = true);
+	template<typename R> bool	read(R &r, size_t n, bool clear = true)		{ size_t o = clear ? 0 : B::length(); resize(o + n); return readn(r, p + o, n); }
+	template<typename R> static alloc_string get(R &r, size_t n)			{ alloc_string s(n); return readn(r, s.p, n) ? s : none; }
+	template<typename W> bool	write(W &w)				const	{ return p ? check_writebuff(w, p, (B::length() + 1) * sizeof(C)) : w.write(C(0)); }
 
 	friend uint32	hash(const alloc_string &s)					{ return string_hash(s.begin(), s.length()); }
 	friend void		swap(alloc_string &a, alloc_string &b)		{ swap(a.p, b.p); }
@@ -1369,11 +1375,12 @@ public:
 	template<typename T> fixed_string&	operator+=(const T *s)				{ append(s); return *this; }
 	template<typename T> fixed_string&	operator+=(const string_base<T> &s)	{ append(s.begin(), s.length()); return *this; }
 
-	fixed_string&	clear()							{ B::p[0] = 0; return *this; }
-	size_t			max_length()		const		{ return N; }
-	size_t			remaining()			const		{ return N - this->length(); }
-	bool			blank()				const		{ return !B::p[0]; }
-	bool			operator!()			const		{ return !B::p[0]; }
+	fixed_string&			clear()							{ B::p[0] = 0; return *this; }
+	constexpr size_t		max_length()		const		{ return N; }
+	constexpr size_t		remaining()			const		{ return N - this->length(); }
+	constexpr bool			blank()				const		{ return !B::p[0]; }
+	constexpr bool			operator!()			const		{ return !B::p[0]; }
+	constexpr explicit operator bool()			const		{ return !!B::p[0]; }
 
 	template<typename T> void append(const T *s, size_t n)	{ if (s) { C *e = B::end(); string_term(e, chars_copy(e, s, s + n, B::p + N - 1 - e)); } }
 	template<typename T> void append(const T *s)			{ if (s) { C *e = B::end(); string_term(e, chars_copy(e, s, B::p + N - 1 - e)); } }
@@ -1472,8 +1479,19 @@ template<int N, typename T> fixed_string<N, char>		str(const string_getter<T> &s
 template<int N, typename T> fixed_string<N, char16>		str16(const string_getter<T> &s)		{ return s; }
 //template<typename T>		fixed_string<256, char16>	str16(const string_getter<T> &s)		{ return s; }
 
+inline auto str(const from_string_getter &s) { return str(s.s); }
+
 constexpr auto operator"" _cstr(const char *s, size_t len) { return str(s, len); }
 constexpr auto operator"" _istr(const char *s, size_t len) { return istr(s, len); }
+
+
+template<typename I, typename A> auto slice_a(I a, const _none&, A&& a1) {
+	I	b = string_end(a);
+	return a1 < 0 ? max_it(a, b + a1) : min_it(a + a1, b);
+}
+
+template<typename B> auto	string_base<B>::slice(int a)			{ return str(slice_a(begin(), term(), a)); }
+template<typename B> auto	string_base<B>::slice(int a)	const	{ return str(slice_a(begin(), term(), a)); }
 
 //-----------------------------------------------------------------------------
 //	write numbers
@@ -1542,7 +1560,7 @@ template<int B, int M, typename C, typename T> C *put_float_digits_n(C *s, T &m,
 	return s;
 }
 
-template<typename T> size_t put_float(char *s, const float_info<T> &f, uint32 digits, uint32 exp_digits);
+template<typename T, typename C> size_t put_float(C *s, const float_info<T> &f, uint32 digits, uint32 exp_digits);
 
 //-----------------------------------------------------------------------------
 //	read integer
@@ -1550,7 +1568,7 @@ template<typename T> size_t put_float(char *s, const float_info<T> &f, uint32 di
 
 template<typename C> inline bool is_prefixed_int(const C *p) {
 	return p[0] == '0' ? (
-			(p[1] == 'x' && string_check(p + 2, char_set("0123456789abcdefABCDEF")))
+			(p[1] == 'x' && string_check(p + 2, char_set::hex))
 		||	(p[1] == 'b' && string_check(p + 2, char_set("01")))
 		||	string_check(p, char_set("01234567"))
 	) : string_check(p, char_set::digit);
@@ -1666,9 +1684,13 @@ struct FORMAT {
 };
 
 template<int N, typename C> inline	auto vformat_string(const C *fmt, va_list valist)	{ return fixed_string<N, C>(fmt, valist);	}
-template<int N, typename C>			auto format_string(const C *fmt, ...)				{ va_list valist; va_start(valist, fmt); return fixed_string<N, C>(fmt, valist); }
 template<typename C>		inline	auto vformat_string(const C *fmt, va_list valist)	{ return fixed_string<256, C>(fmt, valist); }
+
+template<int N, typename C>			auto format_string(const C *fmt, ...)				{ va_list valist; va_start(valist, fmt); return fixed_string<N, C>(fmt, valist); }
 template<typename C>		inline	auto format_string(const C *fmt, ...)				{ va_list valist; va_start(valist, fmt); return vformat_string(fmt, valist); }
+
+template<int N, typename C, typename...P>	auto format_stringi(const C* fmt, P...p)	{ fixed_string<N, C>	s; s.formati(fmt, p...); return s; }
+template<typename C, typename...P>			auto format_stringi(const C* fmt, P...p)	{ fixed_string<256, C>	s; s.formati(fmt, p...); return s; }
 
 //to_string can take any of these forms:
 //size_t			to_string(char *s, T t)				--
@@ -1677,21 +1699,12 @@ template<typename C>		inline	auto format_string(const C *fmt, ...)				{ va_list 
 //size_t			to_string(fixed_string<N> &d, T t)	-- we know the (maximum) output size
 //const char*		to_string(T t)						-- returns (portion of) input as string
 
-template<typename C, int B, typename T> inline enable_if_t<num_traits<T>::is_signed, size_t>	to_string(C *s, baseint<B,T> v)	{ return put_signed_num_base<B>(s, v.i, 'A'); }
-template<typename C, int B, typename T> inline enable_if_t<!num_traits<T>::is_signed, size_t>	to_string(C *s, baseint<B,T> v)	{ return put_unsigned_num_base<B>(s, v.i, 'A'); }
+template<typename C, int B, typename T> inline enable_if_t<is_signed<T>, size_t>	to_string(C *s, baseint<B,T> v)	{ return put_signed_num_base<B>(s, v.i, 'a'); }
+template<typename C, int B, typename T> inline enable_if_t<!is_signed<T>, size_t>	to_string(C *s, baseint<B,T> v)	{ return put_unsigned_num_base<B>(s, v.i, 'a'); }
 
-template<typename C> inline size_t	to_string(C *s, int i)			{ return put_signed_num_base<10>(s, i); }
-template<typename C> inline size_t	to_string(C *s, uint32 i)		{ return put_unsigned_num_base<10>(s, i); }
-#if USE_LONG
-template<typename C> inline size_t	to_string(C *s, long i)			{ return put_signed_num_base<10>(s, i); }
-template<typename C> inline size_t	to_string(C *s, ulong i)		{ return put_unsigned_num_base<10>(s, i); }
-#endif
-#if USE_64BITREGS
-template<typename C> inline size_t	to_string(C *s, int64 i)		{ return put_signed_num_base<10>(s, i); }
-template<typename C> inline size_t	to_string(C *s, uint64 i)		{ return put_unsigned_num_base<10>(s, i); }
-#endif
-template<typename C> inline size_t	to_string(C *s, int128 i)		{ return put_signed_num_base<10>(s, i); }
-template<typename C> inline size_t	to_string(C *s, uint128 i)		{ return put_unsigned_num_base<10>(s, i); }
+template<typename C, typename T> inline enable_if_t<is_int<T>&&is_signed<T>, size_t>				to_string(C *s, T v)	{ return put_signed_num_base<10>(s, v); }
+template<typename C, typename T> inline enable_if_t<(is_int<T>&&!is_signed<T>)||is_enum<T>, size_t>	to_string(C *s, T v)	{ return put_signed_num_base<10>(s, v); }
+template<typename C, typename T> inline enable_if_t<is_float<T>, size_t>							to_string(C *s, T v)	{ return put_float(s, get_print_info<10>(get(v)), float_components<T>::M * 3 / 10, float_components<T>::E * 3 / 10); }
 
 inline size_t				to_string(char *s, char c)				{ *s = c; return 1; }
 inline size_t				to_string(char *s, char16 c)			{ return put_char(c, s); }
@@ -1699,43 +1712,73 @@ inline size_t				to_string(char *s, const char16 *v)		{ return chars_copy(s, v);
 inline size_t				to_string(char *s, char32 c)			{ return put_char(c, s); }
 inline size_t				to_string(char *s, const char32 *v)		{ return chars_copy(s, v); }
 
-inline size_t				to_string(char *s, float f)				{ return put_float(s, get_print_info<10>(f), 6, 2); }
-inline size_t				to_string(char *s, double f)			{ return put_float(s, get_print_info<10>(f), 15, 3); }
 
 template<typename C> inline size_t to_string(C *s, const char *v)	{ return string_copy(s, v); }
 template<typename C, typename B> inline size_t to_string(C *s, const string_base<B> &v)	{ return string_copy(s, v.begin(), v.end()); }
 
-
-template<typename B> inline enable_if_t<!same_v<typename string_traits<B>::start_type,_none>, typename string_traits<const B>::start_type>
+template<typename B> inline enable_if_t<!same_v<decltype(string_traits<const B>::start(declval<const B>())), _none>, decltype(string_traits<const B>::start(declval<const B>()))>
 	to_string(const string_base<B> &v)	{ return v; }
 
+inline const char*			to_string(const char *v)					{ return v ? v : ""; }
+inline auto					to_string(const range<const char*> &v)		{ return str(v); }
+
+template<typename C> size_t to_string(C *s, const GUID &g) {
+	put_num_base<16>(s, 8, g.Data1, 'a');
+	s[8] = '-';
+	put_num_base<16>(s + 9, 4, g.Data2, 'a');
+	s[13] = '-';
+	put_num_base<16>(s + 14, 4, g.Data3, 'a');
+	s[18] = '-';
+	put_num_base<16>(s + 19, 4, (uint16)*(uint16be*)g.Data4, 'a');
+	s[23] = '-';
+	put_num_base<16>(s + 24, 12, (uint64)(uint64be&)g.Data4, 'a');
+	return 36;
+}
+
 template<int N, typename T> inline fixed_string<N>	_to_string(const T &t)	{ fixed_string<N> s; s[to_string(s.begin(), t)] = 0; return s; }
-inline const char*			to_string(const char *v)				{ return v ? v : ""; }
-inline auto					to_string(char v)						{ return _to_string<2>(v); }
-inline auto					to_string(char16 v)						{ return _to_string<8>(v); }
-inline auto					to_string(char32 v)						{ return _to_string<8>(v); }
-inline auto					to_string(int v)						{ return _to_string<16>(v); }
-inline auto					to_string(uint32 v)						{ return _to_string<16>(v); }
-inline auto					to_string(float v)						{ return _to_string<16>(v); }
-inline auto					to_string(double v)						{ return _to_string<32>(v); }
-//inline fixed_string<32>	to_string(const void *v)				{ return _to_string<32>(v); }
-#if USE_LONG
-inline auto					to_string(long v)						{ return _to_string<16>(v); }
-inline auto					to_string(ulong v)						{ return _to_string<16>(v); }
-#endif
-#if USE_64BITREGS
-inline auto					to_string(int64 v)						{ return _to_string<32>(v); }
-inline auto					to_string(uint64 v)						{ return _to_string<32>(v); }
-#endif
 
-inline auto					to_string(const range<const char*> &v)	{ return str(v); }
+template<typename T, typename = void>	static const int needed_chars = 0;
+template<typename T>	static const int needed_chars<T, enable_if_t<is_int<T>>>	= (BIT_COUNT<T> * 3 + (is_signed<T> ? 16 : 9)) / 10;
+template<typename T>	static const int needed_chars<T, enable_if_t<is_float<T>>>	= float_components<T>::M * 3 / 10 + float_components<T>::E * 3 / 10 + 3;
+template<>				static const int needed_chars<GUID>							= 36;
 
+template<typename T>	enable_if_t<needed_chars<T> != 0, fixed_string<needed_chars<T>>> to_string(T v)		{ return _to_string<needed_chars<T>>(v); }
 
 // ensure only actual bools match these
 template<typename B, typename = enable_if_t<same_v<B, bool>>> const char*	to_string(B v)			{ return v ? "true" : "false"; }
 template<typename B, typename = enable_if_t<same_v<B, bool>>> size_t		to_string(char *s, B v)	{ string_copy(s, to_string(v)); return string_len(s); }
 
 template<int B, typename T> inline fixed_string<baseint<B,T>::digits + 1>	to_string(baseint<B,T> v)	{ return _to_string<baseint<B,T>::digits + 1>(v); }
+
+#if 1
+template<typename T> inline decltype(to_string(*(T*)0))	to_string(const constructable<T> &t)	{
+	return to_string(get(t));
+}
+
+template<typename C, typename T> inline decltype(to_string((C*)0, *(T*)0))	to_string(C* s, const constructable<T> &t)	{
+	return to_string(s, get(t));
+}
+template<typename T, int N> inline decltype(to_string(*(T*)0))	to_string(const compact<T, N> &t)	{
+	return to_string(t.get());
+}
+
+template<typename C, typename T, int N> inline decltype(to_string((C*)0, *(T*)0))	to_string(C* s, const compact<T, N> &t)	{
+	return to_string(s, t.get());
+}
+#else
+
+template<typename T, bool S = same_v<T, underlying_t<T>>> struct T_underlying_diff;
+template<typename T> struct T_underlying_diff<T, false> : T_underlying<T> {};
+template<typename T> using underlying_diff_t = typename T_underlying_diff<T>::type;
+
+template<typename T> inline decltype(to_string(declval<underlying_diff_t<T>>()))	to_string(const T &t)	{
+	return to_string(get(t));
+}
+
+template<typename C, typename T> inline decltype(to_string((C*)0, declval<underlying_diff_t<T>>()))	to_string(C* s, const T &t)	{
+	return to_string(s, get(t));
+}
+#endif
 
 template<typename C, class T> struct has_to_string {
 	template<typename U>	static decltype(to_string(*(U*)0))			test0(int);
@@ -1764,14 +1807,6 @@ template<typename C, class T, int N> struct has_to_string<C, T[N]> {
 	static const int get = 0, copy = 0;
 };
 
-template<typename T> inline decltype(to_string(*(T*)0))	to_string(const constructable<T> &t)	{
-	return to_string(get(t));
-}
-
-//template<typename C, typename T> inline enable_if_t<has_to_string0<T>::value, size_t>	to_string(C *s, const T &t)	{
-//	return string_copy(s, to_string(get(t)));
-//}
-
 //-----------------------------------------------------------------------------
 //	string_accum
 //-----------------------------------------------------------------------------
@@ -1789,19 +1824,17 @@ protected:
 	accum() : startp(0) {}
 
 public:
-	C*			getp(int &n)		{ return (*this)(n); }
-	C*			getp()				{ int n = 0; return (*this)(n); }
-	accum&		move(int n)			{ if (int n0 = n) { getp(n); ISO_ASSERT(n == n0); } return *this; }
-	size_t		length()			{ return getp() - startp; }
-	size_t		remaining()			{ int n = 0; getp(n); return n;	}
+	C*			getp(int &n)	const	{ return (*this)(n); }
+	C*			getp()			const	{ int n = 0; return (*this)(n); }
+	size_t		remaining()		const	{ int n = 0; getp(n); return n;	}
+	C*			begin()			const	{ return startp; }
+	C			back()			const	{ auto p = getp(); return p == startp ? 0 : p[-1]; }
+	auto		size()			const	{ return getp() - startp; }
+	size_t		length()		const	{ return getp() - startp; }
+	const C*	term()			const	{ *getp() = 0; return startp; }
 
-	C*			begin()	const		{ return startp; }
-	const C*	term()				{ *getp() = 0; return startp; }
-	operator const C*()				{ return term(); }
-	C			back()				{ auto p = getp(); return p == startp ? 0 : p[-1]; }
-
-	accum&		putc(C c)			{ int n = 1; *getp(n) = c; return *this;	}
-	accum&		putc(C c, int n)	{ if (n > 0) { C *d = getp(n); memset(d, c, n * sizeof(C)); } return *this;	}
+	accum&		move(int n)		{ if (int n0 = n) { getp(n); ISO_ASSERT(n == n0); } return *this; }
+	accum&		putc(C c)		{ int n = 1; *getp(n) = c; return *this;	}
 
 	accum&		vformat(const C *fmt, va_list valist);
 	accum&		format(const C *fmt, ...) {
@@ -1831,17 +1864,21 @@ public:
 		return *this;
 	}
 
-	const_memory_block	data()				{ auto endp = getp(); return {startp, endp}; }
-	count_stringT<const C>	to_string()		{ auto endp = getp(); return {startp, endp}; }
-	operator	count_stringT<const C>()	{ return to_string(); }
-	operator	string_paramT<C>()		&	{ return term(); }
-	operator	string_paramT<C>()		&&	{ return to_string(); }
+	const_memory_block	data()				const	{ auto endp = getp(); return {startp, endp}; }
+	operator	count_stringT<const C>()	const	{ auto endp = getp(); return {startp, endp}; }
+	operator	string_paramT<C>()					{ return term(); }
+
+	friend auto	to_string(const accum& a)	{ return a.term(); }
 };
 
 typedef accum<char>		string_accum;
 typedef accum<char16>	string_accum16;
 
-template<typename C> alloc_string<C>&	alloc_string<C>::operator=(accum<C> &s)	{ return operator=(s.to_string()); }
+template<typename T, typename C> struct accumT : accum<C> {
+	accumT()	{ accum<C>::template bind<T, &T::getp>(); }
+};
+
+//template<typename C> alloc_string<C>&	alloc_string<C>::operator=(accum<C> &s)	{ return operator=(s.to_string()); }
 //template<typename C> string_paramT<C>::string_paramT(accum<C> &s)				: B(s.term()) {}
 //template<typename C> string_paramT<C>::string_paramT(accum<C> &&s)				{ init(s.to_string()); }
 
@@ -1904,18 +1941,29 @@ template<typename C, typename T, size_t N>	inline accum<C>&	operator<<(accum<C> 
 
 template<typename C, typename F> exists_t<decltype(declval<F>()(declval<accum<C>&>())), accum<C>&> operator<<(accum<C> &sa, F &&f) { f(sa); return sa; }
 
-template<typename T, typename C> struct accumT : accum<C> {
-	accumT()	{ accum<C>::template bind<T, &T::getp>(); }
-};
+template<typename C, typename X, typename Y> inline accum<C>& operator<<(accum<C> &a, const pair<X, Y>& p)	{ return a << p.a << p.b; }
+template<typename C, typename...T> inline accum<C>& operator<<(accum<C> &a, const tuple<T...>& t)			{ t.apply([&a](const auto &t) { a << t; }); return a; }
 
 struct CODE_GUID : GUID {
 	CODE_GUID(const GUID &g) : GUID(g) {}
+	template<typename C> friend accum<C> &operator<<(accum<C> &a, const CODE_GUID &g) {
+		a << "{0x" << hex(g.Data1) << "u, 0x" << hex(g.Data2) << ", 0x" << hex(g.Data3) << ", {";
+		for (int i = 0; i < 8; i++)
+			a << onlyif(i, ", ") << "0x" << hex(g.Data4[i]);
+		return a << "}}";
+	}
 };
 
-template<typename C> accum<C>&	operator<<(accum<C> &a, const GUID &g);
-template<typename C> accum<C>&	operator<<(accum<C> &a, const CODE_GUID &g);
+//template<typename C> accum<C>&	operator<<(accum<C> &a, const GUID &g);
 
-template<typename C> inline accum<C>&	operator<<(accum<C> &a, const repeat_s<C> &r) { return a.putc(r.t, r.n); }
+template<typename C> inline accum<C>&	operator<<(accum<C> &a, const repeat_s<C> &r) {
+	int	n = r.n;
+	if (n > 0) {
+		C *d = a.getp(n);
+		fill_n(d, n, r.t);
+	}
+	return a;
+}
 
 template<typename C, typename T> accum<C>& operator<<(accum<C> &a, const repeat_s<T> &r) {
 	for (auto &i : r)
@@ -1947,13 +1995,13 @@ template<typename T> struct formatted_s {
 	FORMAT::FLAGS	flags;
 	int				width;
 	formatted_s(T &t, FORMAT::FLAGS flags, int width = 0) : t(t), flags(flags), width(width) {}
-	friend string_accum& operator<<(string_accum &sa, const formatted_s &f) { put_format(sa, f.t, f.flags, f.width); return sa; }
+	template<typename C> friend accum<C>& operator<<(accum<C> &sa, const formatted_s &f) { put_format(sa, f.t, f.flags, f.width); return sa; }
 };
 
 template<typename T> struct formatted2_s : formatted_s<T> {
 	uint32			precision;
 	formatted2_s(T &t, FORMAT::FLAGS flags, int width, int precision) : formatted_s<T>(t, flags, width), precision(precision) {}
-	friend string_accum& operator<<(string_accum &sa, const formatted2_s &f) { put_format(sa, f.t, f.flags, f.width, f.precision); return sa; }
+	template<typename C> friend accum<C>& operator<<(accum<C> &sa, const formatted2_s &f) { put_format(sa, f.t, f.flags, f.width, f.precision); return sa; }
 };
 
 template<typename T> inline auto formatted(T &&t, FORMAT::FLAGS flags, int width = 0)				{ return formatted_s<T>(t, flags, width); }
@@ -1968,12 +2016,9 @@ template<typename... PP> inline auto formati(const char *fmt, PP... pp) {
 }
 
 //-----------------------------------------------------------------------------
-//	onlyif, ifelse
+//	ifelse
 //-----------------------------------------------------------------------------
 
-//template<typename T> inline auto onlyif(bool b, const T &t)	{
-//	return [b, &t](string_accum &sa) { if (b) sa << t; };
-//}
 template<typename T1, typename T2> inline auto ifelse(bool b, const T1 &t1, const T2 &t2) {
 	return [b, &t1, &t2](string_accum &sa) { if (b) sa << t1; else sa << t2; };
 }
@@ -1984,33 +2029,35 @@ template<typename T1, typename T2> inline auto ifelse(bool b, const T1 &t1, cons
 
 class _justify {
 protected:
-	mutable string_accum	*a;
-	mutable size_t			start;
-	uint16					w;
-	char					c;
-	void	init(string_accum &_a) const	{ a = &_a; start = a->length(); }
+	string_accum	*a;
+	size_t			start;
+	char			c;
+	void	init(string_accum &_a)	{ a = &_a; start = a->length(); }
 public:
-	explicit _justify(uint16 w, char c = ' ') : a(0), w(w), c(c)	{}
-	_justify(string_accum &a, uint16 w, char c = ' ') : a(&a), start(a.length()), w(w), c(c) {}
-	operator string_accum&()										const		{ return *a; }
+	explicit _justify(char c = ' ')			: a(0), c(c)	{}
+	_justify(string_accum &a, char c = ' ')	: a(&a), start(a.length()), c(c) {}
+	operator string_accum&()	const		{ return *a; }
 };
 
 class leftjustify : public _justify {
+	uint16		w;
 	void	done() const {
 		intptr_t len = a->length() - start;
 		if (len < w)
-			a->putc(c, int(w - len));
+			*a << repeat(c, int(w - len));
 	}
 public:
-	explicit leftjustify(uint16 w, char c = ' ') : _justify(w, c)				{}
-	leftjustify(string_accum &a, uint16 w, char c = ' ') : _justify(a, w, c)	{}
-	~leftjustify()																{ if (a) done(); }
-	template<typename T> const leftjustify& operator<<(const T &t) const		{ *a << t; return *this; }
-	string_accum& operator<<(const _none&)							const		{ done(); return *exchange(a, nullptr); }
-	friend const leftjustify &operator<<(string_accum &a, const leftjustify &t)	{ t.init(a); return t; }
+	explicit leftjustify(uint16 w, char c = ' ') : _justify(c), w(w)			{}
+	leftjustify(string_accum &a, uint16 w, char c = ' ') : _justify(a, c), w(w) {}
+	~leftjustify()													{ if (a) done(); }
+	template<typename T> auto& operator<<(const T &t)				{ *a << t; return *this; }
+	auto&			operator<<(const _none&)						{ done(); return *exchange(a, nullptr); }
+	friend auto&	operator<<(string_accum &a, leftjustify &t)		{ t.init(a); return t; }
+	friend auto&	operator<<(string_accum &a, leftjustify &&t)	{ t.init(a); return t; }
 };
 
 class rightjustify : public _justify {
+	uint16		w;
 	void	done() const {
 		intptr_t len = a->length() - start;
 		if (len < w) {
@@ -2021,27 +2068,90 @@ class rightjustify : public _justify {
 		}
 	}
 public:
-	explicit rightjustify(uint16 w, char c = ' ') : _justify(w, c)				{}
-	rightjustify(string_accum &a, uint16 w, char c = ' ') : _justify(a, w, c)	{}
-	~rightjustify()																{ if (a) done(); }
-	template<typename T> const rightjustify& operator<<(const T &t) const		{ *a << t; return *this; }
-	string_accum& operator<<(const _none&)							const		{ done(); return *exchange(a, nullptr); }
-	friend const rightjustify &operator<<(string_accum &a, const rightjustify &t) { t.init(a); return t; }
+	explicit rightjustify(uint16 w, char c = ' ') : _justify(c), w(w)			{}
+	rightjustify(string_accum &a, uint16 w, char c = ' ') : _justify(a, c), w(w) {}
+	~rightjustify()														{ if (a) done(); }
+	template<typename T> auto& operator<<(const T &t) 					{ *a << t; return *this; }
+	auto&			operator<<(const _none&)							{ done(); return *exchange(a, nullptr); }
+	friend auto&	operator<<(string_accum &a, rightjustify &t)		{ t.init(a); return t; }
+	friend auto&	operator<<(string_accum &a, rightjustify &&t)		{ t.init(a); return t; }
 };
 
+
+class tabs : public _justify {
+	const int	*next;
+	intptr_t	prev	= 0;
+
+	void	left(int to) {
+		intptr_t curr	= a->length() - start;
+		*a << repeat(c, max(to - curr, 1));
+	}
+	void	right(int to) {
+		intptr_t curr	= a->length() - start;
+		intptr_t len	= curr - prev;
+		int		n = max(int(to - curr), 1);
+		auto	p = a->getp(n) - len;
+		memmove(p + n, p, len);
+		memset(p, c, n);
+	}
+public:
+	tabs(const int *stops, char c = ' ') : _justify(c), next(stops) {}
+	tabs(string_accum &a, const int *stops, char c = ' ') : _justify(a, c), next(stops) {}
+
+	template<typename T> auto& operator<<(const T &t) {
+		*a << t; return *this;
+	}
+	template<typename T> auto& operator>>(const T &t) {
+		int		to		= *next;
+
+		if (to < 0) {
+			if (prev) {
+				right(-to);
+				++next;
+			}
+		} else {
+			left(to);
+			++next;
+		}
+
+		prev	= 0;
+		if (*next < 0) {
+			a->getp(to = -to);	// ensure buffer space
+			a->move(-to);
+			prev	= a->length() - start;
+		}
+
+		*a << t;
+		return *this;
+	}
+	auto&			operator<<(const _none&) {
+		if (prev)
+			right(-*next);
+		return *a;
+	}
+	friend auto&	operator<<(string_accum &a, tabs &t)	{ t.init(a); return t; }
+	friend auto&	operator<<(string_accum &a, tabs &&t)	{ t.init(a); return t; }
+};
+
+inline auto spaceto(uint32 start, uint32 tabs = 1) {
+	return [start, tabs](string_accum &a) {
+		auto	pos = a.size();
+		a << repeat(' ', start + (pos > start ? align(pos - start, tabs) : 0) - pos);
+	};
+}
 //-----------------------------------------------------------------------------
 //	bracketed, indenter
 //-----------------------------------------------------------------------------
 
-template<char OPEN, char CLOSE> class bracketed {
-	string_accum	*a;
-	bool			need;
-	void	init(string_accum &_a) { a = &_a; if (need) _a << OPEN; }
-public:
-	bracketed(string_accum &a, bool need = true)	: need(need)		{ init(a); }
-	bracketed(bool need = true)						: a(0), need(need)	{}
-	~bracketed()									{ if (need) *a << CLOSE; }
-	friend string_accum &operator<<(string_accum &a, bracketed &&p)	{ p.init(a); return a; }
+template<char OPEN, char CLOSE> struct bracketed {
+	string_accum	*a	= nullptr;
+	void	start(string_accum &_a) { a = &_a; _a << OPEN; }
+
+	bracketed(bracketed &&b)	: a(exchange(b.a, nullptr))	{}
+	bracketed(bool need = true) : a((string_accum*)need)	{}
+	bracketed(string_accum &a, bool need = true)			{ if (need) start(a); }
+	~bracketed()	{ if (a) *a << CLOSE; }
+	friend string_accum &operator<<(string_accum &a, bracketed &&p)	{ if (p.a) p.start(a); return a; }
 };
 
 using parentheses		= bracketed<'(', ')'>;
@@ -2091,6 +2201,41 @@ struct indenter {
 //	separated_list, comma_list, separated_number
 //-----------------------------------------------------------------------------
 
+template<typename B = parentheses> struct _lister : B {
+	const char*		sep;
+	size_t			before_sep, last_sep;
+
+	_lister(string_accum &a, const char *sep = ", ") : B(a), sep(sep) {
+		last_sep = before_sep = a.size();
+	}
+	_lister(const _lister &b) : B((B&&)b), sep(b.sep), before_sep(b.before_sep), last_sep(b.last_sep) {}
+
+	~_lister() {
+		if (a) {
+			auto	i = a->size();
+			if (i == last_sep && i != before_sep)
+				a->move(int(before_sep - i));
+		}
+	}
+
+	template<typename T> _lister& operator>>(const T &t)	{
+		if (a->size() > last_sep) {
+			before_sep	= a->size();
+			*a << sep; 
+			last_sep	= a->size();
+		}
+		*a << t;
+		return *this;
+	}
+
+	template<typename T> friend _lister& operator<<(_lister &a, const T &t)		{ *a.a << t; return a; }
+	template<typename T> friend _lister& operator<<(_lister &&a, const T &t)	{ *a.a << t; return a; }
+};
+
+struct start_list {
+	friend auto operator<<(string_accum &a, const start_list&) { return _lister<>(a); }
+};
+
 template<typename C> auto separated_list(const C &c, const char *sep = ", ") {
 	return [&c, sep](string_accum &sa) {
 		int	j = 0;
@@ -2108,6 +2253,12 @@ template<typename C> auto separated_list(const C &c, int flags, const char *sep 
 			sa << onlyif(j++, sep) << i;
 		if ((flags & 2) && j > (flags & 1))
 			sa << sep;
+	};
+}
+
+template<typename X, typename Y> auto separated_list(const pair<X, Y> &p, const char *sep = ", ") {
+	return [&p, sep](string_accum &sa) {
+		sa << p.a << sep << p.b;
 	};
 }
 
@@ -2242,10 +2393,6 @@ template<typename C, int B, typename T> inline size_t	from_string(const C *s, co
 	return s ? get_num_base<B, T>(skip_whitespace(s, e), e, i.i) - s : 0;
 }
 
-template<typename R, typename T>	_read_as<R, T>	read_as(T p)	{ return p; }
-//template<typename R, typename B, typename T>	struct _read_as<R,T B::*>	{ T B::* p; _read_as(T B::* p) : p(p) {} };
-//template<typename R, typename B, typename T>	_read_as<R,T B::*>	read_as(T B::* p)	{ return p; }
-
 template<typename R, typename T, typename C> inline size_t	from_string(const C *s, _read_as<R,T> &x) {
 	R	r;
 	size_t	len = from_string(s, r);
@@ -2277,7 +2424,9 @@ public:
 	typedef count_stringT<const C>	count_string;
 
 	string_scanT(const C *p)							: p(p), endp(p + string_len(p))			{}
+	string_scanT(const C *p, size_t len)				: p(p), endp(p + len)					{}
 	string_scanT(const C *p, const char *end)			: p(p), endp(end)						{}
+	string_scanT(range<const C*> r)						: p(r.begin()), endp(r.end())			{}
 	string_scanT(const from_string_getter &s)			: p(s.s), endp(p + string_len(p))		{}
 	template<typename T> string_scanT(const string_base<T> &s) : p(s.begin()), endp(s.end())	{}
 
@@ -2312,7 +2461,7 @@ public:
 	bool				begins(const CI *s)				{ return str(p, endp - p).begins(s); }
 	bool				begins(C c)						{ return remaining() && *p == c; }
 	bool				begins(CI c)					{ return remaining() && *p == c; }
-	C					begins(const char_set &set)		{ return remaining() && set.test(*p) ? *p : 0; }
+	C					begins(const char_set &set)		{ return remaining() && set(*p) ? *p : 0; }
 
 	bool				check(const C *s)				{ if (begins(s))	{ p += string_len(s); return true; } return false; }
 	bool				check(const CI *s)				{ if (begins(s))	{ p += string_len(s); return true; } return false; }
@@ -2321,10 +2470,10 @@ public:
 	C					check(const char_set &set)		{ if (begins(set))	{ ++p; return true; } return false; }
 
 	C					getc()							{ return p < endp ? *p++ : 0; }
-	count_string		get_raw(const char_set &set)	{ const C *s = p; while (p < endp && set.test(*p)) ++p; return str(s, p); }
+	count_string		get_raw(const char_set &set)	{ const C *s = p; while (p < endp && set(*p)) ++p; return str(s, p); }
 	count_string		get_token()						{ const C *s = skip_whitespace().getp(); while (p < endp && !is_whitespace(*p)) ++p; return str(s, p); }
-	count_string		get_token(const char_set &set)	{ const C *s = skip_whitespace().getp(); while (p < endp && set.test(*p)) ++p; return str(s, p); }
-	count_string		get_token(const char_set &first, const char_set &set) { const C *s = skip_whitespace().getp(); if (first.test(*s)) while (++p < endp && set.test(*p)); return str(s, p); }
+	count_string		get_token(const char_set &set)	{ const C *s = skip_whitespace().getp(); while (p < endp && set(*p)) ++p; return str(s, p); }
+	count_string		get_token(const char_set &first, const char_set &set) { const C *s = skip_whitespace().getp(); if (first(*s)) while (++p < endp && set(*p)); return str(s, p); }
 	count_string		get_n(int n)					{ const C *s = p; move(n); return str(s, p); }
 	bool				skip_to(int end);
 	count_string		get_to(int end)					{ auto s = p; if (skip_to(end)) return str(s, p); p = s; return none; }
@@ -2425,7 +2574,7 @@ template<char SEP> struct parts {
 		typedef bidirectional_iterator_t iterator_category;
 		const char *s, *e, *p, *n;
 
-		iterator(const char *s, const char *e, const char *p)	: s(s), e(e), p(p), n(string_find(s, SEP, e))	{ if (!n) n = e; }
+		iterator(const char *s, const char *e, const char *p)	: s(s), e(e), p(p), n(string_find(s, e, SEP))	{ if (!n) n = e; }
 		iterator(const char *s) : iterator(s, string_end(s), s) {}
 
 		count_string operator*() {
@@ -2437,7 +2586,7 @@ template<char SEP> struct parts {
 		iterator&	operator++() {
 			if (n != e) {
 				p = n + 1;
-				n = string_find(p, SEP, e);
+				n = string_find(p, e, SEP);
 				if (!n)
 					n = e;
 			} else {
@@ -2454,7 +2603,7 @@ template<char SEP> struct parts {
 		iterator&	operator--() {
 			if (p != s) {
 				n = p == e ? p : p - 1;
-				p = string_rfind(s, SEP, n);
+				p = string_rfind(s, n, SEP);
 				p = p ? p + 1 : s;
 			} else {
 				n = p;
@@ -2474,8 +2623,8 @@ template<char SEP> struct parts {
 	parts(const char *s)				: s(s), e(string_end(s))	{}
 	parts(const count_string &s)		: s(s.begin()), e(s.end())	{}
 	parts(const char *s, const char *e)	: s(s), e(e)				{}
-	iterator	begin()		const { return iterator(s, e, s); }
-	iterator	end()		const { return iterator(s, e, e); }
+	iterator	begin()		const { return {s, e, s}; }
+	iterator	end()		const { return {s, e, e}; }
 };
 
 struct ansi_colour {
@@ -2522,8 +2671,8 @@ public:
 	uint32				size32()		const				{ return (uint32)length(); }
 	size_t				remaining()		const				{ return endp - p; }
 	memory_block		remainder()		const				{ return {p, endp}; }
-	C*					dup()								{ *p = 0; return strdup(startp); }
-	friend string_base<C*>	str(fixed_accumT &s)			{ *s.p = 0; return s.startp; }
+	C*					dup()								{ return strdup(B::term()); }
+	friend string_base<const C*>	str(const fixed_accumT &s)			{ return s.term(); }
 };
 
 typedef fixed_accumT<char>		fixed_accum;
@@ -2574,7 +2723,9 @@ protected:
 	string_base<C[N]>	s;
 public:
 	buffer_accumT() : fixed_accumT<C>(s)	{}
-	friend string_base<C*>			str(buffer_accumT &s)	{ *s.getp() = 0; return s.s.begin(); }
+	buffer_accumT(const buffer_accumT &b)	: fixed_accumT<C>(s), s(b.s)	{ this->move(b.length()); }
+
+	friend auto			str(buffer_accumT &s)	{ s.term(); return s.s; }
 };
 
 template<int N>	class buffer_accum : public buffer_accumT<char, N> {
@@ -2583,8 +2734,8 @@ public:
 	buffer_accum(const char *fmt, ...)						{ va_list valist; va_start(valist, fmt); this->vformat(fmt, valist); }
 	buffer_accum(const char *fmt, va_list valist)			{ this->vformat(fmt, valist); }
 	template<typename T> buffer_accum(const T &t)			{ *this << t; }
-	friend string_base<char*>		str8(buffer_accum &s)	{ return str(s); }
-	friend fixed_string<N,char16>	str16(buffer_accum &s)	{ *s.getp() = 0; return fixed_string<N, char16>(s.s); }
+	friend auto						str8(buffer_accum &s)	{ return str(s); }
+	friend fixed_string<N,char16>	str16(buffer_accum &s)	{ return fixed_string<N, char16>(str(s)); }
 };
 
 template<int N>	class buffer_accum16 : public buffer_accumT<char16, N> {
@@ -2593,8 +2744,8 @@ public:
 	buffer_accum16(const char16 *fmt, ...)					{ va_list valist; va_start(valist, fmt); this->vformat(fmt, valist); }
 	buffer_accum16(const char16 *fmt, va_list valist)		{ this->vformat(fmt, valist); }
 	template<typename T> buffer_accum16(const T &t)			{ *this << t; }
-	friend string_base<char16*>		str16(buffer_accum16 &s){ return str(s); }
-	friend fixed_string<N,char>		str8(buffer_accum16 &s)	{ *s.getp() = 0; return fixed_string<N, char>(s.s); }
+	friend auto						str16(buffer_accum16 &s){ return str(s); }
+	friend fixed_string<N,char>		str8(buffer_accum16 &s)	{ return fixed_string<N, char>(str(s)); }
 };
 
 template<int N>	inline string_accum& operator<<(string_accum &a, const buffer_accum<N> &b)		{ return a.merge(b.begin(), b.length()); }
@@ -2649,7 +2800,7 @@ public:
 //	stream_accum, trace_accum, dummy_accum, temp_accum
 //-----------------------------------------------------------------------------
 
-template<typename W, int N> struct stream_accum : buffered_accum<stream_accum<W, N>, char, N> {
+template<typename W, int N = 512> struct stream_accum : buffered_accum<stream_accum<W, N>, char, N> {
 	W			w;
 	void		flush(const char *s, size_t n) { w.writebuff(s, n); }
 	template<typename...PP> stream_accum(PP&&...pp) : w(forward<PP>(pp)...)	{}
@@ -2724,11 +2875,23 @@ template<typename C> class builder : public accumT<builder<C>, C> {
 			return startp = (C*)realloc(startp, (max_size = n) * sizeof(C));
 
 		startp = (C*)malloc((max_size = n) * sizeof(C));
-		memcpy(startp, buffer, curr_size);
+		memcpy(startp, buffer, N);
 		return startp;
 	}
 
-	C*	detach() {
+	string_param_storage<C>	detach0() {
+		resize(curr_size + (curr_size != 0));
+		string_term(startp, curr_size);
+		curr_size	= 0;
+		max_size	= N;
+
+		if (startp == buffer)
+			return {strdup(startp), true};
+		return {exchange(startp, buffer), true};
+	}
+
+	/*
+	C*	detach0() {
 		resize(curr_size + (curr_size != 0));
 		string_term(startp, curr_size);
 		curr_size = 0;
@@ -2749,6 +2912,7 @@ template<typename C> class builder : public accumT<builder<C>, C> {
 			return {startp, false};
 		return {exchange(startp, buffer), true};
 	}
+	*/
 public:
 	C*		getp(int &n) {
 		size_t	offset	= curr_size;
@@ -2758,6 +2922,7 @@ public:
 			if (n < 64)
 				n = 256;
 		} else {
+			ISO_ASSERT(n > 0 || -n <= curr_size);
 			curr_size += n;
 		}
 
@@ -2772,12 +2937,16 @@ public:
 	template<typename T> explicit builder(const T &t)	: builder()	{ *this << t; }
 
 	~builder() 							{ if (startp != buffer) free(startp); }
-	malloc_block	detach_block()		{
+	size_t				size()			{ return curr_size; }
+	string_paramT<C>	detach()		{ return detach0(); }
+
+
+/*	malloc_block	detach_block() {
 		if (startp == buffer)
 			return const_memory_block(startp, curr_size);
 		resize(curr_size);
 		return malloc_block::own(exchange(startp, buffer), curr_size);
-	}
+	}*/
 	operator count_stringT<C>()			{ return {startp, curr_size}; }
 	explicit operator bool()	const	{ return !!startp; }
 };
@@ -2841,55 +3010,26 @@ struct toggle_accum : temp_builder<char> {
 template<class W, typename F> exists_t<decltype(declval<F>()(declval<string_accum&>())), bool> custom_write(W &w, const F &t) {
 	string_builder a;
 	t(a);
-	return w.write(a.to_string());
+	return w.write(a.term());
 }
 
 template<typename C, typename T> inline auto get_string(const T &t, enable_if_t<has_to_string<C,T>::get == 1> *dummy = 0) {
 	return to_string(get(t));
 }
-template<typename C, typename T> inline auto get_string(const T &t, ...) {
+#if 0
+template<typename C, typename T> inline alloc_string<C> get_string(const T &t, ...) {
 	builder<C>	b;
 	b << t;
-	return str(b);
+	return b;
 }
-
-/*	NOT USED?
-template<typename B> struct split_s {
-	buffer_accum<256>	a;
-	B					b;
-	int					col, last;
-	split_s(B &&b, int col) : b(forward<B>(b)), col(col), last(0) {}
-	~split_s()			{ b << str(a); }
-	template<typename T> auto& operator<<(const T &t) {
-		a << t;
-		int	len = a.size32();
-		if (len > col) {
-			auto	s = str(a);
-			b << s.slice(0, last) << '\n';
-			memcpy(s, s + last, len - last);
-			a.move(-last);
-		}
-		return *this;
-	}
-	auto& operator<<(const _none&) { last = a.size32(); return *this; }
-};
-
-template<typename B> inline auto split_at(B &&b, int col) {
-	return split_s<B>(forward<B>(b), col);
+#else
+template<typename C, typename T> inline alloc_string<C> get_string(const T &t, enable_if_t<has_to_string<C,T>::get != 1> *dummy = 0) {
+	builder<C>	b;
+	b << t;
+	return b;
 }
-*/
+#endif
 
-/*
-class tabs : _justify {
-	iso_export void	tab(string_param &p) const;
-public:
-	explicit tabs(uint16 w, char c = ' ') : _justify(w, c)						{}
-	tabs(string_accum &a, uint16 w, char c = ' ') : _justify(a, w, c)			{}
-	template<typename T> const tabs& operator<<(const T &t)			const		{ tab(get_string(t)); return *this; }
-	string_accum& operator<<(const _none&)							const		{ return *a; }
-	friend const tabs &operator<<(string_accum &a, const tabs &t)				{ t.init(a); return t; }
-};
-*/
 template<typename C> alloc_string<C> replace(const C *srce, const C *from, const C *to) {
 	builder<C>			b;
 	size_t				flen	= string_len(from);
@@ -2929,17 +3069,6 @@ template<typename C> template<typename R> bool alloc_string<C>::read(R &r) {
 		b.putc(c);
 	return true;
 }
-/*
-template<typename C> template<typename R> bool alloc_string<C>::read_to(R &r, const char_set &set, bool clear) {
-	if (r.eof())
-		return false;
-
-	auto b = build(*this, clear);
-	for (C c; r.read(c) && c && !set.test(c);)
-		b.putc(c);
-	return true;
-}
-*/
 
 //-----------------------------------------------------------------------------
 //	multi_string
@@ -2956,6 +3085,7 @@ template<typename C> struct multi_string_iterator {
 	bool		operator==(const multi_string_iterator &b)	const	{ return **this == *b; }
 	bool		operator!=(const multi_string_iterator &b)	const	{ return **this != *b; }
 	bool		operator>(const multi_string_iterator &b)	const	{ return b.p && **this > *b; }
+	bool		operator<(const multi_string_iterator &b)	const	{ return !b.p || **this < *b; }
 };
 
 template<typename C> struct embedded_multi_string {
@@ -3176,7 +3306,7 @@ template<typename C> alloc_string<C> unescape(string_scanT<C> &&s) {
 }
 
 template<typename B> auto unescape(const string_base<B> &s) {
-	return unescape(string_scanT<typename string_traits<B>::element>(s));
+	return unescape(string_scanT<typename string_base<B>::element>(s));
 }
 
 int numstring_cmp(const char *a, const char *b);

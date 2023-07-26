@@ -78,22 +78,19 @@ public:
 
 	static iso_export FileHandler*			Get(const char *ext);
 	static iso_export FileHandler*			GetNext(FileHandler *fh);
-	static iso_export FileHandler*			GetMIME(const char *ext);
+	static iso_export FileHandler*			GetMIME(const string_param &mime);
 	static iso_export FileHandler*			GetNextMIME(FileHandler *fh);
-	static iso_export ptr<void>				Read(tag id, const filename &fn);
-	static iso_export ptr<void>				Read(tag id, iso::istream_ref file, const char *ext);
-	static iso_export ptr64<void>			Read64(tag id, const filename &fn);
-	static iso_export ptr64<void>			Read64(tag id, iso::istream_ref file, const char *ext);
-	template<int B> static iso_export bool	Read(ptr<void, B> &p, tag id, const filename &fn);
-	template<int B> static iso_export bool	Read(ptr<void, B> &p, tag id, iso::istream_ref file, const char *ext);
-	static iso_export bool					Write(ptr_machine<void> p, const filename &fn);
 	static iso_export FileHandler*			Identify(iso::istream_ref file, CHECK mincheck = CHECK_PROBABLE);
-	static iso_export FileHandler*			Identify(const filename &fn, CHECK mincheck = CHECK_PROBABLE);
+	static iso_export FileHandler*			Identify(const char *fn, CHECK mincheck = CHECK_PROBABLE);
 
-#ifdef USE_ISTREAM
-	static iso_export ptr<void>				Read(tag id, iso::istream_ref file, const char *ext)				{ return Read(id, file, ext); }
-	static iso_export bool					Read(ptr<void> &p, tag id, iso::istream_ref file, const char *ext)	{ return Read(p, id, file, ext); }
-#endif
+	static iso_export ptr<void>				Read(tag id, const char *fn);
+	static iso_export ptr<void>				Read(tag id, iso::istream_ref file, const char *ext);
+	static iso_export ptr64<void>			Read64(tag id, const char *fn);
+	static iso_export ptr64<void>			Read64(tag id, iso::istream_ref file, const char *ext);
+	template<int B> static iso_export bool	Read(ptr<void, B> &p, tag id, const char *fn);
+	template<int B> static iso_export bool	Read(ptr<void, B> &p, tag id, iso::istream_ref file, const char *ext);
+	
+	static iso_export bool					Write(ptr_machine<void> p, const filename &fn);
 
 	static iso_export FileHandlerCacheSave	PushCache(const FileHandlerCache &_cache);
 	static iso_export ptr<void>				CachedRead(const filename &fn, bool external = false);
@@ -146,15 +143,15 @@ public:
 	virtual	iso_export	const char*		GetCategory()							{ return 0; }
 	virtual	iso_export	bool			NeedSeek()								{ return false; }
 
-	virtual	iso_export	int				Check(iso::istream_ref file)				{ return CHECK_NO_OPINION; }
-	virtual	iso_export	int				Check(const iso::filename &file)			{ return CHECK_NO_OPINION; }
+	virtual	iso_export	int				Check(iso::istream_ref file)			{ return CHECK_NO_OPINION; }
+	virtual	iso_export	int				Check(const char *file)					{ return CHECK_NO_OPINION; }
 
 	virtual iso_export	ptr<void>		Read(tag id, iso::istream_ref file)								{ return ISO_NULL; }
 	virtual iso_export	bool			Read(ptr<void> &p, tag id, iso::istream_ref file)				{ return p = Read(id, file); }
 	virtual	iso_export	ptr<void>		ReadWithFilename(tag id, const filename &fn);
 	virtual	iso_export	bool			ReadWithFilename(ptr<void> &p, tag id, const filename &fn)		{ return p = ReadWithFilename(id, fn); }
 
-	virtual iso_export	ptr64<void>		Read64(tag id, iso::istream_ref file)							{ return ISO_NULL; }
+	virtual iso_export	ptr64<void>		Read64(tag id, iso::istream_ref file)							{ return Read(id, file); }
 	virtual iso_export	bool			Read64(ptr64<void> &p, tag id, iso::istream_ref file)			{ return p = Read64(id, file); }
 	virtual	iso_export	ptr64<void>		ReadWithFilename64(tag id, const filename &fn);
 	virtual	iso_export	bool			ReadWithFilename64(ptr64<void> &p, tag id, const filename &fn)	{ return p = ReadWithFilename64(id, fn); }
@@ -165,14 +162,6 @@ public:
 	virtual iso_export	bool			WriteWithFilename64(ptr64<void> p, const filename &fn);
 #endif
 
-#ifdef USE_ISTREAM
-	force_inline		ptr<void>		Read(tag id, iso::istream_ref file)						{ return Read(id, file); }
-	force_inline		bool			Read(ptr<void> &p, tag id, iso::istream_ref file)		{ return Read(p, id, file); }
-#endif
-#ifdef USE_OSTREAM
-	force_inline		bool			Write(ptr<void> p, iso::ostream_ref file)				{ return Write(p, file); }
-	force_inline		bool			Write64(ptr64<void> p, iso::ostream_ref file)			{ return Write64(p, file); }
-#endif
 };
 
 template<>	inline ptr64<void> FileHandler::ReadT<64>(tag id, iso::istream_ref file)			{ return Read64(id, file); }
@@ -221,8 +210,9 @@ class IncludeHandler {
 	} *stack;
 
 public:
-	size_t	open(const char *f, const void **data);
-	void	close(const void *data);
+	size_t			open(const char *f, const void **data);
+	malloc_block	open(const char *f);
+	void			close(const void *data);
 	IncludeHandler(const filename *fn, const char *incs);
 };
 

@@ -118,7 +118,7 @@ void CameraResources::CreateResourcesForBackBuffer(ID3D11Device* device, Hologra
 #else
 	com_ptr<ID3D11Resource> cameraBackBuffer;
 #endif
-	com_cast<IDirect3DDxgiInterfaceAccess>(cameraParameters->Direct3D11BackBuffer().get())->GetInterface(IID_PPV_ARGS(&cameraBackBuffer));
+	com_cast<IDirect3DDxgiInterfaceAccess>(cameraParameters->Direct3D11BackBuffer().get())->GetInterface(COM_CREATE(&cameraBackBuffer));
 	//com_ptr<ID3D11Resource> cameraBackBuffer = com_cast<ID3D11Resource>(cameraParameters->Direct3D11BackBuffer().get());
 
 	// Determine if the back buffer has changed. If so, ensure that the render target view is for the current back buffer.
@@ -403,7 +403,7 @@ struct Hololens : RenderOutputFinderPri<Hololens, 0> {
 #else
 	struct HologramWindow : win::Window<HologramWindow> {
 		ptr<IHolographicSpace> space;
-		LRESULT Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+		LRESULT Proc(win::MSG_ID message, WPARAM wParam, LPARAM lParam) {
 			switch (message) {
 				case WM_DESTROY:
 					PostQuitMessage(0);

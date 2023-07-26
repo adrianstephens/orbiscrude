@@ -13,132 +13,11 @@
 namespace iso {
 
 //-----------------------------------------------------------------------------
-//	SoftType
-//-----------------------------------------------------------------------------
-
-struct SoftType {
-	struct vtable {
-		size_t			(*Size)(void*);
-		int				(*Count)(void*);
-		string_accum&	(*Type)(void*, string_accum &sa, int i, const char *name);
-		string_accum&	(*Name)(void*, string_accum &sa, int i);
-		string_accum&	(*Get)(void*, string_accum &sa, const void *data, int i, FORMAT::FLAGS flags);
-		string_scan&	(*Set)(void*, string_scan &ss, void *data, int i);
-		float			(*GetFloat)(void*, const void *data, int i);
-	};
-	template<typename T> struct vtable_s { static vtable v; };
-	void	*t;
-	vtable	*v;
-public:
-	size_t			Size()																				const { return v->Size(t); }
-	int				Count()																				const { return v->Count(t); }
-	string_accum&	Type(string_accum &sa, int i, string_param &&name)									const { return v->Type(t, sa, i, name); }
-	string_accum&	Name(string_accum &sa, int i)														const { return v->Name(t, sa, i); }
-	string_accum&	Get(string_accum &sa, const void *data, int i, FORMAT::FLAGS flags = FORMAT::NONE)	const { return v->Get(t, sa, data, i, flags); }
-	string_scan&	Set(string_scan &ss, void *data, int i)												const { return v->Set(t, ss, data, i); }
-	float			GetFloat(const void *data, int i)													const { return v->GetFloat(t, data, i); }
-	SoftType() : t(0), v(0) {}
-	template<typename T> SoftType(T *t) : t((void*)t), v(&vtable_s<T>::v) {}
-	bool operator!() const	{ return !t; }
-};
-
-template<typename T> SoftType::vtable SoftType::vtable_s<T>::v = {
-	[](void *t)																	->size_t		{ return ((T*)t)->Size(); },
-	[](void *t)																	->int			{ return ((T*)t)->Count(); },
-	[](void *t, string_accum &sa, int i, const char *name)						->string_accum&	{ return ((T*)t)->Type(sa, i, name); },
-	[](void *t, string_accum &sa, int i)										->string_accum&	{ return ((T*)t)->Name(sa, i); },
-	[](void *t, string_accum &sa, const void *data, int i, FORMAT::FLAGS flags)	->string_accum&	{ return ((T*)t)->Get(sa, data, i, flags); },
-	[](void *t, string_scan &ss, void *data, int i)								->string_scan&	{ return ((T*)t)->Set(ss, data, i); },
-	[](void *t, const void *data, int i)										->float			{ return ((T*)t)->GetFloat(data, i); }
-};
-
-//template<> extern SoftType::vtable SoftType::vtable_s<const C_type>::v;
-inline string_accum&	Type(const C_type *t, string_accum &sa, int i, const char *name)						{ int shift; void *data = 0; return DumpType(sa, GetNth(data, t, i, shift), name, 0); }
-inline string_accum&	Name(const C_type *t, string_accum &sa, int i)											{ return GetNthName(sa, t, i); }
-inline string_accum&	Get(const C_type *t, string_accum &sa, const void *data, int i, FORMAT::FLAGS flags)	{ int shift; auto subtype = GetNth(data, t, i, shift); return DumpData(sa, data, subtype, shift, 0, flags); }
-inline string_scan&		Set(const C_type *t, string_scan &ss, void *data, int i)								{ int shift; auto subtype = GetNth(data, t, i, shift); return SetData(ss, data, subtype, shift); }
-inline float			GetFloat(const C_type *t, const void *data, int i)										{ int shift; auto subtype = GetNth(data, t, i, shift); return GetFloat(data, subtype, shift); }
-
-
-template<> SoftType::vtable SoftType::vtable_s<const C_type>::v = {
-	[](void *t)																	->size_t		{ return ((const C_type*)t)->size(); },
-	[](void *t)																	->int			{ return NumElements((const C_type*)t); },
-	[](void *t, string_accum &sa, int i, const char *name)						->string_accum&	{ return iso::Type((const C_type*)t, sa, i, name); },
-	[](void *t, string_accum &sa, int i)										->string_accum&	{ return iso::Name((const C_type*)t, sa, i); },
-	[](void *t, string_accum &sa, const void *data, int i, FORMAT::FLAGS flags)	->string_accum&	{ return iso::Get((const C_type*)t, sa, data, i, flags); },
-	[](void *t, string_scan &ss, void *data, int i)								->string_scan&	{ return iso::Set((const C_type*)t, ss, data, i); },
-	[](void *t, const void *data, int i)										->float			{ return iso::GetFloat((const C_type*)t, data, i); }
-};
-
-template<typename T> void assign(T &f, const param_element<const uint8&, const SoftType&> &a)	{
-	typedef element_type<T>	E;
-	f = to<E>(
-		a.p.GetFloat(&a.t, 0),
-		a.p.GetFloat(&a.t, 1),
-		a.p.GetFloat(&a.t, 2),
-		a.p.GetFloat(&a.t, 3)
-	);
-}
-
-//-----------------------------------------------------------------------------
 //	C_types
 //-----------------------------------------------------------------------------
 
 extern		C_types ctypes, user_ctypes;
 C_types&	builtin_ctypes();
-
-#if 0
-template<int N, typename S> struct C_types::type_getter<_soft_vector<N, S> > : type_getter<S> {};
-
-template<typename T, typename XT, int XB, typename YT, int YB> struct C_types::type_getter<_packed2<T, XT, XB, YT, YB> > {
-	static const C_type *f(C_types &ctypes)	{
-		C_type_struct	s;
-		s.set_packed(true);
-		s.add_atbit("x", ctypes.get_type<XT>(), 0);
-		s.add_atbit("y", ctypes.get_type<YT>(), XB);
-		return ctypes.add(move(s));
-	}
-};
-
-template<typename T, typename XT, int XB, typename YT, int YB, typename ZT, int ZB> struct C_types::type_getter<_packed3<T, XT, XB, YT, YB, ZT, ZB> > {
-	static const C_type *f(C_types &ctypes)	{
-		C_type_struct	s;
-		s.set_packed(true);
-		s.add_atbit("x", ctypes.get_type<XT>(), 0);
-		s.add_atbit("y", ctypes.get_type<YT>(), XB);
-		s.add_atbit("z", ctypes.get_type<ZT>(), XB+YB);
-		return ctypes.add(move(s));
-	}
-};
-
-template<typename T, typename XT, int XB, typename YT, int YB, typename ZT, int ZB, typename WT, int WB> struct C_types::type_getter<_packed4<T, XT, XB, YT, YB, ZT, ZB, WT, WB> > {
-	static const C_type *f(C_types &ctypes)	{
-		C_type_struct	s;
-		s.set_packed(true);
-		s.add_atbit("x", ctypes.get_type<XT>(), 0);
-		s.add_atbit("y", ctypes.get_type<YT>(), XB);
-		s.add_atbit("z", ctypes.get_type<ZT>(), XB+YB);
-		s.add_atbit("w", ctypes.get_type<WT>(), XB+YB+ZB);
-		return ctypes.add(move(s));
-	}
-};
-
-template<typename I, int B, typename T_signed_native<I, false>::type S> struct C_types::type_getter<scaled_field<I, B, S> > {
-	static const C_type *f(C_types &types)	{
-		return C_type_int::get<B, num_traits<I>::is_signed ? C_type_int::SIGN | C_type_int::NORM  : C_type_int::NORM>();
-	}
-};
-template<uint32 M, uint32 E, bool S> struct C_types::type_getter<soft_float<M, E, S> > {
-	static const C_type *f(C_types &types)	{
-		return C_type_float::get<M + E + int(S), E, S>();
-	}
-};
-template<typename I, typename T_signed_native<I, false>::type S> struct C_types::type_getter<scaled<I, S> > : C_types::type_getter<I> {
-	static const C_type *f(C_types &types)	{
-		return C_type_int::get<sizeof(I) * 8, num_traits<I>::is_signed ? C_type_int::SIGN | C_type_int::NORM  : C_type_int::NORM>();
-	}
-};
-#else
 
 template<uint32 M, uint32 E, bool S> struct C_types::type_getter<soft_float_imp<M, E, S> > {
 	static const C_type *f(C_types &types)	{
@@ -146,7 +25,7 @@ template<uint32 M, uint32 E, bool S> struct C_types::type_getter<soft_float_imp<
 	}
 };
 
-template<typename I, typename T_signed_native<I, false>::type S> struct C_types::type_getter<scaled<I, S> > : C_types::type_getter<I> {
+template<typename I, int64 S> struct C_types::type_getter<scaled<I, S> > : C_types::type_getter<I> {
 	static const C_type *f(C_types &types)	{
 		return C_type_int::get<sizeof(I) * 8, num_traits<I>::is_signed ? C_type_int::SIGN | C_type_int::NORM  : C_type_int::NORM>();
 	}
@@ -154,38 +33,38 @@ template<typename I, typename T_signed_native<I, false>::type S> struct C_types:
 
 template<typename T, int N> struct C_types::type_getter<compact<T, N> > : C_types::type_getter<T> {};
 
-template<typename X, typename Y> struct C_types::type_getter<bitfield_vec<X, Y> > {
+
+template<typename B, typename V, typename P> struct C_types::type_getter<soft_vec<B, 2, V, P>> {
+	typedef soft_vec<B, 2, V, P>	T;
 	static const C_type *f(C_types &ctypes)	{
 		C_type_struct	s;
-		s.set_packed(true);
-		s.add_atbit("x", ctypes.get_type<X>(), 0);
-		s.add_atbit("y", ctypes.get_type<Y>(), BIT_COUNT<X>);
+		s.add(ctypes, "x", &T::x);
+		s.add(ctypes, "y", &T::y);
 		return ctypes.add(move(s));
 	}
 };
-template<typename X, typename Y, typename Z> struct C_types::type_getter<bitfield_vec<X, Y, Z> > {
+template<typename B, typename V, typename P> struct C_types::type_getter<soft_vec<B, 3, V, P>> {
+	typedef soft_vec<B, 3, V, P>	T;
 	static const C_type *f(C_types &ctypes)	{
 		C_type_struct	s;
-		s.set_packed(true);
-		s.add_atbit("x", ctypes.get_type<X>(), 0);
-		s.add_atbit("y", ctypes.get_type<Y>(), BIT_COUNT<X>);
-		s.add_atbit("z", ctypes.get_type<Z>(), BIT_COUNT<X> + BIT_COUNT<Y>);
+		s.add(ctypes, "x", &T::x);
+		s.add(ctypes, "y", &T::y);
+		s.add(ctypes, "z", &T::z);
 		return ctypes.add(move(s));
 	}
 };
-template<typename X, typename Y, typename Z, typename W> struct C_types::type_getter<bitfield_vec<X, Y, Z, W> > {
+template<typename B, typename V, typename P> struct C_types::type_getter<soft_vec<B, 4, V, P>> {
+	typedef soft_vec<B, 4, V, P>	T;
 	static const C_type *f(C_types &ctypes)	{
 		C_type_struct	s;
-		s.set_packed(true);
-		s.add_atbit("x", ctypes.get_type<X>(), 0);
-		s.add_atbit("y", ctypes.get_type<Y>(), BIT_COUNT<X>);
-		s.add_atbit("z", ctypes.get_type<Z>(), BIT_COUNT<X> + BIT_COUNT<Y>);
-		s.add_atbit("w", ctypes.get_type<Z>(), BIT_COUNT<X> + BIT_COUNT<Y> + BIT_COUNT<W>);
+		s.add(ctypes, "x", &T::x);
+		s.add(ctypes, "y", &T::y);
+		s.add(ctypes, "z", &T::z);
+		s.add(ctypes, "w", &T::w);
 		return ctypes.add(move(s));
 	}
 };
 
-#endif
 }
 
 namespace app {
@@ -200,22 +79,21 @@ template<typename T> void FillRow(ListViewControl &c, ListViewControl::Item &ite
 	RegisterList(c, format).FillRow(item, fields<T>::f, (const uint32*)&t, 0);
 }
 
-int MakeHeaders(ListViewControl lv, int nc, const C_type *type, string_accum &prefix);
-int MakeHeaders(ListViewControl lv, int nc, const SoftType &type, string_accum &prefix);
+int		MakeHeaders(ListViewControl lv, int nc, const C_type *type, string_accum &prefix);
 
 template<typename T> int MakeHeaders(ListViewControl lv, const C_types &ctypes, int nc, string_accum &prefix) {
 	return MakeHeaders(lv, nc, ctypes.get_type<T>(), prefix);
 }
 
-template<typename R, typename E> int FillColumn(ListViewControl &c, int col, const R &rf, uint8 mask, const E &enabled) {
+template<typename R, typename E> int FillColumn(ListViewControl &c, int col, const R &rf, uint8 mask, const E &enabled, int row = 0) {
 	int	t = 0;
 	for (auto &r : rf) {
 		char				text[64] = "-";
 		ListViewControl2::Item	item(text);
-		item.Index(t).Column(col - 1);
+		item.Index(row + t).Column(col - 1);
 
 		bool	en	= enabled[t];
-		float	*o = (float*)&r;
+		auto	*o	= &r[0];
 
 		for (int m = mask; m; m = clear_lowest(m)) {
 			int	i = lowest_set_index(m);
@@ -322,9 +200,9 @@ struct RegisterTree {
 		curr_h = tree.GetParentItem(curr_h);
 
 	}
-	void	Line(const char* name, const char* value, uint32 addr) {
+	void	Line(const char* name, string_param value, uint32 addr) {
 		if (name)
-			AddText(curr_h, format_string("%s = %s", name, value), addr);
+			AddText(curr_h, format_string("%s = ", name) << value, addr);
 		else
 			AddText(curr_h, value, addr);
 	}
@@ -363,21 +241,22 @@ struct RegisterTree {
 		FieldPutter(this, format).AddArray(p);
 	}
 
-	HTREEITEM	Add(HTREEITEM h, const char *text, int image, const arbitrary &param, int state = 0) {
+	bool		SetParam(HTREEITEM h, int image, const arbitrary &param, int state = 0) {
+		return tree.GetItem(h).Image(image).SetState(state).Param(param).Set(tree);
+	}
+	HTREEITEM	Add(HTREEITEM h, text text, int image, const arbitrary &param, int state = 0) {
 		return TreeControl::Item(text).Image(image).SetState(state).Param(param).Insert(tree, h);
 	}
-
-	HTREEITEM	AddText(HTREEITEM h, const char* text, uint32 addr = 0) {
+	HTREEITEM	AddText(HTREEITEM h, text text, uint32 addr = 0) {
 		return TreeControl::Item(text).Param(addr).Insert(tree, h);
 	}
-
 	void		AddHex(HTREEITEM h, uint32 addr, const uint32le* vals, uint32 n) {
 		curr_h = h;
 		FieldPutter(this, format).AddHex(vals, n, addr);
 	}
 };
 
-void StructureHierarchy(RegisterTree &c, HTREEITEM h, const C_types &types, const char *name, const C_type *type, uint32 offset, const void *data, const uint64 *valid = nullptr);
+HTREEITEM StructureHierarchy(RegisterTree &c, HTREEITEM h, const C_types &types, string_param name, const C_type *type, uint32 offset, const void *data, const uint64 *valid = nullptr);
 
 //-----------------------------------------------------------------------------
 //	ColourList
@@ -393,10 +272,11 @@ struct ColourList {
 
 	operator ListViewControl&()		{ return vw; }
 
-	int		AddColumn(int nc, const char *title, int width, COLORREF col) {
-		ListViewControl2::Column(title).Width(width).Insert(vw, nc++);
-		colours.push_back(col);
-		return nc;
+	int		AddColumn(int nc, text title, int width, COLORREF col) {
+		ListViewControl2::Column(title).Width(width).Insert(vw, nc);
+//		colours.push_back(col);
+		colours.insert(colours.begin() + nc, col);
+		return ++nc;
 	}
 	int		AddColour(int nc, COLORREF col) {
 		while (colours.size() < nc)
@@ -419,7 +299,7 @@ struct ColourTree : Subclass<ColourTree, TreeControl> {
 
 	ColourTree(win::Colour *colours, const Cursor *cursors, uint8 (*cursor_indices)[3]) : colours(colours), cursors(cursors), cursor_indices(cursor_indices), hot(0) {}
 
-	LRESULT Proc(UINT message, WPARAM wParam, LPARAM lParam);
+	LRESULT Proc(MSG_ID message, WPARAM wParam, LPARAM lParam);
 	LRESULT	CustomDraw(NMCUSTOMDRAW	*nmcd) const;
 	void	SetCursor(int type, int mod) const;
 };
@@ -429,6 +309,7 @@ struct ColourTree : Subclass<ColourTree, TreeControl> {
 //-----------------------------------------------------------------------------
 
 template<typename T, typename U = T, typename A = dynamic_array<U>> struct EntryTable0 : ListViewControl, SortColumn {
+	typedef EntryTable0	Base;
 	A		&table;
 	IDFMT	format;
 
@@ -471,19 +352,19 @@ template<typename T, typename U = T, typename A = dynamic_array<U>> struct Entry
 		return MakeColumns(*this, fields<T>::f, IDFMT_CAMEL | IDFMT_FOLLOWPTR, 3);
 	}
 
-	HWND Create(const WindowPos &wpos, text title, Style style = CHILD | CLIPSIBLINGS | VISIBLE | REPORT | SINGLESEL | SHOWSELALWAYS, StyleEx styleEx = GRIDLINES | DOUBLEBUFFER | FULLROWSELECT, ID id = ID()) {
-		HWND h = ListViewControl::Create(wpos, title, style, styleEx, id);
+	HWND Create(const WindowPos &wpos, text title, Style style = CHILD | CLIPSIBLINGS | VISIBLE | REPORT | SINGLESEL | SHOWSELALWAYS, ListStyle styleEx = GRIDLINES | DOUBLEBUFFER | FULLROWSELECT, ID id = ID()) {
+		HWND h = ListViewControl::Create(wpos, title, style, NOEX, id);
 		user = this;
 		SetExtendedStyle(styleEx);
 		InitColumns();
 		return h;
 	}
-	HWND CreateWithID(const WindowPos &wpos, text title, ID id, Style style = CHILD | CLIPSIBLINGS | VISIBLE | REPORT | SINGLESEL | SHOWSELALWAYS, StyleEx styleEx = GRIDLINES | DOUBLEBUFFER | FULLROWSELECT) {
+	HWND Create(const WindowPos &wpos, text title, ID id, Style style = CHILD | CLIPSIBLINGS | VISIBLE | REPORT | SINGLESEL | SHOWSELALWAYS, ListStyle styleEx = GRIDLINES | DOUBLEBUFFER | FULLROWSELECT) {
 		return Create(wpos, title, style, styleEx, id);
 	}
 
 	U*			GetEntry(int i)			const	{ return GetItemParam(i); }
-	int			GetEntryIndex(int i)	const	{ return GetEntry(i) - table; }
+	int			GetEntryIndex(int i)	const	{ return table.index_of(GetEntry(i)); }
 
 	EntryTable0(A &table, IDFMT format = IDFMT_FOLLOWPTR | IDFMT_FIELDNAME_AFTER_UNION) : table(table), format(format) {}
 };

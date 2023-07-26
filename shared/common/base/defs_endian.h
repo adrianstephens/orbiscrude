@@ -99,7 +99,7 @@ template<typename T> struct packed<constructable<T_swap_endian<T> > > : _packed<
 
 template<>					struct T_swap_endian_type<uint8>				: T_type<uint8> {};
 template<typename T>		struct T_swap_endian_type<constructable<T> >	: T_swap_endian_type<T> {};
-template<typename T, int N>	struct T_swap_endian_type<T[N]>					{ typedef typename T_swap_endian_type<T>::type type[N]; };
+template<typename T, int N>	struct T_swap_endian_type<T[N]>					{ typedef swap_endian_t<T> type[N]; };
 
 template<typename T>		struct T_native_endian							: T_type<T> {};
 template<typename T>		struct T_native_endian<constructable<T>>		: T_native_endian<T> {};
@@ -111,7 +111,7 @@ template<typename T>		struct T_swap_endian<constructable<T>>			: T_swap_endian<T
 template<typename T>		struct T_isint<T_swap_endian<T>>				: T_isint<T>		{};
 template<typename T>		struct num_traits<T_swap_endian<T>>				: num_traits<T>		{};
 
-template<typename T>		struct T_constructable_swap_endian_type			: T_type<constructable<typename T_swap_endian_type<T>::type>> {};
+template<typename T>		struct T_constructable_swap_endian_type			: T_type<constructable<swap_endian_t<T>>> {};
 template<>					struct T_constructable_swap_endian_type<uint8>	: T_type<uint8> {};
 
 template<typename T>		struct T_is_native_endian						: T_true				{};

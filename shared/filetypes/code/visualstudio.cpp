@@ -272,7 +272,7 @@ ISO_ptr<void> VSsolutionFileHandler::Read(tag id, istream_ref file) {
 		ba << i.guid;
 
 		i.p.Create(i.name);
-		i.p->Append(ISO_ptr<string>("guid", (const char*)ba));
+		i.p->Append(ISO_ptr<string>("guid", ba));
 
 		const char *type = 0;
 		for (int j = 0; j < num_elements(guid_map); j++) {
@@ -340,7 +340,7 @@ class VSprojectFileHandler : public FileHandler {
 	}
 
 	ISO_ptr<void>	Read(tag id, istream_ref file) override {
-		ISO_ptr<anything>	p = Get("xml")->Read(0, file);
+		ISO_ptr<anything>	p = Get("xml")->Read(none, file);
 		p = (*p)["Project"];
 		p.SetID(id);
 		p.Header()->type = ISO::getdef<VSProject>();
@@ -357,7 +357,7 @@ class VSprojectFileHandler : public FileHandler {
 	ISO_ptr<void>	ReadWithFilename(tag id, const filename &fn) override {
 		ISO_ptr<VSProject>	p1 = Read(id, FileInput(fn).me());
 
-		if (ISO_ptr<anything> p2 = Get("xml")->Read(0, FileInput(filename(fn).add_ext("filters")).me())) {
+		if (ISO_ptr<anything> p2 = Get("xml")->Read(none, FileInput(filename(fn).add_ext("filters")).me())) {
 			if ((p2 = (*p2)["Project"])) {
 				ISO_ptr<anything>	filters("ItemGroup");
 				for (auto &i : *p2) {

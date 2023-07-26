@@ -9,7 +9,9 @@ namespace iso {
 
 
 struct AES {
-	typedef deferred<array<uint32le, 4>> block;
+	struct block : array<uint32le, 4> {
+		auto& operator^=(const block &b) { t[0] ^= b[0]; t[1] ^= b[1]; t[2] ^= b[2]; t[3] ^= b[4]; return *this; }
+	};
 	enum {BLOCK_SIZE = sizeof(block)};
 	int		nr;
 	uint32	rk[68];

@@ -8,6 +8,7 @@ namespace iso {
 
 template<typename A, typename B, typename C, typename... TT> constexpr decltype(auto)	min(A a, B b, C c, TT... tt)				{ return min(min(a, b), c, tt...); }
 template<typename A, typename B, typename C, typename... TT> constexpr decltype(auto)	max(A a, B b, C c, TT... tt)				{ return max(max(a, b), c, tt...); }
+//template<typename T, typename A, typename B>	constexpr auto	clamp(T &&v, A &&a, B &&b)	{ return min(max(forward<T>(v), forward<A>(a)), forward<B>(b)); }
 template<typename T, typename A, typename B>	constexpr auto	clamp(const T &v, const A &a, const B &b)	{ return min(max(v, a), b); }
 
 template<typename T> using diff_t = decltype(declval<T>() - declval<T>());
@@ -26,7 +27,7 @@ template<typename T> struct interval {
 	constexpr interval() {}
 	constexpr interval(const _none&)			: a(iso::maximum), b(iso::minimum)	{}
 	constexpr interval(const T &a, const T &b)	: a(a), b(b)		{}
-	template<typename T2> explicit constexpr interval(const interval<T2> &i)	: a(i.a), b(i.b) {}
+	template<typename T2> constexpr interval(const interval<T2> &i)	: a(i.a), b(i.b) {}
 	explicit interval(const T &a)				: a(a), b(a)		{}
 
 	constexpr T			clamp(const T &t)		const	{ return iso::clamp(t, a, b); }
@@ -55,6 +56,7 @@ template<typename T> struct interval {
 	}
 
 	template<typename F> T	from(F f)	const	{ return a + f * (b - a); }
+	template<typename F> T	to(F f)		const	{ return (f - a) / (b - a); }
 	template<typename F> constexpr interval operator*(const interval<F> &i) const	{ return {from(i.a), from(i.b)}; }
 
 	constexpr bool				operator<(const T &t)				const { return b <= t; }
@@ -79,8 +81,8 @@ template<typename T> struct interval {
 	friend constexpr interval	mul_about(const interval &i, const T &c, const T &t)	{ return (i - c) * t + c; }
 	friend constexpr interval	mul_centre(const interval &i, const T &t)				{ return mul_about(i, i.centre(), t); }
 	friend constexpr interval	abs(const interval &i)									{ return {i.minimum(), i.maximum()}; }
-	friend bool		overlap(const interval &a, const interval &b)			{ return !(any(b.b < a.a) || any(a.b < b.a)); }
-	friend bool		strict_overlap(const interval &a, const interval &b)	{ return all(a.b > b.a) && all(a.a < b.b); }
+	template<typename B> friend constexpr bool		overlap(const interval &a, const B &b)			{ return !(any(b.b < a.a) || any(a.b < b.a)); }
+	friend constexpr bool		strict_overlap(const interval &a, const interval &b)	{ return all(a.b > b.a) && all(a.a < b.b); }
 };
 
 template<typename T> int		max_component_index(const interval<T>& i)	{ return max_component_index(i.extent()); }
@@ -112,11 +114,17 @@ template<typename T, typename I> auto get_extent(I i0, I i1) {
 }
 
 template<typename C> auto get_extent(const C &c) {
-	return get_extent(c.begin(), c.end());
+	return get_extent(begin(c), end(c));
 }
 
 template<typename T, typename C> auto get_extent(const C &c) {
-	return get_extent<T>(c.begin(), c.end());
+	return get_extent<T>(begin(c), end(c));
+}
+
+template<typename T, typename C> auto scale_with_extent(const C &c, interval<T> ext) {
+	return transformc(c, [offset = ext.a, scale = select(ext.extent() == zero, one, one / ext.extent())](T i) {
+		return (i - offset) * scale;
+	});
 }
 
 } // namespace iso

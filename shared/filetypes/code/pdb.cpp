@@ -712,7 +712,7 @@ struct symbol_dumper {
 	}
 
 	void	operator()(const CV::REFSYM2 &t) {
-		unhandled = !char_set::identifier.test(t.name[0]) || !char_set::identifier.test(rnamespace_sep(t.name)[0]);
+		unhandled = !char_set::wordchar.test(t.name[0]) || !char_set::wordchar.test(rnamespace_sep(t.name)[0]);
 		if (!unhandled) {
 			auto	&mod	= pdb.GetModule(t.imod);
 			auto	sym		= mod.GetSymbol(t.ibSym);
@@ -761,9 +761,9 @@ struct symbol_dumper {
 	}
 	void	operator()(const CV::Array &t) {
 		if (size_t elemSize = pdb.GetTypeSize(t.elemtype))
-			save(name, (const char*)(buffer_accum<256>() << name << '[' << (int64)t.size / elemSize << ']')), procTI(t.elemtype);
+			save(name, (buffer_accum<256>() << name << '[' << (int64)t.size / elemSize << ']').term()), procTI(t.elemtype);
 		else
-			save(name, (const char*)(buffer_accum<256>() << name << "[]")), procTI(t.elemtype);
+			save(name, (buffer_accum<256>() << name << "[]").term()), procTI(t.elemtype);
 
 	}
 	void	operator()(const CV::Proc &t) {
@@ -771,7 +771,7 @@ struct symbol_dumper {
 			procTI(t.rvtype);
 			return;
 		}
-		if (name && (!char_set::identifier.test(name[0]) || !char_set::identifier.test(name[strlen(name) - 1])))
+		if (name && (!char_set::wordchar.test(name[0]) || !char_set::wordchar.test(name[strlen(name) - 1])))
 		//if (string_find(name, ~char_set::identifier))
 			save(name, str("(") + name + ")"), save(mode, ARGS), procTI(t.rvtype);
 		else

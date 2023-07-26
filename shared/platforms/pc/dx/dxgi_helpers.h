@@ -9,7 +9,7 @@
 
 #include "base/defs.h"
 #include "base/vector.h"
-#include "base/colour.h"
+#include "extra/colour.h"
 #include "packed_types.h"
 #include "com.h"
 
@@ -288,6 +288,7 @@ struct DXGI_COMPONENTS {
 	constexpr int			CompSize(int i)	const	{ return GetLayoutInfo().chanbits[i]; }
 	constexpr bool			IsHDR()			const	{ return GetLayoutInfo().hdr; }
 	constexpr bool			IsBlock()		const	{ return GetLayoutInfo().block; }
+	constexpr uint8			NumPlanes()		const	{ return layout == R32G8X24 ? 2 : 1; }	//not true on AMD
 
 	constexpr friend int	Bits(LAYOUT layout)				{ return GetInfo(layout).bits; }
 	constexpr friend int	Bytes(LAYOUT layout)			{ return GetInfo(layout).bits / 8; }
@@ -295,6 +296,7 @@ struct DXGI_COMPONENTS {
 	constexpr friend int	CompSize(LAYOUT layout, int i)	{ return GetInfo(layout).chanbits[i]; }
 	constexpr friend bool	IsHDR(LAYOUT layout)			{ return GetInfo(layout).hdr; }
 	constexpr friend bool	IsBlock(LAYOUT layout)			{ return GetInfo(layout).block; }
+	constexpr friend uint8	NumPlanes(LAYOUT layout)		{ return layout == R32G8X24 ? 2 : 1; }	//not true on AMD
 
 	void	SetChan(int i, CHANNEL c)	{ chans = (chans & ~(7 << (i * 3))) | (c << (i * 3)); }
 };
@@ -343,6 +345,9 @@ inline size_t size3D(DXGI_COMPONENTS fmt, int width, int height, int depth, int 
 	return total;
 }
 
+inline uint32	ByteSize(DXGI_FORMAT format) { return DXGI_COMPONENTS(format).Bytes(); }
+inline uint8	NumPlanes(DXGI_FORMAT format) { return DXGI_COMPONENTS(format).NumPlanes(); } //not true on AMD
+
 //-----------------------------------------------------------------------------
 //	component types
 //-----------------------------------------------------------------------------
@@ -389,9 +394,11 @@ DEFCOMPTYPE(float16[4],			DXGI_FORMAT_R16G16B16A16_FLOAT);
 
 DEFCOMPTYPE(int32,				DXGI_FORMAT_R32_SINT);
 DEFCOMPTYPE(int32[2],			DXGI_FORMAT_R32G32_SINT);
+DEFCOMPTYPE(int32[3],			DXGI_FORMAT_R32G32B32_SINT);
 DEFCOMPTYPE(int32[4],			DXGI_FORMAT_R32G32B32A32_SINT);
 DEFCOMPTYPE(uint32,				DXGI_FORMAT_R32_UINT);
 DEFCOMPTYPE(uint32[2],			DXGI_FORMAT_R32G32_UINT);
+DEFCOMPTYPE(uint32[3],			DXGI_FORMAT_R32G32B32_UINT);
 DEFCOMPTYPE(uint32[4],			DXGI_FORMAT_R32G32B32A32_UINT);
 DEFCOMPTYPE(float,				DXGI_FORMAT_R32_FLOAT);
 DEFCOMPTYPE(float[2],			DXGI_FORMAT_R32G32_FLOAT);
@@ -412,18 +419,15 @@ template<typename T>		struct _ComponentType<rawint<T> >			: _ComponentType<T>			
 template<typename T, int N> struct _ComponentType<rawint<T>[N]>			: _ComponentType<T[N]>		{};
 template<typename V>		struct _ComponentType<V, enable_if_t<is_vec<V>>>	: _ComponentType<element_type<V>[num_elements_v<V>]>		{};
 template<>					struct _ComponentType<rgba8>				: _ComponentType<unorm8[4]> {};
-template<>					struct _ComponentType<float4>				: _ComponentType<float[4]>	{};
+//template<>					struct _ComponentType<float4>				: _ComponentType<float[4]>	{};
 template<>					struct _ComponentType<colour>				: _ComponentType<float[4]>	{};
 
 com_ptr<IDXGIAdapter1>	GetAdapter(int index);
-#ifndef PLAT_XONE
-com_ptr<IDXGIAdapter3>	GetAdapter(LUID id);
-#endif
-
 com_ptr<IDXGIOutput>	FindAdapterOutput(char* name);
 com_ptr<IDXGIOutput>	GetAdapterOutput(int adapter_index, int output_index);
 
 #ifndef PLAT_XONE
+com_ptr<IDXGIAdapter3>	GetAdapter(LUID id);
 com_ptr<IDXGIFactory3>	GetDXGIFactory(IUnknown *device);
 #endif
 

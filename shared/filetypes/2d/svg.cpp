@@ -1,12 +1,15 @@
 #include "iso/iso_files.h"
 #include "iso/iso_convert.h"
-#include "maths/geometry.h"
-#include "vector_iso.h"
+#include "fonts.h"
+#include "extra/xml.h"
+#include "maths/geometry_iso.h"
+#include "codec/base64.h"
 
 using namespace iso;
 
 #define make_rgb(r,g,b)	(r | (g<<8) | (b<<16))
 struct {const char *name; uint32 col; } colours[] = {
+	{ "none",					0xffffffff				},
 	{ "aliceblue",				make_rgb(240, 248, 255)	},
 	{ "antiquewhite",			make_rgb(250, 235, 215)	},
 	{ "aqua",					make_rgb( 0, 255, 255)	},
@@ -156,32 +159,20 @@ struct {const char *name; uint32 col; } colours[] = {
 	{ "yellowgreen",			make_rgb(154, 205, 50)	},
 };
 
-class SVG {
-	ISO::Browser		root;
-	float			width, height;
-
-public:
-	struct line			: array<float2p, 2> { line(const float2 &a, const float2 &b) : array<float2p, 2>(a, b) {} };
-	struct quadratic	: array<float2p, 3> { quadratic(const float2 &a, const float2 &b, const float2 &c) : array<float2p, 3>(a, b, c) {} };
-	struct cubic		: array<float2p, 4> { cubic(const float2 &a, const float2 &b, const float2 &c, const float2 &d) : array<float2p, 4>(a, b,c, d) {} };
-	struct elliptic		{
-		float2p start, end, radii; float angle; uint32 flags;
-		elliptic(const float2 &_start, const float2 &_end, const float2 &_radii, float _angle, uint32 _flags) : angle(_angle), flags(_flags) { start = _start; end = _end; radii = _radii; }
-	};
-
-	SVG(ISO::Browser &b) : root(b) {
-		width = b["width"].GetFloat();
-		height = b["height"].GetFloat();
+uint32 GetColour(const char* s) {
+	if (s) {
+		if (s[0] == '#') {
+			uint32	v;
+			s = get_num_base<16>(s + 1, v);
+			return swap_endian(v) >> 8;
+		}
+		for (auto &i: colours) {
+			if (str(i.name) == s)
+				return i.col;
+		}
 	}
-
-	ISO_ptr<void>	GetPath(const ISO::Browser &b);
-	ISO_ptr<void>	GetGroup(const ISO::Browser &b);
-};
-
-ISO_DEFUSERX(SVG::line,		float2p[2], "line");
-ISO_DEFUSERX(SVG::quadratic,float2p[3], "quadratic");
-ISO_DEFUSERX(SVG::cubic,	float2p[4], "cubic");
-ISO_DEFUSERCOMPXV(SVG::elliptic, "elliptic", start, end, radii, angle, flags);
+	return -1;
+}
 
 float2 get_float2(string_scan &ss) {
 	float	x = ss.get<float>();
@@ -191,35 +182,106 @@ float2 get_float2(string_scan &ss) {
 	return {x, y};
 }
 
-struct PathReader {
-	float2	start;
-	float2	pos;
-	float2	cp;
-	float2 read_float2(string_scan &ss, bool relative) {
-		float2	vec = get_float2(ss);
-		pos = relative ? (pos + vec) : vec;
-		return pos;
+float2x3 GetTransform(const char* s) {
+	string_scan		ss(s);
+	auto	tok	= ss.get_token();
+
+	ss.skip_whitespace().check('(');
+
+	if (tok == "matrix") {
+		return {
+			get_float2(ss),
+			(ss.skip_whitespace().check(','), get_float2(ss)),
+			(ss.skip_whitespace().check(','), get_float2(ss))
+		};
+	} else if (tok == "translate") {
+		return translate(get_float2(ss));
+
+	} else if (tok == "scale") {
+		float	x = ss.get<float>(), y = x;
+		if (ss.skip_whitespace().check(','))
+			y = ss.get<float>();
+		return scale(float2{x, y});
+
+	} else if (tok == "rotate") {
+		float	a = degrees(ss.get<float>());
+		if (ss.skip_whitespace().check(',')) {
+			auto	origin = translate(get_float2(ss));
+			return origin * rotate2D(a) * inverse(origin);
+		}
+		return (float2x3)rotate2D(a);
+
+	} else if (tok == "skewX") {
+		float	a = tan(degrees(ss.get<float>()));
+		return {float2{1, 0}, float2{a, 1}, float2{0, 0}};
+
+	} else if (tok == "skewY") {
+		float	a = tan(degrees(ss.get<float>()));
+		return {float2{1, a}, float2{0, 1}, float2{0, 0}};
 	}
-	operator float2()		const		{ return pos; }
-	float2		get_cp()	const		{ return pos + cp; }
-	void		set_cp(param(float2) v)	{ cp = pos - v; }
-	PathReader() : start(zero), pos(zero), cp(zero)	{}
+	return identity;
+}
+
+Gradient GetGradient(XMLiterator &it) {
+	Gradient	g;
+
+	if (it.data.Is("linearGradient")) {
+		position2	p1	= {it.data["x1"], it.data["y1"]};
+		position2	p2	= {it.data["x2"], it.data["y2"]};
+		g.SetLinear(p1, p2 - p1);
+
+	} else if (it.data.Is("radialGradient")) {
+		circle		c1	= {{it.data["cx"], it.data["cy"]}, it.data["r"]};
+		circle		c0	= {{it.data["fx"], it.data["fy"]}, 0};
+		g.SetRadial(c0, c1);
+	}
+
+	g.Transform(GetTransform(it.data["gradientTransform"]));
+
+	g.spread		= which(1, str(it.data["spreadMethod"]), "pad", "reflect", "repeat");
+	g.user_space	= which(0, str(it.data["gradientUnits"]), "objectBoundingBox", "userSpaceOnUse");
+
+	for (it.Enter(); it.Next();) {
+		if (it.data.Is("stop")) {
+			float	offset	= it.data["offset"];
+			auto	col		= force_cast<rgba8>(GetColour(it.data["stop-color"]));
+			col.w			= (float)it.data["stop-opacity"];;
+			g.stops.emplace_back(offset, col);
+		}
+	}
+	return g;
+}
+
+struct PathReader {
+	float2	base	= zero;
+	float2	prev	= zero;
+	float2	prev2	= zero;
+
+	float2	fix(float2 v) {
+		v		+= base;
+		prev2	= prev;
+		prev	= v;
+		return v;
+	}
+	float2	read_float2(string_scan &ss) {
+		return fix(get_float2(ss));
+	}
+	void	set_base(bool relative)	{ base = relative ? prev : zero; }
+	float2	get_cp()	const		{ return prev - (prev2 - prev); }
 };
 
-
-ISO_ptr<void> SVG::GetPath(const ISO::Browser &b)	{
-	ISO_ptr<anything>	p(b["id"].GetString());
-	string_scan		path(b["d"].GetString());
+ISO_ptr<void> GetPath(tag2 id, const char *s) {
+	ISO_ptr<ISO_openarray_machine<curve_vertex>>	p(id);
+	string_scan		path(s);
 	PathReader		pos;
 
-	bool	relative	= false;
 	char	mode		= 0;
 	bool	closed		= true;
 
 	while (path.skip_whitespace().remaining()) {
 		char c = path.peekc();
 		if (is_alpha(c)) {
-			relative	= is_lower(c);
+			pos.set_base(is_lower(c));
 			mode		= to_upper(c);
 			path.move(1);
 		} else if (c == ',') {
@@ -228,124 +290,179 @@ ISO_ptr<void> SVG::GetPath(const ISO::Browser &b)	{
 		} else {
 			closed = false;
 		}
+
 		switch (mode) {
 			case 'M': {
-				pos.read_float2(path, relative);
-				if (closed)
-					pos.start = pos.pos;
+				float2	v = pos.read_float2(path);
+				p->Append({v, ON_BEGIN});
 				mode	= 'L';
 				break;
 			}
 			case 'Z': {
-				p->Append(ISO::MakePtr(0, SVG::line(pos, pos.start)));
 				closed = true;
 				break;
 			}
 			case 'L': {
-				float2	a = pos;
-				float2	b = pos.read_float2(path, relative);
-				p->Append(ISO::MakePtr(0, SVG::line(a, b)));
+				float2	b = pos.read_float2(path);
+				p->Append({b, ON_CURVE});
 				break;
 			}
 			case 'H': {
-				float2	a = pos;
-				float x = path.get<float>();
-				pos.pos.x += x;
-				p->Append(ISO::MakePtr(0, SVG::line(a, pos)));
+				float	x = path.get<float>();
+				float2	v = {x, pos.prev.y - pos.base.y};
+				p->Append({pos.fix(v), ON_CURVE});
 				break;
 			}
 			case 'V': {
-				float2	a = pos;
-				float y = path.get<float>();
-				pos.pos.y += y;
-				p->Append(ISO::MakePtr(0, SVG::line(a, pos)));
+				float	y = path.get<float>();
+				float2	v = {pos.prev.x - pos.base.x, y};
+				p->Append({pos.fix(v), ON_CURVE});
 				break;
 			}
 			case 'Q': {
-				float2	v0 = pos;
-				float2	v1 = pos.read_float2(path, relative);
-				float2	v2 = pos.read_float2(path, relative);
-				pos.set_cp(v1);
-				p->Append(ISO::MakePtr(0, SVG::quadratic(v0, v1, v2)));
+				float2	v1 = pos.read_float2(path);
+				float2	v2 = pos.read_float2(path);
+				p->Append({v1, OFF_BEZ2});
+				p->Append({v2, ON_CURVE});
 				break;
 			}
 			case 'T': {
-				float2	v0 = pos;
 				float2	v1 = pos.get_cp();
-				float2	v2 = pos.read_float2(path, relative);
-				pos.set_cp(v1);
-				p->Append(ISO::MakePtr(0, SVG::quadratic(v0, v1, v2)));
+				float2	v2 = pos.read_float2(path);
+				p->Append({v1, OFF_BEZ2});
+				p->Append({v2, ON_CURVE});
 				break;
 			}
 			case 'C': {
-				float2	v0 = pos;
-				float2	v1 = pos.read_float2(path, relative);
-				float2	v2 = pos.read_float2(path, relative);
-				float2	v3 = pos.read_float2(path, relative);
-				pos.set_cp(v2);
-				p->Append(ISO::MakePtr(0, SVG::cubic(v0, v1, v2, v3)));
+				float2	v1 = pos.read_float2(path);
+				float2	v2 = pos.read_float2(path);
+				float2	v3 = pos.read_float2(path);
+				p->Append({v1, OFF_BEZ3});
+				p->Append({v2, OFF_BEZ3});
+				p->Append({v3, ON_CURVE});
 				break;
 			}
 			case 'S': {
-				float2	v0 = pos;
 				float2	v1 = pos.get_cp();
-				float2	v2 = pos.read_float2(path, relative);
-				float2	v3 = pos.read_float2(path, relative);
-				pos.set_cp(v2);
-				p->Append(ISO::MakePtr(0, SVG::cubic(v0, v1, v2, v3)));
+				float2	v2 = pos.read_float2(path);
+				float2	v3 = pos.read_float2(path);
+				p->Append({v1, OFF_BEZ3});
+				p->Append({v2, OFF_BEZ3});
+				p->Append({v3, ON_CURVE});
 				break;
 			}
 
 			case 'A': {
-				float2	start	= pos;
+				float2	start	= pos.prev;
 				float2	radii	= get_float2(path);
 				float	angle	= path.get<float>();
 				int		large	= path.get<int>();
 				int		sweep	= path.get<int>();
-				float2	end		= pos.read_float2(path, relative);
-				p->Append(ISO::MakePtr(0, SVG::elliptic(start, end, radii, angle, (large ? 1 : 0) | (sweep ? 2 : 0))));
+				float2	end		= pos.read_float2(path);
+
+				ArcParams	arc(radii, degrees(angle), sweep, large);
+				arc.fix_radii(start, end);
+				float2x2 cp	= arc.control_points(start, end);
+				p->Append({cp.x, OFF_ARC});
+				p->Append({cp.y, OFF_ARC});
+				p->Append({end, ON_CURVE});
 				break;
 			}
 		}
 	}
+
 	return p;
 }
+
 /*
 core attributes:
-id, xml:base, xml:lang and xml:space.
+type, xml:base, xml:lang and xml:space
 
-conditional processing attributes
-are requiredExtensions, requiredFeatures and systemLanguage
+presentation attributes:
+alignment-baseline, baseline-shift, clip, clip-path, clip-rule, color, color-interpolation, color-interpolation-filters, color-profile, color-rendering,
+cursor, direction, display, dominant-baseline, enable-background, fill, fill-opacity, fill-rule, filter, flood-color, flood-opacity,
+font-family, font-size, font-size-adjust, font-stretch, font-style, font-variant, font-weight,
+glyph-orientation-horizontal, glyph-orientation-vertical, image-rendering, kerning, letter-spacing, lighting-color,
+marker-end, marker-mid, marker-start, mask, opacity, overflow, pointer-events, shape-rendering, stop-color, stop-opacity,
+stroke, stroke-dasharray, stroke-dashoffset, stroke-linecap, stroke-linejoin, stroke-miterlimit, stroke-opacity, stroke-width,
+text-anchor, text-decoration, text-rendering, unicode-bidi, visibility, word-spacing, writing-mode
 
-graphical event attributes
-onactivate, onclick, onfocusin, onfocusout, onload, onmousedown, onmousemove, onmouseout, onmouseover and onmouseup.
+conditional processing attributes:
+requiredExtensions, requiredFeatures and systemLanguage
 
-xlink attributes
-xlink:href, xlink:type, xlink:role, xlink:arcrole, xlink:title, xlink:show and xlink:actuate.
+graphical event attributes:
+onactivate, onclick, onfocusin, onfocusout, onload, onmousedown, onmousemove, onmouseout, onmouseover, onmouseup
 
-animation element
-animateColor, animateMotion, animateTransform, animate and set.
+xlink attributes:
+xlink:href, xlink:type, xlink:role, xlink:arcrole, xlink:title, xlink:show, xlink:actuate
+
+animation element:
+animateColor, animateMotion, animateTransform, animate, set
 
 externalResourcesRequired=false|true
 */
 
-ISO_ptr<void> SVG::GetGroup(const ISO::Browser &b)	{
-	ISO_ptr<anything>	p(b["id"].GetString());
+auto GetDef(const ISO_ptr<anything64> &defs, const char *ref) {
+	if (!defs)
+		return ISO_NULL64;
+	auto	i = lower_boundc(*defs, ref, [](const ISO_ptr<void> &a, const char *b) { return a.ID().get_tag() < b; });
+	if (i == defs->end())
+		return ISO_NULL64;
+	return *i;//ISO::Browser(defs)/href;
+}
 
-	for (int i = 0, n = b.Count(); i < n; i++) {
-		tag2	id = b.GetName(i);
-		if (id == "g") {
-			p->Append(GetGroup(*b[i]));
-		} else if (id == "circle") {
-			//cx = "<coordinate>"
-			//cy = "<coordinate>"
-			//r = "<length>"
-		} else if (id == "ellipse") {
-			//cx = "<coordinate>"
-			//cy = "<coordinate>"
-			//rx = "<length>"
-			//ry = "<length>"
-		} else if (id == "image") {
+ISO_ptr<anything64> GetGroup(tag2 id, XMLiterator &it, ISO_ptr<anything64> defs) {
+	ISO_ptr<anything64>	p(id);
+
+	for (it.Enter(); it.Next();) {
+		ISO_ptr<void>	temp;
+		auto	ref	= &temp;
+		tag2	id	= it.data.Find("id");
+
+		if (auto fill = it.data.Find("fill")) {
+			if (fill.begins("url(#")) {
+				string	url		= {fill + 5, string_find(fill + 5, ')')};
+				auto	grad	= GetDef(defs, url);
+				if (!grad)
+					grad = GetDef(p, url);
+				auto	x	= ISO::MakePtr(id, Filled{grad});
+				*ref	= x;
+				ref		= &x->element;
+			} else {
+				auto	col = GetColour(fill);
+				if (~col) {
+					auto x	= ISO::MakePtr(id, Filled{ISO::MakePtr(none, force_cast<rgba8>(col | 0xff000000))});
+					*ref	= x;
+					ref		= &x->element;
+				}
+			}
+		}
+
+		if (auto trans = it.data.Find("transform")) {
+			auto x	= ISO::MakePtr(id, Transformed{GetTransform(trans)});
+			*ref	= x;
+			ref		= &x->element;
+		}
+
+		if (it.data.Is("defs")) {
+			defs = GetGroup(id, it, defs);
+			sort(*defs,[](const ISO_ptr<void> &a, const ISO_ptr<void> &b) { return a.ID().get_tag() < b.ID().get_tag(); });
+
+		} else if (it.data.Is("g")) {
+			auto	data = it.data;
+			*ref = GetGroup(id, it, defs);
+
+		} else if (it.data.Is("path")) {
+			*ref = GetPath(id, it.data.Find("d"));
+
+		} else if (it.data.Is("circle")) {
+			*ref = ISO_ptr<circle>(id, position2(it.data["cx"], it.data["cy"]), it.data["r"]);
+
+		} else if (it.data.Is("ellipse")) {
+			float	rx	= it.data["rx"], ry = it.data["ry"];
+			*ref = ISO_ptr<ellipse>(id, position2(it.data["cx"], it.data["cy"]), float2{rx, 0}, ry / rx);
+
+		//} else if (it.data.Is("image")) {
 			//preserveAspectRatio
 			//transform
 			//x
@@ -353,25 +470,54 @@ ISO_ptr<void> SVG::GetGroup(const ISO::Browser &b)	{
 			//width
 			//height
 			//xlink:href
-		} else if (id == "line") {
-			//x1 = "<coordinate>"
-			//y1 = "<coordinate>"
-			//x2 = "<coordinate>"
-			//y2 = "<coordinate>"
-		} else if (id == "path") {
-			p->Append(GetPath(*b[i]));
-		} else if (id == "polygon") {
-			//points = "<list-of-points>"
-		} else if (id == "polyline") {
-			//points = "<list-of-points>"
-		} else if (id == "rect") {
-			//x = "<coordinate>"
-			//y = "<coordinate>"
-			//width = "<length>"
-			//height = "<length>"
-			//rx = "<length>"
-			//ry = "<length>"
-		} else if (id == "text") {
+		} else if (it.data.Is("line")) {
+			ISO_ptr<ISO_openarray_machine<curve_vertex>>	p2(id);
+			p2->Append({float2{it.data["x1"], it.data["y1"]}, ON_BEGIN});
+			p2->Append({float2{it.data["x2"], it.data["y2"]}, ON_CURVE});
+			*ref = p2;
+
+		} else if (it.data.Is("polygon")) {
+			ISO_ptr<ISO_openarray_machine<curve_vertex>>	p2(id);
+			string_scan		points(it.data.Find("points"));
+			auto			flags	= ON_BEGIN;
+			while (points.skip_whitespace().remaining()) {
+				p2->Append({get_float2(points), flags});
+				flags = ON_CURVE;
+			}
+			*ref = p2;
+
+		} else if (it.data.Is("polyline")) {
+			ISO_ptr<ISO_openarray_machine<curve_vertex>>	p2(id);
+			string_scan		points(it.data.Find("points"));
+			auto			flags	= ON_BEGIN;
+			while (points.skip_whitespace().remaining()) {
+				p2->Append({get_float2(points), flags});
+				flags = ON_CURVE;
+			}
+			*ref = p2;
+
+		} else if (it.data.Is("rect")) {
+			position2	p0		= {it.data["x"], it.data["y"]};
+			float2		size	= {it.data["width"], it.data["height"]};
+			float2		radii	= {it.data["rx"], it.data["ry"]};
+
+			if (all(radii == zero)) {
+				*ref = ISO_ptr<rectangle>(id, p0, p0 + size);
+			} else {
+				ISO_ptr<ISO_openarray_machine<curve_vertex>>	p2(id);
+				p2->Append({p0 + float2{radii.x, 0},				ON_BEGIN});
+				p2->Append({p0 + float2{size.x - radii.x, 0},		ON_CURVE});
+				p2->Append({p0 + float2{size.x, radii.y},			ON_ARC});
+				p2->Append({p0 + float2{size.x, size.y - radii.y},	ON_CURVE});
+				p2->Append({p0 + float2{size.x - radii.x, size.y},	ON_ARC});
+				p2->Append({p0 + float2{radii.x, size.y},			ON_CURVE});
+				p2->Append({p0 + float2{0, size.y - radii.y},		ON_ARC});
+				p2->Append({p0 + float2{0, radii.y},				ON_CURVE});
+				p2->Append({p0 + float2{radii.x, 0},				ON_ARC});
+				*ref = p2;
+			}
+
+		//} else if (it.data.Is("text")) {
 			//x = "<list-of-coordinates>"
 			//y = "<list-of-coordinates>"
 			//dx = "<list-of-lengths>"
@@ -379,10 +525,49 @@ ISO_ptr<void> SVG::GetGroup(const ISO::Browser &b)	{
 			//rotate = "<list-of-numbers>"
 			//textLength = "<length>"
 			//lengthAdjust = "spacing|spacingAndGlyphs"
-		} else if (id == "use") {
-			//x, y, width, height (optional)
+		} else if (it.data.Is("use")) {
+			const char		*href = it.data["xlink:href"];
+			if (href[0] == '#') {
+				*ref = GetDef(defs, href + 1);
+				if (!*ref)
+					*ref = GetDef(p, href + 1);
+			}
+
+		} else if (it.data.Is("linearGradient") || it.data.Is("radialGradient")) {
+			*ref = ISO_ptr<Gradient>(id, GetGradient(it));
+
+		} else if (it.data.Is("filter")) {
+			for (it.Enter(); it.Next();) {
+				if (it.data.Is("feBlend")) {
+				} else if (it.data.Is("feColorMatrix")) {
+				} else if (it.data.Is("feComponentTransfer")) {
+				} else if (it.data.Is("feComposite")) {
+				} else if (it.data.Is("feConvolveMatrix")) {
+				} else if (it.data.Is("feDiffuseLighting")) {
+				} else if (it.data.Is("feDisplacementMap")) {
+				} else if (it.data.Is("feDropShadow")) {
+				} else if (it.data.Is("feFlood")) {
+				} else if (it.data.Is("feGaussianBlur")) {
+				} else if (it.data.Is("feImage")) {
+				} else if (it.data.Is("feMerge")) {
+				} else if (it.data.Is("feMorphology")) {
+				} else if (it.data.Is("feOffset")) {
+				} else if (it.data.Is("feSpecularLighting")) {
+				} else if (it.data.Is("feTile")) {
+				} else if (it.data.Is("feTurbulence")) {
+				}
+			}
+
+		} else if (it.data.Is("image")) {
+			uint32	width	= it.data["width"];
+			uint32	height	= it.data["height"];
+			p->Append(FileHandler::Read(id, (const char*)it.data["xlink:href"]));
+
 		} else {
+			ISO_TRACEF("missing ") << it.data.Name() << '\n';
 		}
+		if (temp)
+			p->Append(temp);
 	}
 	return p;
 }
@@ -391,12 +576,15 @@ class SVGFileHandler : public FileHandler {
 	const char*		GetExt() override { return "svg"; }
 
 	ISO_ptr<void>	Read(tag id, istream_ref file) override {
-		ISO_ptr<void>	p = FileHandler::Get("xml")->Read(id, file);
-		ISO::Browser		b(p);
-		if (b.Count() == 1 && b.GetName() == "svg") {
-			b = *b[0];
-			return SVG(b).GetGroup(b);
-		}
-		return p;
+
+		XMLreader		xml(file);
+		XMLreader::Data	data;
+		XMLiterator		it(xml, data);
+
+		if (!it.Next() || !data.Is("svg"))
+			return ISO_NULL;
+
+		float	width = data["width"], height = data["height"];
+		return GetGroup(id, it, ISO_NULL);
 	}
 } svg;

@@ -352,9 +352,9 @@ const char *to_string(SystemValue x) {
 		case SV_FINAL_TRI_EDGE_TESSFACTOR0:		return "finalTriUeq0EdgeTessFactor";
 		case SV_FINAL_TRI_EDGE_TESSFACTOR1:		return "finalTriVeq0EdgeTessFactor";
 		case SV_FINAL_TRI_EDGE_TESSFACTOR2:		return "finalTriWeq0EdgeTessFactor";
-		case SV_FINAL_TRI_INSIDE_TESSFACTOR:	return "finalTriInsideTessFactor";
-		case SV_FINAL_LINE_DETAIL_TESSFACTOR:	return "finalLineEdgeTessFactor";
-		case SV_FINAL_LINE_DENSITY_TESSFACTOR:	return "finalLineInsideTessFactor";
+		case SV_FINAL_TRI_INSIDE_TESSFACTOR0:	return "finalTriInsideTessFactor";
+		case SV_FINAL_LINE_DETAIL_TESSFACTOR0:	return "finalLineEdgeTessFactor";
+		case SV_FINAL_LINE_DENSITY_TESSFACTOR0:	return "finalLineInsideTessFactor";
 
 		case SV_TARGET:							return "target";
 		case SV_DEPTH:							return "depth";
@@ -709,6 +709,24 @@ int ASMOperand::IndexMulti() const {
 			}
 			return r;
 		}
+	}
+}
+
+int ASMOperand::Mask() const {
+	switch (selection_mode) {
+		default:
+		case Operand::SELECTION_MASK:
+			return swizzle_bits;
+
+		case Operand::SELECTION_SWIZZLE: {
+			uint8	m = 0;
+			for (int bits = swizzle_bits | 0x100; bits != 1; bits >>= 2)
+				m |= 1 << (bits & 3);
+			return m;
+		}
+
+		case Operand::SELECTION_SELECT_1:
+			return 1 << swizzle.x;
 	}
 }
 
@@ -1179,12 +1197,12 @@ class DisassemblerDXBC : public Disassembler {
 public:
 	virtual	const char*	GetDescription() { return "DXBC"; }
 
-	virtual State*		Disassemble(const iso::memory_block &block, uint64 addr, SymbolFinder sym_finder) {
+	virtual State*		Disassemble(const_memory_block block, uint64 addr, SymbolFinder sym_finder) {
 		StateDefault2	*state	= new StateDefault2;
 		uint32			indent	= 0;
 
-		for (uint32 *p = block, *end = (uint32*)block.end(); p < end;) {
-			uint64	addr2 = addr + ((char*)p - block);
+		for (const uint32 *p = block, *end = block.end(); p < end;) {
+			uint64	addr2 = addr + ((const char*)p - block);
 
 			uint64			sym_addr;
 			string_param	sym_name;
@@ -1223,18 +1241,18 @@ public:
 				uint32 dataLength = *p++ - 2;
 
 				ba << "dcl_immediateConstantBuffer \\{";
-				state->lines.push_back(make_pair((const char*)ba, addr2));
+				state->lines.emplace_back(ba, addr2);
 
 				for (uint32 i = 0; i < dataLength / 4; i++) {
 					uint64	addr2 = addr + ((char*)p - block);
 					put_comps(ba.reset().format("%012I64x	%08x ", addr2, p[0]) << repeat(' ', (indent0 + 1) * 2) << "\\{", p, 4) << "\\}";
-					state->lines.push_back(make_pair((const char*)ba, addr2));
+					state->lines.emplace_back(ba, addr2);
 					p += 4;
 				}
 
 				uint64	addr2 = addr + ((char*)p - block);
 				ba.reset().format("%012I64x	%08x ", addr2, p[0]) << repeat(' ', indent0 * 2) << "\\}";
-				state->lines.push_back(make_pair((const char*)ba, addr2));
+				state->lines.emplace_back(ba, addr2);
 				continue;
 
 			} else if (token->IsDeclaration()) {
@@ -1245,7 +1263,7 @@ public:
 
 			}
 
-			state->lines.push_back(make_pair((const char*)ba, addr2));
+			state->lines.emplace_back(ba, addr2);
 			p		+= n;
 		}
 

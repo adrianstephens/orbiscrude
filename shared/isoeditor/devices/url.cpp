@@ -11,7 +11,7 @@ class GetURLDialog : public Dialog<GetURLDialog> {
 	static fixed_string<1024>	url;
 	fixed_string<8>				ext;
 public:
-	LRESULT	Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+	LRESULT	Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 		switch (message) {
 			case WM_INITDIALOG: {
 				Item(IDC_URL).SetText(url);

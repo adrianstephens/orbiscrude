@@ -1,350 +1,12 @@
 #ifndef HOOK_COM_H
 #define HOOK_COM_H
 
-#include "com.h"
-#include "base\hash.h"
-#include "base\functions.h"
-#include "base\algorithm.h"
-#include "base\pointer.h"
-#include "allocators\allocator.h"
-#include "utilities.h"
 #include "hook.h"
-#include "comms/ip.h"
+#include "com.h"
+#include "extra/marshal.h"
 #include <comdef.h>
 
 namespace iso {
-
-class offset_allocator : public allocator<offset_allocator> {
-protected:
-	void	*p;
-	size_t	offset;
-public:
-	offset_allocator(void *_p = 0) : p(_p), offset(0) {}
-	void	init(void *_p)	{ p = _p; offset = 0; }
-	void	*_alloc(size_t size) {
-		if (size == 0)
-			return 0;
-		size_t	t = offset;
-		offset	= t + size;
-		return (uint8*)p + t;
-	}
-	void	*_alloc(size_t size, size_t align) {
-		if (size == 0)
-			return 0;
-		size_t	t = (offset + align - 1) & -intptr_t(align);
-		offset = t + size;
-		return (uint8*)p + t;
-	}
-	size_t	size()	const	{ return offset; }
-};
-
-//collapses
-template<typename A, typename S, typename D = void> struct allocator_plus : public allocator<allocator_plus<A, S, D>> {
-	A			&a;
-	const S		&src;
-	D			&dst;
-	allocator_plus(A &&a, const S &s, D &d) : a(a), src(s), dst(d) {}
-
-	void	*_alloc(size_t size)				const { return a._alloc(size); }
-	void	*_alloc(size_t size, size_t align)	const { return a._alloc(size, align); }
-	A&		operator->()	{ return a; }
-};
-
-template<typename A, typename S> struct allocator_plus<A, S, void> : public allocator<allocator_plus<A, S, void>> {
-	A			&a;
-	const S		&src;
-	allocator_plus(A &&a, const S &s) : a(a), src(s) {}
-
-	void	*_alloc(size_t size)				const { return a._alloc(size); }
-	void	*_alloc(size_t size, size_t align)	const { return a._alloc(size, align); }
-	A&		operator->()	{ return a; }
-};
-
-template<typename A, typename S> allocator_plus<A,S>				make_allocator_plus(A &&a, const S &s)			{ return {a, s}; }
-template<typename A, typename S, typename D> allocator_plus<A,S,D>	make_allocator_plus(A &&a, const S &s, D &d)	{ return {a, s, d}; }
-
-template<typename A, typename S0, typename D0, typename S> allocator_plus<A,S>					make_allocator_plus(allocator_plus<A, S0, D0> &a, const S &s)			{ return {a.a, s}; }
-template<typename A, typename S0, typename D0, typename S, typename D> allocator_plus<A,S,D>	make_allocator_plus(allocator_plus<A, S0, D0> &a, const S &s, D &d)		{ return {a.a, s, d}; }
-
-//doesn't collapse
-template<typename A, typename T> struct lookup_allocator : public A {
-	T		&t;
-	lookup_allocator(T &_t) : t(_t) {}
-	T&		operator->()	{ return t; }
-};
-
-//-------------------------------------
-// counted
-//-------------------------------------
-
-template<typename T1, class A, typename T0> void allocate_n(A &&a, const T0 *t0, int n) {
-	T1		*p	= a.template alloc<T1>(n);
-	for (int i = 0; i < n; i++)
-		allocate(a, t0[i], p);
-}
-
-template<typename T1, class A, typename T0> T1 *transfer_n(A &&a, const T0 *t0, int n) {
-	T1		*p	= a.template alloc<T1>(n);
-	for (int i = 0; i < n; i++)
-		transfer(a, t0[i], unconst(p)[i]);
-	return p;
-}
-
-template<typename T, int I, typename P = T*> struct counted {
-	P		p;
-	counted()					{}
-	counted(T *_p)				{ p = _p; }
-	template<typename P2> counted(const counted<T,I,P2> &_p) { p = _p; }
-	void	operator=(T *_p)	{ p = _p; }
-	operator T*()	const		{ return p; }
-	T*		begin()	const		{ return p; }
-
-	template<class A, typename T1, typename P1> friend void allocate(A &&a, const counted &t0, counted<T1,I,P1>*) {
-		if (t0.begin())
-			allocate_n<T1>(a, t0.begin(), a.src.template get<I>());
-	}
-	template<class A, typename T1, typename P1> friend void transfer(A &&a, const counted &t0, counted<T1,I,P1> &t1) {
-		t1 = t0.begin() ? transfer_n<T1>(a, t0.begin(), a.src.template get<I>()) : 0;
-	}
-};
-template<int I, typename T> counted<T, I, T*> make_counted(T *p) { return p; }
-
-template<template<class> class M, typename T, int I, typename P> struct meta::map<M, counted<T,I,P> > : T_type<counted<map_t<M, T>, I, map_t<M, P>>> {};
-
-//-------------------------------------
-// union_first
-//-------------------------------------
-
-template<typename... T> struct union_first {
-	union_of<T...>	t;
-
-	template<class A, typename... T1> friend void allocate(A &&a, const union_first &t0, union_first<T1...> *t1) {
-		allocate(make_allocator_plus(a, t0.t), t0.t.t, &t1->t.t);
-	}
-	template<class A, typename... T1> friend void transfer(A &&a, const union_first &t0, union_first<T1...> &t1) {
-		transfer(make_allocator_plus(a, t0.t), t0.t.t, t1.t.t);
-	}
-	template<class A, typename... T1> friend size_t size(A &&a, const union_first &t0, const union_first<T1...> *t1) {
-		return size(make_allocator_plus(a, t0.t), t0.t.t, &t1->t.t);
-	}
-	template<class A, typename... T1> friend void pointer_allocate_dup(A &&a, const union_first *t0, const union_first<T1...> *t1) {
-		if (t0)
-			pointer_allocate_dup(make_allocator_plus(a, t0->t), &t0->t.t);
-	}
-	template<class A, typename... T1> auto pointer_transfer_dup(A &&a, const union_first *t0, const union_first<T1...> *t1) {
-		if (t0)
-			return pointer_transfer_dup(make_allocator_plus(a, t0->t), &t0->t.t, &t1->t.t);
-		return nullptr;
-	}
-};
-template<template<class> class M, typename...T> struct meta::map<M, union_first<T...>> : T_type<union_first<map_t<M, T>...>> {};
-
-//-------------------------------------
-// selection
-//-------------------------------------
-
-template<class A, typename...T0, typename...T1> constexpr size_t size_selection(A &&a, const union_of<T0...> &t0, const union_of<T1...> *t1, int i)	{
-	return i == 0 ? size(a, t0.t, &t1->t) : size_selection(a, t0.u, &t1->u, i - 1);
-}
-template<class A, typename T0, typename T1> constexpr size_t size_selection(A &&a, const union_of<T0> &t0, const union_of<T1> *t1, int i) {
-	return size(a, t0.t, &t1->t);
-}
-
-template<class A, typename... T0, typename...T1> void allocate_selection(A &&a, const union_of<T0...> &t0, union_of<T1...> *t1, int i) {
-	if (i == 0)
-		allocate(a, t0.t, &t1->t);
-	else
-		allocate_selection(a, t0.u, &t1->u, i - 1);
-}
-template<class A, typename T0, typename T1> void allocate_selection(A &&a, const union_of<T0> &t0, union_of<T1> *t1, int i) {
-	allocate(a, t0.t, &t1->t);
-}
-
-template<class A, typename... T0, typename...T1> void transfer_selection(A &&a, const union_of<T0...> &t0, union_of<T1...> &t1, int i) {
-	if (i == 0)
-		transfer(a, t0.t, t1.t);
-	else
-		transfer_selection(a, t0.u, t1.u, i - 1);
-}
-template<class A, typename T0, typename T1> void transfer_selection(A &&a, const union_of<T0> &t0, union_of<T1> &t1, int i) {
-	transfer(a, t0.t, t1.t);
-}
-
-template<class A, typename...T0, typename...T1> void pointer_allocate_selection(A &&a, const union_of<T0...> *t0,  const union_of<T1...> *t1, int i) {
-	if (i == 0)
-		pointer_allocate_dup(a, &t0->t, &t1->t);
-	else
-		pointer_allocate_selection(a, &t0->u, &t1->u, i - 1);
-}
-template<class A, typename T0, typename T1> void pointer_allocate_selection(A &&a, const union_of<T0> *t0, const union_of<T1> *t1, int i) {
-	pointer_allocate_dup(a, &t0->t, &t1->t);
-}
-
-template<class A, typename...T0, typename...T1> static void *pointer_transfer_selection(A &&a, const union_of<T0...> *t0,  const union_of<T1...> *t1, int i) {
-	if (i == 0)
-		return pointer_transfer_dup(a, &t0->t, &t1->t);
-	else
-		return pointer_transfer_selection(a, &t0->u, &t1->u, i - 1);
-}
-template<class A, typename T0, typename T1> static void *pointer_transfer_selection(A &&a, const union_of<T0> *t0, const union_of<T1> *t1, int i) {
-	pointer_transfer_dup(a, &t0->t, &t1->t);
-}
-
-template<int I, typename... TT> struct selection {
-	union_of<TT...>	t;
-
-	template<class A, typename...T1> friend void allocate(A &&a, const selection &t0, selection<I, T1...> *t1) {
-		allocate_selection(a, t0.t, &t1->t, a.src.template get<I>());
-	}
-	template<class A, typename...T1> friend void transfer(A &&a, const selection &t0, selection<I, T1...> &t1) {
-		transfer_selection(a, t0.t, t1.t, a.src.template get<I>());
-	}
-	template<class A, typename...T1> friend size_t size(A &&a, const selection &t0, const selection<I, T1...> *t1) {
-		return size_selection(a, t0.t, &t1->t, a.src.template get<I>());
-	}
-	template<class A, typename T0> friend void pointer_allocate_dup(A &&a, const T0 *t0, const selection *t1) {
-		if (t0)
-			pointer_allocate_selection(a, &t0->t, &t1->t, a.src.template get<I>());
-	}
-	template<class A, typename T0> friend auto pointer_transfer_dup(A &&a, const T0 *t0, const selection *t1) {
-		return t0 ? (selection*)pointer_transfer_selection(a, &t0->t, &t1->t, a.src.template get<I>()) : nullptr;
-	}
-
-};
-template<template<class> class M, int I, typename...T> struct meta::map<M, selection<I, T...>> : T_type<selection<I, map_t<M, T>...>> {};
-
-//-------------------------------------
-// next_array
-//-------------------------------------
-
-template<int I, typename T, size_t ALIGN = alignof(T)> struct next_array {
-#if 0
-	template<class A, typename T1> friend void allocate(A &&a, const next_array &t0, next_array<I,T1> *t1) {
-		auto	p0		= make_const(t0.t);
-		auto	end		= (const uint8*)p0 + a.src.template get<I>();
-		size_t	total	= 0;
-
-		while ((const uint8*)p0 < end) {
-			auto	s0	= align(size(a, *p0), ALIGN);
-			total	+= s0;
-			p0		= (const T*)((const uint8*)p0 + s0);
-		}
-		a.alloc(total);
-
-		T1	*p1 = nullptr;
-		for (p0 = make_const(t0.t); (const uint8*)p0 < end;) {
-			allocate(a, *p0, p1);
-			auto	s0	= align(size(a, *p0), ALIGN);
-			p0 = (const T*)((const uint8*)p0 + s0);
-		}
-	}
-	template<class A, typename T1> friend void transfer(A &&a, const next_array &t0, next_array<I,T1> &t1) {
-		auto	p0		= make_const(t0.t);
-		auto	end		= (const uint8*)p0 + a.src.template get<I>();
-		size_t	total	= 0;
-
-		while ((const uint8*)p0 < end) {
-			auto	s0	= align(size(a, *p0), ALIGN);
-			total	+= s0;
-			p0		= (const T*)((const uint8*)p0 + s0);
-		}
-		t1.t = (T1*)a.alloc(total);
-
-		T1	*p1 = t1.t;
-		for (p0 = make_const(t0.t); (const uint8*)p0 < end;) {
-			transfer(a, *p0, *p1);
-			auto	s0	= align(size(a, *p0), ALIGN);
-			auto	s1	= align(size(a, *p1), ALIGN);
-			p0 = (const T*)((const uint8*)p0 + s0);
-			p1 = (T1*)((uint8*)p1 + s1);
-		}
-	}
-#endif
-	template<class A, typename T1> friend void pointer_allocate_dup(A &&a, const next_array *t0, const next_array<I,T1> *t1) {
-		T1*		p1		= nullptr;
-		auto	end		= (const uint8*)t0 + a.src.template get<I>();
-		size_t	total	= 0;
-
-		for (auto p0 = (const T*)t0; (const uint8*)p0 < end;) {
-			auto	s0	= align(size(a, *p0, p0), ALIGN);
-			auto	s1	= align(size(a, *p0, p1), ALIGN);
-			total	+= s1;
-			p0		= (const T*)((const uint8*)p0 + s0);
-		}
-		a.alloc(total);
-
-		for (auto p0 = (const T*)t0; (const uint8*)p0 < end;) {
-			allocate(a, *p0, p1);
-			auto	s0	= align(size(a, *p0, p0), ALIGN);
-			p0 = (const T*)((const uint8*)p0 + s0);
-		}
-	}
-	template<class A, typename T1> friend auto pointer_transfer_dup(A &&a, const next_array *t0, const next_array<I,T1> *t1) {
-		T1*		p1		= nullptr;
-		auto	end		= (const uint8*)t0 + a.src.template get<I>();
-		size_t	total	= 0;
-
-		for (auto p0 = (const T*)t0; (const uint8*)p0 < end;) {
-			auto	s0	= align(size(a, *p0, p0), ALIGN);
-			auto	s1	= align(size(a, *p0, p1), ALIGN);
-			total	+= s1;
-			p0		= (const T*)((const uint8*)p0 + s0);
-		}
-		auto	result = a.alloc(total);
-		a.dst.template get<I>() = total;
-
-		p1 = (T1*)result;
-		for (auto p0 = (const T*)t0; (const uint8*)p0 < end;) {
-			transfer(a, *p0, *p1);
-			auto	s0	= align(size(a, *p0, p0), ALIGN);
-			auto	s1	= align(size(a, *p0, p1), ALIGN);
-			p0 = (const T*)((const uint8*)p0 + s0);
-			p1 = (T1*)((uint8*)p1 + s1);
-		}
-		return (next_array<I,T1>*)result;
-	}
-};
-template<template<class> class M, int I, typename T> struct meta::map<M, next_array<I, T>> : T_type<next_array<I, map_t<M, T>>> {};
-
-//-----------------------------------------------------------------------------
-//	Recording
-//-----------------------------------------------------------------------------
-
-template<typename T>		using rel_ptr		= soft_pointer<T, base_relative<uint32> >; 
-template<typename T, int I> using rel_counted	= counted<T, I, rel_ptr<T> >; 
-
-template<typename T> struct dup_pointer {
-	T	t;
-};
-
-template<typename T> struct lookup {
-	T		t;
-};
-template<typename T> struct lookedup {
-	T		t;
-	void	operator=(const T _t) { t = _t; }
-	operator T() const { return t; }
-};
-struct handle {
-	void	*p;
-	handle(void *_p = INVALID_HANDLE_VALUE) : p(_p) {}
-	bool	valid()		const	{ return p != INVALID_HANDLE_VALUE; }
-	operator void*()	const	{ return p; }
-};
-
-template<typename T> struct unwrapped {
-	T		t;
-	void	operator=(const T _t);
-};
-
-struct const_memory_block_rel {
-	rel_ptr<const void>	start;
-	uint32			size;
-	void	init(const void *p, uint32 _size)	{ start = p; size = _size; }
-	operator const_memory_block()	const		{ return const_memory_block(start, size); }
-};
-
-template<int I> counted<uint8, I> make_memory_block(const void *p) { return (uint8*)p; }
 
 //-----------------------------------------------------------------------------
 //	FM - fix for call to original functions
@@ -353,11 +15,11 @@ template<int I> counted<uint8, I> make_memory_block(const void *p) { return (uin
 template<typename T>		struct FM						: T_type<T> {};
 template<typename T>		struct FM<T&>					: T_type<T> {};
 template<typename T>		struct FM<T*>					: T_if<is_com<T>::value, unwrapped<T*>, typename FM<T>::type*> {};
-//template<typename T>		struct FM<T**>					: T_type<T**> {};
-//template<typename T>		struct FM<T* const*>			: T_type<const typename FM<T*>::type*> {};
+template<typename T>		struct FM<T**>					: T_type<T**> {};
+template<typename T>		struct FM<T* const*>			: T_type<const typename FM<T*>::type*> {};
 template<typename T, int I> struct FM<counted<T, I, T*> >	: T_type<counted<map_t<iso::FM, T>, I>> {};
 
-template<typename T>		struct meta::map<FM, T**>		: T_type<T**> {};
+//template<typename T>		struct meta::map<FM, T**>		: T_type<T**> {};
 
 //-----------------------------------------------------------------------------
 //	RTM - convert to recorded format
@@ -371,6 +33,9 @@ template<>					struct RTM<void*>				: T_type<void*> {};
 template<>					struct RTM<const void*>			: T_type<const void*> {};
 template<typename T, int I> struct RTM<counted<T, I, T*> >	: T_type<rel_counted<map_t<iso::RTM, T>, I>> {};
 template<>					struct RTM<const_memory_block>	: T_type<const_memory_block_rel> {};
+template<>					struct RTM<malloc_block>		: T_type<const_memory_block_rel> {};
+
+template<typename K, typename V> struct RTM<hash_map<K, V>>	: T_type<flat_hash<hash_t<K>, map_t<iso::RTM, V>>> {};
 
 //-----------------------------------------------------------------------------
 //	KM - as RTM, but dup strings
@@ -383,8 +48,11 @@ template<typename T>		struct KM<const T*>				: T_if<is_com<T>::value, const T*,	
 template<>					struct KM<void*>				: T_type<void*> {};
 template<>					struct KM<const void*>			: T_type<const void*> {};
 template<>					struct KM<const char*>			: T_type<dup_pointer<rel_ptr<const char> >>	{};
+template<>					struct KM<const char16*>		: T_type<dup_pointer<rel_ptr<const char16>>>{};
 template<typename T, int I> struct KM<counted<T, I, T*> >	: T_type<rel_counted<map_t<iso::KM, T>, I>>	{};
 template<>					struct KM<const_memory_block>	: T_type<const_memory_block_rel>			{};
+
+template<typename K, typename V> struct KM<hash_map<K, V>>	: T_type<flat_hash<hash_t<K>, map_t<iso::KM, V>>> {};
 
 //-----------------------------------------------------------------------------
 //	PM - convert to playback format
@@ -401,242 +69,26 @@ template<typename T>		struct PM<lookedup<T> >			: T_type<lookup<T>> {};
 template<>					struct meta::map<PM, void**>	: T_type<rel_ptr<void*>> {};
 
 //-----------------------------------------------------------------------------
-//	allocate
-//-----------------------------------------------------------------------------
-
-template<class A, typename T0, typename T1>	size_t size(A &&a, const T0 &t0, const T1 *t1)		{ return sizeof(T1); }
-template<class A, typename T0, typename T1>	void allocate(A &&a, const T0 &t0, T1 *t1)			{}
-template<class A, typename T0, typename T1>	void allocate(A &&a, const T0 &t0, const T1 *t1)	{ allocate(a, t0, const_cast<T1*>(t1)); }
-
-//-------------------------------------
-//	pointers
-//-------------------------------------
-
-template<class A, typename T0, typename T1> void pointer_allocate_dup(A &&a, const T0 *t0, const T1 *t1) {
-	if (t0)
-		iso::allocate(a, *t0, unconst(a.template alloc<T1>()));
-}
-template<class A> void pointer_allocate_dup(A &&a, const char *t0, const char *t1) {
-	a.template alloc<char>(string_len(t0) + 1);
-}
-
-template<class A, typename T0, typename T1> void pointer_allocate(A &&a, const T0* t0, const T1* t1) {
-	pointer_allocate_dup(a, t0, t1);
-}
-
-template<class A, typename T> void pointer_allocate(A &&a, const T* t0, const T* t1) {}	//keep unchanged pointers (to point into original data)
-
-template<class A, typename T0, typename T1>					void allocate(A &&a, T0 *const t0, T1**)								{ pointer_allocate(a, (const T0*)t0, (const T1*)0); }
-template<class A, typename T0, typename B0, typename T1>	void allocate(A &&a, const soft_pointer<T0,B0> &t0, T1**)				{ pointer_allocate(a, (const T0*)t0, (const T1*)0); }
-template<class A, typename T0, typename T1, typename B1>	void allocate(A &&a, T0 *const t0, soft_pointer<T1,B1>*)				{ pointer_allocate_dup(a, (const T0*)t0, (const T1*)0); }
-template<class A, typename T0, typename T1>					void allocate(A &&a, const dup_pointer<T0*> &t0, T1**)					{ pointer_allocate_dup(a, (const T0*)t0.t, (const T1*)0); }
-template<class A, typename T0, typename B0, typename T1>	void allocate(A &&a, const dup_pointer<soft_pointer<T0,B0> > &t0, T1**)	{ pointer_allocate_dup(a, (const T0*)t0.t, (const T1*)0); }
-
-
-template<class A, typename T0, typename T1> void allocate(A &&a, const T0 &t0, TL_tuple<T1> *t1) {
-	return allocate(a, (TL_tuple<TL_fields_t<T0>>&)t0, t1);
-}
-template<class A, typename T0, typename T1> void allocate(A &&a, const TL_tuple<T0> &t0, T1 *t1) {
-	return allocate(a, t0, (TL_tuple<TL_fields_t<T1>>*)t1);
-}
-template<class A, typename T0, typename T1> void allocate(A &&a, const TL_tuple<T0> &t0, const T1 *t1) {
-	return allocate(a, t0, (TL_tuple<TL_fields_t<T1>>*)t1);
-}
-
-template<class A> void allocate(A &&a, const TL_tuple<type_list<> > &t, TL_tuple<type_list<> >*) {}
-
-template<class A, typename T0, typename T1, size_t... II>	void allocate_tuple(A &&a, const TL_tuple<T0> &t, TL_tuple<T1> *p, index_list<II...>) {
-	bool	dummy[] = {(allocate(a, t.template get<II>(), &p->template get<II>()), true)...};
-}
-template<class A, typename T0, typename T1>	void allocate(A &&a, const TL_tuple<T0> &t0, TL_tuple<T1> *t1) {
-	allocate_tuple(make_allocator_plus(a, t0), t0, t1, meta::TL_make_index_list<T0>());
-}
-template<class A, typename T0, typename TL0, typename T1, typename TL1> void allocate(A &&a, const as_tuple<T0,TL0> &t0, as_tuple<T1,TL1> *t1) {
-	allocate_tuple(make_allocator_plus(a, t0), (const TL_tuple<TL0>&)t0, (TL_tuple<TL1>*)t1, meta::TL_make_index_list<TL0>());
-}
-
-template<class A, typename T0, typename T1, typename TL1> void allocate(A &&a, const T0 &t0, as_tuple<T1,TL1> *t1) {
-	return allocate(a, (as_tuple<T0>&)t0, t1);
-}
-template<class A, typename T0, typename TL0, typename T1> void allocate(A &&a, const as_tuple<T0,TL0> &t0, T1 *t1) {
-	return allocate(a, t0, (as_tuple<T1>*)t1);
-}
-template<class A, typename T0, typename TL0, typename T1> void allocate(A &&a, const as_tuple<T0,TL0> &t0, const T1 *t1) {
-	return allocate(a, t0, (as_tuple<T1>*)t1);
-}
-
-template<class A>	void allocate(A &&a, const const_memory_block &t, const_memory_block_rel*) {
-	a.alloc(t.size32());
-}
-
-//-----------------------------------------------------------------------------
-//	transfer
-//-----------------------------------------------------------------------------
-
-template<class A, typename T0, typename T1>	void transfer(A &&a, const T0 &t0, T1 &t1)	{
-	t1 = t0;
-}
-template<class A, typename T0, typename T1>	void transfer(A &&a, const T0 &t0, const T1 &t1)	{
-	transfer(a, t0, const_cast<T1&>(t1));
-}
-template<class A, typename T0, typename T1, int N>	void transfer(A &&a, const T0 (&t0)[N], T1 *t1) {
-	for (int i = 0; i < N; i++)
-		transfer(a, t0[i], t1[i]);
-}
-template<class A, typename T, int N>	void transfer(A &&a, const as_tuple<T> (&t0)[N], as_tuple<T> *t1) {
-	for (int i = 0; i < N; i++)
-		transfer(a, t0[i], t1[i]);
-}
-template<class A, typename T, int N>	void transfer(A &&a, const T (&t0)[N], T *t1) {
-	for (int i = 0; i < N; i++)
-		t1[i] = t0[i];
-}
-template<class A, typename T0, typename T1>	void transfer(A &&a, const lookup<T0> &t0, T1 &t1) {
-	t1 = a->lookup(t0.t);
-}
-
-//-------------------------------------
-//	pointers
-//-------------------------------------
-
-template<class A, typename T0, typename T1> T1 *pointer_transfer_dup(A &&a, const T0 *t0, const T1 *t1) {
-	if (t0) {
-		T1	*p	= a.template alloc<T1>();
-		iso::transfer(a, *t0, *unconst(p));
-		return p;
-	}
-	return 0;
-}
-
-template<class A> const char *pointer_transfer_dup(A &&a, const char *t0, const char *t1) {
-	if (size_t len = string_len(t0)) {
-		char	*p	= a.template alloc<char>(len + 1);
-		memcpy(p, t0, len + 1);
-		return p;
-	}
-	return nullptr;
-}
-
-template<class A, typename T0, typename T1> auto pointer_transfer(A &&a, const T0* t0, const T1* t1) {
-	return pointer_transfer_dup(a, t0, t1);
-}
-
-template<class A, typename T> auto pointer_transfer(A &&a, const T* t0, const T* t1) { return unconst(t0); }	//keep unchanged pointers (to point into original data)
-
-template<class A, typename T0, typename T1>					void transfer(A &&a, T0 *const t0, T1 *&t1)									{ t1 = pointer_transfer(a, (const T0*)t0, (const T1*)0);}
-template<class A, typename T0, typename B0, typename T1>	void transfer(A &&a, const soft_pointer<T0,B0> &t0, T1 *&t1)				{ t1 = pointer_transfer(a, (const T0*)t0, (const T1*)0);}
-template<class A, typename T0, typename T1, typename B1>	void transfer(A &&a, T0 *const t0, soft_pointer<T1,B1> &t1)					{ t1 = pointer_transfer_dup(a, (const T0*)t0, (const T1*)0);}
-template<class A, typename T0, typename T1>					void transfer(A &&a, const dup_pointer<T0*> &t0, T1 *&t1)					{ t1 = pointer_transfer_dup(a, (const T0*)t0.t, (const T1*)0);}
-template<class A, typename T0, typename B0, typename T1>	void transfer(A &&a, const dup_pointer<soft_pointer<T0,B0> > &t0, T1 *&t1)	{ t1 = pointer_transfer_dup(a, (const T0*)t0.t, (const T1*)0);}
-
-template<class A, typename T0, typename T1> void transfer(A &&a, const T0 &t0, TL_tuple<T1> &t1) {
-	return transfer(a, (TL_tuple<TL_fields_t<T0>>&)t0, t1);
-}
-template<class A, typename T0, typename T1> void transfer(A &&a, const TL_tuple<T0> &t0, T1 &t1) {
-	return transfer(a, t0, (TL_tuple<TL_fields_t<T1>>&)t1);
-}
-template<class A, typename T0, typename T1> void transfer(A &&a, const TL_tuple<T0> &t0, const T1 &t1) {
-	return transfer(a, t0, (TL_tuple<TL_fields_t<T1>>&)t1);
-}
-
-template<class A, typename T0, typename T1, size_t... II> void transfer_tuple(A &&a, const TL_tuple<T0> &t0, TL_tuple<T1> &t1, index_list<II...>) {
-	bool	dummy[] = {(transfer(a, t0.template get<II>(), t1.template get<II>()), true)...};
-}
-template<class A> void transfer(A &&a, const TL_tuple<type_list<> > &t0, TL_tuple<type_list<> > &t1)	{}
-
-template<class A, typename T0, typename T1> void transfer(A &&a, const TL_tuple<T0> &t0, TL_tuple<T1> &t1) {
-	transfer_tuple(make_allocator_plus(a, t0, t1), t0, t1, meta::TL_make_index_list<T0>());
-}
-template<class A, typename T0, typename TL0, typename T1, typename TL1> void transfer(A &&a, const as_tuple<T0,TL0> &t0, as_tuple<T1,TL1> &t1) {
-	transfer_tuple(make_allocator_plus(a, t0, t1), (const TL_tuple<TL0>&)t0, (TL_tuple<TL1>&)t1, meta::TL_make_index_list<TL0>());
-}
-
-template<class A, typename T0, typename T1, typename TL1> void transfer(A &&a, const T0 &t0, as_tuple<T1,TL1> &t1) {
-	return transfer(a, (as_tuple<T0>&)t0, t1);
-}
-template<class A, typename T0, typename TL0, typename T1> void transfer(A &&a, const as_tuple<T0,TL0> &t0, T1 &t1) {
-	return transfer(a, t0, (as_tuple<T1>&)t1);
-}
-template<class A, typename T0, typename TL0, typename T1> void transfer(A &&a, const as_tuple<T0,TL0> &t0, const T1 &t1) {
-	return transfer(a, t0, (as_tuple<T1>&)t1);
-}
-
-template<class A>	void transfer(A &&a, const const_memory_block &t0, const_memory_block_rel &t1) {
-	uint32	size	= t0.size32();
-	void	*p		= a.alloc(t0.size32());
-	memcpy(p, t0, size);
-	t1.init(p, size);
-}
-
-//-----------------------------------------------------------------------------
-//	flatten_struct
-//-----------------------------------------------------------------------------
-
-template<template<class> class M, typename T> malloc_block map_struct(const T &t) {
-	typedef	map_t<M, T>	T1;
-	offset_allocator	a;
-
-	allocate(a, t, a.alloc<T1>());
-	malloc_block	m(a.size());
-	a.init(m);
-	T1	*t1	= a.alloc<T1>();
-	transfer(a, t, *t1);
-
-	ISO_ASSERT(a.size() == m.length());
-	return m;
-}
-template<template<class> class M, typename T> unique_ptr<map_t<M, T>> map_unique(const T &t) {
-	return map_struct<M>(t);
-}
-
-
-template<template<class> class M, typename T> malloc_block rmap_struct(const void *p) {
-	typedef	map_t<M, T>	T1;
-	offset_allocator	a;
-	T1&					t1 = *(T1*)p;
-
-	allocate(a, t1, a.alloc<T>());
-	malloc_block	m(a.size());
-	a.init(m);
-	T	*t	= a.alloc<T>();
-	transfer(a, t1, *t);
-
-	ISO_ASSERT(a.size() == m.length());
-	return m;
-}
-template<template<class> class M, typename T> unique_ptr<T> rmap_unique(const void *p) {
-	return rmap_struct<M, T>(p);
-}
-
-template<template<class> class M, typename... P> malloc_block save_params(const P&... p) {
-	return map_struct<M>(tuple<P...>(p...));
-}
-
-template<template<class> class M, typename F> void get_params(const void *p, F f) {
-	call(f, *(TL_tuple<map_t<M, typename function<F>::P>>*)p);
-}
-
-//-----------------------------------------------------------------------------
 //	COMParse
 //-----------------------------------------------------------------------------
 
-template<typename F> static typename function<F>::R COMParse(const void *p, F f) {
+template<typename F> static typename function<F>::R COMParse(const uint16 *p, F f) {
 	return call<0>(f, *(TL_tuple<map_t<RTM, typename function<F>::P>>*)p);
 }
 
-template<typename F> static typename function<F>::R COMParse2(const void *p, F f) {
-
+template<typename F> static typename function<F>::R COMParse2(const uint16 *p, F f) {
 	typedef TL_tuple<typename function<F>::P>	T0;
 	typedef	map_t<RTM, T0>		T1;
 
-	T1&					t1 = *(T1*)p;
-	
 	offset_allocator	a;
+
+	T1&	t1 = *(T1*)p;
 	allocate(a, t1, a.alloc<T0>());
 
 	size_t	size = a.size();
 	a.init(alloca(size));
-	T0	*t0	= a.alloc<T0>();
+
+	T0*	t0	= a.alloc<T0>();
 	transfer(a, t1, *t0);
 	ISO_ASSERT(a.size() == size);
 
@@ -663,7 +115,10 @@ template<>	struct COMcall<HRESULT> {
 };
 
 template<typename B> struct COMReplay {
-	bool						abort;
+	bool	abort;
+	bool	always = false;
+
+	auto&	Always()	{ always = true; return *this; }
 
 	template<typename T> unique_ptr<T> Remap(const void *p) {
 		typedef	TL_fields_t<T>		RTL0;
@@ -688,7 +143,7 @@ template<typename B> struct COMReplay {
 
 	template<typename F1, typename C, typename F2, typename C2> void Replay2(C2 *obj, const void *p, F2 C::*f) {
 		typedef	typename function<F1>::P	P;
-		typedef	typename T_noref<P>::type	RTL0;
+		typedef	noref_t<P>		RTL0;
 		typedef map_t<PM, P>	RTL1;
 
 		abort = false;
@@ -702,8 +157,9 @@ template<typename B> struct COMReplay {
 		transfer(a, *t0, *t1);
 
 		ISO_ASSERT(a.size() == size);
-		if (!abort)
+		if (always || !abort)
 			COMcall<typename function<F2>::R>::call(*static_cast<C*>(obj), f, *t1);
+		always = false;
 	}
 	template<typename F1, typename C, typename F2, typename C2> void Replay2(const com_ptr<C2> &obj, const void *p, F2 C::*f) {
 		Replay2<F1>(obj.get(), p, f);
@@ -718,8 +174,8 @@ template<typename B> struct COMReplay {
 	template<typename F> void Replay(const void *p, F f) {
 		abort = false;
 		typedef	typename function<F>::P		P;
-		typedef	typename T_noref<P>::type	RTL0;
-		typedef map_t<PM, P>	RTL1;
+		typedef	noref_t<P>		RTL0;
+		typedef map_t<PM, RTL0>	RTL1;
 
 		lookup_allocator<offset_allocator, B>	a(*static_cast<B*>(this));
 		auto	*t0		= (TL_tuple<RTL1>*)p;
@@ -731,8 +187,9 @@ template<typename B> struct COMReplay {
 		transfer(a, *t0, *t1);
 
 		ISO_ASSERT(a.size() == size);
-		if (!abort)
+		if (always || !abort)
 			call(f, *t1);
+		always = false;
 	}
 
 };
@@ -911,7 +368,7 @@ struct memory_cube {
 
 };
 
-
+/*
 template<typename F, typename W, typename... P> typename function<F>::R COMRun(W *wrap, F f, P... p) {
 	return (wrap->orig->*f)(p...);
 }
@@ -932,11 +389,12 @@ template<typename F, typename W, typename... P> typename function<F>::R COMRun2(
 
 	return call(*wrap->orig, f, *(TL_tuple<TL0>*)t1);
 }
-
+*/
 struct COMRecording {
 	malloc_block	recording;
 	size_t			total;
 	bool			enable;
+	Mutex			recording_mutex;
 
 	class header {
 		uint16			size;
@@ -948,8 +406,8 @@ struct COMRecording {
 				(&id)[1] = uint16(_size >> 16);
 			}
 		}
-		void				*data()			{ return &id + 1 + (size & 1); }
-		const void			*data()	const	{ return &id + 1 + (size & 1); }
+		uint16				*data()			{ return &id + 1 + (size & 1); }
+		const uint16		*data()	const	{ return &id + 1 + (size & 1); }
 		const_memory_block	block()	const	{ return const_memory_block(data(), next()); }
 		const header		*next()	const	{ return (header*)((uint8*)this + (size & 1 ? ((&id)[1] << 16) | (size - 1) : size)); }
 	};
@@ -973,11 +431,17 @@ struct COMRecording {
 
 		header	*p	= new((uint8*)recording + total) header(id, size);
 		total		+= size;
+
 		return p->data();
 	}
-	void add(uint16 id, size_t size, const void *p)			{ memcpy(get_space(id, size), p, size); }
-	template<typename T> void add(uint16 id, const T &t)	{ add(id, sizeof(T), &t); }
-
+	void add(uint16 id, size_t size, const void *p) {
+		with(recording_mutex),
+			memcpy(get_space(id, size), p, size);
+	}
+	template<typename T> void add(uint16 id, const T &t) {
+		add(id, sizeof(T), &t);
+	}
+	
 	COMRecording() : total(0), enable(false) {}
 	
 	void Reset() {
@@ -985,15 +449,18 @@ struct COMRecording {
 	}
 
 	void Record(uint16 id) {
-		get_space(id, 0);
+		with(recording_mutex),
+			get_space(id, 0);
 	}
 
 	void Record(uint16 id, const const_memory_block &t) {
-		t.copy_to(get_space(id, t.length()));
+		with(recording_mutex),
+			t.copy_to(get_space(id, t.length()));
 	}
 
 	void Record(uint16 id, const memory_cube &t) {
-		t.copy_to(get_space(id, t.size()));
+		with(recording_mutex),
+			t.copy_to(get_space(id, t.size()));
 	}
 
 	// record single item (usually a tuple)
@@ -1004,8 +471,10 @@ struct COMRecording {
 		allocate(a, t0, a.alloc<T1>());
 
 		size_t	size	= a.size();
-		a.init(get_space(id, align(size, 4)));
-		transfer(a, t0, *a.alloc<T1>());
+		with_lambda(recording_mutex, [&]() {
+			a.init(get_space(id, align(size, 4)));
+			transfer(a, t0, *a.alloc<T1>());
+		});
 		ISO_ASSERT(a.size() == size);
 	}
 
@@ -1029,7 +498,7 @@ struct COMRecording {
 			return r;
 		}
 		template<typename F, typename W, typename T, typename T0, typename T1, typename...P> static R fwrap(COMRecording *rec, W *wrap, F f, int id, T **pp, T0 &t0, T1 &t1, P... p) {
-			R	r = com_wrap_system->make_wrap(call(*wrap->orig, f, t1), pp, wrap, p...);
+			R	r = com_wrap_system->make_wrap_check(call(*wrap->orig, f, t1), pp, wrap, p...);
 			if (rec)
 				rec->Record(uint16(id), t0);
 			return r;
@@ -1050,7 +519,7 @@ struct COMRecording {
 		template<typename F, typename W, typename T, typename T0, typename T1, typename...P> static void fwrap(COMRecording *rec, W *wrap, F f, int id, T **pp, T0 &t0, T1 &t1, P... p) {
 			call(*wrap->orig, f, t1);
 			if (pp)
-				*pp = com_wrap_system->make_wrap(*pp, wrap, p...);
+				*pp = com_wrap_system->make_wrap_check(*pp, wrap, p...);
 			if (rec)
 				rec->Record(uint16(id), t0);
 		}
@@ -1060,7 +529,7 @@ struct COMRecording {
 	template<typename F, typename W, typename... P> typename function<F>::R RunRecord(W *wrap, F f, int id, P... p) {
 		return RunRecord_s<typename function<F>::R>::f(enable ? this : nullptr, wrap, f, id, p...);
 	}
-
+	/*
 	// fix parameters and run function
 	template<typename F, typename W, typename... P> typename function<F>::R Run2(W *wrap, F f, P... p) {
 		typedef type_list<P...>						TL0;
@@ -1078,7 +547,7 @@ struct COMRecording {
 
 		return call(*wrap->orig, f, *(TL_tuple<TL0>*)t1);
 	}
-
+	*/
 	// fix parameters, run function, and record
 	template<typename F, typename W, typename... P> typename function<F>::R RunRecord2(W *wrap, F f, int id, P... p) {
 		typedef type_list<P...>						TL0;
@@ -1133,10 +602,31 @@ struct COMRecording {
 		return RunRecord_s<typename function<F>::R>::fwrap(enable ? this : nullptr, wrap, f, id, pp, t0, *(TL_tuple<TL0>*)t1, p...);
 	}
 
-	COMRecording& WithObject(const void *p, uint16 id = -1) {
-		if (enable)
-			*(const void**)get_space(id, sizeof(p)) = p;
-		return *this;
+	struct SafeRecorder {
+		COMRecording*	rec;
+		bool			enable;
+		SafeRecorder(COMRecording *rec) : rec(rec), enable(rec->enable) {
+			if (enable)
+				rec->recording_mutex.lock();
+		}
+		~SafeRecorder() {
+			if (enable)
+				rec->recording_mutex.unlock();
+		}
+		explicit		operator bool() const { return enable; }
+		COMRecording*	operator->()	const { return rec; }
+
+		SafeRecorder& Add(uint16 id, size_t size, const void *p) {
+			memcpy(rec->get_space(id, size), p, size);
+			return *this;
+		}
+		template<typename T> SafeRecorder& Add(uint16 id, const T &t) {
+			return Add(id, sizeof(T), &t);
+		}
+
+	};
+	SafeRecorder Safe() {
+		return this;
 	}
 };
 
@@ -1168,7 +658,7 @@ template<class I> inline void block_shuffle_down(I a, I b) {
 }
 
 template<class I> inline void block_shuffle_up(I a, I b) {
-	++a;
+	--b;
 	while (a != b) {
 		I	b0	= b;
 		swap(*b0, *--b);
@@ -1238,57 +728,72 @@ struct _com_wrap_system {
 	//---------------------------------
 	// make_wrap:
 	//---------------------------------
-	template<typename T> Wrap<T>	*_make_wrap(T *p) {
+
+	template<typename T> Wrap<T>	*_make_wrap_nocheck(T *p) {
 		ISO_ASSERT(p);
 		auto *w		= new Wrap<T>;
 		w->orig		= p;
-		//p->AddRef();
 		to_wrap[p]	= w;
 		return w;
 	}
-	//template<typename T> Wrap<T>	*make_wrap_orphan(T *p) {
-	//	ISO_ASSERT(p);
-	//	auto *w		= _make_wrap(p);
-	//	w->init_orphan();
-	//	return w;
-	//}
+	template<typename T> Wrap<T>	*_make_wrap(T *p) {
+		ISO_ASSERT(p);
+		ISO_ASSERT(!to_wrap[p].exists());
+		auto *w		= new Wrap<T>;
+		w->orig		= p;
+		to_wrap[p]	= w;
+		return w;
+	}
 
 	template<typename T> auto	*make_wrap(T *p) {
 		return _make_wrap(GetWrappable(p));
 	}
 	template<typename T, typename... X> auto *make_wrap(T *p, const X&... x) {
-		if (auto *w = find_wrap_check(GetWrappable(p))) {
-			//++w->refs;	//make sure
+		auto	*w = make_wrap(p);
+		w->init(x...);
+		return w;
+	}
+	template<typename T> auto *make_wrap_check(T *p) {
+		if (auto *w = find_wrap_check(p))
 			return w;
-		}
-		auto	*w = _make_wrap(GetWrappable(p));
+		return make_wrap(p);
+	}
+	template<typename T, typename... X> auto *make_wrap_check(T *p, const X&... x) {
+		auto *w = make_wrap_check(p);
+		w->init(x...);
+		return w;
+	}
+	template<typename T> auto *make_wrap_always(T *p) {
+		return _make_wrap_nocheck(GetWrappable(p));
+	}
+	template<typename T, typename... X> auto *make_wrap_always(T *p, const X&... x) {
+		auto *w = make_wrap_always(p);
 		w->init(x...);
 		return w;
 	}
 
-	
 	// pass through HRESULT
 	template<typename T, typename... X> HRESULT make_wrap(HRESULT h, T **pp, const X&... x) {
 		if (h == S_OK)
 			*pp = make_wrap(*pp, x...);
 		return h;
 	}
+	template<typename T, typename... X> HRESULT make_wrap_check(HRESULT h, T **pp, const X&... x) {
+		if (h == S_OK)
+			*pp = make_wrap_check(*pp, x...);
+		return h;
+	}
 
 	// need QueryInterface
-	template<typename T, typename T0> HRESULT make_wrap_qi(HRESULT h, T0 **pp) {
+	template<typename T, typename T0, typename... X> HRESULT make_wrap_qi(HRESULT h, T0 **pp, const X&... x) {
 		if (h == S_OK) {
 			T	*t;
 			h = (*pp)->QueryInterface(__uuidof(T), (void**)&t);
 			if (SUCCEEDED(h)) {
 				(*pp)->Release();
-				*pp = make_wrap(t);
+				*pp = make_wrap_always(t, x...);
 			}
 		}
-		return h;
-	}
-	template<typename T, typename T0, typename... X> HRESULT make_wrap_qi(HRESULT h, T0 **pp, const X&... x) {
-		if ((h = make_wrap_qi<T>(h, pp)) == S_OK)
-			static_cast<Wrap<T>*>(*pp)->init(x...);
 		return h;
 	}
 	
@@ -1317,11 +822,14 @@ struct _com_wrap_system {
 	template<typename T> auto		*find_wrap_carefully(T *p) {
 		return p ? _find_wrap_carefully(GetWrappable(p)) : 0;
 	}
-	template<typename T> Wrap<T>	*find_wrap_check(T *p) {
+	template<typename T> Wrap<T>	*_find_wrap_check(T *p) {
 		auto w = to_wrap[p];
 		if (w.exists())
 			return static_cast<Wrap<T>*>(w.or_default());
 		return 0;
+	}
+	template<typename T> auto		*find_wrap_check(T *p) {
+		return _find_wrap_check(GetWrappable(p));
 	}
 
 	//---------------------------------
@@ -1346,7 +854,7 @@ struct _com_wrap_system {
 	}
 	template<typename T> void rewrap_carefully(T **pp) {
 		if (pp && (*pp = find_wrap_carefully(*pp)))
-			(*pp)->AddRef();
+			;//(*pp)->AddRef();
 	}
 	template<typename T> HRESULT rewrap_carefully(HRESULT h, T **pp) {
 		if (h == S_OK)
@@ -1528,103 +1036,6 @@ template<> class Wrap<IUnknown> : public com_wrap<IUnknown> {};
 
 template<typename T> void unwrapped<T>::operator=(const T _t)	{
 	t = com_wrap_system->unwrap_carefully(_t);
-}
-//-----------------------------------------------------------------------------
-// RPC mechanism
-//-----------------------------------------------------------------------------
-
-#if 0
-
-// RemoteDll-based
-
-template<typename T> struct get_result_s {
-	static void f(void *p, const T &r) { *((T*)p) = r; }
-};
-
-template<typename T> struct get_result_s<dynamic_array<T> > {
-	static void f(void *p, const dynamic_array<T> &r) {
-		*(flat_array<T>*)p = r;
-	}
-};
-
-template<> struct get_result_s<const_memory_block> {
-	static void f(void *p, const const_memory_block &r) {
-		r.copy_to(p);
-	}
-};
-
-template<typename R> void get_result(void *p, const R &r) {
-	get_result_s<R>::f(p, r);
-}
-
-template<typename F> struct RPC {
-	template<F f> static DWORD thread_fn(void *p) {
-		get_result(p, call(f, *(TL_tuple<typename function<F>::P>*)p));
-		return 0;
-	}
-};
-
-#define EXT_RPC(f)	extern "C" { __declspec(dllexport) DWORD RPC_##f(void *p) { return T_get_class<RPC>(f)->thread_fn<f>(p); } }
-#endif
-
-
-struct SocketWait : Socket {
-	using Socket::Socket;
-	size_t	readbuff(void *buffer, size_t size) const {
-		char *p = (char*)buffer;
-		while (size) {
-			size_t	result = Socket::readbuff(p, size);
-			size	-= result;
-			p		+= result;
-			if (size && !select(1))
-				break;
-		}
-
-		return p - (char*)buffer;
-	}
-	template<typename T>T		get()			const	{ T t; read(t); return t; }
-	template<typename...T> bool read(T&&...t)	const	{ return iso::read(*this, t...); }
-};
-
-#if 1
-typedef with_size<malloc_block> malloc_block_all;
-#else
-struct malloc_block_all : malloc_block {
-	using malloc_block::malloc_block;
-	using malloc_block::operator=;
-	template<typename R>	bool	read(R&& r) {
-		auto	size = r.template get<uint32>();
-		return malloc_block::read(r, size);
-	}
-	template<typename W>	bool	write(W&& w) const {
-		return w.write(size32()) && malloc_block::write(w);
-	}
-};
-#endif
-
-template<typename F> enable_if_t<!same_v<typename function<F>::R, void>> SocketRPC(SocketWait &sock, F f) {
-	TL_tuple<typename function<F>::P>	params;
-	params.read(sock);
-	sock.write(call(f, params));
-
-}
-
-template<typename F> enable_if_t<same_v<typename function<F>::R, void>> SocketRPC(SocketWait &sock, F f) {
-	TL_tuple<typename function<F>::P>	params;
-	params.read(sock);
-	call(f, params);
-}
-
-template<typename R, typename...P> enable_if_t<!same_v<R, void>, R> SocketCallRPC(const SocketWait &sock, int func, const P&...p) {
-	sock.putc(func);
-	tuple<P...>(p...).write(sock);
-	sock.select(1);	// wait up to 1 sec
-	return sock.get<R>();
-}
-
-template<typename R, typename...P> enable_if_t<same_v<R, void>> SocketCallRPC(const SocketWait &sock, int func, const P&...p) {
-	sock.putc(func);
-	tuple<P...>(p...).write(sock);
 }
 
 

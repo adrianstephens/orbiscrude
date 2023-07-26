@@ -4,6 +4,7 @@
 #include "maths/polynomial.h"
 #include "maths/geometry.h"
 #include "dxt.h"
+//#include "rdo.h"
 
 using namespace iso;
 
@@ -760,8 +761,9 @@ void DXT1rec::Encode(const block<ISO_rgba, 2> &block, uint32 flags) {
 			remap = remap01;
 		}
 	}
-	for (auto &i : selectors)
-		i = remap[i];
+
+//	for (auto &i : selectors)
+//		i = remap[i];
 
 	set(rgb0, rgb1, DXT1bits(selectors, cs.remap, remap));
 
@@ -1039,8 +1041,8 @@ MN		Q	R G B  delta	0-4								5-14								15-24								25-34								35-44							
 10	30	6	6 6 6	N		m[4:0],							r0[5:0],g3[4],b3[0],b3[1],b2[4],	g0[5:0],g2[5],b2[5],b3[2],g2[4],	b0[5:0],g3[5],b3[3],b3[5],b3[4],	r1[5:0],g2[3:0],				g1[5:0],g3[3:0],				b1[5:0],b2[3:0],				r2[5:0],r3[5:0],						d[4:0]	indices:46
 11	3	10	10		N		m[4:0],							r0[9:0],							g0[9:0],							b0[9:0],							r1[9:0],						g1[9:0],						b1[9:0],						indices:63
 12	7	11	9		Y		m[4:0],							r0[9:0],							g0[9:0],							b0[9:0],							r1[8:0],r0[10],					g1[8:0],g0[10],					b1[8:0],b0[10],					indices:63
-13	11	12	8		Y		m[4:0],							r0[9:0],							g0[9:0],							b0[9:0],							r1[7:0],r0[10:11],				g1[7:0],g0[10:11],				b1[7:0],b0[10:11],				indices:63
-14	15	16	4		Y		m[4:0],							r0[9:0],							g0[9:0],							b0[9:0],							r1[3:0],r0[10:15],				g1[3:0],g0[10:15],				b1[3:0],b0[10:15],				indices:63
+13	11	12	8		Y		m[4:0],							r0[9:0],							g0[9:0],							b0[9:0],							r1[7:0],r0[11],r[10],			g1[7:0],g0[11],g0[10],			b1[7:0],b0[11],b0[10],			indices:63
+14	15	16	4		Y		m[4:0],							r0[9:0],							g0[9:0],							b0[9:0],							r1[3:0],r0[15:10],				g1[3:0],g0[15:10],				b1[3:0],b0[15:10],				indices:63
 */
 
 template<typename T> void BC6setcol(T& d, int32x3 c) {
@@ -1120,8 +1122,8 @@ template<typename R, typename G, typename B> struct BC6_COL {
 
 template<int Q> struct BC6_C01 : BC6_COL<bitfield<uint64, 4, Q>, bitfield<uint64, 14, Q>, bitfield<uint64, 24, Q>> {};
 template<> struct BC6_C01<11> : BC6_COL<bitfield_multi<uint64, 4,10, 43,1>, bitfield_multi<uint64, 14,10, 53,1>, bitfield_multi<uint64, 24,10, 63,1>> {};
-template<> struct BC6_C01<12> : BC6_COL<bitfield_multi<uint64, 4,10, 42,2>, bitfield_multi<uint64, 14,10, 52,2>, bitfield_multi<uint64, 24,10, 62,2>> {};
-template<> struct BC6_C01<16> : BC6_COL<bitfield_multi<uint64, 4,10, 38,6>, bitfield_multi<uint64, 14,10, 48,6>, bitfield_multi<uint64, 24,10, 58,6>> {};
+template<> struct BC6_C01<12> : BC6_COL<bitfield_multi<uint64, 4,10, 42,-2>, bitfield_multi<uint64, 14,10, 52,-2>, bitfield_multi<uint64, 24,10, 62,-2>> {};
+template<> struct BC6_C01<16> : BC6_COL<bitfield_multi<uint64, 4,10, 38,-6>, bitfield_multi<uint64, 14,10, 48,-6>, bitfield_multi<uint64, 24,10, 58,-6>> {};
 
 template<int Q, int R, int G,int B> struct BC6_C02 : BC6_C01<Q> {};
 template<> struct BC6_C02<11,5,4,4> : BC6_COL<bitfield_multi<uint64, 4,10, 39,1>, bitfield_multi<uint64, 14,10, 48,1>, bitfield_multi<uint64, 24,10, 58,1>> {};

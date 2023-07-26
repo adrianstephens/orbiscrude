@@ -14,7 +14,7 @@ using namespace iso;
 struct UnixFileTime { uint64 t; };
 template<> struct ISO::def<UnixFileTime> : ISO::VirtualT2<UnixFileTime> {
 	static ISO_ptr<void>	Deref(const UnixFileTime &t) {
-		return ISO_ptr<string>(0, to_string(DateTime::FromUnixTime(DateTime::Secs(t.t))));
+		return ISO_ptr<string>(0, to_string(DateTime::FromUnixTime(Duration::Secs(t.t))));
 	}
 };
 

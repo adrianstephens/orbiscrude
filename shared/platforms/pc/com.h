@@ -43,32 +43,23 @@ namespace iso {
 //	query helpers
 //-----------------------------------------------------------------------------
 
-/*
-template<typename T, typename V=void> struct uuid;
-
-#ifndef PLAT_CLANG
-template<typename T> struct uuid<T, typename T_void<decltype(__uuidof(T))>::type> { static constexpr GUID value = __uuidof(T); };
-#endif
-//template<typename T> inline constexpr const GUID& uuidof(T*)	{ return uuid<T>::value; }
-*/
-
 template<typename T> inline constexpr exists_t<decltype(__uuidof(T)), const GUID> uuidof(T*)	{ return __uuidof(T); }
 template<typename T> inline constexpr const GUID uuidof()		{ return uuidof((T*)0); }
 
-template<typename T> struct is_com : meta::constant<bool, T_is_base_of<IUnknown, T>::value> {};
-
-struct querier {
-	IUnknown	*t;
-	querier(IUnknown *_t) : t(_t) {}
-	template<typename T> operator T*()	const	{ T *p = 0; t->QueryInterface(uuidof<T>(), (void**)&p); return p; }
-};
+template<typename T> struct is_com : meta::bool_constant<T_is_base_of<IUnknown, T>::value> {};
 
 template<typename T2> inline HRESULT	query(IUnknown *t, T2 **p, const GUID &guid)	{ return t->QueryInterface(guid, (void**)p); }
 template<typename T2> inline HRESULT	query(IUnknown *t, T2 **p)						{ return query(t, p, uuidof<T2>()); }
-template<typename T2> inline T2*		query(IUnknown *t)								{ T2 *p = 0; query(t, &p); return p; }
-inline querier							query(IUnknown *t)								{ return t; }
+template<typename T2> inline T2*		_query(IUnknown *t)								{ T2 *p = 0; query(t, &p); return p; }
 
-//template<typename T>	T com_cast(IUnknown *p) { T t; return SUCCEEDED(query(p, &t)) ? t : 0; }
+struct querier {
+	IUnknown	*p;
+	querier(IUnknown *p) : p(p) {}
+	template<typename T> operator T*()	const	{ return _query<T>(p); }
+};
+
+#define COM_CREATE(pp)		__uuidof(**(pp)), (void**)(pp)
+#define COM_CREATE2(T, pp)	__uuidof(T), (void**)(pp)
 
 //-----------------------------------------------------------------------------
 //	_com_ptr
@@ -77,33 +68,34 @@ inline querier							query(IUnknown *t)								{ return t; }
 template<typename T> class _com_ptr {
 protected:
 	T	*t;
-	T**			get_addr()					{ ISO_ASSERT(t == 0); return &t;	}
-	T* const*	get_addr()		const		{ return &t;			}
-	void		add_ref()					{ if (t) t->AddRef();	}
-	void		release()					{ if (t) t->Release();	}
+	T**			get_addr()					{ ISO_ASSERT(!t); return &t; }
+	T* const*	get_addr()		const		{ return &t; }
+	void		add_ref()					{ if (t) t->AddRef(); }
+	void		release()					{ if (t) t->Release(); }
 	void		set(T *p)					{ if (p && p != t) { p->AddRef(); release(); } t = p; }
 public:
-				_com_ptr(T *t = 0)	: t(t)	{}
-	T*			get()			const		{ return t;				}
-	void		attach(T *p)				{ release(); t = p;		}
-	T*			detach()					{ T *p = t; t = nullptr; return p;	}
-	T**			operator&()					{ ISO_ASSERT(t == 0); return &t;	}
-	T* const*	operator&()		const		{ return &t;			}
-	explicit	operator bool()	const		{ return !!t;			}
-				operator T*()	const		{ return t;				}
-    T*			operator->()	const		{ return t;				}
-   	bool		operator!()		const		{ return t == NULL;		}
-	void		clear()						{ release(); t = 0;		}
-	static const GUID	uuid()				{ return uuidof<T>();	}
+	_com_ptr(T *t = nullptr) : t(t) {}
+	~_com_ptr()								{ this->release();	}
+	T*			get()			const		{ return t;	 }
+	void		attach(T *p)				{ release(); t = p; }
+	T*			detach()					{ return exchange(t, nullptr); }
+	T**			operator&()					{ ISO_ASSERT(!t); return &t; }
+	T* const*	operator&()		const		{ return &t; }
+	explicit	operator bool()	const		{ return !!t; }
+				operator T*()	const		{ return t; }
+    T*			operator->()	const		{ return t; }
+   	bool		operator!()		const		{ return !t; }
+	void		clear()						{ release(); t = nullptr; }
+	static const GUID	uuid()				{ return uuidof<T>(); }
 
-	template<typename T2> HRESULT	query(T2 **p, const GUID &guid)			const	{ return t->QueryInterface(guid, (void**)p); }
-	template<typename T2> HRESULT	query(T2 **p)							const	{ return query(p, uuidof<T2>()); }
-	querier							query()									const	{ return t; }
+	template<typename T2> HRESULT	query(T2 **p, const GUID &guid)	const	{ return t->QueryInterface(guid, (void**)p); }
+	template<typename T2> HRESULT	query(T2 **p)					const	{ return query(p, uuidof<T2>()); }
+	querier							query()							const	{ return t; }
 
 #ifdef _OBJBASE_H_
 	_com_ptr<T>&		create(const CLSID &clsid, uint32 context = CLSCTX_INPROC_SERVER) {
-		ISO_ASSERT(t == 0);
-		CoCreateInstance(clsid, NULL, context, uuidof<T>(), (void**)&t);
+		ISO_ASSERT(!t);
+		CoCreateInstance(clsid, nullptr, context, uuidof<T>(), (void**)&t);
 		return *this;
 	}
 	template<typename C> _com_ptr<T>& create(uint32 context = CLSCTX_INPROC_SERVER) {
@@ -127,29 +119,20 @@ public:
 	com_ptr(com_ptr &&p)	: _com_ptr<T>(p.detach())	{}
 	com_ptr(querier q)		: _com_ptr<T>(q)	{}
 	com_ptr(const CLSID &clsid, uint32 context = CLSCTX_INPROC_SERVER) { CoCreateInstance(clsid, NULL, context, uuidof<T>(), (void**)&t); }
-	~com_ptr()									{ this->release();	}
 	com_ptr&	operator=(com_ptr &&p)			{ swap(this->t, p.t); return *this; }
 
 	using _com_ptr<T>::query;
-	template<typename T2> com_ptr<T2>	query()	const	{ T2 *p = 0; query(&p); return p; }
-	template<typename T2> com_ptr<T2>	as()	const	{ T2 *p = 0; query(&p); return p; }
+	template<typename T2> com_ptr<T2>	query()	const	{ T2 *p = nullptr; query(&p); return p; }
+	template<typename T2> com_ptr<T2>	as()	const	{ T2 *p = nullptr; query(&p); return p; }
 
 	friend void	swap(com_ptr &a, com_ptr &b)	{ swap(a.t, b.t); }
 };
 
-template<typename B, typename A> inline enable_if_t<T_conversion<A*,B*>::exists, B*> com_cast(A *a) {
-	return a;
-}
+template<typename T> inline com_ptr<T>	query(IUnknown *p)			{ return _query<T>(p); }
+template<typename T> inline com_ptr<T>	temp_com_cast(IUnknown *p)	{ return _query<T>(p); }
 
-template<typename B, typename A> inline enable_if_t<!T_conversion<A*,B*>::exists, com_ptr<B>> com_cast(A *a) {
-	B *b;
-	return SUCCEEDED(a->QueryInterface(uuidof<B>(), (void**)&b)) ? b : 0;
-}
-
-template<typename T>		com_ptr<T> temp_com_cast(IUnknown *p) {
-	T *t;
-	return SUCCEEDED(p->QueryInterface(uuidof<T>(), (void**)&t)) ? t : 0;
-}
+template<typename B, typename A> inline enable_if_t<T_conversion<A*,B*>::exists, B*>			com_cast(A *a) { return a; }
+template<typename B, typename A> inline enable_if_t<!T_conversion<A*,B*>::exists, com_ptr<B>>	com_cast(A *a) { return _query<B>(a); }
 
 //-----------------------------------------------------------------------------
 //	com_ptr2
@@ -160,15 +143,15 @@ template<typename T> class com_ptr2 : public _com_ptr<T> {
 public:
 	com_ptr2()										{}
 	com_ptr2(nullptr_t)								{}
-	com_ptr2(T *_t)				: _com_ptr<T>(_t)	{ this->add_ref(); }
+	com_ptr2(T *t)				: _com_ptr<T>(t)	{ this->add_ref(); }
 	com_ptr2(com_ptr<T> &&p)	: _com_ptr<T>(p.detach())	{}
 	com_ptr2(const com_ptr2 &p)	: _com_ptr<T>(p)	{ this->add_ref(); }
+	com_ptr2(com_ptr2 &&p)		: _com_ptr<T>(p.detach())	{}
 	com_ptr2(const CLSID &clsid, uint32 context = CLSCTX_INPROC_SERVER) { CoCreateInstance(clsid, NULL, context, uuidof<T>(), (void**)&t); }
-	~com_ptr2()										{ this->release();	}
 	T**			operator&()							{ this->clear(); return &this->t; }
 	com_ptr2&	operator=(T *p)						{ this->set(p); return *this; }
 	com_ptr2&	operator=(const com_ptr2 &p)		{ this->set(p.t); return *this; }
-	com_ptr2&	operator=(com_ptr<T> &&p)			{ if (this->t) this->t->Release(); this->t = p.detach(); return *this; }
+	com_ptr2&	operator=(com_ptr<T> &&p)			{ this->release(); this->t = p.detach(); return *this; }
 
 	using _com_ptr<T>::query;
 	template<typename T2> com_ptr<T2> query() const	{ T2 *p = 0; query(&p); return p; }
@@ -185,7 +168,7 @@ template<typename E, typename T> class com_iterator : public com_ptr<E> {
 	com_ptr<T>	t;
 public:
 	com_iterator&	operator++() {
-		ulong	fetched;
+		ULONG	fetched;
 		t.clear();
 		(*this)->Next(1, &t, &fetched);
 		return *this;
@@ -194,11 +177,7 @@ public:
 	operator com_ptr<T>&()	{ return t; }
 };
 
-}//namespace iso
-
 #ifdef PLAT_PC
-
-namespace iso {
 
 //-----------------------------------------------------------------------------
 //	com functions
@@ -248,27 +227,11 @@ protected:
 	com_base() : refs(1)	{}
 	virtual ~com_base()		{}
 
-	ULONG	AddRef()	{
-		return InterlockedIncrement(&refs);
-	}
-	ULONG	Release()	{
-		int	n = InterlockedDecrement(&refs);
-		if (!n)
-			delete this;
-		return n;
-	}
+	ULONG	AddRef()	{ return InterlockedIncrement(&refs); }
+	ULONG	Release()	{ return InterlockedDecrement(&refs); }
 };
 
-template<typename T> class com : com_base, public T {
-public:
-	ULONG	STDMETHODCALLTYPE	AddRef()	{ return com_base::AddRef(); }
-	ULONG	STDMETHODCALLTYPE	Release()	{ return com_base::Release();}
-	HRESULT	STDMETHODCALLTYPE	QueryInterface(REFIID riid, void **ppv) {
-		return check_interface<IUnknown>(this, riid, ppv) || check_interface<T>(this, riid, ppv) ? S_OK : E_NOINTERFACE;
-	}
-};
-
-template<typename T, typename B> struct com2 : public T, public B {
+template<typename T, typename B = com_base> struct com : public T, public B {
 	ULONG	STDMETHODCALLTYPE	AddRef()	{ return B::AddRef(); }
 	ULONG	STDMETHODCALLTYPE	Release()	{ return B::Release();}
 	HRESULT	STDMETHODCALLTYPE	QueryInterface(REFIID riid, void **ppv) {
@@ -276,7 +239,22 @@ template<typename T, typename B> struct com2 : public T, public B {
 	}
 };
 
-template<typename T0, typename...T> class com_list : public com2<T0, com_list<T...>> {};
+template<typename T> struct com<T, com_base> : public T, public com_base {
+	ULONG	STDMETHODCALLTYPE	AddRef() {
+		return com_base::AddRef();
+	}
+	ULONG	STDMETHODCALLTYPE	Release() { 
+		auto	n = com_base::Release();
+		if (!n)
+			delete this;
+		return n;
+	}
+	HRESULT	STDMETHODCALLTYPE	QueryInterface(REFIID riid, void **ppv) {
+		return check_interface<T>(this, riid, ppv) || check_interface<IUnknown>(this, riid, ppv) ? S_OK : E_NOINTERFACE;
+	}
+};
+
+template<typename T0, typename...T> class com_list : public com<T0, com_list<T...>> {};
 template<typename T> struct com_list<T> : public com<T> {};
 template<typename T0, typename...T> struct com_list<type_list<T0, T...>> : public com_list<T0, T...> {};
 
@@ -293,8 +271,9 @@ template<typename T, typename X> struct com_inherit : public com_inherit<meta::T
 
 template<typename X> struct com_inherit<type_list<>, X> : public X {};
 
-}//namespace iso
 #endif	//PLAT_PC
+
+}//namespace iso
 
 #ifdef _OLEAUTO_H_
 //-----------------------------------------------------------------------------
@@ -307,17 +286,12 @@ extern const IID GUID_NULL;
 
 namespace iso {
 
-struct _com_allocator {//: com_ptr<IMalloc> {
-	_com_allocator() {
-//		CoGetMalloc(1, &*this);
-	}
-};
-
-struct com_allocator {//: singleton<_com_allocator>, allocator<com_allocator> {
-	static void		*alloc(size_t size)				{ return CoTaskMemAlloc(size); }//return single()->Alloc(size); }
-	static void		*realloc(void *p, size_t size)	{ return CoTaskMemRealloc(p, size); }//return single()->Realloc( p, size); }
-	static void		free(void *p)					{ CoTaskMemFree(p); }//single()->Free(p); }
+struct com_allocator {
+	static void		*alloc(size_t size)				{ return CoTaskMemAlloc(size); }
+	static void		*realloc(void *p, size_t size)	{ return CoTaskMemRealloc(p, size); }
+	static void		free(void *p)					{ CoTaskMemFree(p); }
 	template<typename T, typename...P>	static T*	make(P&&...p)		{ return new(alloc(sizeof(T))) T(forward<P>(p)...); }
+	template<typename C>				static C*	strdup(const C *p)	{ auto n = string_len(p); C *p2 = (C*)alloc((n + 1) * sizeof(C)); string_copy(p2, p, n); return p2; }
 	template<typename T>				static void	del(T *t)			{ t->~T(); free(t); }
 };
 
@@ -333,7 +307,7 @@ public:
 	template<typename...P> unique_com&	emplace(P&&...pp)	{ set(com_allocator::make<T>(forward<P>(pp)...)); return *this; }
 	template<typename...P> unique_com(P&&...pp)		: a(com_allocator::make<T>(forward<P>(pp)...)) {}
 	constexpr unique_com()							: a(nullptr)	{}
-	constexpr unique_com(_none)						: a(nullptr)	{}
+	constexpr unique_com(const _none&)				: a(nullptr)	{}
 	constexpr unique_com(nullptr_t)					: a(nullptr)	{}
 	/*explicit*/ constexpr unique_com(T *p)			: a(p)			{}
 	unique_com(unique_com &&b)						: a(b.detach())	{}
@@ -364,24 +338,22 @@ public:
 		p = SysAllocString(s);
 	}
 	com_string(const char *s) {
-		int	len	= MultiByteToWideChar(CP_ACP, 0, s, -1, NULL, 0);
-		wchar_t	*s2	= new wchar_t[len];
+		int		len	= MultiByteToWideChar(CP_ACP, 0, s, -1, NULL, 0);
+		wchar_t	*s2	= alloc_auto(wchar_t, len);
 		MultiByteToWideChar(CP_ACP, 0, s, len, s2, len);
 		p = SysAllocStringLen(s2, len - 1);
-		delete[] s2;
 	}
 	~com_string() {
 		SysFreeString(p);
 	}
 	void operator=(const char *s) {
-		int	len	= MultiByteToWideChar(CP_ACP, 0, s, -1, NULL, 0);
-		wchar_t	*s2	= new wchar_t[len];
+		int		len	= MultiByteToWideChar(CP_ACP, 0, s, -1, NULL, 0);
+		wchar_t	*s2	= alloc_auto(wchar_t, len);
 		MultiByteToWideChar(CP_ACP, 0, s, -1, s2, len);
 		if (p)
 			SysReAllocStringLen(&p, s2, len - 1);
 		else
 			p = SysAllocStringLen(s2, len - 1);
-		delete[] s2;
 	}
 	void operator=(const wchar_t *s) {
 		if (p)
@@ -407,14 +379,14 @@ public:
 		WideCharToMultiByte(CP_ACP, 0, p, -1, s.begin(), n, NULL, NULL);
 		return s;
 	}
+	friend size_t to_string(char *s, const com_string &v)	{ return string_copy(s, v.begin(), v.length()); }
 };
 
-inline size_t to_string(char *s, const com_string &v)	{ return string_copy(s, v.begin(), v.length()); }
 
 class ole_string : public string_base<LPOLESTR> {
 	typedef string_base<LPOLESTR> B;
 	OLECHAR			*_alloc(size_t n)						{ return p = n ? (OLECHAR*)com_allocator::alloc((n + 1) * sizeof(OLECHAR)) : 0; }
-	template<typename S> void init(const S *s, size_t n)	{ if (OLECHAR *d = _alloc(n)) { while (n--) *d++ = *s++; *d = 0; } }
+	template<typename S> void init(const S *s, size_t n)	{ string_copy(_alloc(n), s, n); }
 	void			init(const char *s)						{
 		int	len	= MultiByteToWideChar(CP_ACP, 0, s, -1, NULL, 0);
 		MultiByteToWideChar(CP_ACP, 0, s, len, _alloc(len - 1), len);
@@ -427,7 +399,8 @@ public:
 	void operator=(const char *s)		{ com_allocator::free(p); init(s); }
 	void operator=(const OLECHAR *s)	{ com_allocator::free(p); init(s, string_len(s)); }
 
-	operator	LPOLESTR()		const	{ return p; }
+	operator	LPOLESTR()		const&	{ return p; }
+	operator	LPOLESTR()		&&		{ return exchange(p, nullptr); }
 	LPOLESTR*	operator&()				{ com_allocator::free(p); return &p; }
 
 	template<int N> operator fixed_string<N>() const {
@@ -454,38 +427,44 @@ inline size_t to_string(char *s, const ole_string &v)	{ return string_copy(s, v.
 
 template<typename T> class com_array;
 
-template<typename T> struct com_vartype;
-template<> struct com_vartype<bool>			: meta::num<VT_BOOL>				{};
-template<> struct com_vartype<int8>			: meta::num<VT_I1>					{};
-template<> struct com_vartype<uint8>		: meta::num<VT_UI1>					{};
-template<> struct com_vartype<int16>		: meta::num<VT_I2>					{};
-template<> struct com_vartype<uint16>		: meta::num<VT_UI2>					{};
-template<> struct com_vartype<int32>		: meta::num<VT_I4>					{};
-template<> struct com_vartype<uint32>		: meta::num<VT_UI4>					{};
-template<> struct com_vartype<int64>		: meta::num<VT_I8>					{};
-template<> struct com_vartype<uint64>		: meta::num<VT_UI8>					{};
-template<> struct com_vartype<float>		: meta::num<VT_R4>					{};
-template<> struct com_vartype<double>		: meta::num<VT_R8>					{};
-template<> struct com_vartype<CY>			: meta::num<VT_CY>					{};
-template<> struct com_vartype<DECIMAL>		: meta::num<VT_BSTR>				{};
-template<> struct com_vartype<IUnknown*>	: meta::num<VT_UNKNOWN>				{};
-template<> struct com_vartype<IDispatch*>	: meta::num<VT_DISPATCH>			{};
-template<> struct com_vartype<SAFEARRAY*>	: meta::num<VT_VARIANT | VT_ARRAY>	{};
-template<> struct com_vartype<BSTR>			: meta::num<VT_BSTR>				{};
-template<> struct com_vartype<com_string>	: meta::num<VT_BSTR>				{};
-template<> struct com_vartype<char*>		: meta::num<VT_BSTR>				{};
+constexpr VARENUM operator|(VARENUM a, int b) { return VARENUM(int(a) | b); }
 
-inline VARENUM operator|(VARENUM a, int b) { return VARENUM(int(a) | b); }
+template<typename T> struct com_vartype;
+template<VARENUM E> using com_enum = meta::constant<VARENUM, E>;
+template<> struct com_vartype<bool>			: com_enum<VT_BOOL>					{};
+template<> struct com_vartype<int8>			: com_enum<VT_I1>					{};
+template<> struct com_vartype<uint8>		: com_enum<VT_UI1>					{};
+template<> struct com_vartype<int16>		: com_enum<VT_I2>					{};
+template<> struct com_vartype<uint16>		: com_enum<VT_UI2>					{};
+template<> struct com_vartype<int32>		: com_enum<VT_I4>					{};
+template<> struct com_vartype<uint32>		: com_enum<VT_UI4>					{};
+template<> struct com_vartype<int64>		: com_enum<VT_I8>					{};
+template<> struct com_vartype<uint64>		: com_enum<VT_UI8>					{};
+template<> struct com_vartype<float>		: com_enum<VT_R4>					{};
+template<> struct com_vartype<double>		: com_enum<VT_R8>					{};
+template<> struct com_vartype<CY>			: com_enum<VT_CY>					{};
+template<> struct com_vartype<DECIMAL>		: com_enum<VT_BSTR>					{};
+template<> struct com_vartype<IUnknown*>	: com_enum<VT_UNKNOWN>				{};
+template<> struct com_vartype<IDispatch*>	: com_enum<VT_DISPATCH>				{};
+template<> struct com_vartype<SAFEARRAY*>	: com_enum<VT_VARIANT | VT_ARRAY>	{};
+template<> struct com_vartype<BSTR>			: com_enum<VT_BSTR>					{};
+template<> struct com_vartype<com_string>	: com_enum<VT_BSTR>					{};
+template<> struct com_vartype<char*>		: com_enum<VT_BSTR>					{};
 
 //#ifndef PLAT_CLANG
 
-class com_variant : public VARIANT {
-	VARIANT	*as(VARENUM _vt) { vt = _vt; return this; }
+class com_variant : public PROPVARIANT {
+	struct either {
+		com_variant	*p;
+		constexpr operator PROPVARIANT*() const { return p; }
+		constexpr operator VARIANT*() const { return (VARIANT*)p; }
+	};
+
+	PROPVARIANT	*as(VARENUM _vt)	{ vt = _vt; return this; }
 public:
-	com_variant()					{ VariantInit(this); }
+	com_variant()					{ PropVariantInit(this); }
+	~com_variant()					{ PropVariantClear(this); }
 	com_variant(VARIANT &&v)		{ *(VARIANT*)this = v; v.vt = VT_EMPTY; }
-//	com_variant(const VARIANT &v)	{ *(VARIANT*)this = v; const_cast<VARIANT&>(v).vt = VT_EMPTY; }
-//	com_variant(const VARIANT &v)	{ VariantInit(this); VariantCopy(this, &v); }
 
 	explicit com_variant(bool v)	{ V_BOOL(as(VT_BOOL))	= v ? VARIANT_TRUE : VARIANT_FALSE; }
 	com_variant(int8 v)				{ V_I1	(as(VT_I1)	)	= v; }
@@ -496,102 +475,69 @@ public:
 	com_variant(uint32 v)			{ V_UI4	(as(VT_UI4)	)	= v; }
 	com_variant(long v)				{ V_I4	(as(VT_I4)	)	= v; }
 	com_variant(ulong v)			{ V_I4	(as(VT_UI4)	)	= v; }
-	com_variant(int64 v)			{ V_I8	(as(VT_I8)	)	= v; }
-	com_variant(uint64 v)			{ V_UI8	(as(VT_UI8)	)	= v; }
+	com_variant(int64 v)			{ as(VT_I8)->hVal.QuadPart		= v; }
+	com_variant(uint64 v)			{ as(VT_UI8)->uhVal.QuadPart	= v; }
 	com_variant(float v)			{ V_R4	(as(VT_R4)	)	= v; }
 	com_variant(double v)			{ V_R8	(as(VT_R8)	)	= v; }
 	com_variant(const CY &v)		{ V_CY	(as(VT_CY)	)	= v; }
 	com_variant(BSTR v)				{ V_BSTR(as(VT_BSTR))	= v; }
 	com_variant(const com_string &v){ V_BSTR(as(VT_BSTR))	= unconst(v); }
-	com_variant(const wchar_t *v)	{ as(VT_BSTR); new(&bstrVal) com_string(v); }
-    com_variant(const char *v)		{ as(VT_BSTR); new(&bstrVal) com_string(v); }
-    com_variant(const DECIMAL &v)	{ V_DECIMAL(this) = v; as(VT_DECIMAL);	}//order matters
+	//com_variant(const char *v)		{ as(VT_BSTR); new(&bstrVal) com_string(v); }
+	//com_variant(const wchar_t *v)	{ as(VT_BSTR); new(&bstrVal) com_string(v); }
+	com_variant(const char *v)		{ as(VT_LPSTR)->pszVal = com_allocator::strdup(v);  }
+	com_variant(const wchar_t *v)	{ as(VT_LPWSTR)->pwszVal = com_allocator::strdup(v);  }
+	com_variant(ole_string &&v)		{ as(VT_LPWSTR)->pwszVal = move(v);  }
+	com_variant(const DECIMAL &v)	{ V_DECIMAL(this) = v; as(VT_DECIMAL);	}//order matters
+	com_variant(const FILETIME &v)	{ as(VT_FILETIME)->filetime		= v; }
 	com_variant(IUnknown *v)		{ V_UNKNOWN (as(VT_UNKNOWN))	= v; }
 	com_variant(IDispatch *v)		{ V_DISPATCH(as(VT_DISPATCH))	= v; }
 	com_variant(SAFEARRAY *v)		{ SafeArrayGetVartype(v, &vt); vt |= VT_ARRAY; V_ARRAY(this) = v; }
 	template<typename T> com_variant(const T *&t)				{ as(VT_BYREF | com_vartype<T>::value); pcVal = (char*)t; }
-	template<typename T> com_variant(const T *p, int N)			{ V_ARRAY(as(VT_ARRAY | com_vartype<T>::value)) = com_array<T>(p, N).transfer(); }
-	template<typename T, int N> com_variant(const T (&v)[N])	{ V_ARRAY(as(VT_ARRAY | com_vartype<T>::value)) = com_array<T>(v).transfer(); }
+	template<typename T> com_variant(const T *p, int N)			{ V_ARRAY(as(VT_ARRAY | com_vartype<T>::value)) = com_array<T>(p, N).detach(); }
+	template<typename T, int N> com_variant(const T (&v)[N])	{ V_ARRAY(as(VT_ARRAY | com_vartype<T>::value)) = com_array<T>(v).detach(); }
 
 	int		type()			const	{ return vt;			}
-	void	clear()					{ VariantClear(this);	}
+	void	clear()					{ PropVariantClear(this);	}
+	PROPVARIANT	detach()			{ PROPVARIANT p = *this; vt = VT_EMPTY; return p; }
 
 	void	operator=(SAFEARRAY *sa){ vt = VT_VARIANT | VT_ARRAY; V_ARRAY(this) = sa; }
 	com_variant& operator*() const	{ return *(com_variant*)pvarVal; }
+	either	operator&()				{ return {this}; }
+	operator const VARIANT&()const	{ return *(VARIANT*)this; }
 
 	operator SAFEARRAY*()	const	{ return V_ARRAY(this);	}
 	operator BSTR()			const	{ return V_BSTR(this);	}
 //	operator com_string&()	const	{ return (com_string&)bstrVal;	}
 	operator int()			const	{ return V_I4(this);	}
 	operator unsigned int()	const	{ return V_UI4(this);	}
-	operator int64()		const	{ return V_I8(this);	}
-	operator uint64()		const	{ return V_UI8(this);	}
+	operator int64()		const	{ return hVal.QuadPart;	}
+	operator uint64()		const	{ return uhVal.QuadPart;}
 	operator float()		const	{ return V_R4(this);	}
 	operator double()		const	{ return V_R8(this);	}
-
-	operator VARIANT*()		const	{ return pvarVal;		}
+	operator PROPVARIANT*()	const	{ return pvarVal;		}
+	operator VARIANT*()		const	{ return (VARIANT*)pvarVal; }
 	operator IDispatch*()	const	{ return pdispVal;		}
 	operator IUnknown*()	const	{ return punkVal;		}
 
 	template<typename T> bool is()	const { return com_vartype<T>::value == vt; }
 
-	template<typename T2> HRESULT	query(com_ptr<T2> &p, const GUID &guid)	const	{ return punkVal->QueryInterface(guid, (void**)&p); }
-	template<typename T2> HRESULT	query(com_ptr<T2> &p)					const	{ return punkVal->QueryInterface(uuidof<T2>(), (void**)&p); }
-	template<typename T2> T2*		query()									const	{ T2 *p = 0; punkVal->QueryInterface(uuidof<T2>(), (void**)&p); return p; }
+	template<typename T2> HRESULT	query(com_ptr<T2> &p, const GUID &guid)	const	{ return iso::query(punkVal, &p, guid); }
+	template<typename T2> HRESULT	query(com_ptr<T2> &p)					const	{ return iso::query(punkVal, &p); }
+	template<typename T2> com_ptr<T2>	query()								const	{ return _query<T2>(punkVal); }
 
-	template<typename T> T get_number(const T &def)	const;
-	template<typename T> T get(const T &def)		const { if (vt == com_vartype<T>::value) return *this; return def; }
-	template<typename T> T get()					const { return get(T()); }
+	template<typename T> T	get_number(const T &def = T())	const;
+	template<typename T> T	get(const T &def)	const	{ if (vt == com_vartype<T>::value) return *this; return def; }
+	template<typename T> T	get()				const	{ return get(T()); }
 
-	template<typename C> friend accum<C> &operator<<(accum<C> &a, const com_variant &v) {
-		switch (v.vt) {
-			case VT_EMPTY:	return a << "<empty>";
-			case VT_NULL:	return a << "<null>";
-			case VT_I2:		return a << V_I2(&v);
-			case VT_I4:		return a << V_I4(&v);
-			case VT_R4:		return a << V_R4(&v);
-			case VT_R8:		return a << V_R8(&v);
-			case VT_BSTR:	return a << (com_string&)v.bstrVal;
-			case VT_BOOL:	return a << V_BOOL(&v);
-			case VT_I1:		return a << V_I1(&v);
-			case VT_UI1:	return a << V_UI1(&v);
-			case VT_UI2:	return a << V_UI2(&v);
-			case VT_UI4:	return a << V_UI4(&v);
-			case VT_I8:		return a << V_I8(&v);
-			case VT_UI8:	return a << V_UI8(&v);
-			case VT_INT:	return a << V_INT(&v);
-			case VT_UINT:	return a << V_UINT(&v);
-			case VT_VOID:	return a << "<void>";
-			case VT_HRESULT:return a << V_UI4(&v);
-			default:		return a << "<unsupported variant>";
-//			case VT_CY:
-//			case VT_DATE:
-//			case VT_VARIANT:
-//			case VT_UNKNOWN:
-//			case VT_DECIMAL:
-//			case VT_DISPATCH:
-//			case VT_ERROR:
-//			case VT_PTR:
-//			case VT_SAFEARRAY:
-//			case VT_CARRAY:
-//			case VT_USERDEFINED:
-//			case VT_LPSTR:
-//			case VT_LPWSTR:
-//			case VT_RECORD:
-//			case VT_INT_PTR:
-//			case VT_UINT_PTR:
-//			case VT_FILETIME:
-//			case VT_BLOB:
-//			case VT_STREAM:
-//			case VT_STORAGE:
-//			case VT_STREAMED_OBJECT:
-//			case VT_STORED_OBJECT:
-//			case VT_BLOB_OBJECT:
-//			case VT_CF:
-//			case VT_CLSID:
-//			case VT_VERSIONED_STREAM:
-		}
-	}
+	template<>	bool		get<bool>()			const	{ return V_BOOL	(this) == VARIANT_TRUE; }
+	template<>	int8		get<int8>()			const	{ return V_I1	(this); }
+	template<>	uint8		get<uint8>()		const	{ return V_UI1	(this); }
+	template<>	int16		get<int16>()		const	{ return V_I2	(this); }
+	template<>	uint16		get<uint16>()		const	{ return V_UI2	(this); }
+	template<>	CY			get<CY>()			const	{ return V_CY	(this); }
+	template<>	DECIMAL		get<DECIMAL>()		const	{ return V_DECIMAL(this); }
+
+	template<typename C> friend accum<C> &operator<<(accum<C> &a, const com_variant &v);
 };
 
 template<typename T> T com_variant::get_number(const T &def) const {
@@ -603,11 +549,11 @@ template<typename T> T com_variant::get_number(const T &def) const {
 		case VT_UI2:	return T(V_UI2(this));
 		case VT_I4:		return T(V_I4(this));
 		case VT_UI4:	return T(V_UI4(this));
-		case VT_I8:		return T(V_I8(this));
-		case VT_UI8:	return T(V_UI8(this));
+		case VT_I8:		return T(hVal.QuadPart);
+		case VT_UI8:	return T(uhVal.QuadPart);
 		case VT_R4:		return T(V_R4(this));
 		case VT_R8:		return T(V_R8(this));
-		default:		return 0;
+		default:		return def;
 	}
 };
 
@@ -618,8 +564,8 @@ template<typename T> class com_quickarray {
 protected:
 	SAFEARRAY	*sa;
 public:
-	com_quickarray(SAFEARRAY *_sa)		: sa(_sa)			{}
-	com_quickarray(const VARIANT &v)	: sa(V_ARRAY(&v))	{ const_cast<VARIANT&>(v).vt = VT_EMPTY; }
+	com_quickarray(SAFEARRAY *sa)	: sa(sa)	{}
+	com_quickarray(VARIANT &&v)		: sa(v)		{ v.vt = VT_EMPTY; }
 	~com_quickarray()					{ SafeArrayDestroy(sa); }
 
 	typedef	T		*iterator;
@@ -640,9 +586,9 @@ protected:
 	template<typename T> struct _element {
 		SAFEARRAY	*sa;
 		LONG		i;
-		_element(SAFEARRAY *_sa, int _i) : sa(_sa), i(_i)	{}
+		_element(SAFEARRAY *sa, int i) : sa(sa), i(i)	{}
 		void		put(const T &v)	{ SafeArrayPutElement(sa, &i, (void*)&v); }
-		T			get() const		{ T v; SafeArrayGetElement(sa, const_cast<LONG*>(&i), &v); return v; }
+		T			get() const		{ T v; SafeArrayGetElement(sa, const_cast<LONG*>(&i), get_ptr(v)); return v; }
 	};
 
 	template<typename E> struct _iterator {
@@ -669,9 +615,9 @@ protected:
 	};
 
 	static SAFEARRAY *create(VARTYPE vt, int d0) {
-		SAFEARRAYBOUND	bounds[1];
-		bounds[0].lLbound	= 0;
-		bounds[0].cElements	= d0;
+		SAFEARRAYBOUND	bounds[1] = {
+			{d0, 0}
+		};
 		return SafeArrayCreate(vt, 1, bounds);
 	}
 	static SAFEARRAY *create(VARTYPE vt, int d0, int d1) {
@@ -692,13 +638,23 @@ protected:
 		set(V_ARRAY(&v));
 		const_cast<VARIANT&>(v).vt = VT_EMPTY;
 	}
+	void	set(const PROPVARIANT &v) {
+		set(V_ARRAY(&v));
+		const_cast<PROPVARIANT&>(v).vt = VT_EMPTY;
+	}
 
-	com_array_base()					: sa(0)				{}
-	com_array_base(SAFEARRAY *_sa)		: sa(_sa)			{}
-	com_array_base(const VARIANT &v)	: sa(V_ARRAY(&v))	{ const_cast<VARIANT&>(v).vt = VT_EMPTY; }
 	~com_array_base()					{ SafeArrayDestroy(sa); }
 public:
-	SAFEARRAY*	transfer()				{ SAFEARRAY *r = sa; sa = 0; return r; }
+	com_array_base()					: sa(0)		{}
+	com_array_base(SAFEARRAY *sa)		: sa(sa)	{}
+	com_array_base(VARIANT &&v)			: sa(V_ARRAY(&v))	{ v.vt = VT_EMPTY; }
+	com_array_base(PROPVARIANT &&v)		: sa(V_ARRAY(&v))	{ v.vt = VT_EMPTY; }
+
+	void	operator=(SAFEARRAY *_sa)		{ set(_sa); }
+	void	operator=(const VARIANT &v)		{ set(v);	}
+	void	operator=(const PROPVARIANT &v) { set(v);	}
+
+	SAFEARRAY*	detach()				{ return exchange(sa, nullptr); }
 	operator SAFEARRAY*()		const	{ return sa; }
 	int		dim()				const	{ return SafeArrayGetDim(sa); }
 	int		ubound(int d = 0)	const	{ LONG v; return SUCCEEDED(SafeArrayGetUBound(sa, d + 1, &v)) ? v : 0; }
@@ -711,21 +667,17 @@ public:
 class com_safearray : public com_array_base {
 	class element : _element<com_variant> {
 	public:
-		element(SAFEARRAY *_sa, int _i) : _element<com_variant>(_sa, _i)	{}
+		element(SAFEARRAY *sa, int i) : _element<com_variant>(sa, i)	{}
 		template<typename T> void operator=(const T &t)	{ this->put(t); }
 		template<typename T> operator T() const			{ return this->get(); }
 	};
 public:
 	typedef _iterator<element> iterator;
+	using com_array_base::com_array_base;
+	using com_array_base::operator=;
 
-	com_safearray()																	{}
-	com_safearray(SAFEARRAY *a)					: com_array_base(a)					{}
-	com_safearray(const VARIANT	&v)				: com_array_base(v)					{}
 	com_safearray(VARTYPE t, int d0)			: com_array_base(create(t, d0))		{}
 	com_safearray(VARTYPE t, int d0, int d1)	: com_array_base(create(t, d0, d1))	{}
-
-	void	operator=(SAFEARRAY *_sa)	{ set(_sa); }
-	void	operator=(const VARIANT &v) { set(v);	}
 
 	element	operator[](int i)	const	{ return element(sa, i); }
 	iterator	begin()			const	{ return iterator(sa, lbound()); }
@@ -736,19 +688,14 @@ public:
 template<typename I> class com_interface_array : public com_array_base {
 public:
 	struct element : _element<com_variant> {
-		element(SAFEARRAY *_sa, int _i) : _element<com_variant>(_sa, _i)	{}
+		element(SAFEARRAY *sa, int i) : _element<com_variant>(sa, i)	{}
 		void operator=(const I *t)	{ this->put(t); }
 		operator I*()		const	{ return this->get().template query<I>(); }
 		I*	operator->()	const	{ return *this; }
 	};
 	typedef _iterator<element> iterator;
-
-	com_interface_array()										{}
-	com_interface_array(SAFEARRAY *a)		: com_array_base(a)	{}
-	com_interface_array(const VARIANT &v)	: com_array_base(v)	{}
-
-	void	operator=(SAFEARRAY *_sa)	{ set(_sa); }
-	void	operator=(const VARIANT &v) { set(v);	}
+	using com_array_base::com_array_base;
+	using com_array_base::operator=;
 
 	I*		operator[](int i)	const	{ i += lbound(); return i <= ubound() ? (I*)element(sa, i) : 0; }
 	iterator	begin()			const	{ return iterator(sa, lbound()); }
@@ -758,21 +705,17 @@ public:
 
 template<typename T> class com_array : public com_array_base {
 	struct element : _element<T> {
-		element(SAFEARRAY *_sa, int _i) : _element<T>(_sa, _i)	{}
+		element(SAFEARRAY *sa, int i) : _element<T>(sa, i)	{}
 		void operator=(const T &t)	{ this->put(t); }
 		operator T() const			{ return this->get(); }
 	};
 public:
 	typedef _iterator<element> iterator;
+	using com_array_base::com_array_base;
+	using com_array_base::operator=;
 
-	com_array() {}
-	com_array(SAFEARRAY *a)			: com_array_base(a)	{}
-	com_array(const VARIANT &v)		: com_array_base(v)	{}
 	com_array(const T *p, int N)	: com_array_base(create(com_vartype<T>::value, N))				{ memcpy(data(), p, N * sizeof(T)); }
 	template<int N> com_array(const T (&v)[N]) : com_array_base(create(com_vartype<T>::value, N))	{ memcpy(data(), v, sizeof(v)); }
-
-	void	operator=(SAFEARRAY *_sa)	{ set(_sa); }
-	void	operator=(const VARIANT &v) { set(v);	}
 
 	element	operator[](int i)	const	{ return element(sa, i); }
 	iterator	begin()			const	{ return iterator(sa, lbound()); }
@@ -781,6 +724,10 @@ public:
 };
 
 #if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP | WINAPI_PARTITION_SYSTEM)
+
+//-----------------------------------------------------------------------------
+//	IDispatch
+//-----------------------------------------------------------------------------
 
 class _IDispatch {
 protected:
@@ -805,7 +752,7 @@ protected:
 	bool	Check(LCID loc) { return (info && map) || Init(loc); }
 
 	HRESULT	GetTypeInfoCount(UINT *n) {
-		if (n == NULL)
+		if (!n)
 			return E_POINTER;
 		*n = 1;
 		return S_OK;
@@ -838,6 +785,10 @@ public:
 			: E_FAIL;
 	}
 };
+
+//-----------------------------------------------------------------------------
+//	com_error
+//-----------------------------------------------------------------------------
 
 class com_error {
 	enum {

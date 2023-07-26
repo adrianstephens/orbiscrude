@@ -2,6 +2,71 @@
 
 namespace iso { namespace ast {
 
+node *fix_type(node *n, const C_type *type) {
+	if (type && n->kind == literal) {
+		lit_node	*lit		= (ast::lit_node*)n;
+		C_type::TYPE	lit_type	= lit->type->type;
+
+		switch (type->type) {
+			case C_type::INT:
+				if (lit_type == C_type::INT)
+					lit->type = type;
+				break;
+			case C_type::FLOAT:
+				if (lit_type == C_type::FLOAT)
+					lit->type = type;
+				break;
+			case C_type::POINTER:
+				if (lit_type == C_type::INT || lit_type == C_type::POINTER)
+					lit->type = type;
+				break;
+		}
+	}
+	return n;
+}
+
+void Builder::remove_redundant_locals() {
+	for (auto &i : locals) {
+		if (i) {
+			int		assigns	= 0, reads = 0;
+			Builder::local_var::use	*last_assign	= 0;
+			for (auto &u : i->uses) {
+				if (u.n->kind == ast::assign) {
+					--reads;
+					if (!last_assign || *last_assign->n != *u.n) {
+						last_assign = &u;
+						++assigns;
+					}
+				} else {
+					++reads;
+				}
+			}
+
+			if (assigns == 1) {
+				ast::node			*n		= last_assign->n;
+				ref_ptr<ast::node>	s		= n->cast<ast::binary_node>()->right;
+
+				if (reads == 1 || s->kind == ast::var) {
+					const C_arg			*v	= i;
+					ref_ptr<ast::node>	ass	= last_assign->b->remove_last_assignment(v);
+
+					ISO_ASSERT(ass == n);
+
+					for (auto &b : blocks) {
+						b->apply([v, s](ref_ptr<ast::node> &r) {
+							if (r->kind == ast::var) {
+								if (r->cast<ast::element_node>()->element == v)
+									r = s;
+							}
+						});
+					}
+					i = 0;
+				}
+			}
+		}
+	}
+}
+
 node *apply_preserve(const callback_ref<node*(node*)> &t, node *p) {
 	if (p) {
 		if (p->is_unary()) {
@@ -363,26 +428,32 @@ void DominatorTree::convert_ifelse(basicblock *header) {
 
 	}
 
-	if (ifelse_node *i = blockt->stmts.front()->cast<ifelse_node>()) {
-		if (i->has(blockf) || (!i->blockf && blockt->jump() == blockf)) {
-//			i->cond	= new binary_node(log_and, cond->flip_condition(i->blockt == blockf), i->cond);
-			i->cond	= new binary_node(log_and, cond, i->cond->flip_condition(i->blockt != blockf));
-			last	= i;
-			//header->stmts.append(slice(blockt->stmts, 1));
-			header->remove_edge(blockf);
-			header->merge(blockt);
-			return;
+	// &&
+	if (!blockt->stmts.empty()) {
+		if (ifelse_node *i = blockt->stmts.front()->cast<ifelse_node>()) {
+			if (i->has(blockf) || (!i->blockf && blockt->jump() == blockf)) {
+	//			i->cond	= new binary_node(log_and, cond->flip_condition(i->blockt == blockf), i->cond);
+				i->cond	= new binary_node(log_and, cond, i->cond->flip_condition(i->blockt != blockf));
+				last	= i;
+				//header->stmts.append(slice(blockt->stmts, 1));
+				header->remove_edge(blockf);
+				header->merge(blockt);
+				return;
+			}
 		}
 	}
 
-	if (ifelse_node *i = blockf->stmts.front()->cast<ifelse_node>()) {
-		if (i->has(blockt) || (!i->blockf && blockf->jump() == blockt)) {
-			i->cond	= new binary_node(log_or, cond, i->cond->flip_condition(i->blockt != blockt));
-			last	= i;
-			header->stmts.append(slice(blockf->stmts, 1));
-			header->remove_edge(blockt);
-			header->merge(blockf);
-			return;
+	// ||
+	if (!blockf->stmts.empty()) {
+		if (ifelse_node *i = blockf->stmts.front()->cast<ifelse_node>()) {
+			if (i->has(blockt) || (!i->blockf && blockf->jump() == blockt)) {
+				i->cond	= new binary_node(log_or, cond, i->cond->flip_condition(i->blockt != blockt));
+				last	= i;
+				header->stmts.append(slice(blockf->stmts, 1));
+				header->remove_edge(blockt);
+				header->merge(blockf);
+				return;
+			}
 		}
 	}
 

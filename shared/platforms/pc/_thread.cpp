@@ -13,7 +13,8 @@ void Thread::_create(const char *name, int stack_size, ThreadPriority priority, 
 	DWORD	id;
 	if (h = CreateThread(NULL, stack_size, proc, p, CREATE_SUSPENDED, &id)) {
 		SetThreadPriority(h, (int)priority);
-		ThreadName(id, name);
+		if (name)
+			ThreadName(id, name);
 	}
 }
 

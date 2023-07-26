@@ -154,6 +154,10 @@ struct external_window : window_with_base {
 		return ref < base ? ref - (data.end() - base) : ref;
 	}
 
+	constexpr bool	check_low_limit(const uint8* ref) const {
+		return ref < base && base - ref > data.size();
+	}
+
 	const uint8*	match_end(const uint8* src, const uint8* ref, const uint8* src_end) const {
 		if (ref < base) {
 			const uint8*	limit	= min(base + (src - ref), src_end);

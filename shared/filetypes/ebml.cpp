@@ -7,9 +7,12 @@ using namespace iso;
 //-----------------------------------------------------------------------------
 
 uint64 read_ebml_num(istream_ref stream, int &len) {
+	int		first	= stream.getc();
+	if (!first)
+		return 0;
+
 	int		mask	= 0x80;
 	int		size	= 1;
-	int		first	= stream.getc();
 	while (!(first & mask)) {
 		mask >>= 1;
 		size++;
@@ -49,8 +52,10 @@ double EBMLreader::read_float() {
 string EBMLreader::read_ascii() {
 	int		size32	= int(size);
 	string	s(size32);
-	istream_chain::readbuff(s, size32);
-	s[size32] = 0;
+	if (size32) {
+		istream_chain::readbuff(s, size32);
+		s[size32] = 0;
+	}
 	return s;
 }
 

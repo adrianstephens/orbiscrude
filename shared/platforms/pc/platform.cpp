@@ -6,7 +6,7 @@
 #include "windows/nt.h"
 #include "hook.h"
 
-//#define HEAP_VALIDATION
+#define HEAP_VALIDATION
 
 #if defined _MSC_VER && _MSC_VER >= 1900
 #include "stdio.h"
@@ -17,6 +17,7 @@
 //}
 #endif
 
+#if 0
 #include "delayimp.h"
 
 extern "C"
@@ -24,6 +25,7 @@ FARPROC WINAPI __delayLoadHelper2(PCImgDelayDescr pidd, FARPROC *ppfnIATEntry) {
 	FARPROC pfnRet = NULL;
 	return pfnRet;
 }
+#endif
 
 namespace iso {
 
@@ -39,15 +41,23 @@ HINSTANCE	GetDefaultInstance()					{ return hinst;			}
 HINSTANCE	GetInstance(HINSTANCE h)				{ return h ? h : hinst; }
 
 const void *WalkHeap(HANDLE h) {
-	PROCESS_HEAP_ENTRY Entry;
 	if (!HeapLock(h))
 		return (void*)1;
 
-	Entry.lpData = NULL;
+	PROCESS_HEAP_ENTRY Entry, Entry2;
+	Entry.lpData = Entry2.lpData = NULL;
+	
+	int	i = 0;
 	while (HeapWalk(h, &Entry)) {
 		if (Entry.wFlags & PROCESS_HEAP_ENTRY_BUSY) {
 			if (!HeapValidate(h, 0, Entry.lpData))
 				return Entry.lpData;
+		}
+		if (i++ & 1)
+			HeapWalk(h, &Entry2);
+
+		if (Entry.lpData == Entry2.lpData) {
+			return Entry.lpData;			//looped
 		}
 	}
 
@@ -91,7 +101,7 @@ struct HeapValidator {
 };
 
 #ifdef HEAP_VALIDATION
-int HeapValidator::mode = 0;
+int HeapValidator::mode = 0x00;
 #endif
 
 
@@ -99,7 +109,7 @@ int HeapValidator::mode = 0;
 iso_export void _iso_dump_heap(uint32 flags)		{}
 #else
 //iso_export void _iso_dump_heap(uint32 flags)		{ _CrtCheckMemory();	}
-iso_export void _iso_dump_heap(uint32 flags)		{ ISO_ALWAYS_ASSERT(HeapValidate(GetProcessHeap(), 0, 0));	}
+iso_export void _iso_dump_heap(uint32 flags)		{ HeapValidator::Validate(GetProcessHeap(), flags + 1); }
 #endif
 
 struct RtlpHeapFailureInfo {
@@ -337,7 +347,7 @@ bool IsProcessElevated() {
 	Win32Handle		h;
 	TOKEN_ELEVATION	elevation;
 	DWORD			size;
-	return OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &h)
+	return OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, h)
 		&& GetTokenInformation(h, TokenElevation, &elevation, sizeof(elevation), &size)
 		&& elevation.TokenIsElevated;
 }

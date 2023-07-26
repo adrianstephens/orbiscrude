@@ -57,9 +57,9 @@ class ATRAC9FileHandler : public SampleFileHandler, public WAVformat {
 	};
 
 	const char*		GetExt() override { return "at9";	}
-	bool					Read(istream_ref file, sample *sm, uint8 *config);
-	bool					Write(ostream_ref file, sample *sm, int superframeSize, int framesInSuperframe);
-	bool					Write(ostream_ref file, sample *sm, HANDLE_ATRAC9	h);
+	bool			Read2(istream_ref file, sample *sm, uint8 *config);
+	bool			Write(ostream_ref file, sample *sm, int superframeSize, int framesInSuperframe);
+	bool			Write(ostream_ref file, sample *sm, HANDLE_ATRAC9	h);
 
 	ISO_ptr<void>	Read(tag id, istream_ref file) override;
 	bool			Write(ISO_ptr<void> p, ostream_ref file) override;
@@ -67,7 +67,7 @@ class ATRAC9FileHandler : public SampleFileHandler, public WAVformat {
 public:
 	bool operator()(const ISO_WAVEFORMATEX *fmt, RIFF_chunk	&chunk, sample *sm) {
 		Header	*header = (Header*)fmt;
-		return header->wFormatTag == ISO_WAVEFORMAT::EXTENSIBLE && header->SubFormat == GUID_SUBTYPE_ATRAC9 && Read(chunk, sm, header->configData);
+		return header->wFormatTag == ISO_WAVEFORMAT::EXTENSIBLE && header->SubFormat == GUID_SUBTYPE_ATRAC9 && Read2(chunk, sm, header->configData);
 	}
 	ATRAC9FileHandler() : WAVformat(this) {}
 } atrac9;
@@ -117,7 +117,7 @@ ISO_ptr<void> ATRAC9FileHandler::Read(tag id, istream_ref file) {
 
 			case "data"_u32: {
 				Header	*h = fmt;
-				if (h->wFormatTag != ISO_WAVEFORMAT::EXTENSIBLE || h->SubFormat != GUID_SUBTYPE_ATRAC9 || !Read(chunk, sm, h->configData))
+				if (h->wFormatTag != ISO_WAVEFORMAT::EXTENSIBLE || h->SubFormat != GUID_SUBTYPE_ATRAC9 || !Read2(chunk, sm, h->configData))
 					return ISO_NULL;
 			}
 		}
@@ -125,7 +125,7 @@ ISO_ptr<void> ATRAC9FileHandler::Read(tag id, istream_ref file) {
 	return sm;
 }
 
-bool ATRAC9FileHandler::Read(istream_ref file, sample *sm, uint8 *config) {
+bool ATRAC9FileHandler::Read2(istream_ref file, sample *sm, uint8 *config) {
 	HANDLE_ATRAC9	h = sceAt9GetHandle();
 	sceAt9DecInit(h, config, SCE_AT9_WORD_LENGTH_16BIT);
 

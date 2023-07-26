@@ -83,9 +83,9 @@ void MakeDistanceField(const block<ISO_rgba, 2> &drect, const block<uint8, 2> &s
 	fill(grid2.sub<1>(swidth + samples2, samples).sub<2>(samples2, sheight), DistPoint(0, 0));
 
 	for (int y = 0; y < sheight; y++) {
-		uint8		*src	= srect[y];
-		DistPoint	*dst1	= grid1[y + samples2] + samples2;
-		DistPoint	*dst2	= grid2[y + samples2] + samples2;
+		uint8		*src	= srect[y].begin();
+		DistPoint	*dst1	= grid1[y + samples2].begin() + samples2;
+		DistPoint	*dst2	= grid2[y + samples2].begin() + samples2;
 		for (int x = swidth; x--; src++, dst1++, dst2++)
 			*(*src ? dst1 : dst2) = DistPoint(0, 0);
 	}
@@ -156,8 +156,8 @@ ISO_ptr<bitmap> DistanceBitmap2(ISO_ptr<bitmap> bm, float scale, float fdist)
 	auto	grid2	= make_auto_block<DistPoint>(width1, height1);
 
 	for (int y = 0; y < height; y++) {
-		DistPoint	*dst1	= grid1[y + dist] + dist;
-		DistPoint	*dst2	= grid2[y + dist] + dist;
+		DistPoint	*dst1	= grid1[y + dist].begin() + dist;
+		DistPoint	*dst2	= grid2[y + dist].begin() + dist;
 		ISO_rgba	*src	= bm->ScanLine(y);
 		for (int x = width; x--; src++, dst1++, dst2++)
 			*(src->a ? dst1 : dst2) = DistPoint(0, 0);
@@ -171,9 +171,9 @@ ISO_ptr<bitmap> DistanceBitmap2(ISO_ptr<bitmap> bm, float scale, float fdist)
 	auto	diffs	= make_auto_block<int>(width1, height1);
 
 	for (int y = 0; y < height - 1; y++) {
-		int			*diff	= diffs[y + dist] + dist;
-		DistPoint	*dst1	= gridc1[y + dist] + dist;
-		DistPoint	*dst2	= gridc2[y + dist] + dist;
+		int			*diff	= diffs[y + dist].begin() + dist;
+		DistPoint	*dst1	= gridc1[y + dist].begin() + dist;
+		DistPoint	*dst2	= gridc2[y + dist].begin() + dist;
 		ISO_rgba	*src1	= bm->ScanLine(y);
 		ISO_rgba	*src2	= bm->ScanLine(y + 1);
 		for (int x = 0; x < width - 1; x++) {
@@ -191,7 +191,7 @@ ISO_ptr<bitmap> DistanceBitmap2(ISO_ptr<bitmap> bm, float scale, float fdist)
 	bm1->Create(width1, height1);
 	for (int y = 0; y < height1; y++) {
 		ISO_rgba	*dst	= bm1->ScanLine(y);
-		int			*src	= diffs[y];
+		int			*src	= diffs[y].begin();
 		for (int x = 0; x < width1; x++)
 			dst[x] = src[x] > 0x100 ? ISO_rgba(255,255,255) : ISO_rgba(0,0,0);
 	}
@@ -206,10 +206,10 @@ ISO_ptr<bitmap> DistanceBitmap2(ISO_ptr<bitmap> bm, float scale, float fdist)
 	for (int y = 0; y < height1; y++) {
 		ISO_rgba	*dst1	= bm3->ScanLine(y);
 		ISO_rgba	*dst2	= bm3->ScanLine(y + height1);
-		DistPoint	*src1	= grid1[y];
-		DistPoint	*src2	= grid2[y];
-		DistPoint	*srcc1	= gridc1[y];
-		DistPoint	*srcc2	= gridc2[y];
+		DistPoint	*src1	= grid1[y].begin();
+		DistPoint	*src2	= grid2[y].begin();
+		DistPoint	*srcc1	= gridc1[y].begin();
+		DistPoint	*srcc2	= gridc2[y].begin();
 		for (int x = 0; x < width1; x++) {
 			DistPoint	d	= srcc1[x];
 			float		d0	= d.DistSq(), dx = gridc1[y][x + 1].DistSq() - d0, dy = gridc1[y + 1][x].DistSq() - d0;
@@ -253,8 +253,8 @@ ISO_ptr<bitmap> DistanceBitmap2(ISO_ptr<bitmap> bm, float scale, float fdist)
 
 	for (int y = 0; y < height2; y++) {
 		ISO_rgba	*dst	= bm2->ScanLine(y);
-		DistPoint	*src1	= grid1[y + dist] + dist;
-		DistPoint	*src2	= grid2[y + dist] + dist;
+		DistPoint	*src1	= grid1[y + dist].begin() + dist;
+		DistPoint	*src2	= grid2[y + dist].begin() + dist;
 		for (int x = width2; x--; dst++, src1++, src2++)
 			dst->a = clamp(int(sqrt(src2->DistSq()) - sqrt(src1->DistSq()) / dist * 128 + 128), 0, 255);
 	}
@@ -296,8 +296,8 @@ ISO_ptr<bitmap> DistanceBitmap(ISO_ptr<bitmap> bm, float scale, float dist) {
 
 	for (int y = 0; y < height; y++) {
 		ISO_rgba	*src	= bm->ScanLine(y);
-		DistPoint	*dst1	= grid1[y];
-		DistPoint	*dst2	= grid2[y];
+		DistPoint	*dst1	= grid1[y].begin();
+		DistPoint	*dst2	= grid2[y].begin();
 		for (int x = width; x--; src++, dst1++, dst2++)
 			*(src->a ? dst1 : dst2) = DistPoint(0, 0);
 	}
@@ -308,8 +308,8 @@ ISO_ptr<bitmap> DistanceBitmap(ISO_ptr<bitmap> bm, float scale, float dist) {
 	float		rdist	= reciprocal(dist);
 	for (int y = 0, ys = scale / 2; ys < height; y++, ys += scale) {
 		ISO_rgba	*src	= bm->ScanLine(ys);
-		DistPoint	*src1	= grid1[ys];
-		DistPoint	*src2	= grid2[ys];
+		DistPoint	*src1	= grid1[ys].begin();
+		DistPoint	*src2	= grid2[ys].begin();
 		ISO_rgba	*dst	= bm2->ScanLine(y);
 		for (int x = 0, xs = scale / 2; xs < width; x++, xs += scale) {
 			int		d1	= src1[xs].DistSq(), d2 = max(src2[xs].DistSq() - 1, 0);

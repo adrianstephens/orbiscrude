@@ -10,12 +10,17 @@
 #include "maths/tesselate.h"
 #include "maths/simplex.h"
 #include "maths/bezier.h"
+#include "maths/bspline.h"
+#include "maths/martinez.h"
 #include "vector_iso.h"
 #include "vector_string.h"
+#include "2d/fonts.h"
 #include "windows/d2d.h"
-#include "maths/martinez.h"
+#include "extra/random.h"
 
 using namespace app;
+
+static position2	global_point;
 
 typedef convex_polygon<ref_array_size<position2>> ref_polygon;
 
@@ -52,41 +57,123 @@ struct temp_points2 : auto_block<position2, 1> {
 	}
 };
 
-struct bezier2d : bezier_spline {
-	bezier2d(param(float2) c0, param(float2) c1, param(float2) c2, param(float2) c3) : bezier_spline(concat(c0,one,zero), concat(c1,one,zero), concat(c2,one,zero), concat(c3,one,zero)) {}
-	position2	centre() const {
-		return position2((c0.xy + c1.xy + c2.xy + c3.xy) / 4);
-	}
-	bezier2d&	operator*=(const float2x3 &m) {
-		c0.xy = m * position2(c0.xy);
-		c1.xy = m * position2(c1.xy);
-		c2.xy = m * position2(c2.xy);
-		c3.xy = m * position2(c3.xy);
+template<int N> struct bezier2dN : bezier_splineT<float2, N> {
+	typedef bezier_splineT<float2, N> B;
+//	bezier2dN(float2 *p) : B{p[0], p[1], p[2]} {}
+	bezier2dN&	operator*=(const float2x3 &m)	{ *(B*)this = m * *this; return *this; }
+	position2			closest(param(position2) p)						const	{ return position2(B::closest(p, 0, 0)); }
+	bool				contains(param(position2) p)					const	{ return len2(closest(p) - p) < 0.01f; }
+	auto				centre()										const	{ return get_box().centre(); }
+	float				ray_closest(param(ray2) r)						const	{ return 0; }
+	friend position2	uniform_perimeter(const bezier2dN &b, float t)			{ return position2(b.evaluate(t)); }
+	friend position2	uniform_interior(const bezier2dN &b, param(float2) v)	{ return uniform_perimeter(b, v.x);	}
+	friend float		area(const bezier2dN &b)								{ return 0; }
+	friend position2	any_point(const bezier2dN &b)							{ return position2(b[0]); }
+};
+
+typedef bezier2dN<2> bezier2d2;
+typedef bezier2dN<3> bezier2d;
+
+template<typename T, int N, typename C> struct bezier_chain2dN : bezier_chain<T, N, C> {
+	typedef bezier_chain<T, N, C> B;
+	bezier_chain2dN(const bezier_chain2dN &b)		: B(copy(b.c)) {}
+	bezier_chain2dN(B &&b)		: B(move(b.c)) {}
+	bezier_chain2dN(const B &b)	: B(copy(b.c)) {}
+	bezier_chain2dN(const C &b) : B(copy(b)) {}
+	bezier_chain2dN&	operator*=(const float2x3 &m) {
+		for (auto &i : c)
+			i = m * position2(i);
 		return *this;
 	}
-	position2			closest(param(position2) p)						const	{ return position2(closest_point(p, 0, 0).xy); }
+	position2			closest(param(position2) p)						const	{ return position2(B::closest(p.v, 0, 0)); }
 	bool				contains(param(position2) p)					const	{ return len2(closest(p) - p) < 0.01f; }
-	rectangle			get_box()										const	{ return rectangle(position2(min(min(min(c0, c1), c2), c3).xy), position2(max(max(max(c0, c1), c2), c3).xy)); }
+	auto				centre()										const	{ return get_box().centre(); }
 	float				ray_closest(param(ray2) r)						const	{ return 0; }
-//	bool				ray_check(param(ray2) r, float &t, float2 *normal) const { return false; }
-	friend position2	uniform_interior(const bezier2d &b, param(float2) v)	{ return position2(v);	}
-	friend position2	uniform_perimeter(const bezier2d &b, float t)			{ return position2(b.evaluate(t).xy); }
-	friend float		area(const bezier2d &b)									{ return 0; }
-	friend position2	any_point(const bezier2d &b)							{ return position2(b.c0.xy); }
+
+	friend position2	uniform_perimeter(const bezier_chain2dN &b, float t)		{ return position2(b.evaluate(t * b.size())); }
+	friend position2	uniform_interior(const bezier_chain2dN &b, param(float2) v)	{ return uniform_perimeter(b, v.x);	}
+	friend float		area(const bezier_chain2dN &b)								{ return 0; }
+	friend position2	any_point(const bezier_chain2dN &b)							{ return position2(b.c[0]); }
 };
+
+typedef bezier_chain2dN<float2p, 2, ISO::OpenArray<float2p>> bezier_chain2d2;
+typedef bezier_chain2dN<float2p, 3, ISO::OpenArray<float2p>> bezier_chain2d;
+
+template<typename T, int N> auto	to_bez(const bspline<T, N> &spline) {
+	auto	bez		= to_beziers(spline);
+	bezier_chain<T, N>	chain;
+	chain.add((bezier_splineT<T, N>*)bez.c.begin(), bez.c.size() / (N + 1));
+	return chain;
+}
+
+
+template<typename T, int N> struct bspline2dN : bspline<T, N> {
+	typedef bspline<T, N> B;
+
+	bspline2dN(const ISO::bspline2d &b)		: B(b.c, b.k) {}
+	bspline2dN(const ISO::bspline2d2 &b)	: B(b.c, b.k) {}
+	bspline2dN(const bspline<float2p,N> &b)	: B(b.c, copy(b.k)) {}
+	bspline2dN&	operator*=(const float2x3 &m)	{ 
+		for (auto &i : c)
+			i = m * position2(i);
+		return *this;
+	}
+	position2			support(param(float2) v)						const	{ return position2(to_bez(*this).support(v)); }
+	position2			closest(param(position2) p)						const	{ return position2(to_bez(*this).closest(p.v, 0, 0)); }
+	bool				contains(param(position2) p)					const	{ return len2(closest(p) - p) < 0.01f; }
+	auto				centre()										const	{ return get_box().centre(); }
+	float				ray_closest(param(ray2) r)						const	{ return 0; }
+	bool				ray_check(param(ray2) r, float &t, float2 *normal) const{ return to_bez(*this).ray_check(r, t, normal); }
+	friend position2	uniform_perimeter(const bspline2dN &b, float t)			{ return position2(b.evaluate(b.domain().from(t))); }
+	friend position2	uniform_interior(const bspline2dN &b, param(float2) v)	{ return uniform_perimeter(b, v.x);	}
+	friend float		area(const bspline2dN &b)								{ return 0; }
+	friend position2	any_point(const bspline2dN &b)							{ return position2(b.c[0]); }
+};
+
+typedef bspline2dN<float2, 3> bspline2d;
+typedef bspline2dN<float2, 2> bspline2d2;
+
+template<typename T, int N> auto	to_bez(const rational<bspline<T, N>> &spline) {
+	return make_rational(to_bez((const bspline<T, N>&)spline));
+}
+
+template<typename T, int N> struct nurbs2dN : rational<bspline<T, N>> {
+	typedef rational<bspline<T, N>> B;
+
+	nurbs2dN(const ISO::nurbs2d &b)		: B(b.c, b.k) {}
+	nurbs2dN(const ISO::nurbs2d2 &b)	: B(b.c, b.k) {}
+	nurbs2dN&	operator*=(const float2x3 &m)	{ 
+		//for (auto &i : c)
+		//	i = m * i;
+		return *this;
+	}
+	position2			support(param(float2) v)						const	{ return position2(to_bez(*this).support(v)); }
+	position2			closest(param(position2) p)						const	{ return to_bez(*this).closest(p, 0, 0); }
+	bool				contains(param(position2) p)					const	{ return len2(closest(p) - p) < 0.01f; }
+	auto				centre()										const	{ return any_point(*this); }//get_box().centre(); }
+	float				ray_closest(param(ray2) r)						const	{ return 0; }
+	bool				ray_check(param(ray2) r, float &t, float2 *normal) const{ return to_bez(*this).ray_check(r, t, normal); }
+	friend position2	uniform_perimeter(const nurbs2dN &b, float t)			{ return position2(b.evaluate(b.domain().from(t))); }
+	friend position2	uniform_interior(const nurbs2dN &b, param(float2) v)	{ return uniform_perimeter(b, v.x);	}
+	friend float		area(const nurbs2dN &b)									{ return 0; }
+	friend position2	any_point(const nurbs2dN &b)							{ return project(b.c[0]); }
+};
+
+typedef nurbs2dN<float3, 2> nurbs2d2;
+typedef nurbs2dN<float3, 3> nurbs2d;
 
 //-----------------------------------------------------------------------------
 //	Drawing
 //-----------------------------------------------------------------------------
 
-void DrawPoint(const d2d::Target &d2d, param(float2x3) transform, ID2D1Brush *brush, param(position2) p) {
+void DrawPoint(const d2d::Target &d2d, param(float2x3) transform, ID2D1Brush *brush, param(position2) p, uint32 size = 4) {
 	position2	a = transform * p;
-	d2d.Fill(rectangle(a - 4, a + 4), brush);
+	d2d.Fill(rectangle(a - size, a + size), brush);
 }
 
-template<typename C> void DrawPoints(const d2d::Target &d2d, param(float2x3) transform, ID2D1Brush *brush, C&& c) {
+template<typename C> void DrawPoints(const d2d::Target &d2d, param(float2x3) transform, ID2D1Brush *brush, C&& c, uint32 size = 4) {
 	for (auto &&i : c)
-		DrawPoint(d2d, transform, brush, i);
+		DrawPoint(d2d, transform, brush, i, size);
 }
 
 void DrawLine(const d2d::Target &d2d, param(float2x3) transform, ID2D1Brush *brush, param(position2) a, param(position2) b) {
@@ -94,8 +181,8 @@ void DrawLine(const d2d::Target &d2d, param(float2x3) transform, ID2D1Brush *bru
 }
 
 template<typename C> void DrawLines(const d2d::Target &d2d, param(float2x3) transform, ID2D1Brush *brush, C &&c, bool loop = true) {
-	if (c.size()) {
-		position2	a = loop ? c.back() : c.front();
+	if (!is_empty(c)) {
+		position2	a = loop ? back(c) : front(c);
 		for (position2 b : slice(c, loop ? 0 : 1)) {
 			DrawLine(d2d, transform, brush, a, b);
 			a = b;
@@ -103,54 +190,24 @@ template<typename C> void DrawLines(const d2d::Target &d2d, param(float2x3) tran
 	}
 }
 
-template<typename P> void DrawLines(const d2d::Target &d2d, param(float2x3) transform, ID2D1Brush *brush, P p, int n, bool loop = true) {
-	if (n) {
-		position2	a = transform * p[loop ? n - 1 : 0];
-		for (int i = loop ? 0 : 1; i < n; i++) {
-			position2	b = transform * p[i];
-			d2d.DrawLine(a, b, brush, 1);
-			a = b;
-		}
-	}
-}
-
-template<typename P> void DrawBezier(const d2d::Target &d2d, param(float2x3) transform, ID2D1Brush *brush, P p, int n, bool loop = true) {
-	d2d::Geometry	geom(d2d);
-	{
-		auto		sink	= geom.Open();
-		position2	a		= transform * p[0];
-
-		sink->BeginFigure(d2d::point(a), D2D1_FIGURE_BEGIN_HOLLOW);
-
-		for (int i = 3; i < n; i += 3) {
-			position2	a = transform * p[i - 2];
-			position2	b = transform * p[i - 1];
-			position2	c = transform * p[i];
-			sink->AddBezier(d2d::bezier_segment(a, b, c));
-		}
-		sink->EndFigure(loop ? D2D1_FIGURE_END_CLOSED : D2D1_FIGURE_END_OPEN);
-	}
-	d2d.Draw(geom, brush);
-}
-
-template<typename P> void FillPoly(const d2d::Target &d2d, param(float2x3) transform, ID2D1Brush *brush, P p, int n) {
-	if (n) {
+template<typename C> void FillPoly(const d2d::Target &d2d, param(float2x3) transform, ID2D1Brush *brush, C &&c) {
+	if (!is_empty(c)) {
 		d2d::Geometry	geom(d2d);
 		{
 			auto	sink = geom.Open();
-			sink->BeginFigure(d2d::point(transform * p[0]), D2D1_FIGURE_BEGIN_FILLED);
-			for (int i = 1; i < n; i++)
-				sink->AddLine(d2d::point(transform * p[i]));
+			sink->BeginFigure(d2d::point(transform * front(c)), D2D1_FIGURE_BEGIN_FILLED);
+			for (position2 b : slice(c, 1))
+				sink->AddLine(d2d::point(transform * b));
 			sink->EndFigure(D2D1_FIGURE_END_CLOSED);
 		}
 		d2d.Fill(geom, brush);
 	}
 }
 
-template<typename P> void DrawPoly(const d2d::Target &d2d, param(float2x3) transform, ID2D1Brush *fill, ID2D1Brush *line, P p, int n) {
+template<typename C> void DrawPoly(const d2d::Target &d2d, param(float2x3) transform, ID2D1Brush *fill, ID2D1Brush *line, C &&c) {
 	if (fill)
-		FillPoly(d2d, transform, fill, p, n);
-	DrawLines(d2d, transform, line, p, n);
+		FillPoly(d2d, transform, fill, c);
+	DrawLines(d2d, transform, line, c, true);
 }
 
 void Draw(const d2d::Target &d2d, param(float2x3) transform, ID2D1Brush *fill, ID2D1Brush *line, const circle &c) {
@@ -160,7 +217,6 @@ void Draw(const d2d::Target &d2d, param(float2x3) transform, ID2D1Brush *fill, I
 	if (fill)
 		d2d.FillEllipse(ellipse, fill);
 	d2d.DrawEllipse(ellipse, line);
-	d2d.SetTransform(identity);
 }
 
 void Draw(const d2d::Target &d2d, param(float2x3) transform, ID2D1Brush *fill, ID2D1Brush *line, const ellipse &e) {
@@ -185,51 +241,260 @@ void Draw(const d2d::Target &d2d, param(float2x3) transform, ID2D1Brush *fill, I
 }
 
 void Draw(const d2d::Target &d2d, param(float2x3) transform, ID2D1Brush *fill, ID2D1Brush *line, const triangle &tri) {
-	position2	t[3];
-	for (int i = 0; i < 3; i++)
-		t[i]	= tri.corner(i);
-	DrawPoly(d2d, transform, fill, line, t, 3);
+	DrawPoly(d2d, transform, fill, line, tri.corners());
 }
 
 void Draw(const d2d::Target &d2d, param(float2x3) transform, ID2D1Brush *fill, ID2D1Brush *line, const quadrilateral &q) {
-	position2		t[4];
-	for (int i = 0; i < 4; i++)
-		t[i]	= q.corner(clockwise(i));
-	DrawPoly(d2d, transform, fill, line, t, 4);
-}
-void Draw(const d2d::Target &d2d, param(float2x3) transform, ID2D1Brush *fill, ID2D1Brush *line, const obb2 &o) {
-	position2		t[4];
-	for (int i = 0; i < 4; i++)
-		t[i]	= o.corner(clockwise(i));
-	DrawPoly(d2d, transform, fill, line, t, 4);
+	DrawPoly(d2d, transform, fill, line, q.corners_cw());
 }
 
 void Draw(const d2d::Target &d2d, param(float2x3) transform, ID2D1Brush *fill, ID2D1Brush *line, const temp_points2 &poly) {
-	DrawPoly(d2d, transform, fill, line, poly.begin(), poly.size());
+	DrawPoly(d2d, transform, fill, line, poly);
 }
 
 //void Draw(const d2d::Target &d2d, param(float2x3) transform, ID2D1Brush *fill, ID2D1Brush *line, const simple_polygon &poly) {
 //	DrawPoly(d2d, transform, fill, line, poly.begin(), poly.size());
 //}
 
-void Draw(const d2d::Target &d2d, param(float2x3) transform, ID2D1Brush *fill, ID2D1Brush *line, const bezier2d &bez) {
+template<typename T, typename C> void Draw(const d2d::Target &d2d, param(float2x3) transform, ID2D1Brush *fill, ID2D1Brush *brush, const bezier_chain<T, 2, C> &chain) {
 	d2d::Geometry	geom(d2d);
 	{
 		auto		sink	= geom.Open();
-		sink->BeginFigure(d2d::point(transform * position2(bez.c0.xy)), D2D1_FIGURE_BEGIN_HOLLOW);
-		sink->AddBezier(d2d::bezier_segment(
-			transform * position2(bez.c1.xy),
-			transform * position2(bez.c2.xy),
-			transform * position2(bez.c3.xy)
-		));
+		position2	a		= transform * position2(chain[0][0]);
+
+		sink->BeginFigure(d2d::point(a), D2D1_FIGURE_BEGIN_HOLLOW);
+
+		for (auto &i : chain) {
+			position2	a = transform * position2(i[1]);
+			position2	b = transform * position2(i[2]);
+			sink->AddQuadraticBezier(d2d::bezier2_segment(a, b));
+		}
 		sink->EndFigure(D2D1_FIGURE_END_OPEN);
 	}
-	d2d.Draw(geom, line);
+	d2d.Draw(geom, brush);
+}
+
+template<typename T, typename C> void Draw(const d2d::Target &d2d, param(float2x3) transform, ID2D1Brush *fill, ID2D1Brush *brush, const bezier_chain<T, 3, C> &chain) {
+	d2d::Geometry	geom(d2d);
+	{
+		auto		sink	= geom.Open();
+		position2	a		= transform * position2(chain[0][0]);
+
+		sink->BeginFigure(d2d::point(a), D2D1_FIGURE_BEGIN_HOLLOW);
+
+		for (auto &i : chain) {
+			position2	a = transform * position2(i[1]);
+			position2	b = transform * position2(i[2]);
+			position2	c = transform * position2(i[3]);
+			sink->AddBezier(d2d::bezier_segment(a, b, c));
+		}
+		sink->EndFigure(D2D1_FIGURE_END_OPEN);
+	}
+	d2d.Draw(geom, brush);
+}
+
+template<int N> void Draw(const d2d::Target &d2d, param(float2x3) transform, ID2D1Brush *fill, ID2D1Brush *line, const bezier_splineT<float2, N> &bez) {
+	Draw(d2d, transform, fill, line, make_bezier_chain(bez));
+}
+
+template<typename T, int N> void Draw(const d2d::Target &d2d, param(float2x3) transform, ID2D1Brush *fill, ID2D1Brush *brush, const bspline<T,N> &spline) {
+#if 1
+	/*
+	auto	bp0 = bspline_poly<3>::f(spline.k + 0);
+	auto	bp1 = bspline_poly<3>::f(spline.k + 1);
+	auto	bp2 = bspline_poly<3>::f(spline.k + 2);
+	auto	bp3 = bspline_poly<3>::f(spline.k + 3);
+
+//	auto	bp20 = bspline_poly2<3,3>::f(spline.k + 0);
+*/
+
+	if (fill) {
+		dynamic_array<position2>	pts(101);
+		auto	dom = spline.domain();
+
+		for (int i = 0; i <= 100; i++)
+			pts[i] = position2(spline.evaluate2(dom.from(i / 100.f)).result());
+		DrawLines(d2d, transform, fill, pts, false);
+	}
+#endif
+	Draw(d2d, transform, fill, brush, to_bez(spline));
+}
+
+template<typename T, int N> void Draw(const d2d::Target &d2d, param(float2x3) transform, ID2D1Brush *fill, ID2D1Brush *brush, const rational<bspline<T,N>> &spline) {
+	DrawLines(d2d, transform, brush, transformc(int_range(101), [&, dom = spline.domain()](int i) {
+		return position2(spline.evaluate(dom.from(i / 100.f)));
+	}), false);
+}
+
+float hyperbolic_param(float2 v) {
+	return v.x < 0
+		? sqrt((v.x - v.y) / (v.x + v.y))
+		: sqrt((v.x + v.y) / (v.x - v.y));
+}
+
+float parabolic_param(float2 v) {
+	return v.x;
+}
+
+void Draw(const d2d::Target &d2d, param(float2x3) transform, ID2D1Brush *brush, const conic &c) {
+	float2x3	m;
+	auto		info	= c.analyse(m);
+
+	if (info.type == conic::TRIVIAL || info.empty)
+		return;
+
+	if (info.type == conic::ELLIPSE) {
+		Draw(d2d, transform, nullptr, brush, ellipse(m));
+		return;
+	}
+
+	auto	size	= d2d.Size();
+	line2	edges[]	= {
+		{-y_axis, -64},		//top
+		{y_axis, size.y - 32},	//bottom
+		{-x_axis, -32},		//left
+		{x_axis, size.x - 32},	//right
+	};
+	for (auto &i : edges)
+		i = i / transform;
+
+	interval<float>	ints[] = {
+		c & edges[0],
+		c & edges[1],
+		c & edges[2],
+		c & edges[3],
+	};
+
+	if (info.type == conic::HYPERBOLA) {
+		auto	pa	= from_x_axis(edges[0]) * position2(ints[0].a, zero);
+		auto	pb	= from_x_axis(edges[0]) * position2(ints[0].b, zero);
+
+		auto	pc	= from_x_axis(edges[1]) * position2(ints[1].b, zero);
+		auto	pd	= from_x_axis(edges[1]) * position2(ints[1].a, zero);
+
+		if (ints[0].a == ints[0].b)
+			pb	= from_x_axis(edges[2]) * position2(ints[2].a, zero);
+		if (ints[1].a == ints[1].b)
+			pc	= from_x_axis(edges[3]) * position2(ints[3].a, zero);
+
+		if (edges[2].test(pa))				//pa off left
+			pa	= from_x_axis(edges[2]) * position2(ints[2].a, zero);
+		else if (edges[3].test(pa))			//pa off right
+			pa	= from_x_axis(edges[3]) * position2(ints[3].b, zero);
+
+		if (edges[2].test(pb))				//pb off left
+			pb	= from_x_axis(edges[2]) * position2(ints[2].a, zero);
+		else if (edges[3].test(pb))			//pa off right
+			pb	= from_x_axis(edges[3]) * position2(ints[3].b, zero);
+
+		if (edges[2].test(pc))				//pc off left
+			pc	= from_x_axis(edges[2]) * position2(ints[2].b, zero);
+		else if (edges[3].test(pc))			//pc off right
+			pc	= from_x_axis(edges[3]) * position2(ints[3].a, zero);
+
+		if (edges[2].test(pd))				//pd off left
+			pd	= from_x_axis(edges[2]) * position2(ints[2].b, zero);
+		else if (edges[3].test(pd))			//pa off right
+			pd	= from_x_axis(edges[3]) * position2(ints[3].a, zero);
+
+		if (info.degenerate) {
+			DrawLine(d2d, transform, brush, pa, pd);
+			DrawLine(d2d, transform, brush, pb, pc);
+
+		} else {
+			float	ta	= hyperbolic_param(pa / m);
+			float	tb	= hyperbolic_param(pb / m);
+			float	tc	= hyperbolic_param(pc / m);
+			float	td	= hyperbolic_param(pd / m);
+
+			DrawLines(d2d, transform, brush, transformc(int_range(101), [&](int i) {
+				float	t = lerp(tb, td, i / 100.f);
+				return  m * position2((square(t) + 1) / (t * 2), (square(t) - 1) / (t * 2));
+			}), false);
+			DrawLines(d2d, transform, brush, transformc(int_range(101), [&](int i) {
+				float	t = lerp(ta, tc, i / 100.f);
+				return  m * position2(-(square(t) + 1) / (t * 2), (square(t) - 1) / (t * 2));
+			}), false);
+		}
+
+	} else {	//conic::PARABOLA:
+		auto	pa	= from_x_axis(edges[0]) * position2(ints[0].a, zero);
+		auto	pb	= from_x_axis(edges[0]) * position2(ints[0].b, zero);
+
+		if (ints[0].a == ints[0].b)
+			pb	= from_x_axis(edges[1]) * position2(ints[1].a, zero);
+
+		if (edges[2].test(pa))				//pa off left
+			pa	= from_x_axis(edges[2]) * position2(ints[2].a, zero);
+		else if (edges[3].test(pa))			//pa off right
+			pa	= from_x_axis(edges[3]) * position2(ints[3].b, zero);
+
+		if (edges[2].test(pb))				//pb off left
+			pb	= from_x_axis(edges[2]) * position2(ints[2].a, zero);
+		else if (edges[3].test(pb))			//pa off right
+			pb	= from_x_axis(edges[3]) * position2(ints[3].b, zero);
+
+		if (info.degenerate) {
+			DrawLine(d2d, transform, brush, pa, pb);
+
+		} else {
+			float	ta	= parabolic_param(pa / m);
+			float	tb	= parabolic_param(pb / m);
+
+			DrawLines(d2d, transform, brush, transformc(int_range(101), [&](int i) {
+				float	t = lerp(tb, ta, i / 100.f);//(i - 50) / 50.f;
+				return m * position2(t, -square(t) / two);
+			}), false);
+		}
+	}
+		
+}
+
+template<typename T> void Draw(const d2d::Target &d2d, param(float2x3) transform, ID2D1Brush *fill, ID2D1Brush *brush, const rational<bspline<T,2>> &spline) {
+#if 0
+	//get conics
+	auto	b = to_bez(spline);
+	for (auto& i : b) {
+		conic	c1	= ConicBezier(i[0], i[1], i[2]);
+		Draw(d2d, transform, brush, c1);
+		break;
+	}
+#endif
+	auto	dom = spline.domain();
+	DrawLines(d2d, transform, brush, transformc(int_range(101), [&](int i) {
+		return position2(spline.evaluate(dom.from(i / 100.f)));
+	}), false);
 }
 
 template<typename S> void Draw(const d2d::Target &d2d, param(float2x3) transform, ID2D1Brush *fill, ID2D1Brush *line, const complex_polygon<S> &poly) {
 	for (auto &i : poly)
-		DrawPoly(d2d, transform, fill, line, i.points().begin(), i.points().size());
+		DrawPoly(d2d, transform, fill, line, i.points());
+}
+
+struct CurveMaker : CurveTranslator, d2d::Geometry::Sink {
+	void Arc(const ArcParams &arc, float2 p0, float2 p1) {
+		get()->AddArc(d2d::arc_segment(p1, arc.radii, to_degrees(arc.angle), arc.clockwise, arc.big));
+	}
+	void Begin(float2 p0)									{ get()->BeginFigure(d2d::point(p0), D2D1_FIGURE_BEGIN_HOLLOW); }
+	void End()												{ get()->EndFigure(D2D1_FIGURE_END_CLOSED); }
+	void Line(float2 p0, float2 p1)							{ get()->AddLine(d2d::point(p1)); }
+	void Bezier(float2 p0, float2 p1, float2 p2)			{ get()->AddQuadraticBezier(d2d::bezier2_segment(p1, p2)); }
+	void Bezier(float2 p0, float2 p1, float2 p2, float2 p3)	{ get()->AddBezier(d2d::bezier_segment(p1, p2, p3)); }
+	void Arc(float2 p0, float2 p1, float2 p2)				{ Arc(ArcParams(p0, p1, p2), p0, p2); }
+	void Arc(float2 p0, float2 p1, float2 p2, float2 p3)	{ Arc(ArcParams(p0, p1, p2, p3), p0, p3); }
+
+	CurveMaker(const d2d::Geometry &geom) : d2d::Geometry::Sink(geom.Open()) {}
+//	~CurveMaker() { close(*this); }
+};
+
+void DrawCurve(const d2d::Target &d2d, param(float2x3) transform, ID2D1Brush *brush, range<curve_vertex*> curve) {
+	d2d::Geometry	geom(d2d);
+	CurveMaker	cm(geom);
+	for (auto &i : curve)
+		cm.add(cm, i, i.flags);
+	cm.close(cm);
+
+	d2d.Draw(d2d::Geometry(d2d.factory, geom, transform), brush);
 }
 
 //-----------------------------------------------------------------------------
@@ -295,7 +560,7 @@ struct Shape2 {
 template<typename T> struct ShapeT : Shape2 {
 	T	x;
 	ShapeT(const T &_t) : x(_t) {}
-	ShapeT(T &&_t) : x(move(_t)) {}
+	template<typename T2> ShapeT(T2 &&t)	: x(forward<T2>(t)) {}
 	void Draw(const d2d::Target &d2d, param(float2x3) transform, ID2D1Brush *fill, ID2D1Brush *line) const {
 		::Draw(d2d, transform, fill, line, x);
 	}
@@ -305,8 +570,8 @@ template<typename T> struct ShapeT : Shape2 {
 	position2	any_point()							const	{ using iso::any_point; return any_point(x);	}
 	position2	closest(param(position2) p)			const	{ return x.closest(p);	}
 	float		dist(param(position2) p)			const	{ using iso::dist; return dist(x, p); }
-	position2	support(param(float2) v)			const	{ return x.support(v);	}
-	async_callback<position2(param(float2))> support()const	{ return [&x=x](param(float2) v) { return x.support(v); };	}
+	position2	support(param(float2) v)			const	{ return position2(x.support(v));	}
+	async_callback<position2(param(float2))> support()const	{ return [&x=x](param(float2) v) { return position2(x.support(v)); };	}
 	float		area()								const	{ using iso::area; return area(x);	}
 	bool		ray_check(param(ray2) r, float &t, float2 *n) const { return x.ray_check(r, t, n);	}
 	float		ray_closest(param(ray2) r)			const	{ return x.ray_closest(r);	}
@@ -416,6 +681,9 @@ class ViewTest2D : public aligned<Window<ViewTest2D>, 16> {
 		MODE_BOX,
 		MODE_QUAD,
 		MODE_NGON,
+		MODE_CUBIC_INTERP,
+		MODE_CUBIC_RELAXED,
+		MODE_CUBIC_CATMULL,
 		MODE_CONTOUR,
 		MODE_MARTINEZ,
 		MODE_STEPPING,
@@ -436,6 +704,7 @@ class ViewTest2D : public aligned<Window<ViewTest2D>, 16> {
 	enum SELECTED_MODE {
 		SEL_NONE,
 		SEL_POINT,
+		SEL_CURVE,
 		SEL_SHAPE
 	};
 	enum NUMBERS {
@@ -444,6 +713,7 @@ class ViewTest2D : public aligned<Window<ViewTest2D>, 16> {
 		NUM_HULL,
 	};
 	enum COMMAND {
+		CYCLE				= 0xff,
 		SET_MODE			= 0x100,
 		SET_NUMBERS			= 0x200,
 		SET_WINDING			= 0x300,
@@ -451,6 +721,7 @@ class ViewTest2D : public aligned<Window<ViewTest2D>, 16> {
 		TRIANGULATOR_START	= MISC,
 		TRIANGULATOR_NEXT,
 		FLIP_Y,
+		REVERSE,
 		RANDOMISE_INTERIOR,
 		RANDOMISE_PERIMETER,
 		REGULAR_INTERIOR,
@@ -478,7 +749,8 @@ class ViewTest2D : public aligned<Window<ViewTest2D>, 16> {
 	d2d::Write				write;
 	d2d::Font				font;
 
-	ISO_ptr<ISO_openarray<float2p> >	p;
+	ISO_ptr<ISO_openarray<float2p>>			p;
+	ISO_ptr<ISO_openarray<curve_vertex>>	curve;
 	ISO_ptr<bitmap>			background;
 	com_ptr<ID2D1Bitmap>	d2d_background;
 
@@ -499,11 +771,12 @@ class ViewTest2D : public aligned<Window<ViewTest2D>, 16> {
 	unique_ptr<Triangulator>	tri;
 	ModifyOp				*currentop;
 
-	int		FindPoint(const Point &mouse);
-	Shape2*	AddShape(const ISO_ptr<void> &p);
-	void	Regular(bool perimeter);
-	void	Paint(const Rect &client);
-	void	Init(const ISO_ptr<void> &_p);
+	int			FindPoint(const Point &mouse);
+	Shape2*		AddShape(const ISO_ptr<void> &p);
+	void		Paint(const Rect &client);
+	rectangle	Init(const ISO_ptr<void> &_p);
+	bool		Set(ISO::Browser b);
+	bool		Select(ISO::Browser b);
 
 	template<typename L> void	GeneratePerimeter(L&& lambda) {
 		if (p && selected_mode == SEL_SHAPE)
@@ -517,6 +790,14 @@ class ViewTest2D : public aligned<Window<ViewTest2D>, 16> {
 				*make_rangec(*p) = generate_interior(*shapes[selected_index], lambda, n);
 			else
 				generate_interior(unit_rect, lambda, (position2*)p->begin(), n);
+		}
+	}
+
+	void	SetSelected(SELECTED_MODE mode, int i) {
+		if (selected_mode != mode || selected_index != i) {
+			selected_mode	= mode;
+			selected_index	= i;
+			Invalidate();
 		}
 	}
 
@@ -559,7 +840,7 @@ public:
 		return false;
 	}
 
-	LRESULT Proc(UINT message, WPARAM wParam, LPARAM lParam);
+	LRESULT Proc(MSG_ID message, WPARAM wParam, LPARAM lParam);
 	//ViewTest2D(MainWindow &_main, const WindowPos &wpos, const ISO_ptr<void> &_p);
 	ViewTest2D(MainWindow &_main, const WindowPos &wpos, const ISO_VirtualTarget &v);
 };
@@ -571,6 +852,14 @@ ViewTest2D::ShapeType	ViewTest2D::shape_types[] = {
 	{ ISO::getdef<triangle		>(), [](const ISO_ptr<void> &p) { return make_shape(*(triangle		*)p); } },
 	{ ISO::getdef<parallelogram	>(), [](const ISO_ptr<void> &p) { return make_shape(*(parallelogram	*)p); } },
 	{ ISO::getdef<quadrilateral	>(), [](const ISO_ptr<void> &p) { return make_shape(*(quadrilateral	*)p); } },
+	{ ISO::getdef<ISO::bezier2d	>(), [](const ISO_ptr<void> &p) { return make_shape(*(bezier2d		*)p); } },
+	{ ISO::getdef<ISO::bezier2d2>(), [](const ISO_ptr<void> &p) { return make_shape(*(bezier2d2		*)p); } },
+	{ ISO::getdef<ISO::bezier_chain2d>(),	[](const ISO_ptr<void> &p) { return make_shape(*(bezier_chain2d		*)p); } },
+	{ ISO::getdef<ISO::bezier_chain2d2>(),	[](const ISO_ptr<void> &p) { return make_shape(*(bezier_chain2d2	*)p); } },
+	{ ISO::getdef<ISO::bspline2d>(),		[](const ISO_ptr<void> &p) { return make_shape<bspline2d>(*(ISO::bspline2d*)p); } },
+	{ ISO::getdef<ISO::bspline2d2>(),		[](const ISO_ptr<void> &p) { return make_shape<bspline2d2>(*(ISO::bspline2d2*)p); } },
+	{ ISO::getdef<ISO::nurbs2d>(),			[](const ISO_ptr<void> &p) { return make_shape<nurbs2d>(*(ISO::nurbs2d*)p); } },
+	{ ISO::getdef<ISO::nurbs2d2>(),			[](const ISO_ptr<void> &p) { return make_shape<nurbs2d2>(*(ISO::nurbs2d2*)p); } },
 };
 
 bool ViewTest2D::supported_type(const ISO::Type *type) {
@@ -597,7 +886,7 @@ bool ViewTest2D::supported_type(const ISO::Type *type) {
 		|| (sub->GetType() == ISO::COMPOSITE && ((ISO::TypeComposite*)sub)->Count() == 2);
 }
 
-LRESULT ViewTest2D::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+LRESULT ViewTest2D::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 		case WM_CREATE: {
 			Accelerator::Builder	ab;
@@ -617,6 +906,9 @@ LRESULT ViewTest2D::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 			ab.Append(sub, "Box",			SET_MODE | MODE_BOX,			'B');
 			ab.Append(sub, "Quad",			SET_MODE | MODE_QUAD,			'Q');
 			ab.Append(sub, "N-gon",			SET_MODE | MODE_NGON);
+			ab.Append(sub, "Interpolating Cubic",	SET_MODE | MODE_CUBIC_INTERP);
+			ab.Append(sub, "Relaxed Cubic",	SET_MODE | MODE_CUBIC_RELAXED);
+			ab.Append(sub, "Catmull-Rom Cubic",	SET_MODE | MODE_CUBIC_CATMULL);
 			ab.Append(sub, "Contour",		SET_MODE | MODE_CONTOUR);
 			ab.Append(sub, "Martinez",		SET_MODE | MODE_MARTINEZ);
 			ab.Append(sub, "Stepping",		SET_MODE | MODE_STEPPING);
@@ -644,6 +936,7 @@ LRESULT ViewTest2D::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 			sub		= Menu::Create();
 			menu.Append("Options", sub);
 			ab.Append(sub, "Flip Vertical",			FLIP_Y,					'Y');
+			ab.Append(sub, "Reverse Order",			REVERSE,				VK_SUBTRACT);
 			ab.Append(sub, "Randomise Interior",	RANDOMISE_INTERIOR,		'R');
 			ab.Append(sub, "Randomise Perimeter",	RANDOMISE_PERIMETER,	{'R', Accelerator::Key::SHIFT});
 			ab.Append(sub, "Regular Interior",		REGULAR_INTERIOR,		{'R', Accelerator::Key::CTRL});
@@ -662,10 +955,10 @@ LRESULT ViewTest2D::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 			sub.Append("Negative",				SET_WINDING | WINDING_NEGATIVE);
 			sub.Append("Absolute >= 2",			SET_WINDING | WINDING_ABS_GEQ_TWO);
 
-			ab.Append(SET_NUMBERS,	'N');
-			ab.Append(STEP_UP,		VK_ADD);
-			ab.Append(STEP_DOWN,	VK_SUBTRACT);
-			ab.Append(BREAK,		VK_F11);
+			ab.Append(SET_NUMBERS | CYCLE,	VK_DECIMAL);
+			ab.Append(STEP_UP,				VK_ADD);
+			ab.Append(STEP_DOWN,			VK_SUBTRACT);
+			ab.Append(BREAK,				VK_F11);
 
 			accel	= Accelerator(ab);
 
@@ -675,8 +968,7 @@ LRESULT ViewTest2D::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 			tooltip.Create(*this, NULL, POPUP);// | TTS_NOPREFIX | TTS_ALWAYSTIP);
 			tooltip.Add(*this);
 
-			Rect	client	= GetClientRect();
-			d2d.Init(hWnd,client.Size());
+			d2d.Init(hWnd, GetClientRect().Size());
 			break;
 		}
 
@@ -693,7 +985,7 @@ LRESULT ViewTest2D::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 			ControlArrangement::GetRects(ToolbarArrange, rect, rects);
 			toolbar.Move(rects[0]);
 
-			if (d2d.Resize(rect.Size())) {
+			if (!d2d.Resize(rect.Size())) {
 				d2d_background.clear();
 				d2d.DeInit();
 			}
@@ -736,55 +1028,35 @@ LRESULT ViewTest2D::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 						} else {
 							i->mode = (Shape2::MODE)(x - 1);
 						}
+						Invalidate();
 					}
 					break;
 				}
 			}
-			Invalidate();
 			break;
 		}
 
 		case WM_LBUTTONDOWN: {
 			mouse			= Point(lParam);
-			selected_mode	= SEL_NONE;
-			position2	p	= position2((float2{mouse.x, mouse.y} - pos.v) / zoom);
-
-			int	i = FindPoint(mouse);
-			if (i >= 0) {
-				selected_index	= i;
-				selected_mode	= SEL_POINT;
-
-			} else {
-				bool	get_ray_start	= mode == MODE_RAY_CLOSEST || mode == MODE_RAY_CHECK;
-
-				for (auto &i : reversed(shapes)) {
-					if (i->contains(p)) {
-						selected_index	= shapes.index_of(i);
-						selected_mode	= SEL_SHAPE;
-						get_ray_start	= false;
-						break;
-					}
-				}
-
-				if (get_ray_start)
-					ray_start = p;
+			if (selected_mode != SEL_SHAPE && (mode == MODE_RAY_CLOSEST || mode == MODE_RAY_CHECK)) {
+				ray_start = position2((float2{mouse.x, mouse.y} - pos.v) / zoom);
+				Invalidate();
 			}
 
-			Invalidate();
 			SetFocus();
 			break;
 		}
 
 		case WM_RBUTTONDOWN: {
 			mouse		= Point(lParam);
-			int	selected2	= FindPoint(mouse);
-			if (selected2 >= 0) {
+			int		i	= FindPoint(mouse);
+			if (i >= 0) {
 				if (tri) {
 //					tri->DeletePoint(selected2);
-					tri->MakeEdge(selected_index, selected2);
+					tri->MakeEdge(selected_index, i);
+					Invalidate();
 				}
 			}
-			Invalidate();
 			break;
 		}
 
@@ -801,10 +1073,10 @@ LRESULT ViewTest2D::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 			break;
 
 		case WM_MOUSEMOVE: {
-			Point	pt(lParam);
+			Point		pt(lParam);
 			TrackMouse(TME_LEAVE);
-			//tooltip.Activate(*this, true);
-			tooltip.Track(GetMousePos() + Point(15, 15));
+			tooltip.Activate(*this, true);
+			tooltip.Track();
 
 			if (wParam & MK_LBUTTON) {
 				Point		pt(lParam);
@@ -819,6 +1091,8 @@ LRESULT ViewTest2D::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 					case SEL_POINT: {
 						(*p)[selected_index] = (*p)[selected_index] + move / zoom;
 						tri = 0;
+						if (curve)
+							(*curve)[selected_index].set_pos((*p)[selected_index]);
 #ifdef ISO_EDITOR
 						if (!currentop)
 							((IsoEditor&)main).Do(currentop = new ModifyOp(p));
@@ -845,13 +1119,33 @@ LRESULT ViewTest2D::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 
 			} else if (wParam & MK_RBUTTON) {
 				Invalidate();
+
+			} else {
+				int	i = FindPoint(mouse);
+				if (i >= 0) {
+					SetSelected(SEL_POINT, i);
+				} else {
+					position2	p	= position2((float2{pt.x, pt.y} - pos.v) / zoom);
+					bool		found	= false;
+					for (auto &i : reversed(shapes)) {
+						if (i->contains(p)) {
+							found	= true;
+							SetSelected(SEL_SHAPE, shapes.index_of(i));
+							break;
+						}
+					}
+					if (!found)
+						SetSelected(SEL_NONE, 0);
+				}
 			}
+
 			if (is_any(mode, MODE_POINT_CLOSEST, MODE_POINT_DIST, MODE_SUPPORT, MODE_RAY_CLOSEST, MODE_RAY_CHECK)) {
 				Invalidate();
 				Update();
 			}
 			mouse = pt;
 			mouse_buttons = wParam;
+			Invalidate();
 			break;
 		}
 
@@ -879,7 +1173,7 @@ LRESULT ViewTest2D::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 					return 0;
 
 				case SET_NUMBERS:
-					numbers = NUMBERS(wParam & 0xff);
+					numbers = wParam & 0xff == CYCLE ? NUMBERS((numbers + 1) % 3) : NUMBERS(wParam & 0xff);
 					Invalidate();
 					return 0;
 
@@ -889,42 +1183,36 @@ LRESULT ViewTest2D::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 					return 0;
 
 				default: switch (LOWORD(wParam)) {
-					case ID_EDIT: {	// from main
-						ISO::Browser b	= *(ISO::Browser*)lParam;
-
-						if (b.GetType() == ISO::REFERENCE) {
-							if (auto s = AddShape(*(ISO_ptr<void>*)b)) {
-								Invalidate();
-								return true;
-							}
-
-						}
-						if (auto p2 = ISO_conversion::convert<ISO_openarray<float2p> >(b)) {
-							p	= p2;
-							tri	= 0;
+					case ID_EDIT:	// from main
+						if (Set(*(ISO::Browser*)lParam)) {
 							Invalidate();
 							return true;
 						}
-					}
-					case ID_EDIT_SELECT: {	// from main
-						ISO::Browser b	= *(ISO::Browser*)lParam;
-
-						if (p && b.GetTypeDef()->SameAs<float2p>()) {
-							int	i = (float2p*)b - *p;
-							if (i >= 0 && i < p->Count()) {
-								selected_index	= i;
-								Invalidate();
-								return true;
-							}
-						}
 						break;
-					}
+
+					case ID_EDIT_SELECT:	// from main
+						Select(*(ISO::Browser*)lParam);
+						break;
+
 //					case TRIANGULATOR_START:
 //					case TRIANGULATOR_NEXT:
 					case FLIP_Y:
 						zoom.y	= -zoom.y;
 						Invalidate();
 						break;
+
+					case REVERSE:
+						if (curve) {
+							reverse_curves(*curve);
+							float2p	*d = p->begin();;
+							for (auto &i : *curve)
+								*d++ = float2p{i.x, i.y};
+
+						} else if (p) {
+							reverse(*p);
+						}
+						Invalidate();
+						return 0;
 
 					case RANDOMISE_INTERIOR:
 						GenerateInterior([](int k, int n) { return random.get<float2>(); });
@@ -955,7 +1243,8 @@ LRESULT ViewTest2D::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 						if (p) {
 							temp_points2	pts(*p, mode == MODE_CONTOUR ? square(p->size32()) : 1);
 							switch (mode) {
-								case MODE_BEZIER:	shapes.push_back(make_shape(bezier2d(pts[0], pts[1], pts[2], pts[3]))); break;
+								//case MODE_BEZIER:	shapes.push_back(make_shape(bezier2d(pts[0], pts[1], pts[2], pts[3]))); break;
+								case MODE_BEZIER:	shapes.push_back(make_shape(bezier_chain2d(*p))); break;
 								case MODE_HULL:		shapes.push_back(make_shape(temp_points2(pts.begin(), generate_hull_2d(pts.begin(), pts.end())))); break;
 								case MODE_CIRCLE:	shapes.push_back(make_shape(pts.cloud().circumscribe())); break;
 								case MODE_INCIRCLE:	shapes.push_back(make_shape(as_simple_polygon(pts.cloud()).inscribe(1e-3f))); break;
@@ -964,10 +1253,14 @@ LRESULT ViewTest2D::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 								case MODE_BOX:		shapes.push_back(make_shape(pts.cloud().get_obb())); break;
 								case MODE_QUAD:		shapes.push_back(make_shape(pts.cloud().get_quad())); break;
 								case MODE_NGON:		shapes.push_back(make_shape(temp_points2(pts.begin(), optimise_polyline_verts(pts.begin(), pts.size(), step + 3, true)))); break;
-								case MODE_STAR:		shapes.push_back(make_shape(temp_points2(make_star_polygon(pts.cloud())))); break;
+								case MODE_STAR:		shapes.push_back(make_shape(temp_points2(make_star_polygon(pts.cloud()).points()))); break;
+								case MODE_CUBIC_INTERP:		shapes.push_back(new ShapeT<bezier_chain2d>(bezier_chain<float2p, 3, ISO::OpenArray<float2p>>::interpolating(*p))); break;
+								case MODE_CUBIC_RELAXED:	shapes.push_back(new ShapeT<bezier_chain2d>(bezier_chain<float2p, 3, ISO::OpenArray<float2p>>::relaxed(*p))); break;
+								case MODE_CUBIC_CATMULL:	shapes.push_back(new ShapeT<bezier_chain2d>(catmull_rom_to_bezier<float2p, ISO::OpenArray<float2p>>(*p, 0.5f, nullptr, nullptr))); break;
+
 								case MODE_CONTOUR: {
 									int		*lengths	= alloc_auto(int, pts.size());
-									int		nc			= find_contour(winding_rule, pts.begin(), pts.size(), pts, lengths);
+									int		nc			= find_contour(winding_rule, pts.begin(), pts.size(), pts.begin(), lengths);
 									complex_polygon<dynamic_array<simple_polygon<temp_points2>>> polygon;
 									auto	p			= pts.begin();
 									for (int c = 0; c < nc; ++c) {
@@ -982,7 +1275,7 @@ LRESULT ViewTest2D::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 									auto	polyr	= poly_bool(as_simple_polygon(pts.cloud()), simple_polygon<array<position2,0>>(), Martinez::XOR);
 									complex_polygon<dynamic_array<simple_polygon<temp_points2>>> polygon;
 									for (auto &c : polyr.contours())
-										polygon.contours().push_back(transformc(c, [](param(double2) i) { return to<float>(i); }));
+										polygon.contours().push_back(transformc(c.points(), [](param(double2) i) { return to<float>(i); }));
 									shapes.push_back(make_shape(move(polygon)));
 									break;
 								}
@@ -1110,6 +1403,8 @@ Shape2 *ViewTest2D::AddShape(const ISO_ptr<void> &p) {
 void ViewTest2D::Paint(const Rect &client) {
 	position2	mouse_pos	= position2((float2{mouse.x, mouse.y} - pos.v) / zoom);
 	vector2		mouse_dir;
+	global_point = mouse_pos;
+
 
 	if (mode == MODE_SUPPORT) {
 		d2d::point	p0	= client.Centre();
@@ -1182,8 +1477,8 @@ void ViewTest2D::Paint(const Rect &client) {
 			auto	*occluders_begin	= partition(shapes2, [](Shape2 *p) { return p->mode != Shape2::normal; });
 			auto	*includers_begin	= partition(occluders_begin, shapes2.end(), [](Shape2 *p) { return p->mode == Shape2::includer; });
 
-			dynamic_array<Includer>		includers = transformc(make_range(includers_begin, shapes2.end()), [](Shape2 *s){ return s->get_polygon(); });
-			dynamic_array<ref_polygon>	occluders = transformc(make_range(occluders_begin, includers_begin), [](Shape2 *s){ return s->get_polygon(); });
+			dynamic_array<Includer>		includers = transformc(make_range(includers_begin, shapes2.end()),		[](Shape2 *s) { return s->get_polygon(); });
+			dynamic_array<ref_polygon>	occluders = transformc(make_range(occluders_begin, includers_begin),	[](Shape2 *s) { return s->get_polygon(); });
 
 			for (auto &i : includers) {
 				for (auto &o : occluders)
@@ -1266,9 +1561,9 @@ void ViewTest2D::Paint(const Rect &client) {
 						auto	poly1	= i->get_polygon();
 						auto	polyr	= poly_bool(poly0, poly1, Martinez::Op(mode - MODE_BOOLOPS));
 						for (auto &c : reversed(polyr)) {
-							dynamic_array<iso::pos<double,2>>		c1 = c;
-							dynamic_array<position2>	c2 = transformc(c, [](param(double2) i) { return to<float>(i); });
-							DrawPoly(d2d, transform, signed_area(c[0], c[1], c[2]) > 0 ? red : green, black, c2.begin(), c2.size());
+							dynamic_array<iso::pos<double,2>>		c1 = c.points();
+							dynamic_array<position2>	c2 = transformc(c.points(), [](param(double2) i) { return to<float>(i); });
+							DrawPoly(d2d, transform, signed_area(c[0], c[1], c[2]) > 0 ? red : green, black, c2);
 						}
 					}
 				}
@@ -1285,7 +1580,6 @@ void ViewTest2D::Paint(const Rect &client) {
 				case MODE_POINT_CLOSEST:
 					for (auto &i : shapes) {
 						position2	b	= i->closest(mouse_pos);
-						d2d.DrawLine(transform * mouse_pos, b, green, 1);
 						DrawLine(d2d, transform, green, b, mouse_pos);
 						DrawPoint(d2d, transform, green, b);
 					}
@@ -1294,7 +1588,8 @@ void ViewTest2D::Paint(const Rect &client) {
 				case MODE_POINT_DIST:
 					for (auto &i : shapes) {
 						float	d	= i->dist(mouse_pos);
-						d2d.DrawEllipse({transform * mouse_pos, d * zoom}, green, 1);
+						//d2d.DrawEllipse({transform * mouse_pos, d * zoom}, green, 1);
+						Draw(d2d, transform, nullptr, green, circle(mouse_pos, d));
 					}
 					break;
 
@@ -1306,7 +1601,7 @@ void ViewTest2D::Paint(const Rect &client) {
 				case MODE_RAY_CHECK:
 				case MODE_RAY_CLOSEST: {
 					ray2		r(ray_start, mouse_pos);
-					d2d.DrawLine(transform * ray_start, transform * mouse_pos, green, 1);
+					DrawLine(d2d, transform, green, ray_start, mouse_pos);
 
 					if (mode == MODE_RAY_CHECK && selected_mode == SEL_SHAPE) {
 						auto	b = shapes[selected_index]->support();
@@ -1353,28 +1648,57 @@ void ViewTest2D::Paint(const Rect &client) {
 
 		switch (mode) {
 			case MODE_LINES:
-				DrawLines(d2d, transform, black, pts.begin(), pts.size(), false);
+				if (curve)
+					DrawCurve(d2d, transform, black, *curve);
+				else
+					DrawLines(d2d, transform, black, pts, false);
 				break;
 
 			case MODE_STAR: {
 				auto	star = make_star_polygon(pts.cloud());
-				DrawPoly(d2d, transform, fill, black, star.begin(), star.size());
-				//DrawLines(d2d, transform, black, star.begin(), star.size(), true);
+				DrawPoly(d2d, transform, fill, black, star.points());
 				break;
 			}
 
 			case MODE_BEZIER:
-				DrawBezier(d2d, transform, black, pts.begin(), pts.size(), false);
+				if (curve) {
+					auto	epsilon = len(pts.get_box().extent()) / 250;
+					auto	chains = get_bezier3(*curve);
+					for (auto &c : chains) {
+						Draw(d2d, transform, nullptr, black, c);
+
+						bezier_chain<float2, 2>	c2 = c.reduce(16, epsilon);
+						Draw(d2d, transform, nullptr, green, c2);
+					}
+
+				} else {
+					bezier_chain<float2, 3>	c2 = dynamic_array<float2>(*p);
+					Draw(d2d, transform, nullptr, black, c2);
+
+					for (int i = 0; i < pts.size() - 3; i += 3) {
+						bezier_splineT<float2, 3>	b{
+							pts[i + 0],
+							pts[i + 1],
+							pts[i + 2],
+							pts[i + 3]
+						};
+						auto	b2	= make_bezier_chain(b).reduce(6, 0.01f);
+						for (auto &j : b2) {
+							Draw(d2d, transform, nullptr, red, j);
+							DrawPoint(d2d, transform, red, position2(j.evaluate(zero)));
+						}
+					}
+				}
 				break;
 
 			case MODE_BOX:
 				Draw(d2d, transform, fill, black, pts.cloud().get_obb());
-				DrawLines(d2d, transform, green, pts.begin(), nh = generate_hull_2d(pts.begin(), pts.end()));
+				DrawLines(d2d, transform, green, make_range_n(pts.begin(), nh = generate_hull_2d(pts.begin(), pts.end())));
 				break;
 
 			case MODE_HULL:
 				nh = generate_hull_2d(pts.begin(), pts.end());
-				DrawPoly(d2d, transform, fill, black, pts.begin(), nh);
+				DrawPoly(d2d, transform, fill, black, slice(pts, 0, nh));
 				break;
 
 			case MODE_DELAUNAY: {
@@ -1387,7 +1711,7 @@ void ViewTest2D::Paint(const Rect &client) {
 						pts[indices[j*3+1]],
 						pts[indices[j*3+2]],
 					};
-					DrawLines(d2d, transform, black, t, 3);
+					DrawLines(d2d, transform, black, make_range(t));
 				}
 				break;
 			}
@@ -1397,7 +1721,7 @@ void ViewTest2D::Paint(const Rect &client) {
 				break;
 
 			case MODE_INCIRCLE:
-				FillPoly(d2d, transform, fill, pts.begin(), pts.size());
+				FillPoly(d2d, transform, fill, pts);
 				Draw(d2d, transform, fill, black, as_simple_polygon(pts.cloud()).inscribe(1e-3f));
 				break;
 
@@ -1407,12 +1731,12 @@ void ViewTest2D::Paint(const Rect &client) {
 
 			case MODE_TRIANGLE:
 				Draw(d2d, transform, fill, black, pts.cloud().get_tri());
-				DrawLines(d2d, transform, green, pts.begin(), nh = generate_hull_2d(pts.begin(), pts.end()));
+				DrawLines(d2d, transform, green, make_range_n(pts.begin(), nh = generate_hull_2d(pts.begin(), pts.end())));
 				break;
 
 			case MODE_QUAD:
 				Draw(d2d, transform, fill, black, pts.cloud().get_quad());
-				DrawLines(d2d, transform, green, pts.begin(), nh = generate_hull_2d(pts.begin(), pts.end()));
+				DrawLines(d2d, transform, green, make_range_n(pts.begin(), nh = generate_hull_2d(pts.begin(), pts.end())));
 				break;
 
 			case MODE_NGON: {
@@ -1422,17 +1746,34 @@ void ViewTest2D::Paint(const Rect &client) {
 				nh = generate_hull_2d(pts.begin(), pts.size());
 				nh = optimise_hull_2d(pts.begin(), nh, ngon);
 			#endif
-				DrawPoly(d2d, transform, fill, black, pts.begin(), nh);
-				DrawLines(d2d, transform, green, pts.begin(), nh = generate_hull_2d(pts.begin(), pts.end()));
+				DrawPoly(d2d, transform, fill, black, slice(pts, 0, nh));
+				DrawLines(d2d, transform, green, make_range_n(pts.begin(), nh = generate_hull_2d(pts.begin(), pts.end())));
 				break;
 			}
+
+			case MODE_CUBIC_INTERP: {
+				auto	b = bezier_chain<float2p, 3>::interpolating(*p);
+				Draw(d2d, transform, nullptr, black, b);
+				break;
+			}
+			case MODE_CUBIC_RELAXED: {
+				auto	b = bezier_chain<float2p, 3>::relaxed(*p);
+				Draw(d2d, transform, nullptr, black, b);
+				break;
+			}
+			case MODE_CUBIC_CATMULL: {
+				auto	b  = catmull_rom_to_bezier<float2p>(*p, 0.5f, nullptr, nullptr);
+				Draw(d2d, transform, nullptr, black, b);
+				break;
+			}
+
 			case MODE_CONTOUR: {
 				int		*lengths	= alloc_auto(int, pts.size());
-				int		nc			= find_contour(winding_rule, pts.begin(), pts.size(), pts, lengths);
+				int		nc			= find_contour(winding_rule, pts.begin(), pts.size(), pts.begin(), lengths);
 				auto	p			= pts.begin();
 				for (int c = 0; c < nc; ++c) {
 					int	n	= lengths[c];
-					DrawPoly(d2d, transform, fill, black, p, n);
+					DrawPoly(d2d, transform, fill, black, make_range_n(p, n));
 					nh	+= n;
 					p	+= n;
 				}
@@ -1443,19 +1784,26 @@ void ViewTest2D::Paint(const Rect &client) {
 
 				complex_polygon<dynamic_array<simple_polygon<temp_points2>>> polygon;
 				for (auto &c : polyr.contours())
-					polygon.contours().push_back(transformc(c, [](param(double2) i) { return to<float>(i); }));
+					polygon.contours().push_back(transformc(c.points(), [](param(double2) i) { return to<float>(i); }));
 
 				Draw(d2d, transform, fill, black, polygon);
 				break;
 			}
 		}
-		for (int i = 0; i < pts.size(); i++)
-			DrawPoint(d2d, transform, selected_mode == SEL_POINT && i == selected_index ? red : black, position2((*p)[i]));
+
+		for (int i = 0; i < pts.size(); i++) {
+			if (selected_mode != SEL_POINT || i != selected_index)
+				DrawPoint(d2d, transform, black, position2((*p)[i]));
+		}
+
+		if (selected_mode == SEL_POINT)
+			DrawPoint(d2d, transform, red, position2((*p)[selected_index]));
 
 		if (numbers) {
 			if (numbers == NUM_HULL && mode != MODE_DELAUNAY) {
 				for (int i = 0; i < nh; i++)
 					DrawText(transform, green, pts[i], to_string(i));
+
 			} else {
 				for (int i = 0; i < pts.size(); i++)
 					DrawText(transform,
@@ -1469,62 +1817,104 @@ void ViewTest2D::Paint(const Rect &client) {
 
 }
 
-void ViewTest2D::Init(const ISO_ptr<void> &_p) {
+bool ViewTest2D::Set(ISO::Browser b) {
+	if (b.GetType() == ISO::REFERENCE) {
+		if (auto s = AddShape(*b))
+			return true;
+	}
+
+	if (auto p2 = ISO_conversion::convert<ISO_openarray<float2p>>(b)) {
+		p	= p2;
+		tri	= 0;
+		return true;
+	}
+
+	if (auto p2 = ISO_conversion::convert<ISO_openarray<curve_vertex>>(b)) {
+		curve = p2;
+		p.Create();
+		for (auto &i : *p2)
+			p->Append(float2p{i.x, i.y});
+		return true;
+	}
+
+	return false;
+}
+
+bool ViewTest2D::Select(ISO::Browser b) {
+	if (p && b.GetTypeDef()->SameAs<float2p>()) {
+		int	i = (float2p*)b - *p;
+		if (i >= 0 && i < p->Count()) {
+			SetSelected(SEL_POINT, i);
+			return true;
+		}
+	}
+	if (curve && b.GetTypeDef()->SameAs<curve_vertex>()) {
+		int	i = (curve_vertex*)b - *curve;
+		if (i >= 0 && i < curve->Count()) {
+			SetSelected(SEL_POINT, i);
+			return true;
+		}
+	}
+
+	return false;
+}
+
+rectangle ViewTest2D::Init(const ISO_ptr<void> &_p) {
+	rectangle	r(none);
+
 	if (Shape2 *s = AddShape(_p)) {
-		FitExtent(s->get_box());
-		return;
-	}
-	if (p = ISO_conversion::convert<ISO_openarray<float2p>>(_p)) {
-		rectangle	r(get_extent(*p));
-		r |= r.a + select(r.extent() == zero, float2(one), float2(zero));
-		FitExtent(r);
-		return;
-	}
-	if (auto c = ISO_conversion::convert<ISO_openarray<curve_vertex>>(_p)) {
+		if (_p.IsType<ISO::bspline2d>() || _p.IsType<ISO::bspline2d2>()) {
+			p		= ISO::MakePtr(none, copy(((ISO::bspline2d*)_p)->c));
+			mode	= MODE_POINTS;
+
+		} else if (_p.IsType<ISO::nurbs2d2>() || _p.IsType<ISO::nurbs2d>()) {
+			auto&	c = ((ISO::nurbs2d*)_p)->c;
+			p.Create(none, c.size());
+			auto	d = p->begin();
+			for (auto& i : c)
+				*d++ = project(i);
+			mode	= MODE_POINTS;
+		}
+		r	= s->get_box();
+
+	} else if (p = ISO_conversion::convert<ISO_openarray<float2p>>(_p)) {
+		r	= get_extent(*p);
+		r	|= r.a + select(r.extent() == zero, float2(one), float2(zero));
+
+	} else if (auto c = ISO_conversion::convert<ISO_openarray<curve_vertex>>(_p)) {
+		curve = c;
 		p.Create();
 		for (auto &i : *c)
 			p->Append(float2p{i.x, i.y});
-		rectangle	r(get_extent(*p));
-		FitExtent(r);
-		return;
-	}
+		r	= get_extent(*p);
 
-	rectangle	r(none);
-	for (auto i : ISO::Browser2(_p)) {
-		if (Shape2 *s = AddShape(i)) {
-			r |= s->get_box();
-		} else {
-			if (auto p1 = (ISO_conversion::convert<ISO_openarray<float2p> >(i))) {
-				r |= rectangle(get_extent(*p1));
-				if (!p) {
-					p = p1;
-				} else {
-					for (auto &i : *p1)
-						p->Append(i);
+	} else {
+		for (auto i : ISO::Browser2(_p)) {
+			if (Shape2 *s = AddShape(i)) {
+				r |= s->get_box();
+
+			} else {
+				if (auto p1 = (ISO_conversion::convert<ISO_openarray<float2p> >(i))) {
+					r |= rectangle(get_extent(*p1));
+					if (!p) {
+						p = p1;
+					} else {
+						for (auto &i : *p1)
+							p->Append(i);
+					}
+
+				} else if (auto c = ISO_conversion::convert<ISO_openarray<curve_vertex>>(i)) {
+					if (!p)
+						p.Create();
+					for (auto &i : *c)
+						p->Append(float2p{i.x, i.y});
+					r = rectangle(get_extent(*p));
 				}
-			} else if (auto c = ISO_conversion::convert<ISO_openarray<curve_vertex>>(i)) {
-				if (!p)
-					p.Create();
-				for (auto &i : *c)
-					p->Append(float2p{i.x, i.y});
-				r = rectangle(get_extent(*p));
 			}
 		}
 	}
-	FitExtent(r);
+	return r;
 }
-
-//ViewTest2D::ViewTest2D(MainWindow &main, const WindowPos &wpos, const ISO_ptr<void> &_p)
-//	: main(main), font(write, L"arial", 16)
-//	, mode(MODE_LINES), numbers(NUM_OFF), winding_rule(WINDING_NONZERO), selected_mode(SEL_NONE)
-//	, zoom(1), pos(zero), prevn(0)
-//	, currentop(NULL)
-//
-//{
-//	Create(wpos, NULL, CHILD | CLIPCHILDREN | VISIBLE, CLIENTEDGE);
-//	Init(_p);
-//	Invalidate();
-//}
 
 ViewTest2D::ViewTest2D(MainWindow &main, const WindowPos &wpos, const ISO_VirtualTarget &v)
 	: main(main), font(write, L"arial", 16)
@@ -1533,7 +1923,7 @@ ViewTest2D::ViewTest2D(MainWindow &main, const WindowPos &wpos, const ISO_Virtua
 	, currentop(NULL)
 {
 	Create(wpos, NULL, CHILD | CLIPCHILDREN | VISIBLE, CLIENTEDGE);
-	Init(v);
+	FitExtent(Init(v));
 	Invalidate();
 }
 
@@ -1544,7 +1934,8 @@ class EditorTest2D : public Editor {
 	virtual Control Create(MainWindow &main, const WindowPos &wpos, const ISO_VirtualTarget &v) {
 		return *new ViewTest2D(main, wpos, v);
 	}
-	//virtual Control Create(MainWindow &main, const WindowPos &wpos, const ISO_ptr<void> &p) {
-	//	return *new ViewTest2D(main, wpos, p);
-	//}
+public:
+	EditorTest2D() {
+		ISO::getdef<curve_vertex>();
+	}
 } editortest2d;

@@ -93,6 +93,7 @@ public:
 	void		AddItemControl(Control c, int i = 0x7fffffff)				const;
 	void		SetItemControl(Control c, text title, int i)				const;
 	void		SetItemControl(Control c, int i)							const;
+	int			ParentNotify(Control c, MSG_ID msg);
 };
 
 // TabControl3
@@ -115,7 +116,7 @@ public:
 		Create(wpos, caption, style, stylex);
 		SetFont(Font::DefaultGui());
 	}
-	TabWindow(const WindowPos &wpos, Control c) : TabWindow(wpos, "tabs", CHILD | CLIPCHILDREN | VISIBLE) {
+	TabWindow(const WindowPos &wpos, Control c) : TabWindow(wpos, "tabs") {
 		if (c) {
 			AddItemControl(c);
 			SetSelectedControl(c);
@@ -246,13 +247,7 @@ public:
 	WindowPos		GetChildWindowPos()						const	{ return WindowPos(*this, GetChildRect()); }
 	Rect			AdjustRect(const Rect &rect)			const	{ return rect + GetFrameAdjust(); }
 	Rect			AdjustRectFromChild(const Rect &rect)	const	{ return rect + (GetRect() - ToScreen(GetChildRect())); }
-	TabWindow*		GetTabs() {
-		if (auto *tabs = TabWindow::Cast(child))
-			return tabs;
-		auto *tabs = new TabWindow(GetChildWindowPos(), GetChild());
-		SetChildImmediate(*tabs);
-		return tabs;
-	}
+	TabWindow*		GetTabs();
 	void StartDrag() {
 		ReleaseCapture();
 		Show();

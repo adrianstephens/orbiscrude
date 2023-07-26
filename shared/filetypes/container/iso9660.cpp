@@ -314,8 +314,8 @@ public:
 };											// 0x11
 
 void DATETIME::Set(DateTime &time, int8 gmt) {
-	Date		d	= time.Days();
-	TimeOfDay	t	= time.TimeOfDay();
+	Date		d(time.Day());
+	TimeOfDay	t(time.TimeOfDay());
 	int			s	= int(t.Sec());
 
 	sprintf(year, "%04i%02i%02i%02i%02i%02i%02i",
@@ -401,7 +401,7 @@ class ISO9660FileHandler : public FileHandler {
 	static void					MakePathTable(directory_info *dirs, ISO_ptr<directory> root);
 	template<typename E> void	WritePathTable(ostream_ref file, directory_info *dirs, int n);
 	void						WriteFile(ostream_ref file, ISO_ptr<void> p);
-	void						Read(ISO_ptr<anything> &pak, istream_ref file);
+	void						Read2(ISO_ptr<anything> &pak, istream_ref file);
 
 	ISO_ptr<void>	Read(tag id, istream_ref file) override {
 		ISO_ptr<anything> t;
@@ -413,11 +413,11 @@ class ISO9660FileHandler : public FileHandler {
 		file.readbuff(test, 20);
 
 		if (memcmp(test, match1, 12) == 0)
-			Read(t, interleaved_reader<istream_ref>(file, CD_SECTOR_SIZE, 0x10, 2352));
+			Read2(t, interleaved_reader<istream_ref>(file, CD_SECTOR_SIZE, 0x10, 2352));
 		else if (memcmp(test, match1 + 4, 8) == 0 || memcmp(test + 12, match2, 8) == 0)
-			Read(t, interleaved_reader<istream_ref>(file, CD_SECTOR_SIZE, 0x14, 2348));
+			Read2(t, interleaved_reader<istream_ref>(file, CD_SECTOR_SIZE, 0x14, 2348));
 		else
-			Read(t, file);
+			Read2(t, file);
 
 		return t;
 	}
@@ -469,7 +469,7 @@ ISO_ptr<void> CUEFileHandler::ReadTrack(istream_ref file, streamptr start, strea
 		return s;
 	} else {
 		ISO_ptr<anything> t(name);
-		iso9660.Read(t, interleaved_reader<istream_ref>(file, CD_SECTOR_SIZE, 0x10, sectlen));
+		iso9660.Read2(t, interleaved_reader<istream_ref>(file, CD_SECTOR_SIZE, 0x10, sectlen));
 		return t;
 	}
 }
@@ -566,7 +566,7 @@ bool CUEFileHandler::WriteWithFilename(ISO_ptr<void> p, const filename &fn) {
 //	read
 //-------------------------------------
 
-void ISO9660FileHandler::Read(ISO_ptr<anything> &pak, istream_ref file) {
+void ISO9660FileHandler::Read2(ISO_ptr<anything> &pak, istream_ref file) {
 	uint8	sector[CD_SECTOR_SIZE];
 	bool	raw = WantRaw();
 
@@ -896,8 +896,8 @@ bool ISO9660FileHandler::Write(ISO_ptr<void> p, ostream_ref file) {
 
 #ifdef PLAT_PC
 	DateTime	now		= DateTime::Now();
-	Date		day		= now.Days();
-	TimeOfDay	time	= now.TimeOfDay();
+	Date		day(now.Day());
+	TimeOfDay	time(now.TimeOfDay());
 
 	pvd.root.year		= day.year - 1900;
 	pvd.root.month		= day.month;
@@ -905,7 +905,7 @@ bool ISO9660FileHandler::Write(ISO_ptr<void> p, ostream_ref file) {
 	pvd.root.hour		= time.Hour();
 	pvd.root.minute		= time.Min();
 	pvd.root.second		= uint8(time.Sec());
-	pvd.root.GMToffset	= uint8(DateTime::TimeZone() / DateTime::Mins(15));
+	pvd.root.GMToffset	= uint8(DateTime::TimeZone() / Duration::Mins(15));
 	pvd.create.Set(now, pvd.root.GMToffset);
 #endif
 

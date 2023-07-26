@@ -8,9 +8,10 @@
 
 #include <winternl.h>
 #include <winnt.h>
-#include <dbghelp.h>
+#include <minidumpapiset.h>
+//#include <dbghelp.h>
 
-#pragma comment(lib, "dbghelp")
+//#pragma comment(lib, "dbghelp")
 
 namespace iso {
 
@@ -80,54 +81,49 @@ struct SID;
 template<> struct deleter<SID> { void operator()(void *p) { FreeSid((SID*)p); } };
 
 // Determine if the current thread is running as a user that is a member of the local admins group.
-// Based on code from KB #Q118626, at http://support.microsoft.com/kb/118626
+// Based on code from KB #Q118626
 
-BOOL IsCurrentUserLocalAdministrator() {
-	// Create a security descriptor that has a DACL which has an ACE that allows only local administrators access and call AccessCheck with the current thread's token and the security descriptor.
-	// It will say whether the user could access an object if it had that security descriptor.
-
+bool IsCurrentUserLocalAdministrator() {
+	// Create a security descriptor that has a DACL which has an ACE that allows only local administrators access and call AccessCheck with the current thread's token and the security descriptor
+	// It will say whether the user could access an object if it had that security descriptor
 	const DWORD ACCESS_READ	 = 1;
 	const DWORD ACCESS_WRITE = 2;
 
 	try {
-		// AccessCheck() requires an impersonation token, so get a primary token and then create a duplicate impersonation token.
+		// AccessCheck() requires an impersonation token, so get a primary token and then create a duplicate impersonation token
 		// The impersonation token is only used in the call to AccessCheck, so this function itself never impersonates, but does use the identity of the thread
 		// If the thread was impersonating already, this function uses that impersonation context
 		Win32Handle	hToken;
-		if (!OpenThreadToken(GetCurrentThread(), TOKEN_DUPLICATE | TOKEN_QUERY, TRUE, &hToken)) {
-			if (GetLastError() != ERROR_NO_TOKEN || !OpenProcessToken(GetCurrentProcess(), TOKEN_DUPLICATE | TOKEN_QUERY, &hToken))
+		if (!OpenThreadToken(GetCurrentThread(), TOKEN_DUPLICATE | TOKEN_QUERY, TRUE, hToken)) {
+			if (GetLastError() != ERROR_NO_TOKEN || !OpenProcessToken(GetCurrentProcess(), TOKEN_DUPLICATE | TOKEN_QUERY, hToken))
 				return false;
 		}
 
 		Win32Handle	hImpersonationToken;
-		if (!DuplicateToken(hToken, SecurityImpersonation, &hImpersonationToken))
+		if (!DuplicateToken(hToken, SecurityImpersonation, hImpersonationToken))
 			return false;
 
-		// Create the binary representation of the well-known SID that represents the local administrators group.
-		// Then create the security descriptor and DACL with an ACE that allows only local admins access.
-		// Then perform the access check to determine whether the current user is a local admin.
+		// Create the binary representation of the well-known SID that represents the local administrators group...
 		SID_IDENTIFIER_AUTHORITY	SystemSidAuthority = SECURITY_NT_AUTHORITY;
 		unique_ptr<SID>				sid;
 		if (!AllocateAndInitializeSid(&SystemSidAuthority, 2, SECURITY_BUILTIN_DOMAIN_RID, DOMAIN_ALIAS_RID_ADMINS, 0, 0, 0, 0, 0, 0, (void**)&sid))
 			return false;
 
-		PSECURITY_DESCRIPTOR	admin;
-		if (!InitializeSecurityDescriptor(&admin, SECURITY_DESCRIPTOR_REVISION))
+		// ...then create the security descriptor and DACL with an ACE that allows only local admins access
+		DWORD				acl_size	= sizeof(ACL) + sizeof(ACCESS_ALLOWED_ACE) + GetLengthSid(sid) - sizeof(DWORD);
+		ACL					*acl		= (ACL*)alloca(acl_size);
+		SECURITY_DESCRIPTOR	admin;
+		if (	!InitializeAcl(acl, acl_size, ACL_REVISION2)
+			||	!AddAccessAllowedAce(acl, ACL_REVISION2, ACCESS_READ | ACCESS_WRITE, sid)
+			||	!InitializeSecurityDescriptor(&admin, SECURITY_DESCRIPTOR_REVISION)
+			||	!SetSecurityDescriptorDacl(&admin, TRUE, acl, FALSE)
+			||	!SetSecurityDescriptorGroup(&admin, sid, FALSE)
+			||	!SetSecurityDescriptorOwner(&admin, sid, FALSE)
+			||	!IsValidSecurityDescriptor(&admin)
+		)
 			return false;
 
-		// Compute size needed for the ACL.
-		DWORD	acl_size	= sizeof(ACL) + sizeof(ACCESS_ALLOWED_ACE) + GetLengthSid(sid) - sizeof(DWORD);
-		ACL		*acl		= (ACL*)alloca(acl_size);
-		if (!InitializeAcl(acl, acl_size, ACL_REVISION2) || !AddAccessAllowedAce(acl, ACL_REVISION2, ACCESS_READ | ACCESS_WRITE, sid) || !SetSecurityDescriptorDacl(&admin, TRUE, acl, FALSE))
-			return false;
-
-		// AccessCheck validates a security descriptor somewhat; set the group and owner so that enough of the security descriptor is filled out to make AccessCheck happy.
-		SetSecurityDescriptorGroup(&admin, sid, FALSE);
-		SetSecurityDescriptorOwner(&admin, sid, FALSE);
-		if (!IsValidSecurityDescriptor(&admin))
-			return false;
-
-		// Initialize GenericMapping structure even though you do not use generic rights
+		// ...then perform the access check to determine whether the current user is a local admin
 		GENERIC_MAPPING GenericMapping	= {ACCESS_READ, ACCESS_WRITE, 0, ACCESS_READ | ACCESS_WRITE};
 		PRIVILEGE_SET	ps;
 		DWORD			ps_size = sizeof(PRIVILEGE_SET);
@@ -269,20 +265,15 @@ class ProcessInfo {
 public:
 	ProcessInfo() {
 		enum { STATUS_INFO_LENGTH_MISMATCH = 0xC0000004 };
-		typedef LONG (WINAPI* t_NtQueryInfo)(SYSTEM_INFORMATION_CLASS, PVOID, ULONG, PULONG);
-		t_NtQueryInfo	info = (t_NtQueryInfo)GetProcAddress(GetModuleNT(), "NtQuerySystemInformation");
-		if (info) {
-			for (;;) {
-				ULONG		needed = 0;
-				LONG	status = info(SystemProcessInformation, data, data.size32(), &needed);
-				if (status == STATUS_INFO_LENGTH_MISMATCH) { // The buffer was too small
-					data.create(needed + 4000);
-					continue;
-				}
-				if (status != 0)
-					data.clear();
-				break;
-			}
+		dll_function<LONG WINAPI(SYSTEM_INFORMATION_CLASS, PVOID, ULONG, PULONG)>	NtQuerySystemInformation(GetModuleNT(), "NtQuerySystemInformation");
+		if (NtQuerySystemInformation) {
+			LONG	status;
+			ULONG	needed = 0;
+			while ((status = NtQuerySystemInformation(SystemProcessInformation, data, data.size32(), &needed)) == STATUS_INFO_LENGTH_MISMATCH)
+				data.create(needed + 4000);
+
+			if (status != 0)
+				data.clear();
 		}
 	}
 
@@ -292,10 +283,8 @@ public:
 
 	const SYSTEM_PROCESS* FindProcess(DWORD id) const {
 		for (auto &p : Processes()) {
-			if (&p) {
-				if (p.ID() == id)
-					return &p;
-			}
+			if (p.ID() == id)
+				return &p;
 		}
 		return 0;
 	}
@@ -433,7 +422,7 @@ void *HookImmediate(const char *function, const char *module_name, void *dest) {
 			}
 		}
 	}
-	return orig;
+	return (void*)orig;
 }
 
 bool Hook::Apply(void **IATentry) {
@@ -539,7 +528,7 @@ Hooks::Hooks() {
 	hook0(LoadLibraryW,		"kernel32.dll");
 	hook0(GetProcAddress,	"kernel32.dll");
 
-	Add("kernel32.dll", hGetProcAddressForCaller.set("GetProcAddressForCaller", Hooked_GetProcAddressForCaller));
+	Add("kernel32.dll", hGetProcAddressForCaller.set("GetProcAddressForCaller", (void*)Hooked_GetProcAddressForCaller));
 
 	/*
 	AddAlias((void**)&get_orig(LoadLibraryExW),	"api-ms-win-core-libraryloader-l1-2-0.dll", "LoadLibraryExW",	&Hooked_LoadLibraryExW);

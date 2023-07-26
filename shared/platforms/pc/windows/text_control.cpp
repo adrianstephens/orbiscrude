@@ -10,135 +10,150 @@
 using namespace iso;
 using namespace win;
 
-template<typename T> struct accum_tree : dynamic_array<T> {
-	accum_tree(size_t n) : dynamic_array<T>(n) {}
-
-	size_t	find(T v) {
-		auto	first = begin();
-		for (auto n = next_pow2(size()); n; n >>= 1) {
-			auto	m = first + (n >> 1);
-			if (*m < v) {
-				v -= *m;
-				first = m;
-			}
-		}
-		return index_of(first);
-	}
-
-	void	adjust(size_t i, T d) {
-		size_t	n;
-		while ((n = lowest_clear(i)) < size()) {
-			i |= n;
-			at(i & ~(n - 1)) += d;
-		}
-	}
-
-	T		sum(size_t i) {
-		T		d = 0;
-		while (i) {
-			d += at(i);
-			i = clear_lowest(i);
-		}
-		return d;
-	}
-
-	T		value(size_t i) {
-		size_t	n	= lowest_clear(i);
-		T		d	= at(i + 1);
-		while (n > 1) {
-			n >>= 1;
-			d -= at(i & ~(n - 1));
-		}
-		return d;
-	}
-};
-
-struct test_accum_tree {
-	test_accum_tree() {
-		rng<simple_random>	random;
-		dynamic_array<int>	nums = transformc(int_range(1024), [&random](int) { return random.to(1024); });
-		dynamic_array<int>	sums(1024);
-		accum_tree<int>		ac(1024);
-
-		uint32	offset = 0;
-		for (int i = 0; i < 1024; i++) {
-			ac.adjust(i, nums[i]);
-			sums[i] = offset += nums[i];
-		}
-
-		for (int i = 0; i < 1023; i++) {
-			if (i != 1023) {
-				int	d = ac.sum(i + 1);
-				ISO_ASSERT(d == sums[i]);
-
-				int	n = ac.value(i);
-				ISO_ASSERT(n == nums[i]);
-			}
-		}
-
-		for (int x = 0, xe = nums.back(); x < xe; ++x) {
-			auto	i = ac.find(x);
-			auto	j = sums.index_of(lower_boundc(sums, x));
-			ISO_ASSERT(i == j);
-		}
-	}
-} _test_accum_tree;
-
 #ifdef D2D_H
 
 namespace iso { namespace d2d {
 
-typedef TextLayout::Range char_range;
+//-----------------------------------------------------------------------------
+//	SimpleTextDisplay
+//-----------------------------------------------------------------------------
 
-struct format0 {
-	enum STATE {
-		FONT, SIZE, STRETCH, STYLE, WEIGHT, STRIKE, UNDERLINE,
-		EFFECT,
-		COUNT,
+struct paragraph {
+	enum {
+		LEFT, RIGHT, CENTRE, JUSTIFY,
+		ALIGN_MASK	= 3 << 0,
+		WRAP		= 1 << 2,
+		UNIFORM		= 1 << 3,
 	};
-	STATE	s;
-	format0() {}
-	format0(STATE _s) : s(_s) {}
-//	virtual	void	set(IDWriteTextLayout *layout, const char_range &range)=0;
-	void	set(IDWriteTextLayout *layout, const char_range &range);
-};
-template<format0::STATE S> struct format : format0 { format() : format0(S) {} };
+	d2d::rect	margins		= {0, 0, 0, 0};
+	float		indent		= 0;
+	float		tabs		= 0;
+	float		spacing		= 0;
+	float		baseline	= 0;
+	uint32		flags		= 0;
 
-struct format_font : format<format0::FONT> {
-	string16				value;
-	void	set(IDWriteTextLayout *layout, const char_range &range) { layout->SetFontFamilyName(value, range); }
-	format_font(const char *v) : value(v) {}
+	void	SetAlign(DWRITE_TEXT_ALIGNMENT a) {
+		flags = (flags & ~ALIGN_MASK) | a;
+	}
+	void	SetSpacing(DWRITE_LINE_SPACING_METHOD _method, float _spacing, float _baseline) {
+		flags		= (flags & ~UNIFORM) | _method * UNIFORM;
+		spacing		= _spacing;
+		baseline	= _baseline;
+	}
+	void	SetSpacing(uint8 rule, float _spacing) {
+		spacing		= _spacing;
+		baseline	= _spacing * .8f;
+	}
 };
-struct format_size : format<format0::SIZE> {
-	float					value;
-	void	set(IDWriteTextLayout *layout, const char_range &range) { layout->SetFontSize(value, range); }
-	format_size(float v) : value(v) {}
+
+
+struct text_chunk : paragraph {
+	d2d::TextLayout	layout;
+	string16		text;
+
+	text_chunk() {}
+	text_chunk(string_ref16 text) : text(text) {}
+	text_chunk(string_ref16 text, paragraph &p)	: paragraph(p), text(text) {}
+
+	uint32	Length()	const	{ return text.length(); }
+
+	bool	HitTestFromWindow(float px, float py, DWRITE_HIT_TEST_METRICS* hit) const {
+		BOOL	trailing, inside;
+		if (SUCCEEDED(layout->HitTestPoint(px, py, &trailing, &inside, hit))) {
+			hit->textPosition += trailing;
+			return true;
+		}
+		return false;
+	}
+	bool	TextPosition(uint32 offset, float* px, float* py, DWRITE_HIT_TEST_METRICS* hit) const {
+		if (!layout)
+			return false;
+		layout->HitTestTextPosition(offset, FALSE, px, py, hit);
+		return true;
+	}
+
+	uint32	LineFromChar(uint32 offset) const {
+		uint32	line = 0;
+		for (const char16 *p = text, *e = p + offset; p = string_find(p, e, '\n'); p = p + 1)
+			++line;
+		return line;
+	}
+
+	int		CharFromLine(uint32 line) const {
+		const char16 *p = text - 1;
+		while (line && (p = string_find(p + 1, '\n')))
+			--line;
+		return line ? -1 : p + 1 - text;
+	}
+
+	uint32	LineLength(uint32 offset) const {
+		auto	a = text.slice(0, offset).rfind('\n');
+		if (!a)
+			a = text - 1;
+		auto	b = text.slice(0, offset).find('\n');
+		if (!b)
+			b = text.end();
+		return b - a - 1;
+	}
+
+	uint32	GetText(const interval<uint32> &r, wchar_t *dest) const {
+		auto	sub = text.slice(r.a, r.extent());
+		copy(sub, dest);
+		return sub.length();
+	}
 };
-struct format_stretch : format<format0::STRETCH> {
-	DWRITE_FONT_STRETCH		value;
-	void	set(IDWriteTextLayout *layout, const char_range &range) { layout->SetFontStretch(value, range); }
-	format_stretch(DWRITE_FONT_STRETCH v) : value(v) {}
+
+class SimpleTextDisplay : text_chunk {
+protected:
+	d2d::colour		background	= {0, 0, 0};
+private:
+	d2d::Write		write;
+	d2d::Font		font	= d2d::Font(write, L"Arial", 12);
+
+public:
+	void	WidthChanged() {
+		layout.clear();
+	}
+
+	void	ReplaceText(const interval<uint32>& r, const wchar_t* s, const wchar_t* e) {
+		text = text.slice(0, r.begin()) + str(s, e) + text.slice(r.end());
+		layout.clear();
+	}
+
+	void	Paint(d2d::Target &target, float x, float y, float width) {
+		if (!layout)
+			layout	= d2d::TextLayout(write, text, Length(), font, width);
+
+		d2d::TextRenderer	renderer(target, d2d::SolidBrush(target, iso::colour::black));
+		target.Clear(background);
+		layout->Draw(0, &renderer, x, y);
+	}
+
+	void	SetBackground(const d2d::colour &col) {
+		background = col;
+	}
+	void	SetFont(const win::Font::Params16 &p) {
+		layout.clear();
+		font = d2d::Font(write, p);
+		if (tabs == 0)
+			tabs = d2d::TextLayout(write, "xxxx", font, 1000).GetExtent().Width();
+	}
+
+	SimpleTextDisplay() {}
 };
-struct format_style : format<format0::STYLE> {
-	DWRITE_FONT_STYLE		value;
-	void	set(IDWriteTextLayout *layout, const char_range &range) { layout->SetFontStyle(value, range); }
-	format_style(DWRITE_FONT_STYLE v) : value(v) {}
-};
-struct format_weight : format<format0::WEIGHT> {
-	DWRITE_FONT_WEIGHT		value;
-	void	set(IDWriteTextLayout *layout, const char_range &range) { layout->SetFontWeight(value, range); }
-	format_weight(DWRITE_FONT_WEIGHT v) : value(v) {}
-};
-struct format_strike : format<format0::STRIKE> {
-	bool					value;
-	void	set(IDWriteTextLayout *layout, const char_range &range) { layout->SetStrikethrough(value, range); }
-	format_strike(bool v) : value(v) {}
-};
-struct format_underline : format<format0::UNDERLINE> {
-	bool					value;
-	void	set(IDWriteTextLayout *layout, const char_range &range) { layout->SetUnderline(value, range); }
-	format_underline(bool v) : value(v) {}
-};
+
+//-----------------------------------------------------------------------------
+//	Formatting
+//-----------------------------------------------------------------------------
+
+
+template<> inline void	Formatting::font		::set(IDWriteTextLayout *layout, const char_range &range) { layout->SetFontFamilyName(value, range); }
+template<> inline void	Formatting::size		::set(IDWriteTextLayout *layout, const char_range &range) { layout->SetFontSize(value, range); }
+template<> inline void	Formatting::stretch		::set(IDWriteTextLayout *layout, const char_range &range) { layout->SetFontStretch(value, range); }
+template<> inline void	Formatting::style		::set(IDWriteTextLayout *layout, const char_range &range) { layout->SetFontStyle(value, range); }
+template<> inline void	Formatting::weight		::set(IDWriteTextLayout *layout, const char_range &range) { layout->SetFontWeight(value, range); }
+template<> inline void	Formatting::strike		::set(IDWriteTextLayout *layout, const char_range &range) { layout->SetStrikethrough(value, range); }
+template<> inline void	Formatting::underline	::set(IDWriteTextLayout *layout, const char_range &range) { layout->SetUnderline(value, range); }
 
 struct FormatEffect : public com<TextEffect> {
 	d2d::colour	col;
@@ -146,7 +161,7 @@ struct FormatEffect : public com<TextEffect> {
 	float		voffset;
 	uint32		effects;
 
-	COM_DECLSPEC_NOTHROW HRESULT DrawGlyphRun(void * context, ID2D1DeviceContext *device, D2D1_POINT_2F baseline, const DWRITE_GLYPH_RUN *glyphs, const DWRITE_GLYPH_RUN_DESCRIPTION *desc, DWRITE_MEASURING_MODE measure) {
+	STDMETHOD(DrawGlyphRun)(void * context, ID2D1DeviceContext *device, D2D1_POINT_2F baseline, const DWRITE_GLYPH_RUN *glyphs, const DWRITE_GLYPH_RUN_DESCRIPTION *desc, DWRITE_MEASURING_MODE measure) {
 		DWRITE_FONT_METRICS	metrics;
 		glyphs->fontFace->GetMetrics(&metrics);
 		baseline.y += voffset;
@@ -165,7 +180,7 @@ struct FormatEffect : public com<TextEffect> {
 		device->DrawGlyphRun(baseline, glyphs, desc, d2d::SolidBrush(device, col), measure);
 		return S_OK;
 	}
-	COM_DECLSPEC_NOTHROW HRESULT	DrawGeometry(void * context, ID2D1DeviceContext *device, ID2D1Geometry *geometry) {
+	STDMETHOD(DrawGeometry)(void * context, ID2D1DeviceContext *device, ID2D1Geometry *geometry) {
 		return S_OK;
 	}
 	FormatEffect() : voffset(0), effects(0) { bg.a = 0; }
@@ -173,67 +188,45 @@ struct FormatEffect : public com<TextEffect> {
 };
 
 // implemented with TextEffects
-struct format_effect : format<format0::EFFECT>, FormatEffect {
+struct Formatting::effect : Formatting::format1<EFFECT>, FormatEffect{
 	void	set(IDWriteTextLayout *layout, const char_range &range) {
 		layout->SetDrawingEffect(this, range);
 	}
 };
 
-void format0::set(IDWriteTextLayout *layout, const char_range &range) {
+void Formatting::format::set(IDWriteTextLayout *layout, const char_range &range) {
 	switch (s) {
-		case FONT:		static_cast<format_font*>(this)->set(layout, range); break;
-		case SIZE:		static_cast<format_size*>(this)->set(layout, range); break;
-		case STRETCH:	static_cast<format_stretch*>(this)->set(layout, range); break;
-		case STYLE:		static_cast<format_style*>(this)->set(layout, range); break;
-		case WEIGHT:	static_cast<format_weight*>(this)->set(layout, range); break;
-		case STRIKE:	static_cast<format_strike*>(this)->set(layout, range); break;
-		case UNDERLINE:	static_cast<format_underline*>(this)->set(layout, range); break;
-		case EFFECT:	static_cast<format_effect*>(this)->set(layout, range); break;
+		case FONT:		static_cast<font*>(this)->set(layout, range); break;
+		case SIZE:		static_cast<size*>(this)->set(layout, range); break;
+		case STRETCH:	static_cast<stretch*>(this)->set(layout, range); break;
+		case STYLE:		static_cast<style*>(this)->set(layout, range); break;
+		case WEIGHT:	static_cast<weight*>(this)->set(layout, range); break;
+		case STRIKE:	static_cast<strike*>(this)->set(layout, range); break;
+		case UNDERLINE:	static_cast<underline*>(this)->set(layout, range); break;
+		case EFFECT:	static_cast<effect*>(this)->set(layout, range); break;
 	}
 }
 
-struct paragraph {
-	enum {
-		LEFT, RIGHT, CENTRE, JUSTIFY,
-		ALIGN_MASK	= 3 << 0,
-		WRAP		= 1 << 2,
-		UNIFORM		= 1 << 3,
-	};
-	d2d::rect	margins;
-	float		indent;
-	float		tabs;
-	float		spacing;
-	float		baseline;
-	uint32		flags;
-
-	paragraph() { clear(*this); }
-	void	SetAlign(DWRITE_TEXT_ALIGNMENT a) { flags = (flags & ~ALIGN_MASK) | a; }
-	void	SetSpacing(DWRITE_LINE_SPACING_METHOD _method, float _spacing, float _baseline) {
-		flags = (flags & ~UNIFORM) | _method * UNIFORM;
-		spacing		= _spacing;
-		baseline	= _baseline;
-	}
-	void	SetSpacing(uint8 rule, float _spacing) {
-		spacing		= _spacing;
-		baseline	= _spacing * .8f;
-	}
-};
+//-----------------------------------------------------------------------------
+//	TextDisplay
+//-----------------------------------------------------------------------------
 
 class TextDisplay {
 protected:
-	struct chunk : paragraph {
-		d2d::TextLayout	layout;
-		string16		s;
-		uint32			offset;
-		uint32			lines;
-		float			width, height, y;
-		const chunk		&next()			const { return *(this + 1); }
-		uint32			begin()			const { return offset; }
-		uint32			end()			const { return next().offset; }
-		uint32			length()		const { return end() - begin(); }
-		auto			text()			const { return count_string16(s.begin(), length()); }
+	struct chunk : text_chunk {
+		uint32			offset	= 0;
+		uint32			lines	= 0;
+		float			y		= 0;
+		float			width	= 0;
+		float			height	= 0;
+
+		const chunk			&next()		const { return *(this + 1); }
+		uint32				begin()		const { return offset; }
+		uint32				end()		const { return next().offset; }
+		uint32				length()	const { return end() - begin(); }
 		interval<uint32>	get_range()	const { return interval<uint32>(begin(), end()); }
-		template<typename B> chunk(const B &_s) : s(_s), offset(0), lines(0), width(0), height(0), y(0) {}
+		chunk(string_ref16 text)				: text_chunk(text) {}
+		chunk(string_ref16 text, paragraph &p)	: text_chunk(text, p) {}
 	};
 
 	d2d::colour				background;
@@ -246,7 +239,7 @@ private:
 
 	d2d::Write				write;
 	d2d::Font				font;
-	interval_tree<uint32, format0*>	formats;
+	Formatting				formats;
 	int						dirty_index;
 
 	chunk*			Split(chunk *c, uint32 split);
@@ -254,28 +247,20 @@ private:
 	const chunk*	GetChunk(uint32 offset) const {
 		return lower_bound(text.begin(), text.end() - 1, offset, [](const chunk &c, uint32 offset) { return c.next().offset <= offset; });
 	}
-	chunk*			GetChunk(uint32 offset) {
-		return lower_bound(text.begin(), text.end() - 1, offset, [](const chunk &c, uint32 offset) { return c.next().offset <= offset; });
-	}
 	const chunk*	GetChunkByPos(float y) const {
-		if (dirty_index && y < text[dirty_index].y)
-			return lower_bound(text.begin(), text.begin() + dirty_index - 1, y, [](const chunk &c, float y) { return c.next().y < y; });
-		return 0;
-	}
-	chunk*			GetChunkByPos(float y) {
 		if (dirty_index && y < text[dirty_index].y)
 			return lower_bound(text.begin(), text.begin() + dirty_index - 1, y, [](const chunk &c, float y) { return c.next().y < y; });
 		return 0;
 	}
 
 public:
-	void			ReplaceText(const interval<uint32> &r, const wchar_t *s, const wchar_t *e);
-	uint32			GetText(const interval<uint32> &r, wchar_t *dest);
+	template<typename C> void ReplaceText(const interval<uint32> &r, const C *s, const C *e);
+	uint32			GetText(const interval<uint32> &r, wchar_t *dest) const;
 	range<chunk*>	MakeParagraphs(const interval<uint32> &r);
 
 	void			WidthChanged()								{ dirty_index = 0; }
-	void			Dirty(uint32 offset)						{ if (offset < ScannedOffset()) dirty_index = text.index_of(GetChunk(offset)); }
-	float			UpdateTo(float ey, uint32 offset, float width);
+	void			MakeDirty(uint32 offset)					{ if (offset < ScannedOffset()) dirty_index = text.index_of(GetChunk(offset)); }
+	float			UpdateTo(float end_y, uint32 end_offset, float width);
 	float			Width(float offsety, float height) const;
 	void			Paint(d2d::Target &target, float x, float y, float offsety, float height);
 
@@ -284,12 +269,12 @@ public:
 	void			SetBackground(const d2d::colour &col)		{ background = col;	}
 	void			SetFont(const win::Font::Params16 &p);
 
-	void			AddFormat(const interval<uint32> &r, format0 *f)	{ formats.insert(r, f); }
+	void			AddFormat(const interval<uint32> &r, Formatting::format *f)	{ formats.add(r, f); }
 
 	uint32			Length()							const	{ return text.back().offset; }
 	float			ScannedHeight()						const	{ return text[dirty_index].y; }
 	uint32			ScannedOffset()						const	{ return text[dirty_index].offset; }
-	float			EstimatedHeight()					const	{ return text[dirty_index].y / dirty_index * (text.size() - 1); }
+	float			EstimatedHeight()					const	{ return ScannedHeight() / dirty_index * (text.size32() - 1); }
 	const chunk*	HitTestFromWindow(float px, float py, DWRITE_HIT_TEST_METRICS *hit) const;
 	const chunk*	TextPosition(uint32 offset, float *px, float *py, DWRITE_HIT_TEST_METRICS *hit) const;
 
@@ -315,27 +300,17 @@ void TextDisplay::SetFont(const win::Font::Params16 &p) {
 uint32 TextDisplay::LineFromChar(uint32 offset) const {
 	uint32	line	= 0;
 	for (auto &i : text) {
-		if (offset < i.end()) {
-			const char16 *s = i.s;
-			const char16 *e = s + offset - i.offset;
-			for (const char16 *p; p = string_find(s, '\n', e); s = p + 1)
-				++line;
-			break;
-		}
+		if (offset < i.end())
+			return i.LineFromChar(offset - i.offset) + line;
 		line += i.lines;
-
 	}
 	return line;
 }
 
 int TextDisplay::CharFromLine(uint32 line) const {
 	for (auto &i : text) {
-		if (line < i.lines) {
-			const char16 *p = i.s - 1;
-			while (line && (p = string_find(p + 1, '\n')))
-				--line;
-			return i.offset + (p + 1 - i.s);
-		}
+		if (line < i.lines)
+			return i.CharFromLine(line) + i.offset;
 		line -= i.lines;
 	}
 	return -1;
@@ -350,40 +325,41 @@ uint32 TextDisplay::LineCount() const {
 
 uint32 TextDisplay::LineLength(uint32 offset) const {
 	const chunk	*i = GetChunk(offset);
-	if (const char16 *s = i->s) {
-		auto	a = string_rfind(s, '\n', s + offset - i->offset);
-		if (!a)
-			a = s - 1;
-		auto	b = string_find(a, '\n');
-		if (!b)
-			b = string_end(s);
-		return b - a - 1;
-	}
-	return 0;
+	return i->LineLength(offset - i->offset);
 }
 
-uint32 count_lines(const char16 *s) {
-	uint32		line	= 0;
-	while (const char16 *p = string_find(s, '\n')) {
-		s = p + 1;
-		++line;
-	}
-	return line;
+template<typename C> const C *BestSplit(const C *n, const C *nf, const C *nr) {
+	return  !nf ?		(nr ? nr + 1 : nullptr)
+		:	!nr ?		nf + 1
+		:	((nf - n) < (n - nr) ? nf : nr) + 1;
+}
+
+template<typename C> const C *FindSplitFront(const C *s, const C *e, int optimal) {
+	if (optimal < 0)
+		return nullptr;
+	auto	n	= s + optimal;
+	return n > e ? e : BestSplit(n, string_find(n, e - 1, '\n'), string_rfind(s, n, '\n'));
+}
+
+template<typename C> const C *FindSplitBack(const C *s, const C *e, int optimal) {
+	if (optimal < 0)
+		return nullptr;
+	auto	n	= e - optimal;
+	return s + optimal > e ? s : BestSplit(n, string_find(n, e - 1, '\n'), string_rfind(s, n, '\n'));
 }
 
 TextDisplay::chunk *TextDisplay::Split(chunk *c, uint32 split) {
 	if (split) {
 		bool	right	= split > c->length() / 2;
-		auto	i		= text.index_of(c);
-		auto	n		= text.insert(c, chunk(c->s.slice(0, split)));
+		auto	n		= text.insert(c, chunk(c->text.slice(0, split)));
 		c				= n + 1;
-		c->s			= c->s.slice(split);
+		c->text			= c->text.slice(split);
 
 		*(paragraph*)n	= *(paragraph*)c;
 		n->tabs			= c->tabs;
 		n->offset		= c->offset;
 		n->y			= c->y;
-		n->lines		= right ? c->lines - count_lines(c->s) : count_lines(n->s);
+		n->lines		= right ? c->lines - c->text.find_count('\n') : n->text.find_count('\n');
 
 		c->offset		+= split;
 		c->lines		-= n->lines;
@@ -392,29 +368,28 @@ TextDisplay::chunk *TextDisplay::Split(chunk *c, uint32 split) {
 }
 
 range<TextDisplay::chunk*> TextDisplay::MakeParagraphs(const interval<uint32> &r) {
-	chunk	*i		= GetChunk(r.begin());
-	if (i->offset < r.begin())
-		i = Split(i, r.begin() - i->offset);
+	chunk	*c		= unconst(GetChunk(r.begin()));
+	if (c->offset < r.begin())
+		c = Split(c, r.begin() - c->offset);
 
-	uint32	index	= text.index_of(i);
+	uint32	index	= text.index_of(c);
 	uint32	end		= r.end();
 	chunk	*back	= text.end() - 1;
-	while (i != back && i->offset <= end)
-		++i;
-	if (i->offset > end) {
-		--i;
-		i = Split(i, end - i->offset);
+	while (c != back && c->offset <= end)
+		++c;
+	if (c->offset > end) {
+		--c;
+		c = Split(c, end - c->offset);
 	}
 
-	return range<chunk*>(text + index, i);
+	return range<chunk*>(text + index, c);
 }
 
-void TextDisplay::ReplaceText(const interval<uint32> &r, const wchar_t *s, const wchar_t *e) {
-	chunk	*i0			= GetChunk(r.begin());
-	chunk	*back		= text.end() - 1;
+template<typename C> void TextDisplay::ReplaceText(const interval<uint32> &r, const C *s, const C *e) {
+	chunk	*i0			= unconst(GetChunk(r.begin()));
+	chunk	*back		= &text.back();
 	uint32	orig_end	= Length();
-	auto	length		= e - s;
-	int		adjust		= int(length) - r.extent();
+	uint32	offset		= r.begin();
 
 	if (i0 == back && s != e && i0 != text.begin())
 		--i0;
@@ -422,119 +397,108 @@ void TextDisplay::ReplaceText(const interval<uint32> &r, const wchar_t *s, const
 	dirty_index = min(dirty_index, text.index_of(i0));
 
 	if (i0 != back) {
-		auto	i1		= i0 + 1;
-		while (i1 != back && i1->end() < r.end())
-			i1 = text.erase(i1);
+		if (uint32 keep0 = r.begin() - i0->offset) {
+			i0->text	= i0->text.slice(0, keep0);
+			i0->lines	= i0->text.find_count('\n');
 
-		if (i1 == back) {
-			i0->s = i0->s.slice(0, r.begin() - i0->offset) + str(s, e);
-		} else {
-			i0->s = i0->s.slice(0, r.begin() - i0->offset) + str(s, e) + i1->s.slice(r.end() - i1->offset);
-			i1 = text.erase(i1);
-		}
-
-		while (i1 != text.end())
-			i1++->offset	+= adjust;
-
-	} else if (s != e) {
-		i0->s			= str(s, e);
-		auto	&chunk	= text.push_back("");
-		chunk.tabs		= i0->tabs;
-		chunk.offset	= i0->offset + (e - s);
-		back			= &chunk;
-	}
-
-	if (i0 != back) {
-		i0->lines = count_lines(i0->s);
-
-		while (i0->length() > optimal_chunk * 2) {
-	#if 1
-			auto	t	= i0->text();
-			auto	s	= t.begin();
-			auto	n	= t.end() - optimal_chunk;
-			auto	nf	= string_find(n, '\n');
-			auto	nr	= string_rfind(s, '\n', n);
-
-			if (nf && nf[1] == 0)
-				nf = nullptr;
-
-			n = !nf ? nr : !nr ? nf : (nf - n) < (n - nr) ? nf : nr;
-
-			if (!n)
-				break;
-
-			i0 = Split(i0, n + 1 - s) - 1;
-	#else
-			auto	*s	= i0->s.begin();
-			auto	*n	= s + optimal_chunk;
-			auto	*nf = string_find(n, '\n');
-			auto	*nr = string_rfind(s, '\n', n);
-			n = !nf ? nr : !nr ? nf : (nf - n) < (n - nr) ? nf : nr;
-
-			if (!n)
-				break;
-
-			i0	= Split(i0, n + 1 - s);
-	#endif
-		}
-	}
-
-	format0	*last[format0::COUNT] = {0};
-
-	if (r.a || r.b != orig_end) {
-		for (auto j = interval_begin(formats, r); j; ++j) {
-			auto	&k = j.key();
-			if (k.b == r.b)
-				last[(*j)->s] = *j;
-		}
-	}
-
-	for (auto j = interval_begin(formats, r); j;) {
-		auto	&k = j.key();
-
-		if (k.a > r.a)
-			k.set_begin(k.a > r.b ? k.a + adjust : r.a);
-
-		if (k.b >= r.a) {
-			if (last[(*j)->s] == *j) {
-				k.set_end(k.b + adjust);
-			} else {
-				k.set_end(r.a);
-				if (k.empty()) {
-					formats.remove(j);
-					continue;
-				}
+			if (auto n = FindSplitFront(s, e, optimal_chunk - keep0)) {
+				ISO_ASSERT(n <= e);
+				i0->text	+= str(s, n);
+				i0->lines	+= string_count(s, n, '\n');
+				offset		+= chars_count<char16>(s, n);
+				s			= n;
 			}
+
+			++i0;
 		}
-		++j;
+
+		auto	i1	= i0;
+		while (i1 != back && i1->end() <= r.end()) {
+			i1		= text.erase(i1);
+			back	= &text.back();
+		}
+
+		if (i1 != back) {
+			i1->text	= i1->text.slice(r.end() - i1->offset);
+			i1->lines	= i1->text.find_count('\n');
+		}
 	}
 
-//	if (r.a == 0 && r.b == orig_end)
-//		ISO_ASSERT(formats.empty());
+	ISO_ASSERT((int)offset >= 0);
+
+	while (e - s > optimal_chunk * 2) {
+		ISO_ASSERT(s <= e);
+		auto	n	= FindSplitFront(s, e, optimal_chunk);
+		if (!n)
+			break;
+
+		i0			= text.insert(i0, chunk(str(s, n), *i0));
+		i0->lines	= i0->text.find_count('\n');
+		i0->offset	= offset;
+		offset		+= chars_count<char16>(s, n);
+		s			= n;
+		++i0;
+	}
+
+	if (i0 != &text.back()) {
+		if (auto n = FindSplitBack(s, e, optimal_chunk - i0->length())) {
+			i0->text	= str(n, e) + i0->text;
+			i0->lines	+= string_count(n, e, '\n');
+			i0->offset	-= chars_count<char16>(n, e);
+			e	= n;
+			ISO_ASSERT(s <= e);
+			ISO_ASSERT((int)i0->offset >= 0);
+
+		}
+	}
+
+	ISO_ASSERT((int)offset >= 0);
+
+	if (s != e) {
+		i0	= text.insert(i0, chunk(str(s, e), *i0));
+		i0->lines	= string_count(s, e, '\n');
+		i0->offset	= offset;
+		offset		+= chars_count<char16>(s, e);
+		++i0;
+	}
+
+	int		adjust	= offset - i0->offset;
+	while (i0 != text.end()) {
+		i0->offset	+= adjust;
+		++i0;
+	}
+
+	formats.adjust(r, adjust);
+
+#if 0
+	for (auto &i : text.slice_to(-1)) {
+		if (i.text.length() != i.length())
+			_iso_break();
+	}
+#endif
 }
 
-uint32 TextDisplay::GetText(const interval<uint32> &r, wchar_t *dest) {
-	chunk	*i		= GetChunk(r.begin());
-	chunk	*back	= text.end() - 1;
+uint32 TextDisplay::GetText(const interval<uint32> &r, wchar_t *dest) const {
+	const chunk	*i		= GetChunk(r.begin());
+	const chunk	*back	= text.end() - 1;
 
 	if (i == back)
 		return 0;
 
 	wchar_t *dest0	= dest;
 
-	uint32	n = min(i->end() - r.begin(), r.extent());
-	memcpy(dest, i->s.begin() + (r.begin() - i->offset), n * sizeof(wchar_t));
+	uint32	n = i->GetText(r, dest);
 	dest	+= n;
 
 	for (++i; i != back && i->end() < r.end(); ++i) {
 		n = i->length();
-		memcpy(dest, i->s, n * 2);
+		memcpy(dest, i->text, n * 2);
 		dest	+= n;
 	}
 
 	if (i != back && i->offset < r.end()) {
 		n = r.end() - i->offset;
-		memcpy(dest, i->s, n * 2);
+		memcpy(dest, i->text, n * 2);
 		dest	+= n;
 	}
 
@@ -542,57 +506,53 @@ uint32 TextDisplay::GetText(const interval<uint32> &r, wchar_t *dest) {
 }
 
 const TextDisplay::chunk *TextDisplay::HitTestFromWindow(float px, float py, DWRITE_HIT_TEST_METRICS *hit) const {
-#if 1
 	if (const chunk *i = GetChunkByPos(py)) {
-		BOOL	trailing, inside;
-		if (SUCCEEDED(i->layout->HitTestPoint(px, py - i->y, &trailing, &inside, hit))) {
-			hit->textPosition += trailing;
+		if (i->HitTestFromWindow(px, py - i->y, hit))
 			return i;
-		}
 	}
-#else
-	auto	i	= text.begin(), e = i + dirty_index;
-	i = lower_bound(i, e, py, [](chunk &c, float y) { return c.next().y < y; });
-
-	if (i != e) {
-		BOOL	trailing, inside;
-		if (i->layout->HitTestPoint(px, py - i->y, &trailing, &inside, hit)) {
-			hit->textPosition += trailing;
-			return i;
-		}
-	}
-#endif
-	return 0;
+	return nullptr;
 }
 
-float TextDisplay::UpdateTo(float ey, uint32 offset, float width) {
+const TextDisplay::chunk *TextDisplay::TextPosition(uint32 offset, float *px, float *py, DWRITE_HIT_TEST_METRICS *hit) const {
+	const chunk	*i	= GetChunk(offset);
+	if (i == text.end() - 1) {
+		if (i != text.begin())
+			--i;
+	}
+	if (i->TextPosition(offset - i->offset, px, py, hit)) {
+		hit->top	+= i->y;
+		*py			+= i->y;
+		return i;
+	}
+	return nullptr;
+}
+
+
+float TextDisplay::UpdateTo(float end_y, uint32 end_offset, float width) {
 	chunk	*i	= text + dirty_index;
 	chunk	*e	= text.end() - 1;
 	float	y	= i->y;
 
-	while (i < e && (y < ey || i->offset <= offset)) {
-		i->width		= 0;
-		if (i->s) {
-
+	while (i < e && (y < end_y || i->offset <= end_offset)) {
+		i->width	= 0;
+		if (i->text) {
 			font->SetIncrementalTabStop(i->tabs);
 			uint32	end	= i->end();
 			uint32	len	= end - i->offset;
-			if (len && i->s[len - 1] == '\n') {
+
+			if (len && i->text[len - 1] == '\n') {
 				--len;
-				if (len && i->s[len - 1] == '\r')
+				if (len && i->text[len - 1] == '\r')
 					--len;
 			}
-			d2d::TextLayout	layout(write, i->s, len, font, width);
 
-			interval<uint32>	ci(i->begin(), end);
-
-			for (auto j = interval_begin(formats, ci.a, end); j && j.key().begin() < end; ++j)
-				(*j)->set(layout, (j.key() & ci) - ci.a);
-
-			i->layout = layout.detach();
+			d2d::TextLayout	layout(write, i->text, len, font, width);
+			formats.set(layout, interval<uint32>(i->begin(), end));
 
 			DWRITE_TEXT_METRICS	metrics;
-			i->layout->GetMetrics(&metrics);
+			layout->GetMetrics(&metrics);
+			
+			i->layout	= move(layout);//.detach();
 			i->width	= metrics.width;
 			i->height	= metrics.height;
 			y			+= metrics.height;
@@ -604,7 +564,7 @@ float TextDisplay::UpdateTo(float ey, uint32 offset, float width) {
 }
 
 void TextDisplay::ApplyTemp(const interval<uint32> &r, TextEffect *fx) {
-	chunk	*i		= GetChunk(r.begin());
+	chunk	*i		= unconst(GetChunk(r.begin()));
 	chunk	*end	= text.begin() + dirty_index;
 	while (i < end && overlap(r, i->get_range())) {
 		i->layout.SetDrawingEffect(fx, (r & i->get_range()) - i->begin());
@@ -622,28 +582,11 @@ float TextDisplay::Width(float offsety, float height) const {
 	return max_w;
 }
 
-const TextDisplay::chunk *TextDisplay::TextPosition(uint32 offset, float *px, float *py, DWRITE_HIT_TEST_METRICS *hit) const {
-	const chunk	*i	= GetChunk(offset);
-	if (i == text.end() - 1) {
-		if (i == text.begin())
-			return 0;
-		--i;
-	}
-
-	if (!i->layout)
-		return 0;
-
-	i->layout->HitTestTextPosition(offset - i->offset, FALSE, px, py, hit);
-	hit->top	+= i->y;
-	*py			+= i->y;
-	return i;
-}
-
 void TextDisplay::Paint(d2d::Target &target, float x, float y, float offsety, float height) {
 	d2d::TextRenderer	renderer(target, d2d::SolidBrush(target, iso::colour::black));
 	target.Clear(background);
 
-	if (chunk *i = GetChunkByPos(offsety)) {
+	if (const chunk *i = GetChunkByPos(offsety)) {
 		for (chunk *e = text.end() - 1; i != e && i->y - offsety < height && i->layout; ++i)
 			i->layout->Draw(0, &renderer, x, y + i->y - offsety);
 	}
@@ -653,18 +596,14 @@ inline bool word_delim(char16 c) {
 	return c < '0';
 }
 
-inline bool delim(char16 *s, bool word) {
+inline bool delim(const char16 *s, bool word) {
 	return !word || word_delim(*s);
 }
 
 bool compare(const char16 *s1, const char16 *s2, size_t len, bool matchcase) {
 	if (matchcase)
-		return memcmp(s1, s2, len * 2) == 0;
-	while (len--) {
-		if (to_lower(*s1++) != to_lower(*s2++))
-			return false;
-	}
-	return true;
+		return string_cmp(make_case_insensitive(s1), make_case_insensitive(s2), len) == 0;
+	return string_cmp(s1, s2, len) == 0;
 }
 
 uint32 TextDisplay::Find(const char16 *search, const interval<uint32> &r, uint32 flags) {
@@ -673,21 +612,20 @@ uint32 TextDisplay::Find(const char16 *search, const interval<uint32> &r, uint32
 	bool	matchcase	= !!(flags & FR_MATCHCASE);
 	bool	word		= !!(flags & FR_WHOLEWORD);
 
-	chunk *i = GetChunk(r.a);
-	for (;;) {
+	for (auto i = GetChunk(r.a);;) {
 		uint32	begin	= i->begin(), end = i->end();
 
 		if (down) {
-			auto	s		= i->s.slice(max(r.a, begin) - begin, min(r.b, end) - begin);
-			for (char16 *f = s.begin(), *e = s.end() - search_len; f < e; f++) {
+			auto	s	= i->text.slice(max(r.a, begin) - begin, min(r.b, end) - begin);
+			for (const char16 *f = s.begin(), *e = s.end() - search_len; f < e; f++) {
 				if (delim(f, word) && compare(f, search, search_len, matchcase) && delim(f + search_len, word))
-					return f - i->s.begin() + begin;
+					return f - i->text.begin() + begin;
 			}
 
 			if (++i == text.end() - 1 || i->begin() >= r.b)
 				break;
 
-			auto	&s2	= i->s;
+			auto	&s2	= i->text;
 			for (int j = min(r.b - end, search_len); j--; ) {
 				if (delim(s.end() - j - 1, word)
 					&& compare(s.end() - j, search, j, matchcase)
@@ -698,16 +636,16 @@ uint32 TextDisplay::Find(const char16 *search, const interval<uint32> &r, uint32
 			}
 
 		} else {
-			auto	s		= i->s.slice(max(r.b, begin) - begin, min(r.a, end) - begin);
-			for (char16 *f = s.end() - search_len, *e = s.begin(); f > e; f--) {
+			auto	s	= i->text.slice(max(r.b, begin) - begin, min(r.a, end) - begin);
+			for (const char16 *f = s.end() - search_len, *e = s.begin(); f > e; f--) {
 				if (delim(f, word) && compare(f, search, search_len, matchcase) && delim(f - 1, word))
-					return f - i->s.begin() + begin;
+					return f - i->text.begin() + begin;
 			}
 
 			if (i == text.begin() || (--i)->end() < r.b)
 				break;
 
-			auto	&s2	= i->s;
+			auto	&s2	= i->text;
 			for (int j = 1, n = min(r.b - begin, search_len); j < n; j++) {
 				if (delim(s.begin() + search_len - j, word)
 					&& compare(s.begin(), search + j, search_len - j, matchcase)
@@ -738,10 +676,10 @@ struct TextFinder16 : FINDREPLACEW {
 		wFindWhatLen	= (WORD)len;
 		FindTextW(this);
 	}
-	static TextFinder16 *CheckMessage(UINT message, WPARAM wParam, LPARAM lParam);
+	static TextFinder16 *CheckMessage(MSG_ID message, WPARAM wParam, LPARAM lParam);
 };
 
-TextFinder16 *TextFinder16::CheckMessage(UINT message, WPARAM wParam, LPARAM lParam) {
+TextFinder16 *TextFinder16::CheckMessage(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 	static UINT WM_FINDMSGSTRING = RegisterWindowMessageW(FINDMSGSTRINGW);
 	if (message == WM_FINDMSGSTRING) {
 		auto	*t = (TextFinder16*)lParam;
@@ -755,7 +693,66 @@ TextFinder16 *TextFinder16::CheckMessage(UINT message, WPARAM wParam, LPARAM lPa
 	return 0;
 }
 
+template<typename B> class TextControlImp : public Window<TextControlImp<B>>, public WindowTimer<TextControlImp<B>>, B {
+};
+
+#if 0
+class D2DSimpleEditControlImp : public Window<D2DSimpleEditControlImp>, public WindowTimer<D2DSimpleEditControlImp>, d2d::SimpleTextDisplay {
+public:
+	static const char*	ClassName()	{ return "D2DSimpleEditControl"; }
+	static auto			Register()	{ return get_class(); }
+	static auto			make()		{ return new D2DSimpleEditControl(); }
+
+};
+
+static initialise init(D2DSimpleEditControlImp::Register());
+#endif
+
+
+struct SmoothScroller : TScrollInfo<float>, TimerT<SmoothScroller> {
+	typedef TScrollInfo<float>	B;
+
+	float	target, speed;
+	Control	c;
+
+	void	operator()(Timer*) {
+		float	dp = target - pos;
+		speed	= speed * 7 / 9 + dp / 32;
+		pos		+= speed;
+		save(pos, round(pos)), c.SetScroll(*this);
+		c.Invalidate();
+		if (abs(dp) < 1 && abs(speed) < 1)
+			Timer::Stop();
+	}
+
+	void Set(const SCROLLINFO &si0) {
+		float	old_pos = pos;
+		B::Set(si0);
+		target	+= pos - old_pos;
+		c.SetScroll(si0);
+	}
+
+	void ProcessScroll(WPARAM wParam) {
+		Timer::Stop();
+		if (wParam == SB_THUMBTRACK)
+			B::Set(c.GetScroll(SIF_TRACKPOS|SIF_RANGE));
+		else
+			B::ProcessScroll(wParam);
+		c.SetScroll(*this);
+	}
+
+	void Wheel(int dz) {
+		if (!Timer::IsRunning())
+			target = pos;
+		target = clamp(target - dz, 0, iso::max(max - page, 0));
+		if (!Timer::IsRunning() && abs(target - pos) > 16)
+			Timer::Start(0.02f, Timer::TIMER_THREAD);
+	}
+};
+
+
 class D2DEditControlImp : public Window<D2DEditControlImp>, public WindowTimer<D2DEditControlImp>, d2d::TextDisplay {
+	typedef	d2d::TextDisplay	B;
 	d2d::WND				target;
 	TScrollInfo<float>		si, sih;
 	float					scroll_target, scroll_speed;
@@ -781,12 +778,11 @@ class D2DEditControlImp : public Window<D2DEditControlImp>, public WindowTimer<D
 	flags<FLAGS>			flags;
 
 	void	SetDrawRect(const Rect &r) {
-		int	width0	= drawrect.Width();
-		drawrect	= r;
-		if (flags.test(WORDWRAP) && drawrect.Width() != width0)
+		if (flags.test(WORDWRAP) && r.Width() != drawrect.Width())
 			WidthChanged();
-		si.SetPage(drawrect.Height());
-		sih.SetPage(drawrect.Width());
+		drawrect	= r;
+		si.SetPage(r.Height());
+		sih.SetPage(r.Width());
 		SetScroll(si);
 	}
 
@@ -796,17 +792,20 @@ class D2DEditControlImp : public Window<D2DEditControlImp>, public WindowTimer<D
 			SetDrawRect((GetClientRect() + rel_drawrect) / zoom);
 	}
 
-	void UpdateTo(float ey, uint32 offset) {
-		float	width	= flags.test(WORDWRAP) ? drawrect.Width() - margins[0] - margins[1] : 1e38f;
-		float	y		= d2d::TextDisplay::UpdateTo(ey, offset, width);
+	void UpdateTo(float end_y, uint32 end_offset) {
+		B::UpdateTo(end_y, end_offset, flags.test(WORDWRAP) ? drawrect.Width() - margins[0] - margins[1] : 1e38f);
 		if (!flags.test(HIDESEL) && !abs(selection).empty())
 			ApplyTemp(abs(selection), new d2d::FormatEffect(colour::white, win::Colour::SysColor(COLOR_HIGHLIGHT), 0, 0));
 	}
 
 	const chunk*	TextPosition(uint32 offset, float *px, float *py, DWRITE_HIT_TEST_METRICS *hit, bool visible_only = true) {
-		if (offset > ScannedOffset())
-			UpdateTo(visible_only ? si.Pos() + drawrect.Height() + 16 : 0, visible_only ? 0 : offset);
-		return d2d::TextDisplay::TextPosition(offset, px, py, hit);
+		if (offset >= ScannedOffset()) {
+			if (visible_only)
+				UpdateTo(si.Pos() + drawrect.Height() + 16, 0);
+			else
+				UpdateTo(0, offset);
+		}
+		return B::TextPosition(offset, px, py, hit);
 	}
 	bool	GetPosition(uint32 offset, POINT &pos, DWRITE_HIT_TEST_METRICS &hit, bool visible_only = true) {
 		float	x, y;
@@ -821,7 +820,7 @@ class D2DEditControlImp : public Window<D2DEditControlImp>, public WindowTimer<D
 		x = x / zoom - drawrect.left - margins[0] + sih.Pos();
 		y = y / zoom - drawrect.top + si.Pos();
 		UpdateTo(y, 0);
-		return d2d::TextDisplay::HitTestFromWindow(x, y, hit);
+		return B::HitTestFromWindow(x, y, hit);
 	}
 	uint32	OffsetFromWindow(float x, float y) {
 		DWRITE_HIT_TEST_METRICS	hit;
@@ -838,19 +837,19 @@ class D2DEditControlImp : public Window<D2DEditControlImp>, public WindowTimer<D
 	bool	Visible(uint32 a) const {
 		DWRITE_HIT_TEST_METRICS	hit;
 		float x, y;
-		return d2d::TextDisplay::TextPosition(a, &x, &y, &hit) && between(y - si.Pos(), 0, drawrect.Height());
+		return B::TextPosition(a, &x, &y, &hit) && between(y - si.Pos(), 0, drawrect.Height());
 	}
 
 	bool	Visible(const interval<uint32> &r) const {
 		DWRITE_HIT_TEST_METRICS	hit;
 		float x, y;
-		return d2d::TextDisplay::TextPosition(r.a, &x, &y, &hit) && y - si.Pos() < drawrect.Height()
-			&& d2d::TextDisplay::TextPosition(r.b, &x, &y, &hit) && y > si.Pos();
+		return B::TextPosition(r.a, &x, &y, &hit) && y - si.Pos() < drawrect.Height()
+			&& B::TextPosition(r.b, &x, &y, &hit) && y > si.Pos();
 	}
 
 	void	SetSelection(uint32 a) {
 		if (!abs(selection).empty())
-			Dirty(selection.minimum());
+			MakeDirty(selection.minimum());
 		selection.a = selection.b = a;
 	}
 
@@ -873,7 +872,7 @@ class D2DEditControlImp : public Window<D2DEditControlImp>, public WindowTimer<D
 					Invalidate();
 			}
 
-			Dirty(sel.a != prev.a ? min(prev.a, sel.a) : min(prev.b, sel.b));
+			MakeDirty(sel.a != prev.a ? min(prev.a, sel.a) : min(prev.b, sel.b));
 		}
 	}
 
@@ -939,10 +938,10 @@ class D2DEditControlImp : public Window<D2DEditControlImp>, public WindowTimer<D
 	string16	GetText(const interval<uint32> &r) {
 		auto		r2	= r & interval<uint32>(0, Length());
 		string16	s(r2.extent());
-		uint32		len	= d2d::TextDisplay::GetText(r2, s);
+		uint32		len	= B::GetText(r2, s);
 		ISO_ASSERT(len == r2.extent());
-		if (len)
-			s[len] = 0;
+		//if (len)
+		//	s[len] = 0;
 		return s;
 	}
 
@@ -1039,9 +1038,9 @@ LRESULT D2DEditControlImp::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 			SetFocus();
 			DWRITE_HIT_TEST_METRICS	hit;
 			if (const chunk *i = HitTestFromWindow(Point(lParam), &hit)) {
-				const char16 *p = i->s;
+				const char16 *p = i->text;
 				const char16 *e = string_find(p + hit.textPosition, char_set::whitespace);
-				const char16 *s = string_rfind(p, char_set::whitespace, p + hit.textPosition);
+				const char16 *s = string_rfind(p, p + hit.textPosition, char_set::whitespace);
 				SetSelection(interval<uint32>(i->offset + (s ? s + 1 - p : 0), i->offset + (e - p)));
 			}
 			SetCapture(*this);
@@ -1124,11 +1123,11 @@ LRESULT D2DEditControlImp::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 		}
 
 		case WM_GETTEXTLENGTH:
-			return d2d::TextDisplay::Length();
+			return B::Length();
 
 		case WM_SETTEXT: {
 			string16	s((const char*)lParam);
-			d2d::TextDisplay::ReplaceText(interval<uint32>(0, Length()), s.begin(), s.end());
+			B::ReplaceText(interval<uint32>(0, Length()), s.begin(), s.end());
 			UpdateTo(0, ~0);
 			SetScroll(si);
 			Invalidate();
@@ -1136,7 +1135,7 @@ LRESULT D2DEditControlImp::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 		}
 
 		case WM_SETFONT:
-			d2d::TextDisplay::SetFont(win::Font(HFONT(wParam)).GetParams16());
+			B::SetFont(win::Font(HFONT(wParam)).GetParams16());
 			return 0;
 
 		case WM_KEYDOWN: {
@@ -1154,7 +1153,7 @@ LRESULT D2DEditControlImp::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 					DWRITE_HIT_TEST_METRICS	hit;
 					float		x, y;
 					const chunk		*i	= TextPosition(selection.b, &x, &y, &hit);
-					i = d2d::TextDisplay::HitTestFromWindow(x, y + hit.height, &hit);
+					i = B::HitTestFromWindow(x, y + hit.height, &hit);
 					MoveCaret(i ? i->offset + hit.textPosition : Length(), shift);
 					break;
 				}
@@ -1163,7 +1162,7 @@ LRESULT D2DEditControlImp::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 					DWRITE_HIT_TEST_METRICS	hit;
 					float		x, y;
 					const chunk		*i	= TextPosition(selection.b, &x, &y, &hit);
-					i = d2d::TextDisplay::HitTestFromWindow(x, y - hit.height, &hit);
+					i = B::HitTestFromWindow(x, y - hit.height, &hit);
 					if (hit.textPosition == i->length())
 						--hit.textPosition;
 					MoveCaret(i->offset + hit.textPosition, shift);
@@ -1198,9 +1197,9 @@ LRESULT D2DEditControlImp::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 				case ID_EDIT_COPY:		return SendMessage(WM_COPY);
 				case ID_EDIT_DELETE: {
 					auto	sel = abs(selection);
-					if (sel.a == sel.b)
+					if (sel.a == sel.b && sel.a)
 						--sel.a;
-					ReplaceText(sel, 0, 0);
+					ReplaceText<char16>(sel, 0, 0);
 					DWRITE_HIT_TEST_METRICS	hit;
 					Point					pos;
 					if (GetPosition(sel.a, pos, hit)) {
@@ -1217,7 +1216,7 @@ LRESULT D2DEditControlImp::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 							return 0;
 						++sel.b;
 					}
-					ReplaceText(sel, 0, 0);
+					ReplaceText<char16>(sel, 0, 0);
 					DWRITE_HIT_TEST_METRICS	hit;
 					Point					pos;
 					if (GetPosition(sel.a, pos, hit)) {
@@ -1248,7 +1247,7 @@ LRESULT D2DEditControlImp::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 
 				case ID_EDIT_WORDWRAP:
 					flags.flip(WORDWRAP);
-					Dirty(0);
+					MakeDirty(0);
 					Invalidate();
 					break;
 
@@ -1260,7 +1259,7 @@ LRESULT D2DEditControlImp::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 		case WM_CUT:
 			if (!abs(selection).empty()) {
 				Clipboard(*this).Set(GetText(abs(selection)));
-				ReplaceText(abs(selection), 0, 0);
+				ReplaceText<char16>(abs(selection), 0, 0);
 				SetSelection(selection.a);
 			}
 			return 0;
@@ -1274,7 +1273,7 @@ LRESULT D2DEditControlImp::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 			return 0;
 
 		case WM_CLEAR:
-			ReplaceText(abs(selection), 0, 0);
+			ReplaceText<char16>(abs(selection), 0, 0);
 			SetSelection(selection.a);
 			return 0;
 
@@ -1293,7 +1292,7 @@ LRESULT D2DEditControlImp::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 
 		case EM_SETTARGETDEVICE:
 			flags.set(WORDWRAP, lParam);
-			Dirty(0);
+			MakeDirty(0);
 			Invalidate();
 			break;
 
@@ -1307,19 +1306,19 @@ LRESULT D2DEditControlImp::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 			const interval<uint32>	r		= wParam == SCF_ALL ? interval<uint32>(0, Length()) : abs(selection);
 
 			if (mask & CFM_WEIGHT)
-				AddFormat(r, new d2d::format_weight(DWRITE_FONT_WEIGHT(f->wWeight)));
+				AddFormat(r, new d2d::Formatting::weight(DWRITE_FONT_WEIGHT(f->wWeight)));
 			else if (mask & CFM_BOLD)
-				AddFormat(r, new d2d::format_weight(effects & CFE_BOLD ? DWRITE_FONT_WEIGHT_BOLD : DWRITE_FONT_WEIGHT_NORMAL));
+				AddFormat(r, new d2d::Formatting::weight(effects & CFE_BOLD ? DWRITE_FONT_WEIGHT_BOLD : DWRITE_FONT_WEIGHT_NORMAL));
 			if (mask & CFM_ITALIC)
-				AddFormat(r, new d2d::format_style(effects & CFE_ITALIC ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL));
+				AddFormat(r, new d2d::Formatting::style(effects & CFE_ITALIC ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL));
 			if (mask & CFM_UNDERLINE)
-				AddFormat(r, new d2d::format_underline(!!(effects & CFE_UNDERLINE)));
+				AddFormat(r, new d2d::Formatting::underline(!!(effects & CFE_UNDERLINE)));
 			if (mask & CFM_STRIKEOUT)
-				AddFormat(r, new d2d::format_strike(!!(effects & CFE_STRIKEOUT)));
+				AddFormat(r, new d2d::Formatting::strike(!!(effects & CFE_STRIKEOUT)));
 			if (mask & CFM_SIZE)
-				AddFormat(r, new d2d::format_size(f->yHeight));
+				AddFormat(r, new d2d::Formatting::size(f->yHeight));
 			if (mask & CFM_FACE)
-				AddFormat(r, new d2d::format_font(f->szFaceName));
+				AddFormat(r, new d2d::Formatting::font(f->szFaceName));
 
 			if (mask & CFM_SPACING) {
 				for (auto &p : MakeParagraphs(r))
@@ -1327,7 +1326,7 @@ LRESULT D2DEditControlImp::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 			}
 
 			if (mask & (CFM_COLOR | CFM_BACKCOLOR | CFM_OFFSET | CFM_SUBSCRIPT | CFM_SUPERSCRIPT)) {
-				d2d::format_effect	*f2 = new d2d::format_effect;
+				d2d::Formatting::effect	*f2 = new d2d::Formatting::effect;
 				if (mask & CFM_COLOR)
 					f2->col = f->crTextColor;
 				if (mask & CFM_BACKCOLOR)
@@ -1393,8 +1392,9 @@ LRESULT D2DEditControlImp::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 
 		case EM_REPLACESEL: {
 			auto	sel = abs(selection);
-			string16	s((const char*)lParam);
-			ReplaceText(sel, s.begin(), s.end());
+//			string16	s((const char*)lParam);
+//			ReplaceText(sel, s.begin(), s.end());
+			ReplaceText(sel, (const char*)lParam, string_end((const char*)lParam));
 			SetSelection(sel.a + string_len32((const char*)lParam));
 
 			if (between(ScannedHeight() - si.Pos(), 0, drawrect.bottom)) {
@@ -1532,7 +1532,7 @@ LRESULT D2DEditControlImp::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 					case CP_UTF8:
 						len = numcr;
 						for (auto &i : text)
-							len += uint32(chars_count<char16>(i.s.begin()));
+							len += uint32(chars_count<char16>(i.text.begin()));
 						break;
 				}
 			} else {
@@ -1565,11 +1565,12 @@ LRESULT D2DEditControlImp::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 					while (!(es->dwError = es->pfnCallback(es->dwCookie, buffer, buffer.size32(), &read)) && read) {
 
 						if (wParam & SF_UNICODE) {
-							ReplaceText(sel, (wchar_t*)buffer, (wchar_t*)(buffer + read));
+							ReplaceText(sel, (const wchar_t*)buffer, (const wchar_t*)(buffer + read));
 							sel = interval<uint32>(sel.a + read / 2);
 						} else {
-							string16	s((char*)buffer, read);
-							ReplaceText(sel, s.begin(), s.end());
+							//string16	s((char*)buffer, read);
+							//ReplaceText(sel, s.begin(), s.end());
+							ReplaceText(sel, (const char*)buffer, (const char*)(buffer + read));
 							sel = interval<uint32>(sel.a + read);
 						}
 					}
@@ -1593,14 +1594,14 @@ LRESULT D2DEditControlImp::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 					for (auto &i : text) {
 						LONG	read = 0;
 						if (wParam & SF_UNICODE) {
-							uint8	*p	= (uint8*)i.s.begin(), *e = (uint8*)i.s.end();
+							uint8	*p	= (uint8*)i.text.begin(), *e = (uint8*)i.text.end();
 							while (p < e && !(es->dwError = es->pfnCallback(es->dwCookie, p, e - p, &read)) && read) {
 								p		+= read;
 								total	+= read / 2;
 							}
 
 						} else {
-							string	s(i.s);
+							string	s(i.text);
 							uint8	*p	= (uint8*)s.begin(), *e = (uint8*)s.end();
 							while (p < e && !(es->dwError = es->pfnCallback(es->dwCookie, p, e - p, &read)) && read) {
 								p		+= read;
@@ -1686,7 +1687,7 @@ D2DTextWindow::D2DTextWindow(const WindowPos &pos, const char *_title, Style sty
 	Create(pos, _title, style, styleEx, id);
 }
 
-LRESULT D2DTextWindow::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+LRESULT D2DTextWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 		case WM_CREATE:
 			Parent().SendMessage(WM_PARENTNOTIFY, WM_SETTEXT, hWnd);
@@ -1702,6 +1703,11 @@ LRESULT D2DTextWindow::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 
 		case WM_GETTEXTLENGTH:
 			return title.length();
+
+		case WM_KEYDOWN:
+			if (auto r = Super(message, wParam, lParam))
+				return r;
+			return Parent()(message, wParam, lParam);
 
 		case WM_DESTROY:
 			hWnd = 0;
@@ -1806,7 +1812,7 @@ TextWindow::TextWindow(const WindowPos &pos, const char *_title, Style style, St
 
 HWND TextWindow::Create(const WindowPos &pos, const char *_title, Style style, StyleEx styleEx, ID id) {
 	title = _title;
-	Subclass<TextWindow, RichEditControl>::Create(pos, NULL, style | EditControl::MULTILINE | EditControl::AUTOHSCROLL | EditControl::AUTOVSCROLL | EditControl::NOHIDESEL | CHILD | HSCROLL | VSCROLL, styleEx, id);
+	Subclass<TextWindow, RichEditControl>::Create(pos, none, style | EditControl::MULTILINE | EditControl::AUTOHSCROLL | EditControl::AUTOVSCROLL | EditControl::NOHIDESEL | CHILD | HSCROLL | VSCROLL, styleEx, id);
 	SetFormat(CharFormat().Font("Courier New").Weight(FW_NORMAL).Size(12 * 15), SCF_DEFAULT);
 	return *this;
 }
@@ -1823,6 +1829,9 @@ void TextWindow::SetTitle(const char *_title) {
 	title = _title;
 	Parent().SendMessage(WM_PARENTNOTIFY, WM_SETTEXT, hWnd);
 }
+//-----------------------------------------------------------------------------
+//	ANSI cols
+//-----------------------------------------------------------------------------
 
 static const win::Colour ansi_cols[] = {
 	{0,0,0},

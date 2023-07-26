@@ -14,7 +14,7 @@ class C_type_composite;
 
 class C_type {
 public:
-	enum TYPE {
+	enum TYPE : uint8 {
 		UNKNOWN,
 		INT,
 		FLOAT,
@@ -30,7 +30,7 @@ public:
 
 		CUSTOM,
 	};
-	enum FLAGS {
+	enum FLAGS : uint8 {
 		NONE		= 0,
 		FLAG0		= 1<<0, FLAG1 = 1<<1, FLAG2 = 1<<2, FLAG3 = 1<<3,
 		FLAG4		= 1<<4,
@@ -46,8 +46,8 @@ public:
 	friend constexpr FLAGS	operator*(FLAGS a, bool b)		{ return b ? a : NONE; }
 	friend constexpr FLAGS&	operator|=(FLAGS &a, FLAGS b)	{ return a = a | b; }
 
-	compact<TYPE, 8>	type;
-	compact<FLAGS, 8>	flags;
+	TYPE	type;
+	FLAGS	flags;
 	constexpr C_type(TYPE t, FLAGS f = NONE) : type(t), flags(f) {}
 	constexpr bool			packed()	const	{ return !!(flags & PACKED); }
 	constexpr bool			templated()	const	{ return !!(flags & TEMPLATED); }
@@ -65,8 +65,8 @@ struct C_arg {
 	string			id;
 	const C_type*	type;
 	C_arg()			{}
-	C_arg(string_param &&id, const C_type *type) : id(move(id)), type(type) {}
-	void	init(string_param &&_id, const C_type *_type) {
+	C_arg(string_ref id, const C_type *type) : id(move(id)), type(type) {}
+	void	init(string_ref _id, const C_type *_type) {
 		id		= move(_id);
 		type	= _type;
 	}
@@ -81,9 +81,9 @@ struct C_element : C_arg {
 		};
 	};
 	C_element()		{}
-	C_element(string_param &&id, const C_type *type, size_t offset = ~size_t(0), ACCESS access = PUBLIC) : C_arg(move(id), type), offset(uint32(offset)), access(access), shift(0) {}
+	C_element(string_ref id, const C_type *type, size_t offset = ~size_t(0), ACCESS access = PUBLIC) : C_arg(move(id), type), offset(uint32(offset)), access(access), shift(0) {}
 
-	void	init(string_param &&_id, const C_type *_type, size_t _offset = ~size_t(0), ACCESS _access = PUBLIC) {
+	void	init(string_ref _id, const C_type *_type, size_t _offset = ~size_t(0), ACCESS _access = PUBLIC) {
 		C_arg::init(move(_id), _type);
 		offset		= uint32(_offset);
 		access		= _access;
@@ -95,19 +95,18 @@ struct C_element : C_arg {
 
 class C_type_withsubtype : public C_type {
 public:
-	uint8			_unused[2];
+	uint8			_unused[2] = {0, 0};
 	uint32			subsize;
 	const C_type*	subtype;
-	constexpr C_type_withsubtype(TYPE t, const C_type *subtype, FLAGS f = NONE) : C_type(t, f | (subtype ? (subtype->flags & TEMPLATED) : NONE)), _unused{0,0}, subsize(subtype ? (uint32)subtype->size() : 0), subtype(subtype) {}
+	constexpr C_type_withsubtype(TYPE t, const C_type *subtype, FLAGS f = NONE) : C_type(t, f | (subtype ? (subtype->flags & TEMPLATED) : NONE)), subsize(subtype ? (uint32)subtype->size() : 0), subtype(subtype) {}
 };
 
 class C_type_withargs : public C_type_withsubtype {
 public:
 	dynamic_array<C_arg>	args;
 	constexpr C_type_withargs(TYPE t, const C_type *subtype, FLAGS f = NONE) : C_type_withsubtype(t, subtype, f) {}
-	size_t	num_args()	const	{ return args.size(); }
-
-	C_arg*			add(string_param &&id, const C_type* type) {
+	size_t			num_args()	const	{ return args.size(); }
+	C_arg*			add(string_ref id, const C_type* type) {
 		if (type)
 			flags |= type->flags & TEMPLATED;
 		return &args.emplace_back(move(id), type);
@@ -167,7 +166,7 @@ struct C_enum {
 	string		id;
 	int64		value;
 	C_enum() {}
-	C_enum(string_param &&id, int64 value) : id(move(id)), value(value) {}
+	C_enum(string_ref id, int64 value) : id(move(id)), value(value) {}
 };
 
 class C_type_enum : public C_type_int, public dynamic_array<C_enum> {
@@ -181,7 +180,10 @@ class C_type_float : public C_type {
 	uint8		nbits, exp;
 	constexpr C_type_float(uint8 nbits, uint8 exp, FLAGS f) : C_type(FLOAT, f), nbits(nbits), exp(exp) {}
 public:
-	constexpr C_type_float(uint8 _nbits, uint8 _exp, bool sign) : C_type(FLOAT, sign ? SIGN : NONE), nbits(_nbits), exp(_exp) {}
+	static uint32		usual_exp_bits(uint32 nbits) { return nbits <= 64 ? log2(nbits) * 3 - 7 : log2(nbits) * 4 - 13; }
+
+	constexpr C_type_float(uint8 nbits, uint8 exp, bool sign = true) : C_type(FLOAT, sign ? SIGN : NONE), nbits(nbits), exp(exp) {}
+	constexpr C_type_float(uint8 nbits) : C_type(FLOAT, SIGN), nbits(nbits), exp(usual_exp_bits(nbits)) {}
 	constexpr uint32	num_bits()		const	{ return nbits;	}
 	constexpr size_t	exp_bits()		const	{ return exp;	}
 	constexpr size_t	size()			const	{ return (nbits + 7) / 8;	}
@@ -197,13 +199,6 @@ public:
 	}
 };
 
-template<typename B> uint32 hash(const string_base<B> &s) {
-	return CRC32C::calc(s.begin(), s.length());
-}
-template<typename C> uint32 hash(const alloc_string<C> &s) {
-	return CRC32C::calc((const void*)s.begin(), s.length());
-}
-
 class C_type_composite : public C_type {
 public:
 	static const FLAGS FORWARD = FLAG0;
@@ -215,20 +210,20 @@ public:
 	size_t							_size;
 
 	C_type_composite(TYPE t, FLAGS f = NONE) : C_type(t, f), parent(0), _size(0) {}
-	C_type_composite(TYPE t, FLAGS f, string_param &&id = nullptr) : C_type(t, f), id(move(id)), parent(0), _size(0) {}
+	C_type_composite(TYPE t, FLAGS f, string_ref id = nullptr) : C_type(t, f), id(move(id)), parent(0), _size(0) {}
 	C_type_composite(C_type_composite&&)		= default;
 	C_type_composite(const C_type_composite&)	= default;
 
 	constexpr size_t	size()		const	{ return _size; }
 	uint32				alignment()	const;
-	C_element*			add(string_param &&id, const C_type* type, size_t offset, C_element::ACCESS access = C_element::PUBLIC) {
+	C_element*			add(string_ref id, const C_type* type, size_t offset, C_element::ACCESS access = C_element::PUBLIC) {
 		C_element	*e	= new(elements) C_element;
 		e->init(move(id), type, offset, access);
 		if (type)
 			flags |= type->flags & TEMPLATED;
 		return e;
 	}
-	C_element*			add_static(string_param &&id, const C_type* type, C_element::ACCESS access = C_element::PUBLIC) {
+	C_element*			add_static(string_ref id, const C_type* type, C_element::ACCESS access = C_element::PUBLIC) {
 		return add(move(id), type, ~(size_t)0, access);
 	}
 	const C_element*	get(const char *id, const C_type *type = 0) const;
@@ -252,14 +247,15 @@ public:
 class C_type_struct : public C_type_composite {
 public:
 	C_type_struct()		: C_type_composite(STRUCT) {}
-	C_type_struct(string_param &&id, FLAGS f = NONE): C_type_composite(STRUCT, f, move(id)) {}
+	C_type_struct(string_ref id, FLAGS f = NONE) : C_type_composite(STRUCT, f, move(id)) {}
+	C_type_struct(string_ref id, FLAGS f, initializer_list<C_element> elements);
 	C_type_struct(C_type_struct&&)		= default;
 	C_type_struct(const C_type_struct&)	= default;
 
 	void				set_packed(bool packed)	{ flags = (flags - PACKED) | (PACKED * packed); }
-	C_element*			add(string_param &&id, const C_type* type, C_element::ACCESS access = C_element::PUBLIC, bool is_static = false);
-	C_element*			add_atoffset(string_param &&id, const C_type* type, uint32 offset, C_element::ACCESS access = C_element::PUBLIC);
-	C_element*			add_atbit(string_param &&id, const C_type* type, uint32 bit, C_element::ACCESS access = C_element::PUBLIC);
+	C_element*			add(string_ref id, const C_type* type, C_element::ACCESS access = C_element::PUBLIC, bool is_static = false);
+	C_element*			add_atoffset(string_ref id, const C_type* type, uint32 offset, C_element::ACCESS access = C_element::PUBLIC);
+	C_element*			add_atbit(string_ref id, const C_type* type, uint32 bit, C_element::ACCESS access = C_element::PUBLIC);
 	C_type_struct*		get_base() const {
 		if (!_size)
 			return 0;
@@ -267,14 +263,20 @@ public:
 		return e.offset == 0 && !e.id && e.type->type == C_type::STRUCT ? (C_type_struct*)e.type : 0;
 	}
 
-	template<typename C, typename E>	C_element*	add(string_param &&id, E C::*field, C_element::ACCESS access = C_element::PUBLIC);
+	template<typename C, typename E>		C_element*			add(string_ref id, E C::*field, C_element::ACCESS access = C_element::PUBLIC);
+	template<typename C, typename E, int O> C_element*			add(string_ref id, offset_type<E,O> C::*field, C_element::ACCESS access = C_element::PUBLIC);
+	template<typename C, typename E, int S, int N> C_element*	add(string_ref id, bitfield<E,S,N> C::*field, C_element::ACCESS access = C_element::PUBLIC);
+
+	template<typename C, typename E>		C_element*			add(struct C_types &ctypes, string_ref id, E C::*field, C_element::ACCESS access = C_element::PUBLIC);
+	template<typename C, typename E, int O> C_element*			add(struct C_types &ctypes, string_ref id, offset_type<E,O> C::*field, C_element::ACCESS access = C_element::PUBLIC);
+	template<typename C, typename E, int S, int N> C_element*	add(struct C_types &ctypes, string_ref id, bitfield<E,S,N> C::*field, C_element::ACCESS access = C_element::PUBLIC);
 };
 
 class C_type_union : public C_type_composite {
 public:
 	C_type_union()		: C_type_composite(UNION) {}
-	C_type_union(string_param &&id)	: C_type_composite(UNION, NONE, move(id)) {}
-	C_element*			add(string_param &&id, const C_type* type, C_element::ACCESS access = C_element::PUBLIC, bool is_static = false) {
+	C_type_union(string_ref id)	: C_type_composite(UNION, NONE, move(id)) {}
+	C_element*			add(string_ref id, const C_type* type, C_element::ACCESS access = C_element::PUBLIC, bool is_static = false) {
 		return C_type_composite::add(move(id), type, is_static ? ~(size_t)0 : 0, access);
 	}
 };
@@ -282,11 +284,12 @@ public:
 class C_type_namespace : public C_type_composite {
 public:
 	C_type_namespace()		: C_type_composite(NAMESPACE) {}
-	C_type_namespace(string_param &&id)	: C_type_composite(NAMESPACE, NONE, move(id)) {}
+	C_type_namespace(string_ref id)	: C_type_composite(NAMESPACE, NONE, move(id)) {}
 };
 
 class C_type_array : public C_type_withsubtype {
 public:
+	static const FLAGS VECTOR = FLAG0;
 	uint32			count;
 	constexpr C_type_array(const C_type *subtype, uint32 count)					: C_type_withsubtype(ARRAY, subtype), count(count)	{}
 	constexpr C_type_array(const C_type *subtype, uint32 count, uint32 stride)	: C_type_withsubtype(ARRAY, subtype), count(count)	{ subsize = stride; }
@@ -297,7 +300,7 @@ public:
 class C_type_pointer : public C_type_withsubtype {
 public:
 	static const FLAGS LONG = FLAG0, LONGLONG = FLAG1, MANAGED = FLAG2, ALLOC = FLAG3, REFERENCE = FLAG4;
-	constexpr C_type_pointer(const C_type *subtype, FLAGS _flags) : C_type_withsubtype(POINTER, subtype, _flags) {}
+	constexpr C_type_pointer(const C_type *subtype, FLAGS flags = NONE) : C_type_withsubtype(POINTER, subtype, flags) {}
 	constexpr C_type_pointer(const C_type *subtype, uint32 nbits, bool reference, bool managed = false, bool alloc = false)
 		: C_type_withsubtype(POINTER, subtype, FLAGS(nbits <= 16 ? 0 : nbits <= 32 ? 1 : nbits <= 64 ? 2 : 3) | (MANAGED * managed) | (ALLOC * alloc) | (REFERENCE * reference)) {}
 	constexpr size_t		size()		const	{ return 2 << (flags & 3);	}
@@ -334,7 +337,7 @@ class C_type_custom : public C_type {
 public:
 	string							id;
 	async_callback<string_accum&(string_accum&, const void*)>	output;
-	template<typename L> C_type_custom(string_param &&id, L &&output) : C_type(CUSTOM, NONE), id(move(id)), output(forward<L>(output)) {}
+	template<typename L> C_type_custom(string_ref id, L &&output) : C_type(CUSTOM, NONE), id(move(id)), output(forward<L>(output)) {}
 };
 
 constexpr size_t C_type::size() const {
@@ -390,7 +393,7 @@ constexpr const char *C_type::tag() const {
 struct CRC32Chash {
 	uint32	u;
 	CRC32Chash(const char *s)	: u(CRC32C::calc(s))	{}
- 	CRC32Chash(const C_type &t);
+	CRC32Chash(const C_type &t);
 	template<typename T> CRC32Chash(const string_base<T> &s) : u(CRC32C::calc(s.begin(), s.length(), 0)) {}
 	friend uint32 hash(const CRC32Chash &h) { return h.u; }
 };
@@ -443,19 +446,21 @@ struct C_types : C_type_namespace {
 			p = new noref_t<T>(forward<T>(t));
 		return p;
 	}
-	const C_type *lookup(const string_param &s) {
+	const C_type *lookup(string_ref s) {
 		return child(s);
 	}
 	C_type *instantiate(const C_type *type, const char *name, const C_type **args);
 	C_type *instantiate(const C_type *type, const char *name, const C_type *arg)	{ return instantiate(type, name, &arg); }
 	uint64	inferable_template_args(const C_type *type);
 
-	template<typename T, typename V = void> struct type_getter {
-		//static constexpr const C_type			*f()						{ return 0; }
-		//static constexpr const C_type			*f(C_types &types)			{ return 0; }
-	};
+	template<typename T, typename V = void> struct type_getter;// {};
 	template<typename T> constexpr const C_type*	get_type()				{ return type_getter<T>::f(*this); }
 	template<typename T> constexpr const C_type*	get_type(T)				{ return type_getter<T>::f(*this); }
+	template<typename T> constexpr const C_type*	get_type(string_ref s)	{
+		if (auto t = child(s))
+			return t;
+		return add(s, get_type<T>());
+	}
 
 	template<typename T> constexpr auto				get_type_maybe()->decltype(type_getter<T>::f(this))		{ return type_getter<T>::f(*this); }
 	template<typename T> constexpr const C_type*	get_type_maybe()		{ return &dummy; }
@@ -475,6 +480,29 @@ struct C_types : C_type_namespace {
 	}
 };
 
+template<typename C, typename E> C_element* C_type_struct::add(string_ref id, E C::*field, C_element::ACCESS access) {
+	return add_atoffset(move(id), C_types::get_static_type<E>(), T_get_member_offset(field), access);
+}
+template<typename C, typename E> C_element* C_type_struct::add(C_types &ctypes, string_ref id, E C::*field, C_element::ACCESS access) {
+	return add_atoffset(move(id), ctypes.get_type<E>(), T_get_member_offset(field), access);
+}
+template<typename C, typename E, int S, int N> C_element* C_type_struct::add(string_ref id, bitfield<E, S, N> C::* field, C_element::ACCESS access) {
+	return add_atbit(move(id), C_types::get_static_type<E>(), S);
+}
+
+template<typename C, typename E, int O> C_element* C_type_struct::add(string_ref id, offset_type<E,O> C::*field, C_element::ACCESS access) {
+	return add_atoffset(move(id), C_types::get_static_type<E>(), O, access);
+}
+template<typename C, typename E, int O> C_element* C_type_struct::add(C_types &ctypes, string_ref id, offset_type<E,O> C::*field, C_element::ACCESS access) {
+	return add_atoffset(move(id), ctypes.get_type<E>(), O, access);
+}
+template<typename C, typename E, int S, int N> C_element* C_type_struct::add(struct C_types& ctypes, string_ref id, bitfield<E, S, N> C::* field, C_element::ACCESS access) {
+	return add_atbit(move(id), ctypes.get_type<E>(), S);
+}
+
+//-----------------------------------------------------------------------------
+//	type_getters
+//-----------------------------------------------------------------------------
 
 template<typename T> struct C_types::type_getter<T, enable_if_t<T_builtin_int<T>::value || T_ischar<T>::value>> {
 	static constexpr const C_type *f()					{ return C_type_int::get<T>(); }
@@ -544,10 +572,9 @@ template<> struct C_types::type_getter<bool> {
 	static const C_type *f(C_types &types)	{ return f(); }
 };
 
-template<typename C, typename E> C_element* C_type_struct::add(string_param &&id, E C::*field, C_element::ACCESS access) {
-	return add_atoffset(move(id), C_types::get_static_type<E>(), T_get_member_offset(field), access);
-}
-
+//-----------------------------------------------------------------------------
+//	functions
+//-----------------------------------------------------------------------------
 
 int				NumChildren(const C_type *type);
 int				NumElements(const C_type *type);
@@ -731,9 +758,9 @@ bool			ReadCType(istream_ref file, C_types &types, const C_type *&type);
 const C_type*	ReadCType(istream_ref file, C_types &types, C_type *type, char *name);
 const C_type*	ReadCType(istream_ref file, C_types &types, char *name);
 void			ReadCTypes(istream_ref file, C_types &types);
-string_accum&	DumpType(string_accum &sa, const C_type *type, string_param &&name, int indent, bool _typedef = false);
-inline string_accum& DumpType(string_accum &&sa, const C_type *type, string_param &&name, int indent, bool _typedef = false) {
-	return DumpType(sa, type, move(name), indent, _typedef);
+string_accum&	DumpType(string_accum &sa, const C_type *type, string_ref name, int indent, bool _typedef = false);
+inline string_accum& DumpType(string_accum &&sa, const C_type *type, string_ref name, int indent, bool _typedef = false) {
+	return DumpType(sa, type, name, indent, _typedef);
 }
 inline string_accum& operator<<(string_accum &sa, const C_type* x) {
 	return DumpType(sa, x, 0, 0);

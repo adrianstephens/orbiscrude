@@ -292,7 +292,7 @@ template<char SEP> struct parts2 : parts<SEP> {
 		iterator&	operator++() {
 			if (n != e) {
 				p = n + 1;
-				while ((n = string_find(n + 1, SEP, e)) && (string_count(p, '"', n) & 1))
+				while ((n = string_find(n + 1, e, SEP)) && (string_count(p, n, '"') & 1))
 					;
 				if (!n)
 					n = e;
@@ -306,7 +306,7 @@ template<char SEP> struct parts2 : parts<SEP> {
 				if (p == e)
 					++p;
 				n = p - 1;
-				while ((p = string_rfind(s, SEP, p - 1)) && (string_count(p, '"', n) & 1))
+				while ((p = string_rfind(s, p - 1, SEP)) && (string_count(p, n, '"') & 1))
 					;
 				p = p ? p + 1 : s;
 			} else {

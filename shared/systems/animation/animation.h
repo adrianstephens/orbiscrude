@@ -12,13 +12,13 @@ struct AnimationSetMessage {
 	float	value;
 	crc32	id;
 	bool	handled;
-	AnimationSetMessage(float _time, float _speed, float _value = -1.0f, crc32 _id = crc32()) : speed(_speed), value(_value), id(_id), handled(false)	{}
+	AnimationSetMessage(float time, float speed, float value = -1.0f, crc32 id = crc32()) : speed(speed), value(value), id(id), handled(false)	{}
 };
 
 // AnimationLoopMessage
 struct AnimationLoopMessage {
 	float	dt;
-	AnimationLoopMessage(float _dt) : dt(_dt)	{}
+	AnimationLoopMessage(float dt) : dt(dt)	{}
 };
 
 class AnimationHolder {
@@ -31,8 +31,8 @@ protected:
 	void	Init();
 
 public:
-	AnimationHolder(Object *_obj) : obj(_obj), data(0), length(0) {}
-	AnimationHolder(Object *_obj, ISO_ptr<Animation> t) : anim(t), obj(_obj) { Init(); }
+	AnimationHolder(Object *obj) : obj(obj), data(0), length(0) {}
+	AnimationHolder(Object *obj, ISO_ptr<Animation> t) : anim(t), obj(obj) { Init(); }
 	~AnimationHolder();
 
 	void	SetAnim(ISO_ptr<Animation> t);

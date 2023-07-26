@@ -46,79 +46,59 @@ void Unpalette(ISO_rgba	*p, size_t n, const ISO_rgba *clut, uint32 flags) {
 	}
 }
 
+
 void BoxFilter(const block<ISO_rgba, 2> &srce, const block<ISO_rgba, 2> &dest, bool alpha1bit) {
-	int	w0 = max(srce.size<1>(), 1u), h0 = max(srce.size<2>(), 1u);
-	int	w1 = max(w0 >> 1, 1),		h1 = max(h0 >> 1, 1);
+	int	w0 = max(srce.size<1>(), 1u),	h0 = max(srce.size<2>(), 1u);
+	int	w1 = max(w0 >> 1, 1),			h1 = max(h0 >> 1, 1);
+
 	for (int y = 0; y < h1; y++) {
-		ISO_rgba	*s0 = srce[y * 2], *s1 = srce[y * 2 + int(y * 2 < h0 - 1)];
-		ISO_rgba	*d	= dest[y * 1];
+		uint8x4		*s0 = (uint8x4*)srce[y * 2].begin(),
+					*s1 = (uint8x4*)srce[y * 2 + int(y * 2 < h0 - 1)].begin(),
+					*d	= (uint8x4*)dest[y * 1].begin();
 
 		for (int x = w1; x--; d++, s0 += 2, s1 += 2) {
+			auto	t0	= to<uint16>(s0[0]),
+					t1	= to<uint16>(s0[1]),
+					t2	= to<uint16>(s1[0]),
+					t3	= to<uint16>(s1[1]);
+				
 			if (alpha1bit) {
-				int	a = s0[0].a + s0[1].a + s1[0].a + s1[1].a;
-				if (a < 255 * 2) {
-					*d = ISO_rgba(0,0,0,0);
-				} else {
-					*d = ISO_rgba(
-						(s0[0].r * s0[0].a + s0[1].r * s0[1].a + s1[0].r * s1[0].a + s1[1].r * s1[1].a) / a,
-						(s0[0].g * s0[0].a + s0[1].g * s0[1].a + s1[0].g * s1[0].a + s1[1].g * s1[1].a) / a,
-						(s0[0].b * s0[0].a + s0[1].b * s0[1].a + s1[0].b * s1[0].a + s1[1].b * s1[1].a) / a,
-						255
-					);
-				}
+				int	a = t0.w + t1.w + t2.w + t3.w;
+				*d = to<uint8>(select(a < 255 * 2, zero, concat((t0.xyz * t0.w + t1.xyz * t1.w + t2.xyz * t2.w + t3.xyz * t3.w) / a, 255)));
 			} else {
-				*d = ISO_rgba(
-					(s0[0].r + s0[1].r + s1[0].r + s1[1].r) / 4,
-					(s0[0].g + s0[1].g + s1[0].g + s1[1].g) / 4,
-					(s0[0].b + s0[1].b + s1[0].b + s1[1].b) / 4,
-					(s0[0].a + s0[1].a + s1[0].a + s1[1].a) / 4
-				);
+				*d = to<uint8>((t0 + t1 + t2 + t3) >> 2);
 			}
 		}
 	}
 }
 
 void BoxFilter(const block<ISO_rgba, 3> &srce, const block<ISO_rgba, 3> &dest, bool alpha1bit) {
-	int	w0 = max(srce.size<1>(), 1u), h0 = max(srce.size<2>(), 1u), d0 = max(srce.size<3>(), 1u);
-	int	w1 = max(w0 >> 1, 1),		h1 = max(h0 >> 1, 1),		d1 = max(d0 >> 1, 1);
+	int	w0 = max(srce.size<1>(), 1u),	h0 = max(srce.size<2>(), 1u),	d0 = max(srce.size<3>(), 1u);
+	int	w1 = max(w0 >> 1, 1),			h1 = max(h0 >> 1, 1),			d1 = max(d0 >> 1, 1);
 
 	for (int d = 0; d < d1; d++) {
 		block<ISO_rgba, 2>	srce2a	= srce[d * 2], srce2b = srce[d * 2 + int(d * 2 < d0 - 1)];
 		block<ISO_rgba, 2>	dest2	= dest[d * 1];
 
 		for (int y = 0; y < h1; y++) {
-			ISO_rgba	*s0	= srce2a[y * 2], *s1 = srce2a[y * 2 + (y * 2 < h0 - 1)];
-			ISO_rgba	*s2	= srce2b[y * 2], *s3 = srce2b[y * 2 + (y * 2 < h0 - 1)];
-			ISO_rgba	*d	= dest2[y];
+			uint8x4		*s0	= (uint8x4*)srce2a[y * 2].begin(),
+						*s1 = (uint8x4*)srce2a[y * 2 + (y * 2 < h0 - 1)].begin(),
+						*s2	= (uint8x4*)srce2b[y * 2].begin(),
+						*s3 = (uint8x4*)srce2b[y * 2 + (y * 2 < h0 - 1)].begin(),
+						*d	= (uint8x4*)dest2[y].begin();
 
 			for (int x = w1; x--; d++, s0 += 2, s1 += 2, s2 += 2, s3 += 2) {
 				if (alpha1bit) {
-					int	a = s0[0].a + s0[1].a + s1[0].a + s1[1].a + s2[0].a + s2[1].a + s3[0].a + s3[1].a;
-					if (a < 255 * 2) {
-						*d = ISO_rgba(0,0,0,0);
-					} else {
-						*d = ISO_rgba(
-							( s0[0].r * s0[0].a + s0[1].r * s0[1].a + s1[0].r * s1[0].a + s1[1].r * s1[1].a
-							+ s2[0].r * s2[0].a + s2[1].r * s2[1].a + s3[0].r * s3[0].a + s3[1].r * s3[1].a) / a,
-							( s0[0].g * s0[0].a + s0[1].g * s0[1].a + s1[0].g * s1[0].a + s1[1].g * s1[1].a
-							+ s2[0].g * s2[0].a + s2[1].g * s2[1].a + s3[0].g * s3[0].a + s3[1].g * s3[1].a) / a,
-							( s0[0].b * s0[0].a + s0[1].b * s0[1].a + s1[0].b * s1[0].a + s1[1].b * s1[1].a
-							+ s2[0].b * s2[0].a + s2[1].b * s2[1].a + s3[0].b * s3[0].a + s3[1].b * s3[1].a) / a,
-							255
-						);
-					}
-				} else {
-					*d = ISO_rgba(
-						(s0[0].r + s0[1].r + s1[0].r + s1[1].r + s2[0].r + s2[1].r + s3[0].r + s3[1].r) / 8,
-						(s0[0].g + s0[1].g + s1[0].g + s1[1].g + s2[0].g + s2[1].g + s3[0].g + s3[1].g) / 8,
-						(s0[0].b + s0[1].b + s1[0].b + s1[1].b + s2[0].b + s2[1].b + s3[0].b + s3[1].b) / 8,
-						(s0[0].a + s0[1].a + s1[0].a + s1[1].a + s2[0].a + s2[1].a + s3[0].a + s3[1].a) / 8
+					int	a = s0[0].w + s0[1].w + s1[0].w + s1[1].w + s2[0].w + s2[1].w + s3[0].w + s3[1].w;
+					*d	= select(a < 255 * 2, zero, concat(
+						(s0[0].xyz * s0[0].w + s0[1].xyz * s0[1].w + s1[0].xyz * s1[0].w + s1[1].xyz * s1[1].w + s2[0].xyz * s2[0].w + s2[1].xyz * s2[1].w + s3[0].xyz * s3[0].w + s3[1].xyz * s3[1].w) / a,
+						255)
 					);
+				} else {
+					*d = (s0[0] + s0[1] + s1[0] + s1[1] + s2[0] + s2[1] + s3[0] + s3[1]) / 8;
 				}
 			}
 		}
-//		BoxFilter(pixels + (d * 2 + 0) * pitch2, pitch, w0, h0, alpha1bit);
-//		BoxFilter(pixels + (d * 2 + 1) * pitch2, pitch, w0, h0, alpha1bit);
 	}
 }
 

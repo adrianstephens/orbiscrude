@@ -131,14 +131,14 @@ ISO_DEFUSER(REGION_PARAM2, int);
 ISO_DEFUSER(REGION_PARAM4, int);
 
 namespace iso {
-struct Font;
+struct TexFont;
 class Texture;
 struct technique;
 class GraphicsContext;
 }
 
 struct fontparams {
-	iso::ISO_ptr<iso::Font>	font;
+	ISO::ptr<iso::TexFont>	font;
 	float		scale, bold, italic, outline, paragraph, line, shift;
 
 	float	LineSpacing() const;
@@ -397,10 +397,7 @@ struct MenuEditor {
 	void			*context;
 	RenderRegion	*rr0;
 	RenderRegion	*rr1;
-	MenuEditor(const void *_p, void *_context, RenderRegion *_rr0, RenderRegion *_rr1)
-		: p(_p), context(_context), rr0(_rr0), rr1(_rr1)
-	{
-	}
+	MenuEditor(const void *p, void *context, RenderRegion *rr0, RenderRegion *rr1) : p(p), context(context), rr0(rr0), rr1(rr1) {}
 	MenuEditor*		me()	{ return this; }
 };
 #endif
@@ -409,14 +406,14 @@ class MenuValue {
 	iso::uint8	dummy[64];
 	void	init(MenuInstance *mi, iso::tag2 id, const ISO::Type *type, void *data, RenderRegion *rr);
 public:
-//	MenuValue(MenuInstance *mi, const iso::ISO_ptr<iso::anything> &a);
+//	MenuValue(MenuInstance *mi, const ISO::ptr<iso::anything> &a);
 	MenuValue(MenuInstance *mi, iso::tag2 id, const ISO::Type *type, void *data, RenderRegion *rr = 0) {
 		init(mi, id, type, data, rr);
 	}
-	MenuValue(MenuInstance *mi, iso::tag2 id, iso::ISO_ptr<void> p, RenderRegion *rr = 0) {
+	MenuValue(MenuInstance *mi, iso::tag2 id, ISO::ptr<void> p, RenderRegion *rr = 0) {
 		init(mi, id, p.GetType(), p, rr);
 	}
-	MenuValue(MenuInstance *mi, iso::ISO_ptr<void> p, RenderRegion *rr = 0) {
+	MenuValue(MenuInstance *mi, ISO::ptr<void> p, RenderRegion *rr = 0) {
 		init(mi, p.ID(), p.GetType(), p, rr);
 	}
 	template<typename T>MenuValue(MenuInstance *mi, iso::tag2 id, const T &t, RenderRegion *rr = 0) {

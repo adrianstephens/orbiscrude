@@ -28,7 +28,8 @@ hash_map<ptr_machine<void>, Converted>	changes;
 bool Conversion::checkinside(const Browser &b, FLAGS flags, int depth) {
 	const Type *type = b.GetTypeDef()->SkipUser();
 	bool	changed	= false;
-	if (type && !type->IsPlainData()) switch (type->GetType()) {
+
+	if (!IsPlainData(type)) switch (type->GetType()) {
 		case REFERENCE: {
 			auto	ref = (TypeReference*)type;
 			ptr_machine<void>	p = ref->get(b);
@@ -58,9 +59,9 @@ bool Conversion::checkinside(const Browser &b, FLAGS flags, int depth) {
 			break;
 		}
 		case OPENARRAY:
-			if (((TypeOpenArray*)type)->subtype->IsPlainData())
+			if (IsPlainData(((TypeOpenArray*)type)->subtype))
 				break;
-			fallthrough
+			//fallthrough
 		case COMPOSITE:
 		case ARRAY:
 			for (auto i : b)
@@ -80,7 +81,7 @@ ptr_machine<void> Conversion::checkinside(ptr_machine<void> p, FLAGS flags, int 
 
 	const Type	*skipuser = p.GetType()->SkipUser();
 
-	if (!skipuser || skipuser->IsPlainData())
+	if (IsPlainData(skipuser))
 		return p;
 
 	if (skipuser->GetType() == REFERENCE) {
@@ -98,7 +99,7 @@ ptr_machine<void> Conversion::checkinside(ptr_machine<void> p, FLAGS flags, int 
 				if (checkinside(Browser(p2), flags, depth - 1))
 					p = p2;
 			}
-			fallthrough
+			//fallthrough
 			default:
 				break;
 		}
@@ -208,7 +209,7 @@ ptr_machine<void> Conversion::_convert(ptr_machine<void> p, const Type *type, FL
 		ISO_TRACEF("expanding type:") << p.GetType() << '\n';
 		saver<FLAGS>	save_flags(flags);
 		if ((flags & EXPAND_EXTERNALS) && (p.GetType()->flags & TypeUser::WRITETOBIN))
-			flags = FLAGS((flags & ~EXPAND_EXTERNALS) | ALLOW_EXTERNALS);
+			flags = (flags - EXPAND_EXTERNALS) | ALLOW_EXTERNALS;
 
 		if ((flags & (FULL_CHECK | CHECK_INSIDE)) && depth > 0) {
 			p = checkinside(p, flags, depth - 1);
@@ -233,6 +234,9 @@ ptr_machine<void> Conversion::_convert(ptr_machine<void> p, const Type *type, FL
 				return _convert(p2, type, flags, depth - 1);
 			}
 		}
+
+	} else if (change && (p.GetType()->flags & TypeUser::WRITETOBIN) && !(flags & ALLOW_EXTERNALS) && (p.Flags() & Value::HASEXTERNAL)) {
+		return save(flags, (flags - EXPAND_EXTERNALS) | ALLOW_EXTERNALS), _convert(p, type, flags, depth);
 
 	} else if (!(flags & (ALLOW_EXTERNALS | FULL_CHECK | CHECK_INSIDE)) && (flags & EXPAND_EXTERNALS) && (p.Flags() & Value::HASEXTERNAL)) {
 		p = FileHandler::ExpandExternals(p);
@@ -363,7 +367,7 @@ ptr_machine<void> Conversion::convert(const Browser &b, const Type *type, FLAGS 
 		return ISO_NULL;
 
 	if (b.GetType() == REFERENCE)
-		return convert(ptr<void>(*b), type, flags);
+		return convert((*b).operator ptr<void>(), type, flags);
 
 	if (!type || type == stype)
 		return b.Duplicate();
@@ -433,8 +437,11 @@ bool Conversion::batch_convert(
 	void		*dest, uint32 dest_stride, const Type *dest_type,
 	uint32		num, bool convert_ptrs, void *physical_ram)
 {
-	if (!srce || !dest || !srce_type || !dest_type)
+	if (!dest || !dest_type)
 		return false;
+
+	//if (!srce || !srce_type)
+	//	return false;
 
 	if (dest_type->GetType() == USER && (dest_type->flags & TypeUser::INITCALLBACK)) {
 		bool ret = batch_convert(
@@ -449,15 +456,15 @@ bool Conversion::batch_convert(
 		return ret;
 	}
 
-	auto	*srce_type2 = srce_type->SkipUser();
-	auto	*dest_type2 = dest_type->SkipUser();
+	auto	*srce_type2 = SkipUser(srce_type);
+	auto	*dest_type2 = SkipUser(dest_type);
 
 	auto	st = TypeType(srce_type2);
 	auto	dt = TypeType(dest_type2);
 
-	if (dt == UNKNOWN || srce_type2->SameAs(dest_type2)) {
-		bool	plain	= srce_type2->IsPlainData();
-		uint32	size	= srce_type2->GetSize();
+	if (dt == UNKNOWN || Same(srce_type2, dest_type2)) {
+		bool	plain	= IsPlainData(srce_type2);
+		uint32	size	= GetSize(srce_type2);
 		if (plain && (num == 1 || (srce_stride == size && dest_stride == size))) {
 			memcpy(dest, srce, size * num);
 		} else {
@@ -465,7 +472,7 @@ bool Conversion::batch_convert(
 				void	*d = (char*)dest + i * dest_stride;
 				memcpy(d, (char*)srce + i * srce_stride, size);
 				if (!plain)
-					_Duplicate(dest_type2, d, 0, physical_ram);
+					_Duplicate(dest_type2, d, TRAV_DEFAULT, physical_ram);
 			}
 		}
 		return true;
@@ -518,7 +525,7 @@ bool Conversion::batch_convert(
 				for (int i = 0; i < num; i++) {
 					ptr_machine<void>	p = MakePtr(srce_type);
 					memcpy(p, (char*)srce + srce_stride * i, srce_type->GetSize());
-					_Duplicate(srce_type, p, 0, physical_ram);
+					_Duplicate(srce_type, p, TRAV_DEFAULT, physical_ram);
 					refd->set((char*)dest + dest_stride * i, convert_ptrs ? convert(p, type, ALLOW_EXTERNALS) : p);
 				}
 			}
@@ -810,6 +817,10 @@ bool Conversion::batch_convert(
 					}
 					return true;
 				}
+				case UNKNOWN:
+					if (!srce)
+						return true;
+
 				default:
 					break;
 			}
@@ -826,7 +837,7 @@ bool Conversion::batch_convert(
 						char	*d	= (char*)dest;
 						for (int i = 0; i < num; i++, d += dest_stride) {
 							memcpy(d, def, s);
-							_Duplicate(&compd, d, 0, physical_ram);
+							_Duplicate(&compd, d, TRAV_DEFAULT, physical_ram);
 						}
 					}
 					for (auto &i : compd) {
@@ -866,8 +877,9 @@ bool Conversion::batch_convert(
 							if (got * 2 < compd.Count())
 								return false;
 						}
+						return true;
 					}
-					return true;
+					break;
 				}
 				case ARRAY: {
 					auto	arrays	= (TypeArray*)srce_type2;

@@ -319,7 +319,7 @@ struct SQT {
 	float3		scale;
 	quaternion	quat;
 	position3	trans;
-	bool read(istream_ref file) { return iso::read(file, scale, quat, trans); }
+	bool read(istream_ref file) { return file.read(scale, quat, trans); }
 };
 
 struct AnimTrackRange {
@@ -1493,7 +1493,7 @@ struct CloudData {
 		m.technique	= ISO::root("data")["default"]["specular"];
 		m.indices	= make_split_range<3>(indices);
 		m.verts		= ISO::MakePtr(0, ISO::OpenArray<Vertex>(verts));
-		m.UpdateExtents();
+		m.UpdateExtent();
 		return m;
 	}
 };
@@ -1518,7 +1518,7 @@ struct SkirtData {
 		m.technique	= ISO::root("data")["default"]["specular"];
 		m.indices	= make_split_range<3>(indices);
 		m.verts		= ISO::MakePtr(0, ISO::OpenArray<Vertex>(verts));
-		m.UpdateExtents();
+		m.UpdateExtent();
 		return m;
 	}
 };
@@ -1540,7 +1540,7 @@ struct OccluderMesh {
 		m.technique	= ISO::root("data")["default"]["specular"];
 		m.indices	= make_split_range<3>(indices);
 		m.verts		= ISO::MakePtr(0, ISO::OpenArray<Vertex>(verts));
-		m.UpdateExtents();
+		m.UpdateExtent();
 		return m;
 	}
 };
@@ -1654,7 +1654,7 @@ struct VolumetricLighting {
 
 	VolumetricLighting(const memory_block &data) {
 		byte_reader	file(data);
-		iso::read(file, x, y, z, size, xs, ys, zs, cellCount);
+		file.read(x, y, z, size, xs, ys, zs, cellCount);
 		offsets		= new uint32[xs * zs];
 		grid		= new VolCell[cellCount];
 		for (size_t c = 0; c < xs * zs; ++c)

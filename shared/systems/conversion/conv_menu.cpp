@@ -290,7 +290,7 @@ class HTMLtext {
 public:
 	HTMLtext(istream_ref in);
 
-	operator const char*()			{ return out;		}
+	operator const char*()			{ return out.term(); }
 	uint32		GetAlign()	const	{ return align;		}
 	const rgb8&	GetColour()	const	{ return col;		}
 	float		GetSize()	const	{ return size;		}
@@ -342,7 +342,7 @@ HTMLtext::HTMLtext(istream_ref in) : align(FA_LEFT) {
 							else if (i.value == "justify")
 								curr = FA_JUSTIFY;
 							if (curr != prev) {
-								out << curr;
+								out << curr;//_CC_ALIGN + curr;
 								align = (align & ~3) | curr;
 							}
 						}
@@ -1220,7 +1220,7 @@ ISO_ptr<void> FlashToMenu::Process(FlashRearrange &fr) {
 					swap(states[1], states[2]);
 			}
 			if (curve_flags & LC_DESELECT_ANIM) {
-				if (CompareData(states[0], states[1], ISO::DUPF_DEEP) && CompareData(states[0], states[2], ISO::DUPF_DEEP)) {
+				if (CompareData(states[0], states[1], ISO::TRAV_DEEP) && CompareData(states[0], states[2], ISO::TRAV_DEEP)) {
 					item	= states[0];
 				} else {
 					ISO_ptr<mi_list>	temp(0);
@@ -1239,7 +1239,7 @@ ISO_ptr<void> FlashToMenu::Process(FlashRearrange &fr) {
 						item = ifsel;
 				}
 			} else {
-				if (CompareData(states[0], states[1], ISO::DUPF_DEEP)) {
+				if (CompareData(states[0], states[1], ISO::TRAV_DEEP)) {
 					item	= states[0];
 				} else {
 					ISO_ptr<mi_list>	temp(0);

@@ -114,7 +114,7 @@ ISO_ptr<void> ToonBoomFileHandler::Read(tag id, istream_ref file) {
 				break;
 			}
 			case 'UNCO': {//uncompressed?
-				p->Append(GetToonBoomBlock(name, lvalue(istream_offset(file, b.len))));
+				p->Append(GetToonBoomBlock(name, make_reader_offset(file, b.len)));
 				break;
 			}
 
@@ -2889,7 +2889,7 @@ ISO_DEFUSER(ToonBoom, anything);
 
 class ToonBoomXMLFileHandler : public FileHandler {
 	const char*		GetDescription() override { return "ToonBoom Exported Animation"; }
-	int				Check(const filename &fn) override {
+	int				Check(const char *fn) override {
 		return is_dir(fn) && exists(filename(fn).add_dir("stage.xml")) ? CHECK_PROBABLE : CHECK_DEFINITE_NO;
 	}
 
@@ -3042,7 +3042,7 @@ LRESULT ViewToonBoom::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 		case WM_NOTIFY: {
 			NMHDR	*nmh = (NMHDR*)lParam;
 			switch (nmh->code) {
-				case d2d::PAINT: {
+				case d2d::PAINT_INFO::CODE: {
 					auto	*info	= (d2d::PAINT_INFO*)nmh;
 
 					TBCollector	col;

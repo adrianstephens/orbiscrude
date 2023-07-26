@@ -13,7 +13,6 @@
 
 #include "isolink.h"
 
-void _set_error(const char *format, ...);
 void _isolink_set_error(const char* reason);
 bool _isolink_discover(isolink_handle_t h, char *target);
 

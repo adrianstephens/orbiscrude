@@ -96,7 +96,7 @@ class ViewMenu : public aligned<Window<ViewMenu>, 16>, public WindowTimer<ViewMe
 	}
 
 public:
-	LRESULT Proc(UINT message, WPARAM wParam, LPARAM lParam);
+	LRESULT Proc(MSG_ID message, WPARAM wParam, LPARAM lParam);
 	intptr_t	operator()(MenuInstance *mi, tag id, MENU_MESSAGE msg, void *params);
 
 	ViewMenu(MainWindow &_main, const WindowPos &wpos, const ISO_ptr<void> &_p) : p(_p), main((MainWindowType&)_main), mi(this) {
@@ -146,7 +146,7 @@ template<typename T> struct BlockD3D : LockedRect, block<T, 2> {
 };
 #endif
 
-LRESULT ViewMenu::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+LRESULT ViewMenu::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 		case WM_CREATE:
 			menu	= Menu(IDR_MENU_MENU);
@@ -558,9 +558,9 @@ intptr_t ViewMenu::operator()(MenuInstance *mi, tag id, MENU_MESSAGE msg, void *
 					mparams->Set(b, 0, 100);
 				} else {
 					auto	i	= find(tree, id);
-					node	*n	= i;
+					node	*n	= &*i;
 					if (!n)
-						tree.insert(i, n = new node(id));
+						tree.insert(move(i), n = new node(id));
 					mparams->minval = -100;
 					mparams->maxval	= +100;
 					mparams->pval	= &n->i;
@@ -575,9 +575,9 @@ intptr_t ViewMenu::operator()(MenuInstance *mi, tag id, MENU_MESSAGE msg, void *
 					mparams->index = b;
 				} else {
 					auto	i	= find(tree, id);
-					node	*n	= i;
+					node	*n	= &*i;
 					if (!n)
-						tree.insert(i, n = new node(id));
+						tree.insert(move(i), n = new node(id));
 					mparams->index	= &n->i;
 					return 1;
 				}
@@ -817,12 +817,12 @@ intptr_t ViewMenu::operator()(MenuInstance *mi, tag id, MENU_MESSAGE msg, void *
 				return -1;
 
 			} else if (id == "truncate") {
-				iso::Font	*font	= rr->fp->font;
+				auto	font	= rr->fp->font;
 				const char	*buffer = mi->GetText();
 				const char	*linebreak;
 				int		rw	= rr->size.x / rr->fp->scale;
-				int		dw	= font->Width("...");
-				int		tw	= font->Width(buffer, rw - dw, 1, &linebreak);
+				int		dw	= font->GetGlyphs().Width("...");
+				int		tw	= font->GetGlyphs().Width(buffer, rw - dw, 1, &linebreak);
 				if (linebreak)
 					strcpy((char*)linebreak, "...");
 

@@ -9,10 +9,6 @@ namespace iso {
 template<class T> class pointer {
 	T			*t;
 public:
-	typedef T			element, *iterator;
-	typedef	const T*	const_iterator;
-	typedef typename T_traits<T>::ref	reference;
-
 	constexpr pointer()				: t(0)		{}
 	constexpr pointer(T *t)			: t(t)		{}
 	pointer&		operator=(T *t2)		{ t = t2; return *this; }
@@ -27,6 +23,7 @@ template<typename T, typename O, typename P=void, bool nulls=true> struct offset
 	O		offset;
 	constexpr T	*get(const P *base) const	{ return offset ? (T*)((char*)base + offset) : 0; }
 	void		set(T *t, const P *base)	{ offset = t ? (char*)t - (char*)base : 0; }
+	explicit constexpr operator bool() const { return offset; }
 };
 
 template<typename T, typename O, typename P> struct offset_pointer<T,O,P,false> {
@@ -35,9 +32,15 @@ template<typename T, typename O, typename P> struct offset_pointer<T,O,P,false> 
 	void		set(T *t, const P *base)	{ offset = (char*)t - (char*)base; }
 };
 
+template<typename T, typename O, typename P, bool nulls> auto& get(const param_element<offset_pointer<T, O, P, nulls>&, const P*>& p) {
+	return *p.t.get(p.p);
+}
+template<typename T, typename O, typename P, bool nulls> auto& get(const param_element<const offset_pointer<T, O, P, nulls>&, const P*>& p) {
+	return *p.t.get(p.p);
+}
+
+#if 0
 template<typename T, typename O, typename P=void, bool nulls=true> struct offset_iterator {
-	typedef random_access_iterator_t iterator_category;
-	typedef const T	element, *pointer, &reference;
 	const P									*base;
 	const offset_pointer<T, O, P, nulls>	*p;
 	constexpr offset_iterator(const void *_base, const offset_pointer<T, O, P, nulls> *p) : base(_base), p(p) {}
@@ -62,7 +65,6 @@ template<typename T, typename O, typename P, bool nulls> constexpr offset_iterat
 
 template<typename T, typename O, typename P=void, bool nulls=true> struct offset_iterator_ptr : offset_iterator<T,O,P,nulls> {
 	typedef offset_iterator<T,O,P,nulls>	B;
-	typedef const T	*element, **pointer, *reference;
 	constexpr offset_iterator_ptr(const void *base, const offset_pointer<T,O,P,nulls> *p) : B(base, p) {}
 	offset_iterator_ptr& operator++()						{ ++B::p; return *this; }
 	constexpr T*		operator*()					const	{ return B::p->get(B::base); }
@@ -81,6 +83,8 @@ template<typename T, typename O, typename P, bool nulls> force_inline range<offs
 template<typename T, typename O, typename P, bool nulls, int N> force_inline range<offset_iterator<T,O,P,nulls> > make_range(const void *base, const offset_pointer<T,O,P,nulls> (&a)[N]) {
 	return make_range_n(offset_iterator<T,O,P,nulls>(base, a), N);
 }
+#endif
+
 //-----------------------------------------------------------------------------
 //	bases for soft_pointer
 //-----------------------------------------------------------------------------
@@ -90,11 +94,12 @@ struct base_direct {
 
 	static constexpr bool	check(const void *p)	{ return true; }
 
-	constexpr base_direct()	: ptr(0)						{}
+	constexpr base_direct()	: ptr(nullptr)					{}
 	constexpr base_direct(const void *p) : ptr((void*)p)	{}
-	void			set(const void *p)	{ ptr = (void*)p; }
-	constexpr void*	get()		const	{ return ptr; }
-	constexpr bool	operator!()	const	{ return !ptr; }
+	void			set(const void *p)			{ ptr = (void*)p; }
+	constexpr void*	get()				const	{ return ptr; }
+	constexpr bool	operator!()			const	{ return !ptr; }
+	constexpr explicit operator bool()	const	{ return !!ptr; }
 };
 
 template<typename T> struct base_absolute {
@@ -106,9 +111,10 @@ template<typename T> struct base_absolute {
 
 	constexpr base_absolute()				: offset(0)				{}
 	constexpr base_absolute(const void *p)	: offset(calc_check(p)) {}
-	void			set(const void *p)	{ offset = calc_check(p); }
-	constexpr void*	get()		const	{ return offset ? (void*)intptr_t(offset) : 0; }
-	constexpr bool	operator!()	const	{ return !offset; }
+	void			set(const void *p)			{ offset = calc_check(p); }
+	constexpr void*	get()		const			{ return offset ? (void*)intptr_t(offset) : 0; }
+	constexpr bool	operator!()	const			{ return !offset; }
+	constexpr explicit operator bool() const	{ return !!offset; }
 };
 
 template<typename T> struct base_relative {
@@ -127,14 +133,11 @@ template<typename T> struct base_relative {
 	void	set(const void *p)					{ offset = calc_check(p); }
 	constexpr void*	get()		const			{ return offset ? (char*)this + offset : 0; }
 	constexpr bool	operator!()	const			{ return !offset; }
+	constexpr explicit operator bool() const	{ return !!offset; }
 };
 
-template<typename T, typename B> class soft_pointer : B {
+template<typename T, typename B> class soft_pointer : public B {
 public:
-	typedef T			element, *iterator;
-	typedef	const T*	const_iterator;
-	typedef typename T_traits<T>::ref		reference;
-
 	constexpr soft_pointer()					{}
 	soft_pointer(T *t)							{ B::set(t); }
 	soft_pointer& operator=(T *t)				{ B::set(t); return *this; }
@@ -142,8 +145,6 @@ public:
 	constexpr T*		begin()			const	{ return get(); }
 	constexpr T*		operator->()	const	{ return get(); }
 	constexpr operator	T*()			const	{ return get(); }
-	constexpr bool		operator!()		const	{ return B::operator!(); }
-//	template<typename T2> operator T2*() const	{ return static_cast<T2*>(get()); }
 	friend constexpr T*	get(const soft_pointer &a)	{ return a; }
 };
 

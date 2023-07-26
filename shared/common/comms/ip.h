@@ -31,43 +31,54 @@ namespace iso {
 // socket_addr
 //-----------------------------------------------------------------------------
 
-struct socket_addr_head {
+class socket_addr_head {
+protected:
+	socket_addr_head(size_t _len)		: len(socklen_t(_len - sizeof(len)))	{ memset(&len + 1, 0, len); }
+	socket_addr_head(size_t _len, int family, PORT port) : len(socklen_t(_len - sizeof(len))), family(family), port(port) { memset(this + 1, 0, _len - sizeof(socket_addr_head)); }
+//#ifndef PLAT_PS4
+//	socket_addr_head(const addrinfo *a)	: len(socklen_t(a->ai_addrlen))			{ memcpy(&family, a->ai_addr, len); }
+//#endif
+
+public:
 	socklen_t	len;
 	uint16		family;
 	uint16be	port;
 
-	socket_addr_head(size_t _len) : len(socklen_t(_len - sizeof(len)))					{ memset(&len + 1, 0, len); }
-	socket_addr_head(size_t _len, int family, PORT port) : len(socklen_t(_len - sizeof(len))), family(family), port(port) { memset(this + 1, 0, _len - sizeof(socket_addr_head)); }
-	socket_addr_head(size_t _len, SOCKET sock)	: len(socklen_t(_len - sizeof(len)))	{ getpeername(sock, sockaddr(), &len); }
-#ifndef PLAT_PS4
-	socket_addr_head(const addrinfo *a)			: len(socklen_t(a->ai_addrlen))			{ memcpy(&family, a->ai_addr, len); }
-#endif
+	static bool		check_error(int r)		{ if (r == 0) return true; socket_error("?"); return false; }
+	static SOCKET	check_socket(int r)		{ if (r < 0) socket_error("?"); return (SOCKET)r; }
 
 	::sockaddr			*sockaddr()			{ return (::sockaddr*)&family; }
 	const ::sockaddr	*sockaddr()	const	{ return (const ::sockaddr*)&family; }
 
-	bool	check_error(int r)		const	{ if (r == 0) return true; socket_error("?"); return false; }
-	SOCKET	check_socket(int r)		const	{ if (r < 0) socket_error("?"); return (SOCKET)r; }
+	bool	local_addr(SOCKET sock)			{ return check_error(getsockname(sock, sockaddr(), &len)); }
+	bool	peer_addr(SOCKET sock)			{ return check_error(getpeername(sock, sockaddr(), &len)); }
 
 	bool	bind(SOCKET sock)		const	{ return check_error(::bind(sock, sockaddr(), len)); }
 	bool	connect(SOCKET sock)	const	{ return check_error(::connect(sock, sockaddr(), len)); }
 	SOCKET	accept(SOCKET sock)				{ return check_socket(::accept(sock, sockaddr(), &len)); }
+	
+	bool	listen(SOCKET sock, int max_pending = 16)			const	{ return bind(sock) && check_error(::listen(sock, max_pending)); }
 
-	int		send(SOCKET sock, const void *buffer, size_t size) const {
-		return (int)sendto(sock, (const char*)buffer, socklen_t(size), 0, sockaddr(), len);
-	}
-	int		recv(SOCKET sock, void *buffer, size_t size) {
-		return (int)recvfrom(sock, (char*)buffer, socklen_t(size), 0, sockaddr(), &len);
-	}
-	int		send(SOCKET sock, const const_memory_block &buffer) const {
-		return send(sock, buffer, buffer.length());
-	}
-//	template<typename T> bool send(SOCKET sock, const T &t) const {
-//		return send(sock, (const char*)&t, sizeof(T)) == sizeof(T);
-//	}
+	int		send(SOCKET sock, const void *buffer, size_t size)	const	{ return (int)sendto(sock, (const char*)buffer, socklen_t(size), 0, sockaddr(), len); }
+	int		send(SOCKET sock, const const_memory_block &buffer) const	{ return send(sock, buffer, buffer.length()); }
+	int		recv(SOCKET sock, void *buffer, size_t size)				{ return (int)recvfrom(sock, (char*)buffer, socklen_t(size), 0, sockaddr(), &len); }
+	int		recv(SOCKET sock, const memory_block &buffer)				{ return recv(sock, buffer, buffer.length()); }
+
+	SOCKET	bind_or_close(SOCKET sock)		const	{ if (bind(sock)) return sock; socket_close(sock); return INVALID_SOCKET; }
+	SOCKET	connect_or_close(SOCKET sock)	const	{ if (connect(sock)) return sock; socket_close(sock); return INVALID_SOCKET; }
+	SOCKET	listen_or_close(SOCKET sock, int max_pending = 16)	const	{ if (listen(sock, max_pending)) return sock; socket_close(sock); return INVALID_SOCKET; } 
+
+#if 0
 	SOCKET	listener(int type = SOCK_STREAM, int proto = IPPROTO_TCP, int max_pending = 16) const {
 		SOCKET sock = socket_create(family, type, proto);
-		if (bind(sock) && check_error(listen(sock, max_pending)))
+		if (listen(sock, max_pending))
+			return sock;
+		socket_close(sock);
+		return INVALID_SOCKET;
+	}
+	SOCKET	unconnected_socket(int type = SOCK_STREAM, int proto = IPPROTO_TCP) const {
+		SOCKET sock = socket_create(family, type, proto);
+		if (bind(sock))
 			return sock;
 		socket_close(sock);
 		return INVALID_SOCKET;
@@ -79,10 +90,11 @@ struct socket_addr_head {
 		socket_close(sock);
 		return INVALID_SOCKET;
 	}
+#endif
 };
 
 //-----------------------------------------------------------------------------
-// MAC & port
+// MAC
 //-----------------------------------------------------------------------------
 
 struct MAC : uintn<6, true> {
@@ -101,16 +113,17 @@ struct MAC : uintn<6, true> {
 namespace IP4 {
 	struct addr : array<uint8, 4> {
 		addr()	{}
-		addr(uint8 a, uint8 b, uint8 c, uint8 d) : array<uint8, 4>{a, b, c, d} {}
 		addr(const char *s)					{ from_string(s, *this); }
-		addr(uint32 x)						{ *(uint32be*)this = x;	}
-		operator uint32()			const	{ return *(uint32be*)this;	}
-		bool	operator==(uint32 u) const	{ return operator uint32() == u; }
-		addr	flip()				const	{ return swap_endian(*this); }
+		constexpr addr(uint8 a, uint8 b, uint8 c, uint8 d) : array<uint8, 4>{a, b, c, d} {}
+		constexpr addr(uint32 x)			{ *(uint32be*)this = x;	}
+		constexpr operator uint32()	const	{ return *(uint32be*)this;	}
+		//bool	operator==(uint32 u) const	{ return operator uint32() == u; }
+		//addr	flip()				const	{ return swap_endian(*this); }
 		friend size_t from_string(const char *s, addr &a);
 		friend size_t to_string(char *s, const addr &a);
 	};
 	static const addr localhost(127,0,0,1);
+	static const addr broadcast(255,255,255,255);
 	typedef uint16		chksum;
 
 	struct header {
@@ -152,7 +165,6 @@ namespace IP4 {
 		addr	multicast, local;
 		multicast_group(const addr &multicast, const addr &local) : multicast(multicast), local(local) {}
 	};
-
 	struct multicast_source {
 		addr	multicast, source, local;
 		multicast_source(const addr &multicast, const addr &source, const addr &local) : multicast(multicast), source(source), local(local) {}
@@ -164,16 +176,22 @@ namespace IP4 {
 		uint8	unused[8];
 
 		socket_addr()								: socket_addr_head(sizeof(*this))		{}
-	#ifndef PLAT_PS4
-		socket_addr(const addrinfo *a)				: socket_addr_head(a)					{}
-	#endif
-		socket_addr(SOCKET sock)					: socket_addr_head(sizeof(*this), sock)	{}
+	//#ifndef PLAT_PS4
+	//	socket_addr(const addrinfo *a)				: socket_addr_head(a)					{}
+	//#endif
+		socket_addr(SOCKET sock)					: socket_addr_head(sizeof(*this))		{ peer_addr(sock); }
 		socket_addr(const addr &ip, PORT port)		: socket_addr_head(sizeof(*this), AF_INET, port), ip(ip) {}
 		socket_addr(PORT port)						: socket_addr_head(sizeof(*this), AF_INET, port) {}
-
+		
+	#if 0
 		SOCKET	listener(int type = SOCK_STREAM, int proto = IPPROTO_TCP, int max_pending = 16) {
-			return socket_addr_head::listener(type, proto, max_pending);
+			SOCKET	sock	= socket_create(AF_INET, type, proto);
+			if (listen(sock, max_pending))
+				return sock;
+			socket_close(sock);
+			return INVALID_SOCKET;
 		}
+	#endif
 		bool	is_local() const {
 			return (ip >> 16) == 0xa9fe	//169.254
 				||	ip == localhost;	//127.0.0.1
@@ -188,7 +206,7 @@ namespace IP4 {
 		struct _multicast {
 			auto	me()						const	{ return T_get_enclosing(this, &Options::multicast); }
 			bool	interfce(addr v)			const	{ return me()->set(IP_MULTICAST_IF, v); }				//outgoing interface for sending IPv4 multicast traffic
-			bool	loop(bool v)				const	{ return me()->set(IP_MULTICAST_LOOP, v); }				//Controls whether data sent by an application on the local computer (not necessarily by the same socket) in a multicast session will be received by a socket joined to the multicast destination group on the loopback interface
+			bool	loop(bool v = true)			const	{ return me()->set(IP_MULTICAST_LOOP, v); }				//Controls whether data sent by an application on the local computer (not necessarily by the same socket) in a multicast session will be received by a socket joined to the multicast destination group on the loopback interface
 			bool	ttl(uint32 v)				const	{ return me()->set(IP_MULTICAST_TTL, v); }				//TTL value associated with IP multicast traffic on the socket.
 			bool	join(multicast_group v)		const	{ return me()->set(IP_ADD_MEMBERSHIP, v); }				//Join the socket to the multicast group on the specified interface
 			bool	leave(multicast_group v)	const	{ return me()->set(IP_DROP_MEMBERSHIP, v); }			//Leaves the specified multicast group from the specified interface
@@ -200,7 +218,7 @@ namespace IP4 {
 	#ifdef PLAT_PC
 		struct _unicast {
 			auto	me()						const	{ return T_get_enclosing(this, &Options::unicast); }
-			bool	interfce(addr v)			const	{ return me()->set(IP_UNICAST_IF, v); }				//Gets or sets the outgoing interface for sending IPv4 traffic. This option does not change the default interface for receiving IPv4 traffic. This option is important for multihomed computers.
+			bool	interfce(addr v)			const	{ return me()->set(IP_UNICAST_IF, v); }					//Gets or sets the outgoing interface for sending IPv4 traffic. This option does not change the default interface for receiving IPv4 traffic. This option is important for multihomed computers.
 		} unicast;
 	#endif
 		bool	ttl(bool v)								const	{ return set(IP_TTL, v); }						//Changes the default value set by the TCP/IP service provider in the TTL field of the IP header in outgoing datagrams
@@ -214,11 +232,13 @@ namespace IP4 {
 		bool	receive_interface(bool v)				const	{ return set(IP_RECVIF, v); }					//whether the IP stack should populate the control buffer with details about which interface received a packet with a datagram socket
 	#endif
 	#ifdef PLAT_PC
-		bool	dont_fragment(bool v)					const	{ return set(IP_DONTFRAGMENT, v); }				//data should not be fragmented regardless of the local MTU
-		bool	original_arrival_interface(bool v)		const	{ return set(IP_ORIGINAL_ARRIVAL_IF, v); }		//Indicates if the WSARecvMsg function should return optional control data containing the arrival interface where the packet was received for datagram sockets.
-		bool	receive_broadcast(bool v)				const	{ return set(IP_RECEIVE_BROADCAST, v); }		//Allows or blocks broadcast reception.
+		bool	dont_fragment(bool v = true)			const	{ return set(IP_DONTFRAGMENT, v); }				//data should not be fragmented regardless of the local MTU
+		bool	original_arrival_interface(bool v = true)const	{ return set(IP_ORIGINAL_ARRIVAL_IF, v); }		//Indicates if the WSARecvMsg function should return optional control data containing the arrival interface where the packet was received for datagram sockets.
+		bool	receive_broadcast(bool v = true)		const	{ return set(IP_RECEIVE_BROADCAST, v); }		//Allows or blocks broadcast reception.
 	#endif
 	};
+	inline auto TCP()		{ return socket_create(AF_INET, SOCK_STREAM, IPPROTO_TCP); }
+	inline auto UDP()		{ return socket_create(AF_INET, SOCK_DGRAM, IPPROTO_UDP); }
 };
 
 //-----------------------------------------------------------------------------
@@ -249,6 +269,7 @@ namespace IP6 {
 		friend size_t from_string(const char *s, addr &a);
 		friend size_t to_string(char *s, const addr &a);
 	};
+	static const addr localhost(0, 0, 0, 0, 0, 0, 0, 1);
 
 	enum EXTENSION {
 		HOP_BY_HOP		= 0,	//Options that need to be examined by all devices on the path.
@@ -276,7 +297,6 @@ namespace IP6 {
 	struct extension_header {
 		uint8	next_header, len;
 	};
-
 	struct hop_by_hop : extension_header {
 		uint16be	options[];
 	};
@@ -320,14 +340,19 @@ namespace IP6 {
 		uint32	zone : 28, level : 4;
 
 		//socket_addr()							: socket_addr_head(sizeof(*this))		{}
-		socket_addr(const addrinfo *a)			: socket_addr_head(a)					{}
-		socket_addr(SOCKET sock)				: socket_addr_head(sizeof(*this), sock)	{}
+		//socket_addr(const addrinfo *a)			: socket_addr_head(a)					{}
+		socket_addr(SOCKET sock)				: socket_addr_head(sizeof(*this))		{ peer_addr(sock); }
 		socket_addr(const addr &ip, PORT port)	: socket_addr_head(sizeof(*this), AF_INET6, port), ip(ip) {}
 		socket_addr(PORT port)					: socket_addr_head(sizeof(*this), AF_INET6, port), ip(0, 0, 0, 0, 0, 0, 0, 0) {}
-
+	#if 0
 		SOCKET	listener(int type = SOCK_STREAM, int proto = IPPROTO_TCP, int max_pending = 16) {
-			return socket_addr_head::listener(type, proto, max_pending);
+			SOCKET	sock	= socket_create(AF_INET6, type, proto);
+			if (listen(sock, max_pending))
+				return sock;
+			socket_close(sock);
+			return INVALID_SOCKET;
 		}
+	#endif
 		bool	is_local() const {
 			return ip == addr(0, 0, 0, 0, 0, 0, 0, 1);
 		}
@@ -339,7 +364,7 @@ namespace IP6 {
 			auto	me()						const	{ return T_get_enclosing(this, &Options::multicast); }
 			bool	hops(uint32 v)				const	{ return me()->set(IPV6_MULTICAST_HOPS, v); }		//Gets or sets the TTL value associated with IPv6 multicast traffic on the socket. It is illegal to set the TTL to a value greater than 255.
 			bool	interfce(uint32 v)			const	{ return me()->set(IPV6_MULTICAST_IF, v); }			//Gets or sets the outgoing interface for sending IPv6 multicast traffic. This option does not change the default interface for receiving IPv6 multicast traffic. This option is important for multihomed computers.
-			bool	loop(bool v)				const	{ return me()->set(IPV6_MULTICAST_LOOP, v); }		//Indicates multicast data sent on the socket will be echoed to the sockets receive buffer if it is also joined on the destination multicast group. If optval is set to 1 on the call to setsockopt, the option is enabled. If set to 0, the option is disabled.
+			bool	loop(bool v = true)			const	{ return me()->set(IPV6_MULTICAST_LOOP, v); }		//Indicates multicast data sent on the socket will be echoed to the sockets receive buffer if it is also joined on the destination multicast group. If optval is set to 1 on the call to setsockopt, the option is enabled. If set to 0, the option is disabled.
 			bool	join(multicast_group v)		const	{ return me()->set(IPV6_JOIN_GROUP, v); }			//Join the socket to the supplied multicast group on the specified interface.
 			bool	leave(multicast_group v)	const	{ return me()->set(IPV6_LEAVE_GROUP, v); }			//Leave the supplied multicast group from the given interface.
 		} multicast;
@@ -356,14 +381,17 @@ namespace IP6 {
 
 		bool	v6_only(bool v)							const	{ return set(IPV6_V6ONLY, v); }				//Indicates if a socket created for the AF_INET6 address family is restricted to IPv6 communications only
 	#ifdef PLAT_PC
-		bool	include_header(bool v)					const	{ return set(IPV6_HDRINCL, v); }			//Indicates the application provides the IPv6 header on all outgoing data
-		bool	packet_info(bool v)						const	{ return set(IPV6_PKTINFO, v); }			//Indicates that packet information should be returned by the WSARecvMsg function.
-		bool	receive_interface(bool v)				const	{ return set(IPV6_RECVIF, v); }				//populate the control buffer with details about which interface received a packet with a datagram socket
-		bool	original_arrival_interface(bool v)		const	{ return set(IP_ORIGINAL_ARRIVAL_IF, v); }	//return optional control data containing the original arrival interface where the packet was received for datagram sockets.
-		bool	hop_limit(bool v)						const	{ return set(IPV6_HOPLIMIT, v); }			//Indicates that hop (TTL) information should be returned in the WSARecvMsg function
+		bool	include_header(bool v = true)			const	{ return set(IPV6_HDRINCL, v); }			//Indicates the application provides the IPv6 header on all outgoing data
+		bool	packet_info(bool v = true)				const	{ return set(IPV6_PKTINFO, v); }			//Indicates that packet information should be returned by the WSARecvMsg function.
+		bool	receive_interface(bool v = true)		const	{ return set(IPV6_RECVIF, v); }				//populate the control buffer with details about which interface received a packet with a datagram socket
+		bool	original_arrival_interface(bool v = true)const	{ return set(IP_ORIGINAL_ARRIVAL_IF, v); }	//return optional control data containing the original arrival interface where the packet was received for datagram sockets.
+		bool	hop_limit(bool v = true)				const	{ return set(IPV6_HOPLIMIT, v); }			//Indicates that hop (TTL) information should be returned in the WSARecvMsg function
 		bool	protection_level(int v)					const	{ return set(IPV6_PROTECTION_LEVEL, v); }	//Enables restriction of a socket to a specified scope, such as addresses with the same link local or site local prefix
 	#endif
 	};
+
+	inline auto TCP()		{ return socket_create(AF_INET6, SOCK_STREAM, IPPROTO_TCP); }
+	inline auto UDP()		{ return socket_create(AF_INET6, SOCK_DGRAM, IPPROTO_UDP); }
 };
 #endif
 
@@ -376,11 +404,11 @@ struct SocketOptions {
 	SocketOptions(SOCKET s) : s(s)	{}
 	template<typename T> bool set(int opt, const T &val) const { return socket_setopt(s, SOL_SOCKET, opt, val); }
 
-	bool	broadcast(bool v)						const	{ return set(SO_BROADCAST, v); }
-	bool	keepalive(bool v)						const	{ return set(SO_KEEPALIVE, v); }
+	bool	broadcast(bool v = true)				const	{ return set(SO_BROADCAST, v); }
+	bool	keepalive(bool v = true)				const	{ return set(SO_KEEPALIVE, v); }
 	bool	linger(bool on, int secs)				const	{ ::linger v = {on, (uint16)secs}; return set(SO_LINGER, v); }
 	bool	receive_buffer(int v)					const	{ return set(SO_RCVBUF, v); }
-	bool	reuse_addr(bool v)						const	{ return set(SO_REUSEADDR, v); }
+	bool	reuse_addr(bool v = true)				const	{ return set(SO_REUSEADDR, v); }
 	bool	receive_timeout(float s)				const	{ return set(SO_RCVTIMEO, uint32(s * 1000)); }
 	bool	send_buffer(int v)						const	{ return set(SO_SNDBUF, v); }
 	bool	send_timeout(float s)					const	{ return set(SO_SNDTIMEO, uint32(s * 1000)); }
@@ -389,51 +417,61 @@ struct SocketOptions {
 	bool	oob_inline(bool v)						const	{ return set(SO_OOBINLINE, v); }
 #endif
 #ifdef PLAT_PC
-	bool	conditional_accept(bool v)				const	{ return set(SO_CONDITIONAL_ACCEPT, v); }
-	bool	dont_linger(bool v)						const	{ return set(SO_DONTLINGER, v); }
-	bool	exclusive_addr(bool v)					const	{ return set(SO_EXCLUSIVEADDRUSE, v); }
+	bool	conditional_accept(bool v = true)		const	{ return set(SO_CONDITIONAL_ACCEPT, v); }
+	bool	dont_linger(bool v = true)				const	{ return set(SO_DONTLINGER, v); }
+	bool	exclusive_addr(bool v = true)			const	{ return set(SO_EXCLUSIVEADDRUSE, v); }
 #endif
 };
 
 struct Socket : readwriter_mixin<const Socket> {
 	SOCKET	s;
 
-	static Socket TCP()		{ return Socket(AF_INET, SOCK_STREAM, IPPROTO_TCP); }
-	static Socket UDP()		{ return Socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP); }
-
 	Socket() : s(INVALID_SOCKET)		{}
 	Socket(int family, int socktype, int protocol) : s(socket_create(family, socktype, protocol))	{}
 	Socket(SOCKET s)	: s(s)			{}
 	Socket(Socket &&s)	: s(s.detach())	{}
-//	Socket& operator=(SOCKET _s)		{ s = _s; return *this; }
 	Socket& operator=(Socket &&_s)		{ swap(s, _s.s); return *this; }
 	~Socket()							{ socket_close(s);	}
 
-	SOCKET	detach()										{ return exchange(s, INVALID_SOCKET); }
-	explicit operator bool()						const	{ return s != INVALID_SOCKET;}
-	operator SOCKET()								const	{ return s; }
-	operator SOCKET&()										{ return s; }
+	SOCKET	detach()						{ return exchange(s, INVALID_SOCKET); }
+	explicit operator bool()		const	{ return s != INVALID_SOCKET;}
+	explicit operator bool()				{ return s != INVALID_SOCKET;}
+	operator SOCKET()				const	{ return s; }
+	operator SOCKET&()						{ return s; }
 
-	Socket	accept()								const	{ return socket_accept(s, 0, 0); }
-	bool	connect(void *addr, size_t addr_len)	const	{ return socket_connect(s, addr, addr_len); }
-//	size_t	receive_all(void *buffer, size_t size)	const	{ return socket_receive_all(s, buffer, size); }
-	bool	select(float time)						const	{ return socket_select(time, s); }
-	bool	select()								const	{ return socket_select(s); }
-//	bool	valid()									const	{ return s != INVALID_SOCKET; }
-	void	close()											{ socket_close(detach());	}
+	Socket	accept()				const	{ return socket_accept(s, 0, 0); }
+	bool	select(float time)		const	{ return socket_select(time, s); }
+	bool	select()				const	{ return socket_select(s); }
+	void	close()							{ socket_close(detach());	}
 
 	template<typename T> bool setopt(int lev, int opt, const T &val) const { return socket_setopt(s, lev, opt, val); }
-	SocketOptions	options()						const	{ return s; }
-	IP4::Options	ip4_options()					const	{ return s; }
+	SocketOptions	options()		const	{ return s; }
+	IP4::Options	ip4_options()	const	{ return s; }
 #ifndef PLAT_PS4
-	IP6::Options	ip6_options()					const	{ return s; }
+	IP6::Options	ip6_options()	const	{ return s; }
 #endif
 
-	bool		exists()								const	{ return s != INVALID_SOCKET;	}
-	bool		eof()									const	{ return false; }
+	bool	exists()									const	{ return s != INVALID_SOCKET;	}
+	bool	eof()										const	{ return false; }
 	size_t	readbuff(void *buffer, size_t size)			const	{ return socket_receive(s, buffer, size); }
 	size_t	writebuff(const void *buffer, size_t size)	const	{ return socket_send(s, buffer, size); }
-	SOCKET	_clone()	const { return INVALID_SOCKET; }
+	SOCKET	_clone()									const	{ return INVALID_SOCKET; }
+};
+
+struct SocketWait : Socket {
+	using Socket::Socket;
+	size_t	readbuff(void *buffer, size_t size) const {
+		char *p = (char*)buffer;
+		while (size_t result = size ? Socket::readbuff(p, size) : 0) {
+			size	-= result;
+			p		+= result;
+			if (size && !select(1))
+				break;
+		}
+		return p - (char*)buffer;
+	}
+	template<typename T>T		get()			const	{ T t; read(t); return t; }
+	template<typename...T> bool read(T&&...t)	const	{ return iso::read(*this, t...); }
 };
 
 //-----------------------------------------------------------------------------
@@ -527,7 +565,7 @@ struct TCP {
 
 // ICMP packet
 struct ICMP {
-	enum type_enum {
+	enum type_enum : uint8 {
 		ECHO_REPLY					= 0,
 		DESTINATION_UNREACHABLE		= 3,
 		SOURCE_QUENCH				= 4,	// Deprecated
@@ -556,7 +594,7 @@ struct ICMP {
 		SKIP						= 39,
 		PHOTURIS					= 40,
 	};
-	uint8		type;
+	type_enum	type;
 	uint8		code;
 	uint16		checksum;
 	uint16be	id;
@@ -599,8 +637,7 @@ public:
 #ifndef PLAT_PS4
 struct socket_addr_any : socket_addr_head {
 	uint64	dummy[(_SS_MAXSIZE - sizeof(socket_addr_head)) / sizeof(uint64)];
-	socket_addr_any(const addrinfo *a)	: socket_addr_head(a) {}
-
+//	socket_addr_any(const addrinfo *a)	: socket_addr_head(a) {}
 	bool	is_local() const {
 		return	family == AF_INET	? ((IP4::socket_addr*)this)->is_local()
 			:	family == AF_INET6	? ((IP6::socket_addr*)this)->is_local()
@@ -689,8 +726,8 @@ struct socket_address : addrinfo {
 	struct iterator {
 		const addrinfo	*a;
 		iterator(const addrinfo *_a) : a(_a) {}
-		const socket_addr_any	operator*()	{ return a; }
-		iterator&	operator++()	{ a = a->ai_next; return *this; }
+		const socket_addr_any&	operator*()				{ return *(socket_addr_any*)a; }
+		iterator&	operator++()						{ a = a->ai_next; return *this; }
 		bool		operator==(const iterator &b) const { return a == b.a; }
 		bool		operator!=(const iterator &b) const { return a != b.a; }
 	};

@@ -47,7 +47,7 @@ bool ScriptWriter::PrintString(const char *s, char delimiter, int len) {
 }
 
 bool ScriptWriter::LegalLabel(const char *name) {
-	return name && (is_alpha(name[0]) || name[0] == '_') && string_check(name + 1, char_set::identifier);
+	return name && (is_alpha(name[0]) || name[0] == '_') && string_check(name + 1, char_set::wordchar);
 }
 
 bool ScriptWriter::PrintLabel(tag1 id) {
@@ -451,7 +451,7 @@ Tokeniser::TOKEN Tokeniser::GetToken(int c) {
 		case 'I': case 'J': case 'K': case 'L': case 'M': case 'N': case 'O': case 'P':
 		case 'Q': case 'R': case 'S': case 'T': case 'U': case 'V': case 'W': case 'X':
 		case 'Y': case 'Z': {
-			identifier = read_token(*this, char_set::identifier, c);
+			identifier = read_token(*this, char_set::wordchar, c);
 			const char **k = find(keywords, identifier);
 			return k == end(keywords)
 				? TOK_IDENTIFIER
@@ -681,7 +681,7 @@ Tokeniser::TOKEN ScriptReader::GetToken() {
 						SwallowComments(TOK_COMMENT);
 					break;
 				case '#':
-					identifier = read_token(*this, char_set::identifier, c);
+					identifier = read_token(*this, char_set::wordchar, c);
 
 					if (identifier == "#ifdef") {
 						if (first) {
@@ -990,7 +990,7 @@ const Type *ScriptReader::ParseType() {
 				iso_throw("Expected {");
 			token = save;
 		}
-		fallthrough
+		//fallthrough
 		case TOK_OPEN_BRACE: {
 			bool	bitpacked	= token == TOK_BITPACKED;
 			bool	packed		= token == TOK_PACKED;
@@ -1091,7 +1091,7 @@ Browser2 ScriptReader::GetField(const Browser2 &b) {
 			if (token == TOK_DOT) {
 				Next();
 				if (token == TOK_NUMBER)
-					identifier = read_token(*this, char_set::identifier, 0);
+					identifier = read_token(*this, char_set::wordchar, 0);
 
 				s << DIRECTORY_SEP;
 				int	i = b.GetIndex(identifier);
@@ -1108,7 +1108,7 @@ Browser2 ScriptReader::GetField(const Browser2 &b) {
 			if (token == TOK_DOT) {
 				Next();
 				if (token == TOK_NUMBER)
-					identifier = read_token(*this, char_set::identifier, 0);
+					identifier = read_token(*this, char_set::wordchar, 0);
 				s << ";.\\"[state];
 				if (identifier.find('.'))
 					s << '\'' << identifier << '\'';
@@ -1145,7 +1145,7 @@ Browser2 ScriptReader::GetField(const Browser2 &b) {
 		if (token == TOK_DOT) {
 			Next();
 			if (token == TOK_NUMBER)
-				identifier = read_token(*this, char_set::identifier, 0);
+				identifier = read_token(*this, char_set::wordchar, 0);
 			if (!skip) {
 				Browser2 b2 = b1[identifier];
 				if (!b2) {
@@ -1185,7 +1185,7 @@ bool Assign(const Type *type, void *data, ptr_machine<void> p, bool dontconvert)
 			Browser2	b = FileHandler::ReadExternal(p);
 			if (b.Is(type)) {
 				memcpy(data, b, type->GetSize());
-				int	r = _Duplicate(type, data, DUPF_DUPSTRINGS|DUPF_CHECKEXTERNALS);
+				int	r = _Duplicate(type, data, TRAV_DUPSTRINGS|TRAV_CHECKEXTERNALS);
 				return !!(r & 2);
 			}
 			p = b;
@@ -1193,7 +1193,7 @@ bool Assign(const Type *type, void *data, ptr_machine<void> p, bool dontconvert)
 
 		if (ptr_machine<void> p2 = Conversion::convert(p, type, conv_flags)) {
 			memcpy(data, p2, type->GetSize());
-			_Duplicate(type, data, DUPF_DUPSTRINGS);
+			_Duplicate(type, data, TRAV_DUPSTRINGS);
 			return !!(p2.Flags() & (Value::EXTERNAL | Value::HASEXTERNAL));
 		}
 
@@ -1245,7 +1245,7 @@ bool ScriptReader::SkipHierarchy() {
 		case TOK_ASTERIX:
 		case TOK_IDENTIFIER:
 			ParseType();
-			fallthrough
+			//fallthrough
 		default:
 			break;
 	}
@@ -1266,7 +1266,7 @@ bool ScriptReader::SkipHierarchy() {
 				if (token == TOK_DOT) {
 					Next();
 					if (token == TOK_NUMBER) {
-						identifier = read_token(*this, char_set::identifier, 0);
+						identifier = read_token(*this, char_set::wordchar, 0);
 						token = TOK_IDENTIFIER;
 					}
 				} else
@@ -1395,7 +1395,7 @@ bool ScriptReader::Parse(const Type *_type, void *data) {
 						}
 						if (next_id) {
 							p = Duplicate(next_id, p);
-							next_id = 0;
+							next_id = tag();
 							Add(p);
 						}
 //						if (p.ID() != id && p.Header()->refs > 0) {
@@ -1802,7 +1802,7 @@ bool ScriptReader::Parse(const Type *_type, void *data) {
 				}
 				p = MakePtr(reftype, next_id);
 				if (next_id) {
-					next_id = 0;
+					next_id = tag();
 					Add(p);
 				}
 				if (Parse(reftype, p)) {

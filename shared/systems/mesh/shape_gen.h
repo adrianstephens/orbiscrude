@@ -18,31 +18,36 @@ struct VertexIndexBuffer {
 
 	VertexBuffer<vertex>	vb;
 	IndexBuffer<uint16>		ib;
+	PrimType		prim	= PRIM_TRILIST;
 	uint32			num_verts, num_prims;
 
-	vertex	*BeginVerts(uint32 n) {
+	auto	BeginVerts(uint32 n) {
 		num_verts = n;
-		return vb.Begin(num_verts, BUFFER_FLAGS);
+		vb.Init(num_verts, BUFFER_FLAGS);
+		return vb.WriteData();
 	}
 
-	uint16	*BeginPrims(uint32 n) {
+	auto	BeginPrims(uint32 n) {
 		num_prims	= n;
-		return ib.Begin(num_prims * 3, BUFFER_FLAGS);
+		ib.Init(num_prims * 3, BUFFER_FLAGS);
+		return ib.WriteData();
+	}
+	auto	BeginTris(uint32 n) {
+		num_prims	= n;
+		ib.Init(num_prims * 3, BUFFER_FLAGS);
+		return ib.WriteData();
 	}
 
 	void Render(GraphicsContext &ctx) const {
 		ctx.SetVertices(vb);
 		ctx.SetIndices(ib);
-		ctx.DrawIndexedPrimitive(PRIM_TRILIST, 0, num_verts, 0, num_prims);
+		ctx.DrawIndexedPrimitive(prim, 0, num_verts, 0, num_prims);
 	}
 };
 
-template<> inline VertexElements GetVE<VertexIndexBuffer::vertex>() {
-	static VertexElement ve[] = {
-		VertexElement(&VertexIndexBuffer::vertex::pos, "position"_usage),
-		VertexElement(&VertexIndexBuffer::vertex::norm, "normal"_usage)
-	};
-	return ve;
+template<> static const VertexElements ve<VertexIndexBuffer::vertex> = (const VertexElement[]) {
+	{&VertexIndexBuffer::vertex::pos, "position"_usage},
+	{&VertexIndexBuffer::vertex::norm, "normal"_usage}
 };
 
 
@@ -59,7 +64,8 @@ struct MeshHolder {
 };
 
 template<typename A> void RectangleVerts(A &a, float w, float h) {
-	auto	*v		= a.BeginVerts(4);
+	auto	verts	= a.BeginVerts(4);
+	auto	v		= verts.begin();
 	float3	norm	= float3{zero, zero, one};
 	v++->set(float3{-w, -h, zero}, norm);
 	v++->set(float3{+w, -h, zero}, norm);
@@ -79,8 +85,8 @@ template<typename A> void RectangleVerts(A &a, float w, float h) {
 struct RectangleVB : public VertexIndexBuffer {
 	RectangleVB(float w = 1, float h = 1) {
 		RectangleVerts(*this, w, h);
-		vb.End();
-		ib.End();
+		//vb.End();
+		//ib.End();
 	}
 	static const RectangleVB&	get() {
 		static RectangleVB	vib;
@@ -97,7 +103,8 @@ struct RectangleVB : public VertexIndexBuffer {
 };
 
 template<typename A> void CircleVerts(A &a, int n, float r = 1, int adj = 0) {
-	auto	*v		= a.BeginVerts(n + adj);
+	auto	verts	= a.BeginVerts(n + adj);
+	auto	v		= verts.begin();
 	float3	norm	= float3{zero, zero, one};
 	for (int i = 0; i < n + adj; i++) {
 		float2	r2  = sincos(float(i) / n * pi * 2);
@@ -121,8 +128,8 @@ template<typename A> void CircleVerts(A &a, int n, float r = 1, int adj = 0) {
 struct CircleVB : public VertexIndexBuffer {
 	CircleVB(int n, float r = 1) {
 		CircleVerts(*this, n, r, 2);
-		vb.End();
-		ib.End();
+		//vb.End();
+		//ib.End();
 	}
 	void RenderOutline(GraphicsContext &ctx) const {
 		ctx.SetVertices(vb);
@@ -141,7 +148,8 @@ struct CircleVB : public VertexIndexBuffer {
 template<typename A> void SphereVerts(A &a, int n, float r = 1, bool half = false) {
 	int	lats		= half ? n / 4 : n / 2 - 1;
 
-	auto	*v	= a.BeginVerts(n * lats + (half ? 1 : 2));
+	auto	verts	= a.BeginVerts(n * lats + (half ? 1 : 2));
+	auto	v		= verts.begin();
 	v++->set(float3{0, 0, -r}, float3{0, 0, -1});
 	for (int i = 1; i <= lats; i++) {
 		float2	r2  = sincos((float(i) / n - .25f) * pi * 2);
@@ -153,7 +161,8 @@ template<typename A> void SphereVerts(A &a, int n, float r = 1, bool half = fals
 	if (!half)
 		v++->set(float3{0, 0, +r}, float3{0, 0, 1});
 
-	uint16	*x	= a.BeginPrims((lats - 1) * n * 2 + (half ? 1 : 2) * n);
+	auto	indices	= a.BeginPrims((lats - 1) * n * 2 + (half ? 1 : 2) * n);
+	auto	x		= indices.begin();
 	for (int i = 0; i < n; i++) {
 		*x++	= 0;
 		*x++	= (i + 1) % n + 1;
@@ -183,8 +192,8 @@ template<typename A> void SphereVerts(A &a, int n, float r = 1, bool half = fals
 struct SphereVB : public VertexIndexBuffer {
 	SphereVB(int n, float r = 1, bool half = false) {
 		SphereVerts(*this, n, r, half);
-		vb.End();
-		ib.End();
+		//vb.End();
+		//ib.End();
 	}
 	template<int N> static const SphereVB&	get() {
 		static SphereVB	vib(N);
@@ -193,7 +202,8 @@ struct SphereVB : public VertexIndexBuffer {
 };
 
 template<typename A> void TorusVerts(A &a, int n, int m, float r_outer = 1, float r_inner = 0.5f) {
-	auto	*v = a.BeginVerts(n * m);
+	auto	verts	= a.BeginVerts(n * m);
+	auto	v		= verts.begin();
 	float	r_middle	= (r_outer + r_inner) / 2;
 	float	r_tube		= (r_outer - r_inner) / 2;
 	for (int i = 0; i < n; i++) {
@@ -205,7 +215,8 @@ template<typename A> void TorusVerts(A &a, int n, int m, float r_outer = 1, floa
 		}
 	}
 
-	uint16	*x = a.BeginPrims(n * m * 2);
+	auto	indices	= a.BeginPrims(n * m * 2);
+	auto	x		= indices.begin();
 	for (int i = 0; i < n; i++) {
 		int	i0 = i * m;
 		int	i1 = ((i + 1) % n) * m;
@@ -225,8 +236,8 @@ template<typename A> void TorusVerts(A &a, int n, int m, float r_outer = 1, floa
 struct TorusVB : public VertexIndexBuffer {
 	TorusVB(int n, int m, float r_outer = 1, float r_inner = 0.5f) {
 		TorusVerts(*this, n, m, r_outer, r_inner);
-		vb.End();
-		ib.End();
+		//vb.End();
+		//ib.End();
 	}
 
 	template<int N, int M> static const VertexIndexBuffer&	get() {
@@ -236,14 +247,16 @@ struct TorusVB : public VertexIndexBuffer {
 };
 
 template<typename A> void CylinderVerts(A &a, int n, float r = 1, float h = 1, bool ends = true) {
-	auto	*v = a.BeginVerts(n * (ends ? 4 : 2));
+	auto	verts	= a.BeginVerts(n * (ends ? 4 : 2));
+	auto	v		= verts.begin();
 	for (int i = 0; i < n; i++) {
 		float2	t = sincos(two * pi * i / n);
 		v++->set(concat(t * r, -h), concat(t, 0));
 		v++->set(concat(t * r, +h), concat(t, 0));
 	}
 
-	uint16	*x = a.BeginPrims(n * 2 + (ends ? (n - 2) * 2 : 0));
+	auto	indices	= a.BeginPrims(n * 2 + (ends ? (n - 2) * 2 : 0));
+	auto	x		= indices.begin();
 	for (int i = 0; i < n; i++) {
 		int		j = i * 2, k = (i + 1) % n * 2;
 
@@ -278,8 +291,8 @@ template<typename A> void CylinderVerts(A &a, int n, float r = 1, float h = 1, b
 struct CylinderVB : public VertexIndexBuffer {
 	CylinderVB(int n, float r = 1, float h = 1, bool ends = true) {
 		CylinderVerts(*this, n, r, h, ends);
-		vb.End();
-		ib.End();
+		//vb.End();
+		//ib.End();
 	}
 	template<int N> static const CylinderVB&	get() {
 		static CylinderVB	vib(N);
@@ -291,7 +304,8 @@ struct CylinderVB : public VertexIndexBuffer {
 template<typename A> void ConeVerts(A &a, int n, float r = 1, float h = 1, bool bottom = true) {
 	float2	z		= normalise(float2{-r, h});
 
-	auto	*v = a.BeginVerts(1 + n * (bottom ? 2 : 1));
+	auto	verts	= a.BeginVerts(1 + n * (bottom ? 2 : 1));
+	auto	v		= verts.begin();
 	v++->set(float3{0, 0, +h}, float3{0,0,0});
 
 	for (int i = 0; i < n; i++) {
@@ -299,7 +313,8 @@ template<typename A> void ConeVerts(A &a, int n, float r = 1, float h = 1, bool 
 		v++->set(concat(t * r, -h), concat(t * z.y, -z.x));
 	}
 
-	uint16	*x = a.BeginPrims(n + (bottom ? n - 2 : 0));
+	auto	indices	= a.BeginPrims(n + (bottom ? n - 2 : 0));
+	auto	x		= indices.begin();
 	for (int i = 0; i < n; i++) {
 		*x++	= ((i + 1) % n) + 1;
 		*x++	= 0;
@@ -322,8 +337,8 @@ template<typename A> void ConeVerts(A &a, int n, float r = 1, float h = 1, bool 
 struct ConeVB : public VertexIndexBuffer {
 	ConeVB(int n, float r = 1, float h = 1, bool bottom = true) {
 		ConeVerts(*this, n, r, h, bottom);
-		vb.End();
-		ib.End();
+		//vb.End();
+		//ib.End();
 	}
 	template<int N> static const ConeVB&	get() {
 		static ConeVB	vib(N);
@@ -332,8 +347,10 @@ struct ConeVB : public VertexIndexBuffer {
 };
 
 template<typename A> void BoxVerts(A &a, param(float3) dims = float3(one)) {
-	auto	*v = a.BeginVerts(4 * 6);
-	uint16	*x = a.BeginPrims(6 * 2);
+	auto	verts	= a.BeginVerts(4 * 6);
+	auto	v		= verts.begin();
+	auto	indices	= a.BeginPrims(6 * 2);
+	auto	x		= indices.begin();
 	for (int f = 0; f < 6; f++) {
 		float	d = f & 1 ? 1 : -1;
 		int		s = f >> 1;
@@ -354,8 +371,8 @@ template<typename A> void BoxVerts(A &a, param(float3) dims = float3(one)) {
 struct BoxVB : public VertexIndexBuffer {
 	BoxVB(param(float3) dims = float3(one)) {
 		BoxVerts(*this, dims);
-		vb.End();
-		ib.End();
+		//vb.End();
+		//ib.End();
 	}
 	static const BoxVB&	get() {
 		static BoxVB	vib;
@@ -371,7 +388,8 @@ template<typename A> void TetrahedronVerts(A &a, param(float3x4) m = identity) {
 		position3(m.w + m.y),
 		position3(m.w + m.z)
 	};
-	auto	*v = a.BeginVerts(3 * 4);
+	auto	verts	= a.BeginVerts(3 * 4);
+	auto	v		= verts.begin();
 	uint16	*x = a.BeginPrims(4);
 	for (int f = 0; f < 4; f++) {
 		int		o	= f * 3;
@@ -388,11 +406,70 @@ template<typename A> void TetrahedronVerts(A &a, param(float3x4) m = identity) {
 struct TetrahedronVB : public VertexIndexBuffer {
 	TetrahedronVB(param(float3x4) m = identity) {
 		TetrahedronVerts(*this, m);
-		vb.End();
-		ib.End();
+		//vb.End();
+		//ib.End();
 	}
 	static const TetrahedronVB&	get() {
 		static TetrahedronVB	vib;
+		return vib;
+	}
+};
+
+
+template<typename A> void IcosahedronVerts(A &g, float r = one) {
+	float	phi	= (1.0f + sqrt(5.0f)) * 0.5f; // golden ratio
+	float	a	= r * rsqrt(one + square(phi));
+	float	b	= a / phi;
+
+	auto	verts	= g.BeginVerts(12);
+	auto	v		= verts.begin();
+
+	// add vertices
+	v++->set({0, b, -a},	zero);
+	v++->set({b, a, 0},		zero);
+	v++->set({-b, a, 0},	zero);
+	v++->set({0, b, a},		zero);
+	v++->set({0, -b, a},	zero);
+	v++->set({-a, 0, b},	zero);
+	v++->set({0, -b, -a},	zero);
+	v++->set({a, 0, -b},	zero);
+	v++->set({a, 0, b},		zero);
+	v++->set({-a, 0, -b},	zero);
+	v++->set({b, -a, 0},	zero);
+	v++->set({-b, -a, 0},	zero);
+
+	// add triangles
+	static const uint8 ix[] = {
+		2, 1, 0,
+		1, 2, 3,
+		5, 4, 3,
+		4, 8, 3,
+		7, 6, 0,
+		6, 9, 0,
+		11, 10, 4,
+		10, 11, 6,
+		9, 5, 2,
+		5, 9, 11,
+		8, 7, 1,
+		7, 8, 10,
+		2, 5, 3,
+		8, 1, 3,
+		9, 2, 0,
+		1, 7, 0,
+		11, 9, 6,
+		7, 10, 6,
+		5, 11, 4,
+		10, 8, 4,
+	};
+	copy(ix, g.BeginPrims(num_elements(ix)));
+}
+
+struct IcosahedronVB : public VertexIndexBuffer {
+	IcosahedronVB(float r = one) {
+		IcosahedronVerts(*this, r);
+	}
+	static const IcosahedronVB&	get() {
+		static IcosahedronVB	vib;
 		return vib;
 	}
 };
@@ -412,11 +489,11 @@ struct _Grid : static_list<_Grid>, refs<_Grid> {
 	IndexBuffer<uint16>		ib;
 
 	_Grid(int nx, int ny) : nx(nx), ny(ny), nv((nx + 1) * (ny + 1)), np(((nx + 1) * 2 + 1) * ny) {
-		MakeGridVerts(vb.Begin(nv), nx, ny, 1.f / nx,  1.f / ny);
-		vb.End();
+		MakeGridVerts(vb.Begin(nv).begin(), nx, ny, 1.f / nx, 1.f / ny);
+		//vb.End();
 
 		MakeGridIndices(ib.Begin(np), nx, ny);
-		ib.End();
+		//ib.End();
 	}
 
 	void Render(GraphicsContext &ctx) const {
@@ -468,7 +545,7 @@ struct _LineGrid : static_list<_LineGrid>, refs<_LineGrid> {
 			*p++ = float2{0, y * sy};
 			*p++ = float2{1, y * sy};
 		}
-		vb.End();
+		//vb.End();
 
 		uint16	*i	= ib.Begin(np);
 		for (int x = 0; x <= nx; x++) {
@@ -479,7 +556,7 @@ struct _LineGrid : static_list<_LineGrid>, refs<_LineGrid> {
 			*i++ = (nx + 1 + y) * 2 + 0;
 			*i++ = (nx + 1 + y) * 2 + 1;
 		}
-		ib.End();
+		//ib.End();
 	}
 	void Render(GraphicsContext &ctx) const {
 		ctx.SetIndices(ib);

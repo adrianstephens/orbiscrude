@@ -177,7 +177,7 @@ ISO_ptr<void> GetDevices(UPnP_Device *device) {
 	XMLDOM0		services = (*device)/"serviceList";
 	for (XMLDOM0::iterator i = services.begin(); i != services.end(); ++i) {
 		const char	*type = (*i)/"serviceType";
-		if (strstr(type, "ContentDirectory")) {
+		if (str(type) == "ContentDirectory") {
 			ISO_ptr<UPnP_container>	p(type);
 			p->Init(device, (*i)/"controlURL", "0");
 			dev->Append(p);

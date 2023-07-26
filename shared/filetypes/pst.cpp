@@ -1446,14 +1446,14 @@ void print(string_accum &a, prop_type type, const memory_ref &v) {
 		case prop_type_float:		a << *(float*)v; break;
 		case prop_type_double:		a << *(double*)v; break;
 		case prop_type_currency:	a << *(int64*)v; break;
-		case prop_type_apptime:		a << DateTime::Days(*(double*)v) + apptime_offset; break;
+		case prop_type_apptime:		a << apptime_offset + Duration::Days(*(double*)v); break;
 		case prop_type_error:		a << "error(" << *(int32*)v << ")"; break;
 		case prop_type_bool:		a << *(bool*)v; break;
 		case prop_type_object:		a << "object[" << v.length() << "]"; break;
 		case prop_type_int64:		a << *(int64*)v; break;
 		case prop_type_string:		a << string(v); break;
 		case prop_type_wstring:		a << wstring(v); break;
-		case prop_type_systime:		a << DateTime(*(int64*)v / 10) + systime_offset; break;
+		case prop_type_systime:		a << systime_offset + Duration(*(int64*)v / 10); break;
 		case prop_type_guid:		a << *(GUID*)v; break;
 		case prop_type_binary:		a << "binary[" << v.length() << "]"; break;
 	}
@@ -1531,7 +1531,7 @@ ISO::Browser2 pst_value(memory_block v, pst::prop_type type, pst::prop_id id) {
 		case pst::prop_type_float:		return ISO::MakeBrowser(*(float*)v);
 		case pst::prop_type_double:		return ISO::MakeBrowser(*(double*)v);
 		case pst::prop_type_currency:	return ISO::MakeBrowser(*(int64*)v);
-		case pst::prop_type_apptime:	return ISO_ptr<date_string>(0, DateTime::Days(*(double*)v) + pst::apptime_offset);
+		case pst::prop_type_apptime:	return ISO_ptr<date_string>(0, pst::apptime_offset + Duration::Days(*(double*)v));
 		case pst::prop_type_error:		return ISO::MakeBrowser(*(int32*)v);
 		case pst::prop_type_bool:		return ISO::MakeBrowser(*(bool8*)v);
 		case pst::prop_type_object:		return ISO_ptr<string>(0, "object");
@@ -1543,7 +1543,7 @@ ISO::Browser2 pst_value(memory_block v, pst::prop_type type, pst::prop_id id) {
 				s = s.sub_str(2);
 			return ISO_ptr<string16>(0, s);
 		}
-		case pst::prop_type_systime:	return ISO_ptr<date_string>(0, DateTime(*(int64*)v / 10) + pst::systime_offset);
+		case pst::prop_type_systime:	return ISO_ptr<date_string>(0, pst::systime_offset + Duration(*(int64*)v / 10));
 		case pst::prop_type_guid:		return ISO::MakeBrowser(*(GUID*)v);
 		case pst::prop_type_binary:	{
 			ISO_ptr<ISO_openarray<uint8> > t(0);

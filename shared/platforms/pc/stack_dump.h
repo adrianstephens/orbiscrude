@@ -101,9 +101,9 @@ public:
 	void				SetOptions(uint32 _options, const char *_search_path);
 	ModuleInfo*			AddModule(const char *fn, uint64 base, uint64 end, bool mapped, const get_memory_t &mem);
 	ModuleInfo*			AddModule(HANDLE file, uint64 base);
-	Modules::iterator	GetModuleIterator(uint64 addr)		const	{ return modules.lower_bound(addr); }
-	ModuleInfo*			GetModule(uint64 addr)				const	{ auto i = GetModuleIterator(addr); return i == modules.end() || i.key().a > addr ? 0 : &*i; }
-	void*				GetFunctionTableEntry(uint64 addr)	const;
+	auto				GetModuleIterator(uint64 addr)				{ return lower_boundc(modules, addr); }
+	ModuleInfo*			GetModule(uint64 addr)						{ auto i = GetModuleIterator(addr); return modules.end() == i || i.key().a > addr ? 0 : &*i; }
+	void*				GetFunctionTableEntry(uint64 addr);
 	PDB2*				GetPdb(ModuleInfo *mod)				const;
 	const Line*			LineFromAddr(uint64 addr, const char **fn, uint32 *length, bool &nostep);
 	const CV::PROCSYM32* ProcFromAddr(uint64 addr, uint32 &offset, PDB_types *&types);

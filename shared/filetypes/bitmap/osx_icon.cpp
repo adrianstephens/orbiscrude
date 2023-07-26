@@ -291,8 +291,7 @@ bool ICNSFileHandler::Write(ISO_ptr<void> p, ostream_ref file) {
 
 	file.seek(sizeof(entry));
 
-	if (p.IsType<ISO_openarray<ISO_ptr<bitmap> > >()) {
-		ISO_ptr<ISO_openarray<ISO_ptr<bitmap> > >	bms(p);
+	if (auto bms = p.test_cast<ISO_openarray<ISO_ptr<bitmap>>>()) {
 		int	num = bms->Count();
 		for (int i = 0; i < num; i++) {
 			if (!WriteIcon((*bms)[i], file)) {
@@ -476,8 +475,7 @@ ISO_ptr<void> ICONSETFileHandler::ReadWithFilename(tag id, const filename &fn) {
 
 bool ICONSETFileHandler::WriteWithFilename(ISO_ptr<void> p, const filename &fn) {
 
-	if (p.IsType<ISO_openarray<ISO_ptr<bitmap> > >()) {
-		ISO_ptr<ISO_openarray<ISO_ptr<bitmap> > >	bms(p);
+	if (auto bms = p.test_cast<ISO_openarray<ISO_ptr<bitmap>>>()) {
 		FileHandler	*png	= FileHandler::Get("png");
 		FileOutput	file(filename(fn).add_dir("Contents.json"));
 		JSONwriter	json(file);

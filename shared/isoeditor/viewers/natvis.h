@@ -169,11 +169,12 @@ struct formatted_node : ast::custom_node {
 };
 
 
-void DumpValue(string_accum &sa, uint64 addr, const C_type *type, uint32 flags, FORMAT::FLAGS format, ast::get_memory_t get_mem);
-bool DumpValue(string_accum &sa, ast::node *node, FORMAT::FLAGS format, NATVIS *natvis, ast::get_memory_t get_mem, ast::get_variable_t get_var);
+void	DumpValue(string_accum &sa, uint64 addr, const C_type *type, uint32 flags, FORMAT::FLAGS format, ast::get_memory_t get_mem);
+bool	DumpValue(string_accum &sa, ast::node *node, FORMAT::FLAGS format, NATVIS *natvis, ast::get_memory_t get_mem, ast::get_variable_t get_var);
+int		Visibility(ast::node* node, ast::get_memory_t get_mem, ast::test_memory_t test_mem);
 dynamic_array<NATVIS::ExpandedAST> Expand(ast::noderef node, NATVIS *natvis, ast::get_memory_t get_mem, ast::get_variable_t get_var);
-bool HasChildren(const C_type *type, const NATVIS *natvis);
-bool HasChildren(ast::node *node, const NATVIS *natvis, ast::get_variable_t get_var, ast::get_memory_t get_mem);
+bool	HasChildren(const C_type *type, const NATVIS *natvis);
+bool	HasChildren(ast::node *node, const NATVIS *natvis, ast::get_variable_t get_var, ast::get_memory_t get_mem);
 ast::node* ReadFormattedExpression(const char *s, C_types &types, const C_type_composite *scope, ast::get_variable_t get_var);
 
 }// namespace iso

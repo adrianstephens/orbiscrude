@@ -182,14 +182,14 @@ struct DBFDate {
 struct DBFDateTime {
 	uint32le	date, time;
 	operator DateTime() const {
-		return DateTime::Days(date) + DateTime::Secs(time) / 1000;
+		return DateTime::Day(date) + Duration::Secs(time) / 1000;
 	}
 };
 struct DBFTimeStamp {
 	uint32le	date, time;
 	operator DateTime() const {
 		static DateTime offset = DateTime(-4713, 0);
-		return offset + DateTime::Days(date) + DateTime::Secs(time) / 1000;
+		return offset + Duration::Days(date) + Duration::Secs(time) / 1000;
 	}
 };
 

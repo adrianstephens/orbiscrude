@@ -6,7 +6,7 @@
 
 namespace iso {
 
-template<> class atomic<linear_allocator> : public allocator<atomic<linear_allocator> > {
+template<> class atomic<linear_allocator> : public allocator_mixin<atomic<linear_allocator> > {
 protected:
 	atomic<void*>	p;
 public:
@@ -23,7 +23,7 @@ public:
 	void	*getp() const { return p; }
 };
 
-template<> class atomic<checking_linear_allocator> : public allocator<atomic<checking_linear_allocator> > {
+template<> class atomic<checking_linear_allocator> : public allocator_mixin<atomic<checking_linear_allocator> > {
 protected:
 	atomic<void*>	p;
 	const void		*end;
@@ -44,7 +44,7 @@ public:
 	size_t	remaining()	const	{ return (char*)end - (char*)p.get(); }
 };
 
-template<> class atomic<circular_allocator> : public allocator<atomic<circular_allocator> > {
+template<> class atomic<circular_allocator> : public allocator_mixin<atomic<circular_allocator> > {
 protected:
 	uint8			*a, *b, *g;
 	atomic<uint8*>	p;
@@ -106,7 +106,7 @@ public:
 //	allows free
 //-----------------------------------------------------------------------------
 
-class circular_allocator2 : public allocator<circular_allocator2> {
+class circular_allocator2 : public allocator_mixin<circular_allocator2> {
 protected:
 	typedef uint32	U;
 	static const U	USED = 1u << 31;
@@ -184,6 +184,8 @@ public:
 				return true;
 		}
 		t += *t & ~USED;
+		if (t == b)
+			t = (U*)a;
 
 		void	*p0;
 		while (!(p0 = p));

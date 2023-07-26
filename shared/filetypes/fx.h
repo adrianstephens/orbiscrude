@@ -58,11 +58,14 @@ cgclib::item *ParseFX(string_scan s);
 cgclib::item *Find(cgclib::item *s, const char *name, cgclib::TYPE type);
 
 struct ErrorCollector {
+	enum SEVERITY {
+		SEV_INFO, SEV_WARNING, SEV_ERROR
+	};
 	struct entry {
 		uint32	code;
 		crc32	fn;
 		uint32	line, col;
-		entry(uint32 _code, const char *_fn, uint32 _line, uint32 _col) : code(_code), fn(_fn), line(_line), col(_col) {}
+		entry(uint32 code, const char *fn, uint32 line, uint32 col) : code(code), fn(fn), line(line), col(col) {}
 		bool operator<(const entry &e) const {
 			return	code	< e.code	|| (code	== e.code
 				&&	(fn		< e.fn		|| (fn		== e.fn
@@ -78,15 +81,31 @@ struct ErrorCollector {
 
 	ErrorCollector() : have_errors(false), have_warnings(false) {}
 
-	static void Error(string_accum &b, uint32 code, const count_string &msg, const char *fn = 0, uint32 line = 0) {
+	static void Error(string_accum &b, SEVERITY severity, uint32 code, string_ref msg, string_ref fn = none, uint32 line = 0) {
 		if (line)
 			b << fn << '(' << line << "): ";
-		b << code << ": " << msg << '\n';
+
+		if (severity == SEV_WARNING)
+			b << "warning";
+		else if (severity == SEV_ERROR)
+			b << "error";
+
+		b << onlyif(code, code) << ": " << msg << '\n';
 	}
 
-	void	Error(uint32 code, const count_string &msg, const char *fn = 0, uint32 line = 0, uint32 col = 0) {
-		if (had.insert(entry(code, fn, line, col)))
-			Error(error_builder, code, msg, fn, line);
+	void	Error(SEVERITY severity, uint32 code, string_ref msg, string_ref fn = none, uint32 line = 0, uint32 col = 0) {
+		if (severity)
+			(severity == SEV_WARNING ? have_warnings : have_errors) = true;
+
+		if (had.insert(entry(code, fn, line, col))) {
+			Error(error_builder, severity, code, msg, fn, line);
+		}
+	}
+
+	void	ErrorAlways(SEVERITY severity, uint32 code, string_ref msg, string_ref fn = none, uint32 line = 0, uint32 col = 0) {
+		if (severity)
+			(severity == SEV_WARNING ? have_warnings : have_errors) = true;
+		Error(error_builder, severity, code, msg, fn, line);
 	}
 
 	void	Throw() {

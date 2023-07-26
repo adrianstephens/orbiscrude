@@ -343,9 +343,9 @@ template<typename T> inline void no_lock_update(atomic<T> &t, T a, T b) {
 //	ref pointer helpers
 //-----------------------------------------------------------------------------
 
-struct ref_holder {
+struct refs_holder {
 	atomic<int>	&refs;
-	template<typename E> ref_holder(atomic<int> &refs, E& event) : refs(refs) {
+	template<typename E> refs_holder(atomic<int> &refs, E& event) : refs(refs) {
 		for (;;) {
 			int	r = refs;
 			if (r < 0)
@@ -354,7 +354,7 @@ struct ref_holder {
 				break;
 		}
 	}
-	~ref_holder()	{ --refs; }
+	~refs_holder()	{ --refs; }
 };
 
 template<typename T> struct external_refs {

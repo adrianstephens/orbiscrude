@@ -148,34 +148,8 @@ float vol_minimum(const conic &c1, const conic &c2) {
 	return best;
 }
 
-conic conic::through(const position2 &p1, const position2 &p2, const position2 &p3, const position2 &p4, const position2 &p5) {
-	conic	c1 = line_pair(p1, p2, p3, p4);
-	conic	c2 = line_pair(p1, p4, p2, p3);
-	return c1 * c2.evaluate(p5) - c2 * c1.evaluate(p5);
-}
-
-conic conic::circle_through(const position2 &p1, const position2 &p2, const position2 &p3) {
-	// precondition: p1, p2, p3 not colinear
-	float det = cross(p1 - p3, p2 - p3);
-	ISO_ASSERT(det != 0);
-
-	float3 sqr{dot(p1, p1), dot(p2, p2), dot(p3, p3)};
-	return conic(
-		float3{
-			det,
-			det,
-			dot(float3{cross(p3.v, p2.v), cross(p1.v, p3.v), cross(p2.v, p1.v)}, sqr)
-		},
-		float3{
-			zero,
-			dot(float3{p2.v.x - p3.v.x, p3.v.x - p1.v.x, p1.v.x - p2.v.x}, sqr) * half,	//o.y
-			dot(float3{p3.v.y - p2.v.y, p1.v.y - p3.v.y, p2.v.y - p1.v.y}, sqr) * half	//o.z
-		}
-	);
-}
-
 conic conic::line_pair(const position2 &p1, const position2 &p2, const position2 &p3, const position2 &p4) {
-	ISO_ASSERT(any(p1.v != p2.v & p3.v != p4.v));
+//	ISO_ASSERT(any(p1.v != p2.v & p3.v != p4.v));
 
 	float2	d12		= p2 - p1;
 	float2	d34		= p4 - p3;
@@ -216,6 +190,32 @@ void conic::two_linepairs(conic &c1, conic &c2, const position2 &p1, const posit
 			c2 = line_pair(p3, p2, p4, p1);
 		}
 	}
+}
+
+conic conic::through(const position2 &p1, const position2 &p2, const position2 &p3, const position2 &p4, const position2 &p5) {
+	conic	c1 = line_pair(p1, p2, p3, p4);
+	conic	c2 = line_pair(p1, p4, p2, p3);
+	return c1 * c2.evaluate(p5) - c2 * c1.evaluate(p5);
+}
+
+conic conic::circle_through(const position2 &p1, const position2 &p2, const position2 &p3) {
+	// precondition: p1, p2, p3 not colinear
+	float det = cross(p1 - p3, p2 - p3);
+	ISO_ASSERT(det != 0);
+
+	float3 sqr{dot(p1, p1), dot(p2, p2), dot(p3, p3)};
+	return conic(
+		float3{
+			det,
+			det,
+			dot(float3{cross(p3.v, p2.v), cross(p1.v, p3.v), cross(p2.v, p1.v)}, sqr)
+		},
+		float3{
+			zero,
+			dot(float3{p2.v.x - p3.v.x, p3.v.x - p1.v.x, p1.v.x - p2.v.x}, sqr) * half,	//o.y
+			dot(float3{p3.v.y - p2.v.y, p1.v.y - p3.v.y, p2.v.y - p1.v.y}, sqr) * half	//o.z
+		}
+	);
 }
 
 conic conic::ellipse_through(const position2 &p1, const position2 &p2, const position2 &p3) {
@@ -261,12 +261,16 @@ conic conic::ellipse_through(const position2 &p1, const position2 &p2, const pos
 	return lerp(c1, c2, vol_minimum(c1, c2 - c1));
 }
 
-conic conic::line(const line2 &p1) {
+conic conic::line(const iso::line<float, 2> &p1) {
 	auto	v1 = as_vec(p1);
+#if 1
+	return conic(v1.xyz * v1.xyz, v1.xyz * v1.yzx);
+#else
 	return conic(extend_left<3>(v1.z), extend_left<3>(v1.yx * half));
+#endif
 }
 
-conic conic::line_pair(const line2 &p1, const line2 &p2) {
+conic conic::line_pair(const iso::line<float, 2> &p1, const iso::line<float, 2> &p2) {
 	auto	v1 = as_vec(p1);
 	auto	v2 = as_vec(p2);
 	return conic(v1.xyz * v2.xyz, (v1.xyz * v2.yzx + v2.xyz * v1.yzx) * half);
@@ -290,10 +294,10 @@ conic conic::from_matrix(const float3x3 &m) {
 }
 
 conic::info conic::analyse() const {
-	float	det		= det2x2();
-	TYPE	type	= (TYPE)get_sign1(det);
-	bool	empty	= false;
-	SIGN	orientation;
+	float	det2		= det2x2();
+	TYPE	type		= (TYPE)get_sign1(det2);
+	bool	empty		= false;
+	SIGN	orientation	= ZERO;
 	bool	degenerate;
 
 	if (type == PARABOLA) {
@@ -303,13 +307,10 @@ conic::info conic::analyse() const {
 			if (o.z == 0 && o.y == 0) {
 				if (d.z == 0) {
 					type		= TRIVIAL;
-					orientation	= POS;
 				} else {
 					empty		= true;
 					orientation	= get_sign1(d.z);
 				}
-			} else {
-				orientation		= ZERO;
 			}
 
 		} else {
@@ -319,7 +320,7 @@ conic::info conic::analyse() const {
 			}
 
 			if (degenerate = o.x * o.z == d.x * o.y) {
-				float discr = o.y * o.y - d.y * d.z;
+				float discr = square(o.y) - square(d.y);
 				if (discr < 0) {
 					empty		= true;
 					orientation = get_sign1(d.z);
@@ -334,37 +335,104 @@ conic::info conic::analyse() const {
 		}
 
 	} else {
-		orientation	= get_sign1(conic_combine(det, *this, *this));
-		degenerate	= orientation == ZERO;
+		orientation	= get_sign1(conic_combine(det2, *this, *this));
+		empty		= type == ELLIPSE && get_sign1(d.x) == orientation;
+		degenerate	= empty || orientation == ZERO;
+	}
+	return {type, orientation, empty, degenerate};
+}
 
-		if (type == ELLIPSE) {
-			empty		= get_sign1(d.x) == orientation;
-			degenerate	|= empty;
+#if 0
+//shear transform:
+float	t		= sqrt(-det() / (d.x * det2));
+m = {
+	float2{t, zero},
+	float2{-o.x, d.x} * t,
+	centre()
+};
+#endif
+
+conic::info conic::analyse(float2x3 &m) const {
+	float	epsilon		= reduce_max(max(abs(o), abs(d))) / 100.f;
+	float	epsilon2	= square(epsilon);
+	float	det2		= det2x2();
+//	float	epsilon		= abs(det()) / 100.f;
+	TYPE	type		= (TYPE)get_sign1(det2, epsilon2);
+	bool	empty		= false;
+	SIGN	orientation	= ZERO;
+	bool	degenerate;
+
+	float2x2	m1	= identity;
+
+	if (o.x) {
+		float	ac	= d.x - d.y;
+	//	auto	sc	= concat((-ac - sqrt(square(ac) + square(o.x) * 4)) * half, -o.x);
+		auto	sc	= concat((ac + sqrt(square(ac) + square(o.x) * 4)) * half, o.x);
+		m1	= _rotate2D(normalise(sc));
+	}
+
+	if (type == PARABOLA) {
+		auto	c1	= *this / float3x3(m1);
+		degenerate	= abs(c1.o.y) < epsilon;
+		orientation = get_sign1(-c1.d.x, epsilon2);
+
+		if (orientation == ZERO) {
+			orientation		= get_sign1(c1.d.z, epsilon2);
+			if (degenerate) {
+				if (orientation == ZERO)
+					type	= TRIVIAL;
+				else
+					empty	= true;
+			}
+			degenerate	= true;
+			m			= float2x3(m1);
+
+		} else {
+			if (degenerate)
+				empty = c1.d.x * c1.d.z > 0;
+
+			float	tx	= -c1.o.z / c1.d.x;
+			float	ty	= (square(c1.o.z) / c1.d.x - c1.d.z) / (c1.o.y * 2);
+			auto	m2	= m1 * translate(tx, ty);
+			c1			= *this / m2;
+			m			= m2 * scale(sign1(c1.d.x), abs(c1.d.x) / c1.o.y);
+		}
+		
+	} else {
+		m			= translate(centre()) * m1;
+		auto	c1	= *this / m;
+		orientation	= get_sign1(c1.d.z, epsilon2);
+		empty		= type == ELLIPSE && c1.d.x * c1.d.z > 0;
+		degenerate	= empty || orientation == ZERO;
+		
+		if (orientation != ZERO) {
+			float2	s	= c1.d.xy / c1.d.z;
+			m			= m * scale(sign1(c1.d.x) * rsqrt(abs(s)));
+			if (type == HYPERBOLA && s.x > 0)
+				m	= m * rotate2D(pi / two);
 		}
 	}
-	return info(type, orientation, empty, degenerate);
+
+	auto	verify	= *this / m;	//verification
+	return {type, orientation, empty, degenerate};
 }
 
-bool conic::ray_check(param(ray2) r, float &t, vector2 *normal)	{
-	float3x3	Q		= *this;
-	float2		p1		= (Q * concat(r.p.v, one)).xy;
-	float2		d1		= (Q * concat(r.d, zero)).xy;
-	float		dp		= dot(r.d, p1);
-	float		dd		= dot(r.d, d1);
-	float		discr	= square(dp) - dd * dot(r.p.v, p1);
-	if (discr < zero)
-		return false;
-	t = (-dp + sqrt(discr)) / dd;
-	if (normal) {
-		float3	p = concat(r.from_parametric(t).v, one);
-		*normal = float2{dot(p, Q.x), dot(p, Q.y)};
-	}
-	return true;
+
+int	intersection(const conic& a, const conic& b, position2* results) {
+	auto	A	= ((const symmetrical3&)a * inverse(b));
+	auto	e	= get_eigenvalues(A);
+
+	auto	degen	= a - e.x * b;
+	auto	intx	= degen & x_axis, inty = degen & y_axis;
+
+	line2	z		= line2(position2(intx.a, 0), position2(0, inty.a));
+	auto	intz	= a & z;
+
+	results[0] = from_x_axis(z) * position2(intz.a, 0);
+	results[1] = from_x_axis(z) * position2(intz.b, 0);
+	return 2;
 }
 
-rectangle conic::get_box() const {
-	return rectangle::with_centre(centre(), sqrt(-d.yx * det()) / det2x2());
-}
 
 // tangent points to x, y axes given by M * [+-1,0], M * [0,+-1]
 float2x3 conic::get_tangents() const {
@@ -381,6 +449,43 @@ position2 conic::support(param(float2) v) const {
 	conic		c	= *this / float3x3(m);
 	auto		t	= c.get_tangents();
 	return m * (get_trans(t) + t.x);
+}
+
+position2 conic::closest(param(position2) p) const {
+	conic	c2(
+		float3{
+			+o.x,
+			-o.x,
+			cross(o.zy, p.v)
+		},
+		float3{
+			d.y - d.x,
+			cross(concat(o.x, d.y), p.v) - o.z,
+			cross(concat(d.x, o.x), p.v) + o.y
+		} / two
+	);
+
+	return  {nan, nan};
+	position2	results[4];
+	int			num_int = intersection(*this, c2, results);
+	return results[0];
+}
+
+bool conic::ray_check(param(ray2) r, float &t, vector2 *normal)	const {
+	float3x3	Q		= *this;
+	float2		p1		= (Q * concat(r.p.v, one)).xy;
+	float2		d1		= (Q * concat(r.d, zero)).xy;
+	float		dp		= dot(r.d, p1);
+	float		dd		= dot(r.d, d1);
+	float		discr	= square(dp) - dd * dot(r.p.v, p1);
+	if (discr < zero)
+		return false;
+	t = (-dp + sqrt(discr)) / dd;
+	if (normal) {
+		float3	p = concat(r.from_parametric(t).v, one);
+		*normal = float2{dot(p, Q.x), dot(p, Q.y)};
+	}
+	return true;
 }
 
 //-----------------------------------------------------------------------------
@@ -483,10 +588,7 @@ ellipse::ellipse(const float2x3 &m) {
 	*this = c;
 	return;
 #else
-	float4	t		= m.v * m.v;
-	float2	sc2		= normalise(float2{t.x + t.y - t.z - t.w, dot(m.x, m.y) * two});
-	float2	sc		= sincos_half(clamp(sc2, -one, one));
-
+	float2	sc		= max_circle_point((float2x2)m);
 	float2	axis1	= m * sc;
 	float2	axis2	= m * perp(sc);
 	v		= concat(m.z, axis1);
@@ -496,8 +598,8 @@ ellipse::ellipse(const float2x3 &m) {
 
 ellipse::ellipse(const conic &c) {
 	position2	centre;
-	auto	s		= c.centre_form(centre);
-	float2	e		= get_eigenvalues(s);
+	auto	s	= c.centre_form(centre);
+	float2	e	= get_eigenvalues(s);
 
 	v		= concat(centre.v, normalise(get_eigenvector(s, e.x)) * rsqrt(e.x));
 	ratio	= sqrt(e.x / e.y);
@@ -882,19 +984,21 @@ position2 uniform_perimeter(const quadrilateral &s, float v) {
 	float	l0 = len(s.p01.xy - s.p01.zw), l1 = len(s.p01.zw - s.p23.xy), l2 = len(s.p23.xy - s.p23.zw), l3 = len(s.p23.zw - s.p01.xy);
 
 	v *= l0 + l1 + l2 + l3;
-	return	v < l0				? position2(s.p01.xy + (s.p01.zw - s.p01.xy) * (v / l0))
-		:	v < l0 + l1			? position2(s.p01.zw + (s.p23.xy - s.p01.zx) * ((v - l0) / l1))
-		:	v < l0 + l1 + l2	? position2(s.p23.xy + (s.p23.zw - s.p23.xy) * ((v - l0 - l1) / l2))
-		:	position2(s.p23.zw + (s.p01.xy - s.p23.zw) * ((v - l0 - l1 - l2) / l3));
+	return	position2(
+			v < l0				? lerp(s.p01.xy, s.p01.zw, v / l0)
+		:	v < l0 + l1			? lerp(s.p01.zw, s.p23.xy, (v - l0) / l1)
+		:	v < l0 + l1 + l2	? lerp(s.p23.xy, s.p23.zw, (v - l0 - l1) / l2)
+		:	lerp(s.p23.zw, s.p01.xy, (v - l0 - l1 - l2) / l3)
+	);
 }
 
 position2 uniform_interior(const quadrilateral &s, param(float2) t) {
-	float	area1 = diff(s.p01.xy * s.p01.wz + s.p01.zw * s.p23.wz + s.p23.zw * s.p01.yx);
-	float	area2 = diff(s.p01.xy * s.p23.wz + s.p23.zw * s.p23.yx + s.p23.xy * s.p01.yx);
+	float	area1 = s.tri012().area();
+	float	area2 = s.tri321().area();
 	float	x	= t.x * (area1 + area2);
 	return x < area1
-		? uniform_interior(triangle(s.pt0(), s.pt1(), s.pt3()), float2{x / area1, t.y})
-		: uniform_interior(triangle(s.pt0(), s.pt3(), s.pt2()), float2{(x - area1) / area2, t.y});
+		? uniform_interior(s.tri012(), float2{x / area1, t.y})
+		: uniform_interior(s.tri321(), float2{(x - area1) / area2, t.y});
 }
 
 
@@ -1113,7 +1217,7 @@ quadric quadric::plane_pair(const iso::plane &p1, const iso::plane &p2) {
 }
 
 quadric quadric::sphere_through(const position3 &p1, const position3 &p2, const position3 &p3, const position3 &p4) {
-	return sphere::through(p1, p2, p3, p4).matrix() * unit_sphere();
+	return sphere::through(p1, p2, p3, p4).matrix() * standard_sphere();
 }
 
 
@@ -1210,7 +1314,7 @@ quadric::info quadric::analyse() const {
 		}
 	}
 #endif
-	return info(type, orientation, empty, degenerate);
+	return {type, orientation, empty, degenerate};
 }
 
 static struct test_quadric_params {
@@ -1362,7 +1466,7 @@ int check_occlusion(const sphere &sa, const sphere &sb, const position3 &camera)
 }
 
 conic projection(param(sphere) s, const float4x4 &m) {
-	return (m * quadric(s)).project_z();
+	return ((m * s.matrix()) * quadric::standard_sphere()).project_z();
 }
 
 float projected_area(const sphere &s, const float4x4 &m) {
@@ -1472,10 +1576,6 @@ float dist(param(triangle3) t, param(iso::plane) p) {
 	return p.dist(position3(m.z)) + min(min(dx, dy), zero);
 }
 
-//-----------------------------------------------------------------------------
-// triangle3
-//-----------------------------------------------------------------------------
-
 interval<float>	triangle3::intersection(const line3 &line) const {
 	float3x4	mat1	= matrix();
 	float3x4	basis(line.dir(), cross(mat1.z, line.dir()), mat1.z, line.p);
@@ -1577,6 +1677,29 @@ bool intersect(const triangle3 &t0, const triangle3 &t1, param(float3) velocity,
 		}
 	}
 	return true;
+}
+
+//-----------------------------------------------------------------------------
+// quadrilateral3
+//-----------------------------------------------------------------------------
+
+position3 uniform_perimeter(const quadrilateral3 &s, float v) {
+	float	l0 = len(s[0] - s[1]), l1 = len(s[1] - s[2]), l2 = len(s[2] - s[3]), l3 = len(s[3] - s[0]);
+
+	v *= l0 + l1 + l2 + l3;
+	return	v < l0				? lerp(s[0], s[1], v / l0)
+		:	v < l0 + l1			? lerp(s[1], s[2], (v - l0) / l1)
+		:	v < l0 + l1 + l2	? lerp(s[2], s[3], (v - l0 - l1) / l2)
+		:	lerp(s[3], s[0], (v - l0 - l1 - l2) / l3);
+}
+
+position3 uniform_interior(const quadrilateral3 &s, param(float2) t) {
+	float	area1 = s.tri012().area();
+	float	area2 = s.tri321().area();
+	float	x	= t.x * (area1 + area2);
+	return x < area1
+		? uniform_interior(s.tri012(), float2{x / area1, t.y})
+		: uniform_interior(s.tri321(), float2{(x - area1) / area2, t.y});
 }
 
 //-----------------------------------------------------------------------------
@@ -1687,7 +1810,7 @@ position3 tetrahedron::closest(param(position3) p) const {
 				return corner(lowest_set_index4(i^15));
 
 		}
-		fallthrough
+		//fallthrough
 		case 2:	{	// outside two facets - closest is along common edge
 			i ^= 15;
 			position3	p0	= corner(lowest_set_index4(i));

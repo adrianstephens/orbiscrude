@@ -16,7 +16,7 @@ using namespace iso;
 CallStacks::CallStacks() {
 	current_process	= GetCurrentProcess();
 	current_thread	= GetCurrentThread();
-	reinterpret_cast<void*&>(CaptureStackBackTrace) = ::GetProcAddress(GetModuleHandleA("ntdll.dll"), "RtlCaptureStackBackTrace");
+	reinterpret_cast<void*&>(CaptureStackBackTrace) = (void*)::GetProcAddress(GetModuleHandleA("ntdll.dll"), "RtlCaptureStackBackTrace");
 }
 
 uint32 CallStacks::GetStackTrace(const context& ctx, void **addr, uint32 maxdepth) {
@@ -111,11 +111,11 @@ CompressedCallStacks::stack_node* CompressedCallStacks::Compress(void **addr, in
 	e_rbtree<stack_node>	*s	= &stacks;
 	for (int i = len; i--;) {
 		void	*a	= addr[i];
-		auto	j	= lower_boundc(*s, a);
+		auto	j	= s->lower_bound(a);
 		if (!j || a < *j)
-			s->insert(j, node = new stack_node(a, prev));
+			s->insert(move(j), node = new stack_node(a, prev));
 		else
-			node	= j;
+			node	= &*j;
 		prev	= node;
 		s		= &node->next;
 	}

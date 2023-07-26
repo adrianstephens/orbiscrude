@@ -471,12 +471,12 @@ void FastCopy(HANDLE fh, uint64 foffset, HANDLE th, uint64 toffset, uint64 total
 	mem[1]	= vmem::reserve_commit(block);
 
 	DateTime	start	= DateTime::Now();
-	DateTime	next	= start + DateTime::Secs(1);
+	DateTime	next	= start + Duration::Secs(1);
 
 	for (int b = 0; done < total; b = 1 - b) {
 		if (DateTime::Now() >= next) {
-			ISO_TRACEF("At ") << (next - start).TimeOfDay() << "s " << done * 100.0 / total << "%\n";
-			next += DateTime::Secs(1);
+			ISO_TRACEF("At ") << (next - start).fSecs() << "s " << done * 100.0 / total << "%\n";
+			next += Duration::Secs(1);
 		}
 		DWORD	r, w;
 		uint64	x	= min(total - done, block);
@@ -551,7 +551,7 @@ struct SectorsDevice : app::DeviceT<SectorsDevice>, app::MenuCallbackT<SectorsDe
 			return h == INVALID_HANDLE_VALUE ? ISO_NULL : (ISO_ptr<void>)ISO_ptr<DiskDescription>(id, h);
 		}
 		void			operator()(AppEvent *ev)				{ if (ev->state == AppEvent::END) delete this; }
-		PhysicalDrive(const char *_id, const char *_device) : id(_id), device(_device)	{}
+		PhysicalDrive(string_ref id, string_ref device) : id(id), device(device)	{}
 	};
 
 	struct LogicalDrive : app::DeviceCreateT<LogicalDrive>, Handles2<LogicalDrive, AppEvent> {
@@ -561,7 +561,7 @@ struct SectorsDevice : app::DeviceT<SectorsDevice>, app::MenuCallbackT<SectorsDe
 			return h == INVALID_HANDLE_VALUE ? ISO_NULL : (ISO_ptr<void>)ISO_ptr<Sectors>(id, h);
 		}
 		void			operator()(AppEvent *ev)				{ if (ev->state == AppEvent::END) delete this; }
-		LogicalDrive(const char *_id, const char *_device) : id(_id), device(_device)	{}
+		LogicalDrive(string_ref id, string_ref device) : id(id), device(device)	{}
 	};
 
 	virtual ISO_ptr<void>	Read(tag id, const char *spec);
@@ -641,6 +641,7 @@ struct SectorsDevice : app::DeviceT<SectorsDevice>, app::MenuCallbackT<SectorsDe
 } sectors_device;
 
 ISO_ptr<void>	SectorsDevice::Read(tag id, const char *spec) {
+	spec = string_find(spec, ':') + 1;
 	if (is_prefixed_int(spec)) {
 		int	n;
 		spec = get_prefixed_num(spec, n);

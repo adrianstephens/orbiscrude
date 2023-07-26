@@ -355,8 +355,8 @@ public:
 	void			push_back(const T &t)					{ B::push_back(new link<T>(t)); }
 	void			pop_front()								{ delete B::pop_front(); }
 	void			pop_back()								{ delete B::pop_back(); }
-	auto			pop_front_value()						{ unique_ptr<T> p = B::pop_front(); return move(p->t); }
-	auto			pop_back_value()						{ unique_ptr<T> p = B::pop_back(); return move(p->t); }
+	auto			pop_front_value()						{ unique_ptr<link<T>> p = B::pop_front(); return move(p->t); }
+	auto			pop_back_value()						{ unique_ptr<link<T>> p = B::pop_back(); return move(p->t); }
 	void			clear()									{ while (!B::empty()) pop_back(); }
 
 	static void		remove(iterator &i)						{ delete i.remove(); }
@@ -1117,7 +1117,7 @@ template<typename T> struct hierarchy : e_slink<T> {
 	void		push_front(T *t)		{ t->parent = me(); children.push_front(t); }
 
 	T *detach() {
-		if (parent) {
+		if (parent && is_linked()) {
 			parent->children.prev(me())->unlink_next();
 			parent	= 0;
 		}

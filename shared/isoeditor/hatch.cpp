@@ -29,8 +29,8 @@ template<typename T> void FillVMips(block<T, 2> &dest) {
 void VBoxFilter(const block<ISO_rgba, 2> &srce, const block<ISO_rgba, 2> &dest) {
 	int	w = max(srce.size<1>(), 1u), h0 = max(srce.size<2>(), 1u), h1 = max(h0 >> 1, 1);
 	for (int y = 0; y < h1; y++) {
-		ISO_rgba	*s0 = srce[y * 2], *s1 = srce[y * 2 + int(y * 2 < h0 - 1)];
-		ISO_rgba	*d	= dest[y * 1];
+		ISO_rgba	*s0 = srce[y * 2].begin(), * s1 = srce[y * 2 + int(y * 2 < h0 - 1)].begin();
+		ISO_rgba	*d	= dest[y * 1].begin();
 
 		for (int x = w; x--; d++, ++s0, ++s1) {
 			*d = ISO_rgba(
@@ -125,7 +125,7 @@ struct Stroke {
 		obb2				o	= make_point_cloud(dynamic_array<float2>(c.points)).get_obb();
 		x.p.add(o);
 
-		float4	t	= o.v * o.v;
+		float4	t	= square(o.v());
 		float2	ext	= sqrt(t.xz + t.yw);
 		int		w	= ext.x, h = ext.y;
 		bm.Create(w * 8, h);
@@ -793,14 +793,14 @@ template<typename I, typename D> I unique_indices(I begin, I end, D d) {
 }
 
 void cone_tree_builder::init(SubMesh *sm) {
-	array<uint16,3>	*tris		= sm->indices;
-	int						num_faces	= sm->indices.Count();
-	uint32					num_verts	= sm->NumVerts();
+	auto	tris		= sm->indices.begin();
+	int		num_faces	= sm->indices.Count();
+	uint32	num_verts	= sm->NumVerts();
 
 #if 1
 	dynamic_array<int>		indices		= int_range(0u, num_verts);
 
-	auto	c	= make_index_container(sm->VertComponentData<float3p>(0), indices);
+	auto	c	= make_indexed_container(sm->VertComponentData<float3p>(0), indices);
 
 	sort(c, [](const float3p &_a, const float3p &_b) {
 		float3	a = _a, b = _b;

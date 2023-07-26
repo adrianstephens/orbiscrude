@@ -91,29 +91,6 @@ C_type::FLAGS	function_flags(const clr::ENTRY<MethodDef> &i) {
 		| (i.flags & i.Abstract	? C_type_function::ABSTRACT : C_type::NONE);
 };
 
-ast::node *fix_type(ast::node *n, const C_type *type) {
-	if (type && n->kind == ast::literal) {
-		ast::lit_node	*lit		= (ast::lit_node*)n;
-		C_type::TYPE	lit_type	= lit->type->type;
-
-		switch (type->type) {
-			case C_type::INT:
-				if (lit_type == C_type::INT)
-					lit->type = type;
-				break;
-			case C_type::FLOAT:
-				if (lit_type == C_type::FLOAT)
-					lit->type = type;
-				break;
-			case C_type::POINTER:
-				if (lit_type == C_type::INT || lit_type == C_type::POINTER)
-					lit->type = type;
-				break;
-		}
-	}
-	return n;
-}
-
 bool check_type(const C_type *type, const char *id, C_type_namespace *ns) {
 	if (type) {
 		if (auto c = type->composite())
@@ -616,117 +593,39 @@ const C_element *Context::GetElement(const Token &tok, const C_type *&parent) {
 }
 
 //-----------------------------------------------------------------------------
-//	Stack
-//-----------------------------------------------------------------------------
-
-struct Stack {
-	enum TYPE {
-		NONE,
-		INT32,
-		INT64,
-		NATIVE_INT,
-		FLOAT,
-		PTR,
-		OBJECT,
-		USERVALUE,
-	};
-	enum STATE {
-		STACK_UNSET,
-		STACK_SET,
-		STACK_VARS,
-	};
-	enum {
-		SIDE_EFFECTS	= 1 << 0,
-	};
-	struct ENTRY {
-		ast::node	*p;
-		TYPE		t:8;
-		uint32		flags:24;
-		uint32		offset;
-		ENTRY(ast::node *p, TYPE t, uint32 offset, uint32 flags) : p(p), t(t), flags(flags), offset(offset) {}
-		operator ast::node*() const		{ return p; }
-		ast::node*	operator->() const	{ return p; }
-	};
-	dynamic_array<ENTRY>	sp;
-	STATE					state;
-
-	Stack() : state(STACK_UNSET) {}
-
-	void			push(ast::node *p, TYPE t, uint32 offset = 0, uint32 flags = 0)	{ sp.emplace_back(p, t, offset, flags); }
-	void			push(const ENTRY &e)	{ sp.push_back(e); }
-	const ENTRY&	pop()					{ ISO_ASSERT(sp.size()); return sp.pop_back_retref(); }
-	const ENTRY&	top() const				{ return sp.back(); }
-	ENTRY&			top()					{ return sp.back(); }
-	void			end()					{ sp.clear(); }
-	bool			end(int i)				{ return sp.size() == i; }
-
-	bool	compatible(const Stack &s) const {
-		if (sp.size() != s.sp.size())
-			return false;
-		for (auto i0 = sp.begin(), i1 = s.sp.begin(), e0 = sp.end(); i0 != e0; ++i0, ++i1) {
-			if (i0->t != i1->t)
-				return false;
-		}
-		return true;
-	}
-	int		first_unequal(const Stack &s) const {
-		for (auto i0 = sp.begin(), i1 = s.sp.begin(), e0 = sp.end(); i0 != e0; ++i0, ++i1) {
-			if (*i0->p != *i1->p)
-				return e0 - i0;
-		}
-		return 0;
-	}
-};
-
-static_assert(sizeof(Stack::ENTRY) == 16, "ugh");
-//-----------------------------------------------------------------------------
 //	Builder
 //-----------------------------------------------------------------------------
 
-struct Builder : Stack {
-	struct block : ref_ptr<ast::basicblock>	{
-		uint32			offset;
-		Stack			stack;
-		block(ast::basicblock *_b, uint32 _offset) : ref_ptr<ast::basicblock>(_b), offset(_offset) {}
-	};
-
-	struct local_var : C_arg {
-		struct use {
-			ast::basicblock	*b;
-			ast::node		*n;
-		};
-		dynamic_array<use> uses;
-		local_var(const char *_id, const C_type *_type) : C_arg(_id, _type) {}
-		void	add_use(ast::basicblock *b, ast::node *n) {
-			use	&u = uses.push_back();
-			u.b = b;
-			u.n = n;
-		}
-	};
+struct Builder : ast::Builder {
 
 	Context						&ctx;
 	const_memory_block			code;
-	int							gen_var;
-	uint32						offset;
-	dynamic_array<block>		blocks;
 	block						*pbb;
-	ast::basicblock				*bb;
-	dynamic_array<local_var*>	locals;
+	int							gen_var = 0;
 
-	Builder(Context &_ctx, const const_memory_block &_code) : ctx(_ctx), code(_code), gen_var(0) {
-	}
+	Builder(Context &_ctx, const const_memory_block &_code) : ctx(_ctx), code(_code) {}
 
 	void create_blocks(dynamic_array<uint32> &dests) {
 		sort(dests);
 		int		id	= 0;
-		block	*x	= new(blocks) block(new ast::basicblock(id++), 0);
+		block	*x	= &blocks.emplace_back(new ast::basicblock(id++), 0);
 		for (auto i = dests.begin(), e = dests.end(); i != e; ++i) {
 			if (*i != x->offset)
-				x = new(blocks) block(new ast::basicblock(id++), *i);
+				x = &blocks.emplace_back(new ast::basicblock(id++), *i);
 		}
 
 		pbb		= blocks.begin();
 		bb		= *pbb;
+	}
+
+	ref_ptr<ast::basicblock>&	entry_point() const {
+		return blocks[0];
+	}
+
+	ast::element_node*	element0(ast::KIND k, Token tok) {
+		const C_type		*parent;
+		const C_element		*e = ctx.GetElement(tok, parent);
+		return new ast::element_node(k, e, parent);
 	}
 
 	void	create_locals(Token tok) {
@@ -744,148 +643,6 @@ struct Builder : Stack {
 		} else {
 			locals.clear();
 		}
-	}
-
-	block *at_offset(uint32 target) {
-		return lower_boundc(blocks, target, [](const block &a, uint32 b) {
-			return a.offset < b;
-		});
-	}
-
-	local_var *is_local(const ast::node *n) const {
-		if (const ast::element_node *en = n->cast()) {
-			if (local_var *const *lv = find_check(locals, (local_var*)en->element))
-				return *lv;
-		}
-		return 0;
-	}
-
-
-	ref_ptr<ast::basicblock>&	entry_point() const {
-		return blocks[0];
-	}
-
-	static TYPE	type_to_stack(const C_type *type) {
-		if (type) {
-			switch (type->type) {
-				case C_type::INT:		return ((C_type_int*)type)->num_bits() > 32 ? INT64 : INT32;
-				case C_type::FLOAT:		return FLOAT;
-				case C_type::STRUCT:	return OBJECT;
-				case C_type::ARRAY:		return OBJECT;
-				case C_type::POINTER:	return ((C_type_pointer*)type)->managed() ? OBJECT : PTR;
-				default:				return PTR;
-			}
-		}
-		return PTR;
-	}
-	const C_type *stack_to_type(TYPE t) {
-		const C_type *types[] = {
-			0,								//NONE,
-			C_type_int::get<int32>(),		//INT32,
-			C_type_int::get<int64>(),		//INT64,
-			C_type_int::get<int>(),			//NATIVE_INT,
-			C_type_float::get<double>(),	//FLOAT,
-			ctx.type_uint8ptr,				//PTR,
-			ctx.type_object,				//OBJECT,
-			0,	//USERVALUE,
-		};
-		return types[t];
-	}
-
-	void	push(ast::node *p, TYPE t, uint32 flags = 0)	{ Stack::push(p, t, offset, flags); }
-	void	push(const ENTRY &e)							{ Stack::push(e.p, e.t, offset, e.flags); }
-
-	uint32	get_offset(const byte_reader &r) const {
-		return r.p - code;
-	}
-	bool	is_float()		const	{
-		return top().t == FLOAT;
-	}
-
-	ENTRY	fix_ptr(ENTRY e) {
-		if (e.t == PTR && e.p->kind == ast::var)
-			e.p = new ast::unary_node(ast::cast, e.p, ctx.type_uint8ptr);
-		return e;
-	}
-
-	ast::element_node*	element0(ast::KIND k, Token tok) {
-		const C_type		*parent;
-		const C_element		*e = ctx.GetElement(tok, parent);
-		return new ast::element_node(k, e, parent);
-	}
-
-	ast::node*	binary_cmp0(ast::KIND k, uint32 flags = 0) {
-		const ENTRY &right	= pop();
-		const ENTRY &left	= pop();
-		return new ast::binary_node(k, left.p, right.p, flags);
-	}
-	ast::node*	ldelem0(const C_type *type) {
-		const ENTRY &right	= pop();
-		const ENTRY &left	= pop();
-		return new ast::binary_node(ast::ldelem, left.p, right.p, type);
-	}
-	ast::node*	var0(const C_arg *v, uint32 _flags = 0) {
-		return new ast::element_node(ast::var, (const C_element*)v, 0, _flags);
-	}
-//	ast::node*	var0(local_var *v, uint32 _flags = 0) {
-//		return new linked_var_node(v, bb, _flags);
-//	}
-
-	void	unary(ast::KIND k, uint32 flags = 0)	{
-		const ENTRY &arg	= pop();
-		push(new ast::unary_node(k, arg.p, flags), arg.t);
-	}
-	void	binary(ast::KIND k, uint32 flags = 0) {
-		ENTRY right	= fix_ptr(pop());
-		ENTRY left	= fix_ptr(pop());
-		push(new ast::binary_node(k, left.p, right.p, flags), (TYPE)max(left.t, right.t));
-	}
-	void	binary_cmp(ast::KIND k, uint32 flags = 0)	{
-		push(binary_cmp0(k, flags), INT32);
-	}
-	void	ldelem(const C_type *type, TYPE stack_type) {
-		push(ldelem0(type), stack_type);
-	}
-	void	cast(const C_type *type, TYPE stack_type) {
-		TYPE	top_type = top().t;
-		if (top_type == stack_type)
-			return;
-		if (top_type == NATIVE_INT && (stack_type == INT32 || stack_type == INT64)) {
-			top().t = stack_type;
-			return;
-		}
-		push(new ast::unary_node(ast::cast, pop(), type), stack_type);
-	}
-	void	var(local_var *v) {
-		push(var0(v), type_to_stack(v->type));
-	}
-	void	var(const C_arg *v) {
-		push(var0(v), type_to_stack(v->type));
-	}
-
-	void	get_args(ast::call_node *call, C_arg *args, size_t nargs) {
-		call->args.resize(nargs);
-		for (size_t i = nargs; i--;)
-			call->args[i] = fix_type(pop(), args[i].type);
-	}
-
-	template<typename T> ast::node* lit0(const T &t) {
-		return new ast::lit_node(C_value(t));
-	}
-
-	template<typename T> void lit(const T &t, TYPE stack_type) {
-		push(lit0(t), stack_type);
-	}
-
-	void add_stmt(ast::node *p) {
-		bb->stmts.push_back(p);
-	}
-
-	void assign(const C_arg *v) {
-		add_stmt(new ast::binary_node(ast::assign, var0(v, ast::ASSIGN), pop()));
-	}
-	void assign(local_var *v) {
-		add_stmt(new ast::binary_node(ast::assign, var0(v, ast::ASSIGN), pop()));
 	}
 
 	ast::basicblock *branch_stack(block *e) {
@@ -913,7 +670,7 @@ struct Builder : Stack {
 			if (!sp.empty() && state != STACK_VARS) {
 				//create stack vars
 				for (auto &i : sp) {
-					local_var	*arg	= new local_var(format_string("stack%i", gen_var++), stack_to_type(i.t));
+					local_var	*arg	= new local_var(format_string("stack%i", gen_var++), i.p->type);//stack_to_type(i.t));
 					locals.push_back(arg);
 					ast::node	*var	= var0(arg, ast::ASSIGN);
 					add_stmt(new ast::binary_node(ast::assign, var, i));
@@ -946,6 +703,10 @@ struct Builder : Stack {
 		));
 	}
 
+	uint32	get_offset(const byte_reader &r) const {
+		return r.p - code;
+	}
+
 	bool check_end(byte_reader &r) {
 		offset		= get_offset(r);
 
@@ -972,73 +733,7 @@ struct Builder : Stack {
 		}
 		return r.p < code.end();
 	}
-
-	void	count_local_use(postorder<ast::DominatorTree::Info> &&po);
-	void	remove_redundant_locals();
 };
-
-
-void Builder::count_local_use(postorder<ast::DominatorTree::Info> &&po) {
-	for (auto &i : locals) {
-		if (i)
-			i->uses.clear();
-	}
-	for (auto i : po) {
-		ast::basicblock	*bb	= unconst(i->node);
-		bb->apply([this, bb](ref_ptr<ast::node> &r) {
-			if (r->kind == ast::assign) {
-				if (auto *lv = is_local(r->cast<ast::binary_node>()->left))
-					lv->add_use(bb, r);
-			}
-			if (r->kind == ast::var) {
-				if (auto *lv = is_local(r))
-					lv->add_use(bb, r);
-			}
-		});
-	}
-}
-
-void Builder::remove_redundant_locals() {
-	for (auto &i : locals) {
-		if (i) {
-			int		assigns	= 0, reads = 0;
-			Builder::local_var::use	*last_assign	= 0;
-			for (auto &u : i->uses) {
-				if (u.n->kind == ast::assign) {
-					--reads;
-					if (!last_assign || *last_assign->n != *u.n) {
-						last_assign = &u;
-						++assigns;
-					}
-				} else {
-					++reads;
-				}
-			}
-
-			if (assigns == 1) {
-				ast::node			*n		= last_assign->n;
-				ref_ptr<ast::node>	s		= n->cast<ast::binary_node>()->right;
-
-				if (reads == 1 || s->kind == ast::var) {
-					const C_arg			*v	= i;
-					ref_ptr<ast::node>	ass	= last_assign->b->remove_last_assignment(v);
-
-					ISO_ASSERT(ass == n);
-
-					for (auto &b : blocks) {
-						b->apply([v, s](ref_ptr<ast::node> &r) {
-							if (r->kind == ast::var) {
-								if (r->cast<ast::element_node>()->element == v)
-									r = s;
-							}
-						});
-					}
-					i = 0;
-				}
-			}
-		}
-	}
-}
 
 //-----------------------------------------------------------------------------
 //	MakeAST
@@ -1119,7 +814,7 @@ ref_ptr<ast::basicblock> MakeAST(Context &ctx, ast::funcdecl_node *func, const I
 
 	uint32	flags		= 0;
 	for (byte_reader r(builder.code); builder.check_end(r); ) {
-
+		typedef ast::Stack Stack;
 		switch (r.getc()) {
 			case cil::NOP:			break;
 			case cil::BREAK:		break;
@@ -1136,27 +831,27 @@ ref_ptr<ast::basicblock> MakeAST(Context &ctx, ast::funcdecl_node *func, const I
 			case cil::STLOC_2:		builder.assign(builder.locals[2]); break;
 			case cil::STLOC_3:		builder.assign(builder.locals[3]); break;
 			case cil::LDARG_S:		builder.var(func->get_arg(r.getc())); break;
-			case cil::LDARGA_S:		builder.push(ctx.TakeAddress(builder.var0(func->get_arg(r.getc()))), Stack::PTR); break;
+			case cil::LDARGA_S:		builder.push(ctx.TakeAddress(builder.var0(func->get_arg(r.getc())))); break;
 			case cil::STARG_S:		builder.assign(func->get_arg(r.getc())); break;
 			case cil::LDLOC_S:		builder.var(builder.locals[r.getc()]); break;
-			case cil::LDLOCA_S:		builder.push(ctx.TakeAddress(builder.var0(builder.locals[r.getc()])), Stack::PTR); break;
+			case cil::LDLOCA_S:		builder.push(ctx.TakeAddress(builder.var0(builder.locals[r.getc()]))); break;
 			case cil::STLOC_S:		builder.assign(builder.locals[r.getc()]); break;
-			case cil::LDNULL:		builder.push(new ast::node(ast::null), Stack::OBJECT); break;
-			case cil::LDC_I4_M1:	builder.lit(-1, Stack::INT32); break;
-			case cil::LDC_I4_0:		builder.lit(0, Stack::INT32); break;
-			case cil::LDC_I4_1:		builder.lit(1, Stack::INT32); break;
-			case cil::LDC_I4_2:		builder.lit(2, Stack::INT32); break;
-			case cil::LDC_I4_3:		builder.lit(3, Stack::INT32); break;
-			case cil::LDC_I4_4:		builder.lit(4, Stack::INT32); break;
-			case cil::LDC_I4_5:		builder.lit(5, Stack::INT32); break;
-			case cil::LDC_I4_6:		builder.lit(6, Stack::INT32); break;
-			case cil::LDC_I4_7:		builder.lit(7, Stack::INT32); break;
-			case cil::LDC_I4_8:		builder.lit(8, Stack::INT32); break;
-			case cil::LDC_I4_S:		builder.lit(r.getc(), Stack::INT32); break;
-			case cil::LDC_I4:		builder.lit(r.get<int32>(), Stack::INT32); break;
-			case cil::LDC_I8:		builder.lit(r.get<int64>(), Stack::INT64); break;
-			case cil::LDC_R4:		builder.lit(r.get<float>(), Stack::FLOAT); break;
-			case cil::LDC_R8:		builder.lit(r.get<double>(), Stack::FLOAT); break;
+			case cil::LDNULL:		builder.push(new ast::node(ast::null)); break;
+			case cil::LDC_I4_M1:	builder.lit(-1); break;
+			case cil::LDC_I4_0:		builder.lit(0); break;
+			case cil::LDC_I4_1:		builder.lit(1); break;
+			case cil::LDC_I4_2:		builder.lit(2); break;
+			case cil::LDC_I4_3:		builder.lit(3); break;
+			case cil::LDC_I4_4:		builder.lit(4); break;
+			case cil::LDC_I4_5:		builder.lit(5); break;
+			case cil::LDC_I4_6:		builder.lit(6); break;
+			case cil::LDC_I4_7:		builder.lit(7); break;
+			case cil::LDC_I4_8:		builder.lit(8); break;
+			case cil::LDC_I4_S:		builder.lit(r.getc()); break;
+			case cil::LDC_I4:		builder.lit(r.get<int32>()); break;
+			case cil::LDC_I8:		builder.lit(r.get<int64>()); break;
+			case cil::LDC_R4:		builder.lit(r.get<float>()); break;
+			case cil::LDC_R8:		builder.lit(r.get<double>()); break;
 			case cil::DUP:
 				if (builder.top().flags & Stack::SIDE_EFFECTS) {
 					auto	*loc = new Builder::local_var(format_string("sidefx%i", builder.offset), builder.top()->type);
@@ -1181,8 +876,6 @@ ref_ptr<ast::basicblock> MakeAST(Context &ctx, ast::funcdecl_node *func, const I
 
 				builder.get_args(call, func->args, func->num_args());
 
-				auto	stack_type = builder.type_to_stack(func->subtype);
-
 				if (tok.type() == MethodDef) {
 					auto	*method		= ctx.meta->GetEntry<MethodDef>(tok.index());
 					if (method->flags & clr::ENTRY<MethodDef>::SpecialName) {
@@ -1193,22 +886,22 @@ ref_ptr<ast::basicblock> MakeAST(Context &ctx, ast::funcdecl_node *func, const I
 
 						if (method->name.begins("op_")) {
 							if (auto i = find_check(unary_operator_names, method->name)) {
-								builder.push(new ast::unary_node(i->kind, call->args[0]), stack_type);
+								builder.push(new ast::unary_node(i->kind, call->args[0]));
 								break;
 							}
 
 							if (auto i = find_check(binary_operator_names, method->name)) {
-								builder.push(new ast::binary_node(i->kind, call->args[0], call->args[1]), stack_type);
+								builder.push(new ast::binary_node(i->kind, call->args[0], call->args[1]));
 								break;
 							}
 
 							if (method->name == "op_Implicit") {
-								builder.push(call->args[0], stack_type);
+								builder.push(call->args[0]);
 								break;
 							}
 
 							if (method->name == "op_Explicit") {
-								builder.push(new ast::unary_node(ast::cast, call->args[0], func->subtype), stack_type);
+								builder.push(new ast::unary_node(ast::cast, call->args[0], func->subtype));
 								break;
 							}
 						}
@@ -1216,7 +909,7 @@ ref_ptr<ast::basicblock> MakeAST(Context &ctx, ast::funcdecl_node *func, const I
 					}
 				}
 				if (func->subtype) {
-					builder.push(call, stack_type);
+					builder.push(call);
 
 				} else {
 					builder.add_stmt(call);//new ast::unary_node(ast::expression, call));
@@ -1237,7 +930,7 @@ ref_ptr<ast::basicblock> MakeAST(Context &ctx, ast::funcdecl_node *func, const I
 				builder.get_args(call, func->args, func->num_args());
 
 				if (func->subtype)
-					builder.push(call, builder.type_to_stack(func->subtype));
+					builder.push(call);//, builder.type_to_stack(func->subtype));
 				else
 					builder.add_stmt(call);//new ast::unary_node(ast::expression, call));
 				break;
@@ -1288,17 +981,17 @@ ref_ptr<ast::basicblock> MakeAST(Context &ctx, ast::funcdecl_node *func, const I
 				builder.add_stmt(s);
 				break;
 			}
-			case cil::LDIND_I1:		builder.push(new ast::unary_node(ast::deref, builder.pop(), ctx.GetType<int8>(),	flags), Stack::INT32); flags = 0; break;
-			case cil::LDIND_U1:		builder.push(new ast::unary_node(ast::deref, builder.pop(), ctx.GetType<uint8>(),	flags), Stack::INT32); flags = 0; break;
-			case cil::LDIND_I2:		builder.push(new ast::unary_node(ast::deref, builder.pop(), ctx.GetType<int16>(),	flags), Stack::INT32); flags = 0; break;
-			case cil::LDIND_U2:		builder.push(new ast::unary_node(ast::deref, builder.pop(), ctx.GetType<uint16>(),	flags), Stack::INT32); flags = 0; break;
-			case cil::LDIND_I4:		builder.push(new ast::unary_node(ast::deref, builder.pop(), ctx.GetType<int32>(),	flags), Stack::INT32); flags = 0; break;
-			case cil::LDIND_U4:		builder.push(new ast::unary_node(ast::deref, builder.pop(), ctx.GetType<uint32>(),	flags), Stack::INT32); flags = 0; break;
-			case cil::LDIND_I8:		builder.push(new ast::unary_node(ast::deref, builder.pop(), ctx.GetType<int64>(),	flags), Stack::INT64); flags = 0; break;
-			case cil::LDIND_I:		builder.push(new ast::unary_node(ast::deref, builder.pop(), ctx.GetType<int>(),		flags), Stack::INT32); flags = 0; break;
-			case cil::LDIND_R4:		builder.push(new ast::unary_node(ast::deref, builder.pop(), ctx.GetType<float>(),	flags), Stack::FLOAT); flags = 0; break;
-			case cil::LDIND_R8:		builder.push(new ast::unary_node(ast::deref, builder.pop(), ctx.GetType<double>(),	flags), Stack::FLOAT); flags = 0; break;
-			case cil::LDIND_REF:	builder.push(new ast::unary_node(ast::deref, builder.pop(), ctx.GetType<uint8>(),	flags), Stack::PTR); flags = 0; break;
+			case cil::LDIND_I1:		builder.push(new ast::unary_node(ast::deref, builder.pop(), ctx.GetType<int8>(),	flags)); flags = 0; break;
+			case cil::LDIND_U1:		builder.push(new ast::unary_node(ast::deref, builder.pop(), ctx.GetType<uint8>(),	flags)); flags = 0; break;
+			case cil::LDIND_I2:		builder.push(new ast::unary_node(ast::deref, builder.pop(), ctx.GetType<int16>(),	flags)); flags = 0; break;
+			case cil::LDIND_U2:		builder.push(new ast::unary_node(ast::deref, builder.pop(), ctx.GetType<uint16>(),	flags)); flags = 0; break;
+			case cil::LDIND_I4:		builder.push(new ast::unary_node(ast::deref, builder.pop(), ctx.GetType<int32>(),	flags)); flags = 0; break;
+			case cil::LDIND_U4:		builder.push(new ast::unary_node(ast::deref, builder.pop(), ctx.GetType<uint32>(),	flags)); flags = 0; break;
+			case cil::LDIND_I8:		builder.push(new ast::unary_node(ast::deref, builder.pop(), ctx.GetType<int64>(),	flags)); flags = 0; break;
+			case cil::LDIND_I:		builder.push(new ast::unary_node(ast::deref, builder.pop(), ctx.GetType<int>(),		flags)); flags = 0; break;
+			case cil::LDIND_R4:		builder.push(new ast::unary_node(ast::deref, builder.pop(), ctx.GetType<float>(),	flags)); flags = 0; break;
+			case cil::LDIND_R8:		builder.push(new ast::unary_node(ast::deref, builder.pop(), ctx.GetType<double>(),	flags)); flags = 0; break;
+			case cil::LDIND_REF:	builder.push(new ast::unary_node(ast::deref, builder.pop(), ctx.GetType<uint8>(),	flags)); flags = 0; break;
 
 			case cil::STIND_REF:	{ ast::node *p = builder.pop(); builder.add_stmt(new ast::binary_node(ast::assign, new ast::unary_node(ast::deref, builder.pop(), ctx.GetType<uint8>(),	flags), p)); flags = 0; break; }
 			case cil::STIND_I1:		{ ast::node *p = builder.pop(); builder.add_stmt(new ast::binary_node(ast::assign, new ast::unary_node(ast::deref, builder.pop(), ctx.GetType<int8>(),	flags), p)); flags = 0; break; }
@@ -1324,14 +1017,14 @@ ref_ptr<ast::basicblock> MakeAST(Context &ctx, ast::funcdecl_node *func, const I
 			case cil::NEG:			builder.unary(ast::neg); break;
 			case cil::NOT:			builder.unary(ast::bit_not); break;
 
-			case cil::CONV_I1:		builder.cast(C_type_int::get<int8>(), Stack::INT32); break;
-			case cil::CONV_I2:		builder.cast(C_type_int::get<int16>(), Stack::INT32); break;
-			case cil::CONV_I4:		builder.cast(C_type_int::get<int32>(), Stack::INT32); break;
-			case cil::CONV_I8:		builder.cast(C_type_int::get<int64>(), Stack::INT64); break;
-			case cil::CONV_R4:		builder.cast(C_type_float::get<float>(), Stack::FLOAT); break;
-			case cil::CONV_R8:		builder.cast(C_type_float::get<double>(), Stack::FLOAT); break;
-			case cil::CONV_U4:		builder.cast(C_type_int::get<uint32>(), Stack::INT32); break;
-			case cil::CONV_U8:		builder.cast(C_type_int::get<uint64>(), Stack::INT64); break;
+			case cil::CONV_I1:		builder.cast(C_type_int::get<int8>()); break;
+			case cil::CONV_I2:		builder.cast(C_type_int::get<int16>()); break;
+			case cil::CONV_I4:		builder.cast(C_type_int::get<int32>()); break;
+			case cil::CONV_I8:		builder.cast(C_type_int::get<int64>()); break;
+			case cil::CONV_R4:		builder.cast(C_type_float::get<float>()); break;
+			case cil::CONV_R8:		builder.cast(C_type_float::get<double>()); break;
+			case cil::CONV_U4:		builder.cast(C_type_int::get<uint32>()); break;
+			case cil::CONV_U8:		builder.cast(C_type_int::get<uint64>()); break;
 
 			case cil::CALLVIRT: {
 				Token					tok		= r.get();
@@ -1347,7 +1040,7 @@ ref_ptr<ast::basicblock> MakeAST(Context &ctx, ast::funcdecl_node *func, const I
 				builder.get_args(call, func->args, func->num_args());
 
 				if (func->subtype)
-					builder.push(call, builder.type_to_stack(func->subtype));
+					builder.push(call);//, builder.type_to_stack(func->subtype));
 				else
 					builder.add_stmt(call);//new ast::unary_node(ast::expression, call));
 				break;
@@ -1358,11 +1051,11 @@ ref_ptr<ast::basicblock> MakeAST(Context &ctx, ast::funcdecl_node *func, const I
 				break;
 			}
 			case cil::LDOBJ:
-				builder.push(new ast::unary_node(ast::load, builder.pop(), ctx.GetType(r.get<Token>()), flags), Stack::USERVALUE);
+				builder.push(new ast::unary_node(ast::load, builder.pop(), ctx.GetType(r.get<Token>()), flags));
 				flags = 0;
 				break;
 			case cil::LDSTR:
-				builder.push(new ast::lit_node(ctx.type_string, ctx.GetUserString0(r.get<Token>())), Stack::OBJECT);
+				builder.push(new ast::lit_node(ctx.type_string, ctx.GetUserString0(r.get<Token>())));
 				break;
 			case cil::NEWOBJ: {
 				Token					tok		= r.get();
@@ -1372,13 +1065,13 @@ ref_ptr<ast::basicblock> MakeAST(Context &ctx, ast::funcdecl_node *func, const I
 				ast::call_node			*call	= new ast::call_node(new ast::element_node(ast::element, e, parent), ast::ALLOC);
 
 				builder.get_args(call, func->args + 1, int(func->num_args()) - 1);
-				builder.push(call, is_value_type(parent) ? Stack::PTR : Stack::OBJECT);
+				builder.push(call);//, is_value_type(parent) ? Stack::PTR : Stack::OBJECT);
 				break;
 			}
-			case cil::CASTCLASS:		builder.push(new ast::unary_node(ast::castclass, builder.pop(), ctx.GetType(r.get<Token>())), Stack::OBJECT); break;
-			case cil::ISINST:			builder.push(new ast::unary_node(ast::isinst, builder.pop(), ctx.GetType(r.get<Token>())), Stack::OBJECT); break;
-			case cil::CONV_R_UN:		builder.cast(C_type_float::get<float>(), Stack::FLOAT); break;
-			case cil::UNBOX:			builder.push(new ast::unary_node(ast::castclass, builder.pop(), ctx.GetType(r.get<Token>())), Stack::PTR); break;
+			case cil::CASTCLASS:		builder.push(new ast::unary_node(ast::castclass, builder.pop(), ctx.GetType(r.get<Token>()))); break;
+			case cil::ISINST:			builder.push(new ast::unary_node(ast::isinst, builder.pop(), ctx.GetType(r.get<Token>()))); break;
+			case cil::CONV_R_UN:		builder.cast(C_type_float::get<float>()); break;
+			case cil::UNBOX:			builder.push(new ast::unary_node(ast::castclass, builder.pop(), ctx.GetType(r.get<Token>()))); break;
 			case cil::THROW:			builder.add_stmt(new ast::unary_node(ast::thrw, builder.pop())); break;
 			case cil::LDFLD: {
 				Token					tok		= r.get();
@@ -1386,13 +1079,13 @@ ref_ptr<ast::basicblock> MakeAST(Context &ctx, ast::funcdecl_node *func, const I
 				ast::node				*r		= builder.pop();
 				//if (r->kind == ast::ref)
 				//	r = ((ast::unary_node*)r)->arg;
-				builder.push(new ast::binary_node(ast::field, r, e, flags), builder.type_to_stack(e->element->type));
+				builder.push(new ast::binary_node(ast::field, r, e, flags));//, builder.type_to_stack(e->element->type));
 				flags = 0;
 				break;
 			}
 			case cil::LDFLDA: {
 				Token					tok		= r.get();
-				builder.push(ctx.TakeAddress(new ast::binary_node(ast::field, builder.pop(), builder.element0(ast::element, tok))), Stack::PTR);
+				builder.push(ctx.TakeAddress(new ast::binary_node(ast::field, builder.pop(), builder.element0(ast::element, tok))));
 				break;
 			}
 			case cil::STFLD: {
@@ -1409,12 +1102,12 @@ ref_ptr<ast::basicblock> MakeAST(Context &ctx, ast::funcdecl_node *func, const I
 			case cil::LDSFLD: {
 				Token					tok		= r.get();
 				auto					*e		= builder.element0(ast::element, tok);
-				builder.push(e, builder.type_to_stack(e->element->type));
+				builder.push(e);//, builder.type_to_stack(e->element->type));
 				break;
 			}
 			case cil::LDSFLDA: {
 				Token					tok		= r.get();
-				builder.push(ctx.TakeAddress(builder.element0(ast::element, tok)), Stack::PTR);
+				builder.push(ctx.TakeAddress(builder.element0(ast::element, tok)));
 				break;
 			}
 			case cil::STSFLD: {
@@ -1427,41 +1120,41 @@ ref_ptr<ast::basicblock> MakeAST(Context &ctx, ast::funcdecl_node *func, const I
 				builder.add_stmt(new ast::binary_node(ast::assignobj, builder.pop(), srce, ctx.GetType(r.get<Token>()), flags));
 				break;
 			}
-			case cil::CONV_OVF_I1_UN:	builder.cast(ctx.GetType<int8>(),	Stack::INT32); break;
-			case cil::CONV_OVF_I2_UN:	builder.cast(ctx.GetType<int16>(),	Stack::INT32); break;
-			case cil::CONV_OVF_I4_UN:	builder.cast(ctx.GetType<int32>(),	Stack::INT32); break;
-			case cil::CONV_OVF_I8_UN:	builder.cast(ctx.GetType<int64>(),	Stack::INT64); break;
-			case cil::CONV_OVF_U1_UN:	builder.cast(ctx.GetType<uint8>(),	Stack::INT32); break;
-			case cil::CONV_OVF_U2_UN:	builder.cast(ctx.GetType<uint16>(),	Stack::INT32); break;
-			case cil::CONV_OVF_U4_UN:	builder.cast(ctx.GetType<uint32>(),	Stack::INT32); break;
-			case cil::CONV_OVF_U8_UN:	builder.cast(ctx.GetType<uint64>(),	Stack::INT64); break;
-			case cil::CONV_OVF_I_UN:	builder.cast(ctx.GetType<int32>(),	Stack::INT32); break;
-			case cil::CONV_OVF_U_UN:	builder.cast(ctx.GetType<uint32>(),	Stack::INT32); break;
+			case cil::CONV_OVF_I1_UN:	builder.cast(ctx.GetType<int8>()); break;
+			case cil::CONV_OVF_I2_UN:	builder.cast(ctx.GetType<int16>()); break;
+			case cil::CONV_OVF_I4_UN:	builder.cast(ctx.GetType<int32>()); break;
+			case cil::CONV_OVF_I8_UN:	builder.cast(ctx.GetType<int64>()); break;
+			case cil::CONV_OVF_U1_UN:	builder.cast(ctx.GetType<uint8>()); break;
+			case cil::CONV_OVF_U2_UN:	builder.cast(ctx.GetType<uint16>()); break;
+			case cil::CONV_OVF_U4_UN:	builder.cast(ctx.GetType<uint32>()); break;
+			case cil::CONV_OVF_U8_UN:	builder.cast(ctx.GetType<uint64>()); break;
+			case cil::CONV_OVF_I_UN:	builder.cast(ctx.GetType<int32>()); break;
+			case cil::CONV_OVF_U_UN:	builder.cast(ctx.GetType<uint32>()); break;
 
-			case cil::BOX:				builder.push(new ast::unary_node(ast::box, builder.pop(), ctx.GetType(r.get<Token>())), Stack::OBJECT); break;
-			case cil::NEWARR:			builder.push(new ast::unary_node(ast::newarray, builder.pop(), ctx.GetType(r.get<Token>())), Stack::OBJECT, Stack::SIDE_EFFECTS); break;
+			case cil::BOX:				builder.push(new ast::unary_node(ast::box, builder.pop(), ctx.GetType(r.get<Token>()))); break;
+			case cil::NEWARR:			builder.push(new ast::unary_node(ast::newarray, builder.pop(), ctx.GetType(r.get<Token>())), Stack::SIDE_EFFECTS); break;
 
 			case cil::LDLEN: {
 				const C_element			*e		= &ctx.array_len;
 				const C_type_function	*func	= (const C_type_function*)e->type->skip_template();
 				ast::call_node			*call	= new ast::call_node(new ast::element_node(ast::element, e, 0));
 				builder.get_args(call, func->args, func->num_args());
-				builder.push(call, Stack::NATIVE_INT);
+				builder.push(call);
 				break;
 			}
 
-			case cil::LDELEMA:			builder.push(ctx.TakeAddress(builder.ldelem0(ctx.GetType(r.get<Token>()))), Stack::NATIVE_INT); break;
-			case cil::LDELEM_I1:		builder.ldelem(ctx.GetType<int8>(),		Stack::INT32); break;
-			case cil::LDELEM_U1:		builder.ldelem(ctx.GetType<uint8>(),	Stack::INT32); break;
-			case cil::LDELEM_I2:		builder.ldelem(ctx.GetType<int16>(),	Stack::INT32); break;
-			case cil::LDELEM_U2:		builder.ldelem(ctx.GetType<uint16>(),	Stack::INT32); break;
-			case cil::LDELEM_I4:		builder.ldelem(ctx.GetType<int32>(),	Stack::INT32); break;
-			case cil::LDELEM_U4:		builder.ldelem(ctx.GetType<uint32>(),	Stack::INT32); break;
-			case cil::LDELEM_I8:		builder.ldelem(ctx.GetType<int64>(),	Stack::INT64); break;
-			case cil::LDELEM_I:			builder.ldelem(ctx.GetType<int>(),		Stack::INT32); break;
-			case cil::LDELEM_R4:		builder.ldelem(ctx.GetType<float>(),	Stack::FLOAT); break;
-			case cil::LDELEM_R8:		builder.ldelem(ctx.GetType<double>(),	Stack::FLOAT); break;
-			case cil::LDELEM_REF:		builder.ldelem(ctx.GetType<void*>(),	Stack::PTR); break;
+			case cil::LDELEMA:			builder.push(ctx.TakeAddress(builder.ldelem0(ctx.GetType(r.get<Token>())))); break;
+			case cil::LDELEM_I1:		builder.ldelem(ctx.GetType<int8>()); break;
+			case cil::LDELEM_U1:		builder.ldelem(ctx.GetType<uint8>()); break;
+			case cil::LDELEM_I2:		builder.ldelem(ctx.GetType<int16>()); break;
+			case cil::LDELEM_U2:		builder.ldelem(ctx.GetType<uint16>()); break;
+			case cil::LDELEM_I4:		builder.ldelem(ctx.GetType<int32>()); break;
+			case cil::LDELEM_U4:		builder.ldelem(ctx.GetType<uint32>()); break;
+			case cil::LDELEM_I8:		builder.ldelem(ctx.GetType<int64>()); break;
+			case cil::LDELEM_I:			builder.ldelem(ctx.GetType<int>()); break;
+			case cil::LDELEM_R4:		builder.ldelem(ctx.GetType<float>()); break;
+			case cil::LDELEM_R8:		builder.ldelem(ctx.GetType<double>()); break;
+			case cil::LDELEM_REF:		builder.ldelem(ctx.GetType<void*>()); break;
 
 			case cil::STELEM_I:			builder.add_stmt(new ast::binary_node(ast::assign, builder.ldelem0(ctx.GetType<int>()),		builder.pop())); break;
 			case cil::STELEM_I1:		builder.add_stmt(new ast::binary_node(ast::assign, builder.ldelem0(ctx.GetType<int8>()),	builder.pop())); break;
@@ -1471,31 +1164,31 @@ ref_ptr<ast::basicblock> MakeAST(Context &ctx, ast::funcdecl_node *func, const I
 			case cil::STELEM_R4:		builder.add_stmt(new ast::binary_node(ast::assign, builder.ldelem0(ctx.GetType<float>()),	builder.pop())); break;
 			case cil::STELEM_R8:		builder.add_stmt(new ast::binary_node(ast::assign, builder.ldelem0(ctx.GetType<double>()),	builder.pop())); break;
 			case cil::STELEM_REF:		builder.add_stmt(new ast::binary_node(ast::assign, builder.ldelem0(ctx.GetType<void*>()),	builder.pop())); break;
-			case cil::LDELEM:			builder.ldelem(ctx.GetType(r.get<Token>()), Stack::INT32); break;
+			case cil::LDELEM:			builder.ldelem(ctx.GetType(r.get<Token>())); break;
 			case cil::STELEM:			builder.add_stmt(new ast::binary_node(ast::assign, builder.ldelem0(ctx.GetType(r.get<Token>())), builder.pop())); break;
 
-			case cil::UNBOX_ANY:		builder.push(new ast::unary_node(ast::load, builder.pop(), ctx.GetType(r.get<Token>()), flags), Stack::INT32); flags = 0; break;
+			case cil::UNBOX_ANY:		builder.push(new ast::unary_node(ast::load, builder.pop(), ctx.GetType(r.get<Token>()), flags)); flags = 0; break;
 
-			case cil::CONV_OVF_I1:		builder.cast(C_type_int::get<int8>(),	Stack::INT32); break;
-			case cil::CONV_OVF_U1:		builder.cast(C_type_int::get<int16>(),	Stack::INT32); break;
-			case cil::CONV_OVF_I2:		builder.cast(C_type_int::get<int32>(),	Stack::INT32); break;
-			case cil::CONV_OVF_U2:		builder.cast(C_type_int::get<int64>(),	Stack::INT64); break;
-			case cil::CONV_OVF_I4:		builder.cast(C_type_int::get<uint8>(),	Stack::INT32); break;
-			case cil::CONV_OVF_U4:		builder.cast(C_type_int::get<uint16>(),	Stack::INT32); break;
-			case cil::CONV_OVF_I8:		builder.cast(C_type_int::get<uint32>(),	Stack::INT32); break;
-			case cil::CONV_OVF_U8:		builder.cast(C_type_int::get<uint64>(),	Stack::INT64); break;
+			case cil::CONV_OVF_I1:		builder.cast(C_type_int::get<int8>()); break;
+			case cil::CONV_OVF_U1:		builder.cast(C_type_int::get<int16>()); break;
+			case cil::CONV_OVF_I2:		builder.cast(C_type_int::get<int32>()); break;
+			case cil::CONV_OVF_U2:		builder.cast(C_type_int::get<int64>()); break;
+			case cil::CONV_OVF_I4:		builder.cast(C_type_int::get<uint8>()); break;
+			case cil::CONV_OVF_U4:		builder.cast(C_type_int::get<uint16>()); break;
+			case cil::CONV_OVF_I8:		builder.cast(C_type_int::get<uint32>()); break;
+			case cil::CONV_OVF_U8:		builder.cast(C_type_int::get<uint64>()); break;
 
-			case cil::REFANYVAL:		builder.push(new ast::unary_node(ast::refanyval, builder.pop()), Stack::PTR); break;
+			case cil::REFANYVAL:		builder.push(new ast::unary_node(ast::refanyval, builder.pop())); break;
 			case cil::CKFINITE:			builder.unary(ast::ckfinite); break;
-			case cil::MKREFANY:			builder.push(new ast::unary_node(ast::mkrefany, builder.pop(), ctx.GetType(r.get<Token>())), Stack::OBJECT); break;
-//			case cil::LDTOKEN:			builder.push(new tok_node(ast::tok, r.get()), Stack::NATIVE_INT); break;
-			case cil::LDTOKEN:			builder.lit(r.get<uint32>(), Stack::INT32); break;
+			case cil::MKREFANY:			builder.push(new ast::unary_node(ast::mkrefany, builder.pop(), ctx.GetType(r.get<Token>()))); break;
+//			case cil::LDTOKEN:			builder.push(new tok_node(ast::tok, r.get())); break;
+			case cil::LDTOKEN:			builder.lit(r.get<uint32>()); break;
 
-			case cil::CONV_U2:			builder.cast(C_type_int::get<uint16>(),	Stack::INT32); break;
-			case cil::CONV_U1:			builder.cast(C_type_int::get<uint8>(),	Stack::INT32); break;
-			case cil::CONV_I:			builder.cast(C_type_int::get<int32>(),	Stack::INT32); break;
-			case cil::CONV_OVF_I:		builder.cast(C_type_int::get<int32>(),	Stack::INT32); break;
-			case cil::CONV_OVF_U:		builder.cast(C_type_int::get<uint32>(),	Stack::INT32); break;
+			case cil::CONV_U2:			builder.cast(C_type_int::get<uint16>()); break;
+			case cil::CONV_U1:			builder.cast(C_type_int::get<uint8>()); break;
+			case cil::CONV_I:			builder.cast(C_type_int::get<int32>()); break;
+			case cil::CONV_OVF_I:		builder.cast(C_type_int::get<int32>()); break;
+			case cil::CONV_OVF_U:		builder.cast(C_type_int::get<uint32>()); break;
 
 			case cil::ADD_OVF:			builder.binary(ast::add, ast::OVERFLOW); break;
 			case cil::ADD_OVF_UN:		builder.binary(ast::add, ast::OVERFLOW | ast::UNSIGNED); break;
@@ -1514,27 +1207,27 @@ ref_ptr<ast::basicblock> MakeAST(Context &ctx, ast::funcdecl_node *func, const I
 				flags = 0;
 				break;
 			}
-			case cil::CONV_U:			builder.cast(C_type_int::get<uint32>(), Stack::INT32); break;
+			case cil::CONV_U:			builder.cast(C_type_int::get<uint32>()); break;
 
 			case cil::PREFIX1:
 				switch (r.getc()) {
-					case cil::ARGLIST:		builder.push(new ast::node(ast::vararg), Stack::NATIVE_INT); break;
+					case cil::ARGLIST:		builder.push(new ast::node(ast::vararg)); break;
 					case cil::CEQ:			builder.binary_cmp(ast::eq); break;
 					case cil::CGT:			builder.binary_cmp(ast::gt); break;
 					case cil::CGT_UN:		builder.binary_cmp(ast::gt, ast::UNORDERED); break;
 					case cil::CLT:			builder.binary(ast::lt); break;
 					case cil::CLT_UN:		builder.binary_cmp(ast::lt, ast::UNORDERED); break;
 
-					case cil::LDFTN:		builder.push(builder.element0(ast::func, r.get()), Stack::NATIVE_INT); break;
-					case cil::LDVIRTFTN:	builder.push(builder.element0(ast::vfunc, r.get()), Stack::NATIVE_INT); break;
+					case cil::LDFTN:		builder.push(builder.element0(ast::func, r.get())); break;
+					case cil::LDVIRTFTN:	builder.push(builder.element0(ast::vfunc, r.get())); break;
 
 					case cil::LDARG:		builder.var(func->get_arg(r.get<uint16>())); break;
-					case cil::LDARGA:		builder.push(ctx.TakeAddress(builder.var0(func->get_arg(r.get<uint16>()))), Stack::PTR); break;
+					case cil::LDARGA:		builder.push(ctx.TakeAddress(builder.var0(func->get_arg(r.get<uint16>())))); break;
 					case cil::STARG:		builder.assign(func->get_arg(r.get<uint16>())); break;
 					case cil::LDLOC:		builder.var(builder.locals[r.get<uint16>()]); break;
-					case cil::LDLOCA:		builder.push(ctx.TakeAddress(builder.var0(builder.locals[r.get<uint16>()])), Stack::PTR); break;
+					case cil::LDLOCA:		builder.push(ctx.TakeAddress(builder.var0(builder.locals[r.get<uint16>()]))); break;
 					case cil::STLOC:		builder.assign(builder.locals[r.get<uint16>()]); break;
-					case cil::LOCALLOC:		builder.push(new ast::unary_node(ast::alloc_stack, builder.pop()), Stack::NATIVE_INT); break;
+					case cil::LOCALLOC:		builder.push(new ast::unary_node(ast::alloc_stack, builder.pop())); break;
 					case cil::ENDFILTER:	break;
 					case cil::UNALIGNED_:	flags |= r.getc(); break;
 					case cil::VOLATILE_:	flags |= ast::VOLATILE; break;
@@ -1561,8 +1254,8 @@ ref_ptr<ast::basicblock> MakeAST(Context &ctx, ast::funcdecl_node *func, const I
 					}
 					case cil::NO_:			r.getc(); break;
 					case cil::RETHROW:		builder.add_stmt(new ast::node(ast::rethrw)); break;
-					case cil::SIZEOF:		builder.push(new ast::node(ast::get_size, 0, ctx.GetType(r.get<Token>())), Stack::NATIVE_INT); break;
-					case cil::REFANYTYPE:	builder.push(new ast::unary_node(ast::get_type, builder.pop()), Stack::NATIVE_INT); break;
+					case cil::SIZEOF:		builder.push(new ast::node(ast::get_size, 0, ctx.GetType(r.get<Token>()))); break;
+					case cil::REFANYTYPE:	builder.push(new ast::unary_node(ast::get_type, builder.pop())); break;
 					case cil::READONLY_:	flags |= ast::READONLY; break;
 				}
 				break;
@@ -1597,7 +1290,7 @@ ref_ptr<ast::basicblock> MakeAST(Context &ctx, ast::funcdecl_node *func, const I
 
 	for (auto &i : builder.blocks) {
 		ast::basicblock	*b = i;
-		if (b->stmts) {
+		if (!b->stmts.empty()) {
 			switch (b->stmts.back()->kind) {
 				case ast::swtch: {
 					ast::switch_node	*a = (ast::switch_node*)get(b->stmts.back());
@@ -1650,7 +1343,7 @@ ref_ptr<ast::basicblock> MakeAST(Context &ctx, ast::funcdecl_node *func, const I
 	}
 #endif
 
-	builder.count_local_use(dt.info_root);
+	builder.count_local_use(make_postorder(dt.info_root));
 	builder.remove_redundant_locals();
 
 #if 1
@@ -1768,7 +1461,7 @@ ref_ptr<ast::basicblock> MakeAST(Context &ctx, ast::funcdecl_node *func, const I
 	}
 
 //	dt.recreate(builder.entry_point());
-	builder.count_local_use(dt.info_root);
+	builder.count_local_use(make_postorder(dt.info_root));
 	builder.remove_redundant_locals();
 
 	for (auto &i : builder.blocks) {
@@ -1944,7 +1637,7 @@ void DecompileCS(clr::Context &ctx, Dumper &dumper, string_accum &a, const ENTRY
 		// methods
 
 		for (auto &i : ctx.meta->GetEntries(type, type->methods)) {
-			if (done.check(ctx.meta->GetIndexed(&i)))
+			if (done.count(ctx.meta->GetIndexed(&i)))
 				continue;
 
 			ISO_TRACEF("Decompile ") << i.name << '\n';

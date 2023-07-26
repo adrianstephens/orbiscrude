@@ -5,7 +5,7 @@
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug-clang|x64'">
-    <LocalDebuggerCommandArguments>-a asext=txt exportfor=dx11  D:\dev\orbiscrude\shared\platforms\ps4\shared\ortmapi.ix D:\dev\orbiscrude\out\IsoCmd\Debug-clang_x64\ortmapi.tlh</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>-a fxargs="/Od /Zi" incdirs=D:\dev\orbiscrude\shared\assets\shaders exportfor=dx11  D:\dev\orbiscrude\shared\common\default.fx D:\dev\orbiscrude\out\ORBIScrude\DebugDX11-clang_x64\default.ib</LocalDebuggerCommandArguments>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
 </Project>

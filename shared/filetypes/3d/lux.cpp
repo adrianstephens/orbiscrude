@@ -3115,7 +3115,7 @@ float3 lux_fix(param(float3) v) {
 }
 
 ISO_ptr<Model3> GetModel(Lux &lux, LuxModel *luxmodel) {
-	ModelBuilder	model(0);
+	ModelBuilder	model(none);
 
 	int mi = 0;
 	for (auto m : luxmodel->materials) {
@@ -3199,9 +3199,9 @@ ISO_ptr<Model3> GetModel(Lux &lux, LuxModel *luxmodel) {
 			}
 
 
-			SubMesh	*sm = model.AddMesh(builder.Duplicate(), indexer.NumUnique(), nf);
-			uint16	*indices = &sm->indices[0][0];
-			char	*verts = sm->VertData();
+			SubMesh	*sm		= model.AddMesh(builder.Duplicate(), indexer.NumUnique(), nf);
+			auto	indices	= &sm->indices[0][0];
+			char	*verts	= sm->VertData();
 
 //			copy(indexer.Indices(), indices);
 

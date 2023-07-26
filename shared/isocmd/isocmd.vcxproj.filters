@@ -7,9 +7,6 @@
     <Filter Include="Common\extra">
       <UniqueIdentifier>{c833d3b8-791f-47a1-8cce-239e97ef40ec}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Common\iso">
-      <UniqueIdentifier>{89b8f14b-2a80-4d48-912a-cb3b3928c86a}</UniqueIdentifier>
-    </Filter>
     <Filter Include="PC">
       <UniqueIdentifier>{53aa8d9a-9bcc-4f61-af8d-7ec9b808f420}</UniqueIdentifier>
     </Filter>
@@ -93,6 +90,12 @@
     </Filter>
     <Filter Include="Common\codec\mesh">
       <UniqueIdentifier>{76856cde-d90c-46d2-8a2f-e241c9adf0d4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Common\codec\video">
+      <UniqueIdentifier>{67f6e34e-173c-4cb4-b9c0-9fda39b4a601}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Common\hashes\iso">
+      <UniqueIdentifier>{89b8f14b-2a80-4d48-912a-cb3b3928c86a}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -376,19 +379,19 @@
       <Filter>FileTypes</Filter>
     </ClCompile>
     <ClCompile Include="..\common\iso\iso.cpp">
-      <Filter>Common\iso</Filter>
+      <Filter>Common\hashes\iso</Filter>
     </ClCompile>
     <ClCompile Include="..\common\iso\iso_binary.cpp">
-      <Filter>Common\iso</Filter>
+      <Filter>Common\hashes\iso</Filter>
     </ClCompile>
     <ClCompile Include="..\common\iso\iso_convert.cpp">
-      <Filter>Common\iso</Filter>
+      <Filter>Common\hashes\iso</Filter>
     </ClCompile>
     <ClCompile Include="..\common\iso\iso_files.cpp">
-      <Filter>Common\iso</Filter>
+      <Filter>Common\hashes\iso</Filter>
     </ClCompile>
     <ClCompile Include="..\common\iso\iso_script.cpp">
-      <Filter>Common\iso</Filter>
+      <Filter>Common\hashes\iso</Filter>
     </ClCompile>
     <ClCompile Include="..\common\base\defs.cpp">
       <Filter>Common\base</Filter>
@@ -407,9 +410,6 @@
     </ClCompile>
     <ClCompile Include="..\systems\conversion\channeluse.cpp">
       <Filter>conversion</Filter>
-    </ClCompile>
-    <ClCompile Include="..\platforms\x360\shared\x360_conversion.cpp">
-      <Filter>Targets\x360</Filter>
     </ClCompile>
     <ClCompile Include="..\platforms\ps3\shared\ps3_conversion.cpp">
       <Filter>Targets\ps3</Filter>
@@ -443,18 +443,6 @@
     </ClCompile>
     <ClCompile Include="..\platforms\xone\shared\xone_conversion.cpp">
       <Filter>Targets\xone</Filter>
-    </ClCompile>
-    <ClCompile Include="..\filetypes\bitmap\ptc.cpp">
-      <Filter>Targets\x360</Filter>
-    </ClCompile>
-    <ClCompile Include="..\filetypes\bitmap\mct.cpp">
-      <Filter>Targets\x360</Filter>
-    </ClCompile>
-    <ClCompile Include="..\filetypes\bitmap\xpr.cpp">
-      <Filter>Targets\x360</Filter>
-    </ClCompile>
-    <ClCompile Include="..\filetypes\sound\xma.cpp">
-      <Filter>Targets\x360</Filter>
     </ClCompile>
     <ClCompile Include="..\filetypes\bitmap\gtf.cpp">
       <Filter>Targets\ps3</Filter>
@@ -584,9 +572,6 @@
     </ClCompile>
     <ClCompile Include="..\platforms\Wii\shared\isolink_target_wii.cpp">
       <Filter>Targets\Wii</Filter>
-    </ClCompile>
-    <ClCompile Include="..\platforms\x360\shared\isolink_target_x360.cpp">
-      <Filter>Targets\x360</Filter>
     </ClCompile>
     <ClCompile Include="..\platforms\ps3\shared\isolink_target_ps3.cpp">
       <Filter>Targets\ps3</Filter>
@@ -764,6 +749,30 @@
     <ClCompile Include="..\common\comms\WebSocket.cpp">
       <Filter>Common\comms</Filter>
     </ClCompile>
+    <ClCompile Include="..\common\codec\oodle.cpp">
+      <Filter>Common\codec</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\maths\bezier.cpp">
+      <Filter>Common\maths</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\codec\video\h265.cpp">
+      <Filter>Common\codec\video</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\codec\video\nal.cpp">
+      <Filter>Common\codec\video</Filter>
+    </ClCompile>
+    <ClCompile Include="..\platforms\pc\windows\com.cpp">
+      <Filter>PC</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\codec\video\sei.cpp">
+      <Filter>Common\codec\video</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\codec\video\vpx_decode.cpp">
+      <Filter>Common\codec\video</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\codec\video\vpx_filter.cpp">
+      <Filter>Common\codec\video</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\common\filename.h">
@@ -881,19 +890,19 @@
       <Filter>Common</Filter>
     </ClInclude>
     <ClInclude Include="..\common\iso\iso.h">
-      <Filter>Common\iso</Filter>
+      <Filter>Common\hashes\iso</Filter>
     </ClInclude>
     <ClInclude Include="..\common\iso\iso_binary.h">
-      <Filter>Common\iso</Filter>
+      <Filter>Common\hashes\iso</Filter>
     </ClInclude>
     <ClInclude Include="..\common\iso\iso_convert.h">
-      <Filter>Common\iso</Filter>
+      <Filter>Common\hashes\iso</Filter>
     </ClInclude>
     <ClInclude Include="..\common\iso\iso_files.h">
-      <Filter>Common\iso</Filter>
+      <Filter>Common\hashes\iso</Filter>
     </ClInclude>
     <ClInclude Include="..\common\iso\iso_script.h">
-      <Filter>Common\iso</Filter>
+      <Filter>Common\hashes\iso</Filter>
     </ClInclude>
     <ClInclude Include="..\common\base\algorithm.h">
       <Filter>Common\base</Filter>
@@ -1224,6 +1233,18 @@
     </ClInclude>
     <ClInclude Include="..\common\comms\WebSocket.h">
       <Filter>Common\comms</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\oodle.h">
+      <Filter>Common\codec</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\video\h265.h">
+      <Filter>Common\codec\video</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\video\nal.h">
+      <Filter>Common\codec\video</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\video\vpx_decode.h">
+      <Filter>Common\codec\video</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

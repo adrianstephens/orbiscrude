@@ -18,6 +18,7 @@
 namespace iso {
 
 bool MiniDump(EXCEPTION_POINTERS *ep, const char *fn);
+bool IsCurrentUserLocalAdministrator();
 
 #ifdef UNICODE
 #undef MODULEENTRY32

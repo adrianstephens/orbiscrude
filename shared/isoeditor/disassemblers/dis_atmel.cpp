@@ -303,7 +303,7 @@ Disassembler::State *DisassemblerATMEL::Disassemble(const memory_block &block, u
 		ba.format("%04x ", p[0]);
 
 		if (nb == 1)
-			ba.putc(' ', 5);
+			ba << repeat(' ', 5);
 		else
 			ba.format("%04x ", p[1]);
 
@@ -342,7 +342,7 @@ Disassembler::State *DisassemblerATMEL::Disassemble(const memory_block &block, u
 		}
 
 		p += nb;
-		state->lines.push_back((const char*)ba);
+		state->lines.push_back(ba);
 	}
 	return state;
 }

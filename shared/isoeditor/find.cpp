@@ -17,11 +17,11 @@ protected:
 	hash_map<void*, ISO_ptr<void> > found;
 	ScaleProgress					prog;
 
-	void AddFound(ISO_ptr<void> &p, const char *r) {
+	void AddFound(ISO_ptr<void> &p, string_ref r) {
 		route_ptr		rp(p, r);
 		target(WM_ISO_SET, 0, (LPARAM)&rp);
 	}
-	void AddFound(const ISO::Browser2 &b, const char *r, tag2 id = tag2()) {
+	void AddFound(const ISO::Browser2 &b, string_ref r, tag2 id = tag2()) {
 		if (!b.IsPtr() && b.SkipUser().GetType() == ISO::VIRTUAL) {
 			if (b.SkipUser().IsVirtPtr())
 				AddFound(*b, r, id);
@@ -212,14 +212,14 @@ class FindFileThread : public FinderThread {
 			TestAbort();
 			ISO_ptr<void>	e;
 			tag				id	= (const char*)d;
-			e.CreateExternal(filename(dir).add_dir(d), id);
+			e.CreateExternal(filename(dir).add_dir((const char*)d), id);
 			AddFound(e, 0);
 		}
 
 		if (depth != 1) {
 			for (directory_iterator d = filename(dir).add_dir("*.*").begin(); d; ++d) {
 				if (d.is_dir() && d[0] != '.')
-					FindAllFiles(filename(dir).add_dir(d), depth - 1);
+					FindAllFiles(filename(dir).add_dir((const char*)d), depth - 1);
 			}
 		}
 	}
@@ -265,7 +265,7 @@ class FinderWindow : public Window<FinderWindow> {
 			toolbar.CheckButton(id, !!(f & 1));
 	}
 public:
-	LRESULT			Proc(UINT message, WPARAM wParam, LPARAM lParam);
+	LRESULT			Proc(MSG_ID message, WPARAM wParam, LPARAM lParam);
 
 	FinderWindow(MainWindow &_main, const ISO::Browser2 &_b, const char *_route) : main(_main), route(_route),
 		arrangement(arrange, &label, 5), b(_b), p("found"), abort(new with_refs<bool>(false)) {
@@ -273,18 +273,18 @@ public:
 	}
 };
 
-Control MakeFinderWindow(MainWindow &main, const ISO::Browser2 &b, const char *route) {
+Control MakeFinderWindow(MainWindow &main, const ISO::Browser2 &b, string_ref route) {
 	return *new FinderWindow(main, b, route);
 }
 
-LRESULT FinderWindow::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+LRESULT FinderWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 		case WM_CREATE: {
-			label.Create(*this, NULL, CHILD | VISIBLE | label.CENTERIMAGE);
-			value.Create(*this, NULL, CHILD | VISIBLE | BORDER | value.AUTOHSCROLL, NOEX, 1);
-			depth.Create(*this, NULL, CHILD | VISIBLE | BORDER | value.AUTOHSCROLL, NOEX, 1);
-			treecolumn.Create(WindowPos(*this, Rect(0,0,0,0)), NULL, CHILD | VISIBLE | BORDER | HSCROLL | treecolumn.GRIDLINES | treecolumn.HEADERAUTOSIZE);
-			toolbar.Create(*this, NULL, CHILD | VISIBLE | toolbar.NORESIZE | toolbar.NOPARENTALIGN);
+			label.Create(*this, none, CHILD | VISIBLE | label.CENTERIMAGE);
+			value.Create(*this, none, CHILD | VISIBLE | BORDER | value.AUTOHSCROLL, NOEX, 1);
+			depth.Create(*this, none, CHILD | VISIBLE | BORDER | value.AUTOHSCROLL, NOEX, 1);
+			treecolumn.Create(WindowPos(*this, Rect(0,0,0,0)), none, CHILD | VISIBLE | BORDER | HSCROLL | treecolumn.GRIDLINES | treecolumn.HEADERAUTOSIZE);
+			toolbar.Create(*this, none, CHILD | VISIBLE | toolbar.NORESIZE | toolbar.NOPARENTALIGN);
 			_value	= value;
 			_depth	= depth;
 			_tree	= treecolumn;

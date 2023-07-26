@@ -3851,7 +3851,7 @@ bool Reader::ReadPointCloudKD(istream_ref file) {
 			} method;
 			uint32		compression_level0;
 
-			if (!iso::read(file, method, compression_level, num_points2) || num_points2 == 0)
+			if (!file.read(method, compression_level, num_points2) || num_points2 == 0)
 				return false;
 
 			switch (method) {
@@ -3874,10 +3874,10 @@ bool Reader::ReadPointCloudKD(istream_ref file) {
 					a.coding->Read(file);
 					a.values.resize(num_points * 3 * sizeof(int));
 
-					if (!iso::read(file, num_points2) || num_points2 == 0)
+					if (!file.read(num_points2) || num_points2 == 0)
 						return false;
 
-					if (!iso::read(file, compression_level0, bit_length, num_points2) || compression_level0 > 6 || bit_length > 31 || num_points2 == 0)
+					if (!file.read(compression_level0, bit_length, num_points2) || compression_level0 > 6 || bit_length > 31 || num_points2 == 0)
 						return false;
 					break;
 				}
@@ -3887,7 +3887,7 @@ bool Reader::ReadPointCloudKD(istream_ref file) {
 						a.values.resize(a.num_components * num_points * sizeof(int));
 					}
 
-					if (!iso::read(file, bit_length, num_points2) || bit_length > 32 || num_points2 == 0)
+					if (!file.read(bit_length, num_points2) || bit_length > 32 || num_points2 == 0)
 						return false;
 					break;
 				}
@@ -3901,7 +3901,7 @@ bool Reader::ReadPointCloudKD(istream_ref file) {
 				a.values.resize(a.num_components * num_points * sizeof(int));
 			}
 
-			if (!iso::read(file, compression_level, bit_length, num_points2) || bit_length > 32 || num_points2 == 0)
+			if (!file.read(compression_level, bit_length, num_points2) || bit_length > 32 || num_points2 == 0)
 				return false;
 
 		}

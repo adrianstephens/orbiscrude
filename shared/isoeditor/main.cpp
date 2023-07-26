@@ -1,5 +1,7 @@
 #include "base/array.h"
 #include "maths/geometry.h"
+#include "maths/polynomial.h"
+#include "maths/polygon.h"
 #include "main.h"
 #include "windows/control_helpers.h"
 #include "iso/iso_files.h"
@@ -7,6 +9,7 @@
 #include "iso/iso_binary.h"
 #include "iso/iso_convert.h"
 #include "base/algorithm.h"
+#include "extra/random.h"
 
 #include "directory.h"
 #include "graphics.h"
@@ -35,8 +38,16 @@
 #include <sapi.h>
 #include <Ole2.h>
 #include <d3dcompiler.h>
+#include <mfidl.h>
+#include <mfapi.h>
+#include <propkey.h>     // System PROPERTYKEY definitions
+#include <propsys.h>     // System PROPERTYKEY definitions
 
 #include "comms/WebSocket.h"
+#include "vector_string.h"
+
+#pragma comment(lib,"mfplat.lib")
+#pragma comment(lib,"propsys.lib")
 
 #ifdef USE_VLD
 #include "vld.h"
@@ -58,7 +69,7 @@ using namespace app;
 extern Control			MakeTTYViewer(const WindowPos &wpos);
 extern Control			MakeIXEditor(MainWindow &main, const WindowPos &wpos, ISO_VirtualTarget &v);
 extern bool				MakeTextEditor(MainWindow &main, const WindowPos &wpos, Control *c);
-extern Control			MakeFinderWindow(MainWindow &main, const ISO::Browser2 &b, const char *route);
+extern Control			MakeFinderWindow(MainWindow &main, const ISO::Browser2 &b, string_ref route);
 extern Control			MakeCompareWindow(MainWindow &main, const ISO::Browser2 &b1, const ISO::Browser2 &b2);
 
 extern int				UsableClipboardContents();
@@ -73,10 +84,11 @@ struct browser_pointer : ISO::VirtualDefaults {
 ISO_DEFVIRT(browser_pointer);
 
 void iso::JobQueueMain::put(const job &j) {
-	if (auto *main = MainWindow::Get())
+	if (auto *main = MainWindow::Get()) {
 		main->PostMessage(WM_ISO_JOB, j.me, j.f);
-	else
+	} else {
 		j();
+	}
 }
 
 //-----------------------------------------------------------------------------
@@ -94,8 +106,8 @@ namespace iso {
 _Texture*	_MakeTexture(bitmap *bm);
 DXGI_FORMAT GetDXGI(const ISO::Type *type);
 
-ID3D11ShaderResourceView *_MakeDataBuffer(const ISO::Type *type, void *data, uint32 count) {
-	return graphics.MakeDataBuffer((TexFormat)GetDXGI(type), type->GetSize(), data, count);
+ID3D11ShaderResourceView *_MakeDataBuffer(const ISO::Type *type, stride_t stride, void *data, uint32 count) {
+	return graphics.MakeDataBuffer((TexFormat)GetDXGI(type), count, stride, data);
 }
 
 #ifdef ISO_PTR64
@@ -106,14 +118,13 @@ ID3D11ShaderResourceView *get_safe(const DXwrapper<ID3D11ShaderResourceView,64> 
 	if (auto& p1 = (ISO_ptr<void,64>&)x->p) {
 		_Texture	*&t = *x->write();
 		if (!t) {
-			if (p1.IsType("DataBuffer")) {
-				ISO::Browser	b(p1);
-				if (t = _MakeDataBuffer(b[0].GetTypeDef(), b[0], b.Count()))
-					p1.Header()->addref();
-
-			} else if (ISO_ptr<bitmap> bm = ISO_conversion::convert<bitmap>(FileHandler::ExpandExternals(p1), ISO_conversion::FULL_CHECK | ISO_conversion::EXPAND_EXTERNALS)) {
+			if (ISO_ptr<bitmap> bm = ISO_conversion::convert<bitmap>(FileHandler::ExpandExternals(p1), ISO_conversion::FULL_CHECK | ISO_conversion::EXPAND_EXTERNALS)) {
 				t = _MakeTexture(bm.get());
 				p1.Header()->addref();
+			} else {
+				ISO::Browser	b(p1);
+				if (t = _MakeDataBuffer(b[0].GetTypeDef(), stride_t(b.GetSubSize()), b[0], b.Count()))
+					p1.Header()->addref();
 			}
 		}
 		return t;
@@ -139,6 +150,19 @@ template<> _Texture *DXwrapper<_Texture>::safe() const {
 } // namespace iso
 
 namespace app {
+
+void HierarchyProgress::Create(const WindowPos &wpos, const char* _caption, uint32 total) {
+	caption	= _caption;
+	prog	= total;
+	win::ProgressTaskBar::Create(wpos, 100);
+}
+
+void HierarchyProgress::Next() {
+	++prog;
+	SetPos(prog.pos(100));
+	if (prog.ready())
+		SetText(buffer_accum<256>(caption) << '(' << prog << ')' << " remaining time: " << Duration::Secs(prog.remaining_time()));
+}
 
 ImageList			tree_imagelist;
 map<uint32, int>	tree_imagemap;
@@ -226,7 +250,7 @@ Menu GetTypesMenu(Menu menu, dynamic_array<pair<int,int>> &&items, int id, int d
 dynamic_array<pair<int,int>> GetTypes(Menu menu, istream_ref file, const char *ext) {
 	dynamic_array<pair<int,int>>	items;
 
-	if (file.exists()) {
+	if (file.exists() && file.length() > 16) {
 		size_t		n		= distance(FileHandler::begin(), FileHandler::end());
 		int			index	= 0;
 		items.reserve(n);
@@ -599,34 +623,272 @@ ISO::Browser2 Differences(const ISO::Browser2 &b1, const ISO::Browser2 &b2, hash
 //	Drag & Drop
 //-----------------------------------------------------------------------------
 
-filename GetTempPath(const ISO::Browser2 &b) {
-	filename	fn;
-	::GetTempPath(sizeof(fn), fn);
+//#define DROP_VIRTUAL_FILES
 
-	tag	id = b.GetName();
-	fn.add_dir(id ? id : "temp");
+#ifdef DROP_VIRTUAL_FILES
 
-	if (auto ext = WriteFilesExt(SkipPointer(b), id))
-		return fn.set_ext(ext);
-	return fn;
+class ISOStream : public com_list<IStream> {
+	ISO::Browser2	b;
+	const uint8		*p, *end;
+
+public:
+	ISOStream(const ISO::Browser2 &b) : b(b), p(b[0]), end(p ? p + b.GetSize() : nullptr) {}
+
+//ISequentialStream
+	STDMETHODIMP Read(void *pv, ULONG cb, ULONG *pcbRead) override {
+		cb	= min(end - p, cb);
+		*pcbRead = cb;
+		memcpy(pv, p, cb);
+		p += cb;
+		return S_OK;
+	}
+	STDMETHODIMP Write(const void *pv, ULONG cb, ULONG *pcbWritten) override {
+		return E_NOTIMPL;
+	}
+
+//IStream
+	STDMETHODIMP CopyTo(IStream *dest, ULARGE_INTEGER cb, ULARGE_INTEGER *pcbRead, ULARGE_INTEGER *pcbWritten)	override {
+		cb.QuadPart = min(end - p, cb.QuadPart);
+		*pcbRead	= cb;
+
+		while (cb.QuadPart) {
+			ULONG	write = min(cb.QuadPart, 0x80000000u);
+			auto hr = dest->Write(p, write, &write);
+			if (FAILED(hr))
+				return hr;
+
+			p			+= write;
+			cb.QuadPart -= write;
+		}
+		return S_OK;
+	}
+
+	STDMETHODIMP Stat(STATSTG *stats, DWORD flag) override {
+		clear(*stats);
+		stats->type				= STGTY_STREAM;
+		stats->cbSize.QuadPart	= end - p;
+		return S_OK;
+	}
+
+	STDMETHODIMP Seek(LARGE_INTEGER dlibMove, DWORD dwOrigin, _Out_opt_  ULARGE_INTEGER *plibNewPosition)	override { return E_NOTIMPL; }
+	STDMETHODIMP SetSize(ULARGE_INTEGER libNewSize)															override { return E_NOTIMPL; }
+	STDMETHODIMP Commit(DWORD grfCommitFlags)																override { return E_NOTIMPL; }
+	STDMETHODIMP Revert()																					override { return E_NOTIMPL; }
+	STDMETHODIMP LockRegion(ULARGE_INTEGER libOffset, ULARGE_INTEGER cb, DWORD dwLockType)					override { return E_NOTIMPL; }
+	STDMETHODIMP UnlockRegion(ULARGE_INTEGER libOffset, ULARGE_INTEGER cb, DWORD dwLockType)				override { return E_NOTIMPL; }
+	STDMETHODIMP Clone(IStream **ppstm)																		override { return E_NOTIMPL; }
+};
+
+class ISOStorage : public com_list<IStorage> {
+	ISO::Browser2	b;
+
+	struct Enum : com_list<IEnumSTATSTG> {
+		com_ptr<ISOStorage>	s;
+		int		i;
+		Enum(ISOStorage *s) : s(s) { s->AddRef(); i = 0; }
+
+		//IEnumSTATSTG
+		STDMETHODIMP Next(ULONG celt, STATSTG *stats, ULONG *pceltFetched) override {
+			celt = min(celt, s->b.Count() - celt);
+			*pceltFetched = celt;
+			while (celt--) {
+				auto	b2 = s->b[i];
+				clear(*stats);
+				string_copy(stats->pwcsName, (tag)b2.GetName());
+				stats->type				= STGTY_STREAM;
+				stats->cbSize.QuadPart	= b2.Count();
+				++i;
+				++stats;
+			}
+			return S_OK;
+		}
+		STDMETHODIMP Skip(ULONG celt)				override { i += celt; return S_OK; }
+		STDMETHODIMP Reset()						override { i = 0; return S_OK; }
+		STDMETHODIMP Clone(IEnumSTATSTG **ppenum)	override { return E_NOTIMPL; }
+	};
+
+public:
+	ISOStorage(const ISO::Browser2 &b) : b(b) {}
+
+//IStorage
+	STDMETHODIMP OpenStream(const OLECHAR *pwcsName, void *reserved1, DWORD grfMode, DWORD reserved2, IStream **ppstm) override {
+		*ppstm = new ISOStream(SkipPointer(b / str8(pwcsName)));
+		return S_OK;
+	}
+
+	STDMETHODIMP EnumElements(DWORD reserved1, void *reserved2, DWORD reserved3, IEnumSTATSTG **ppenum) override {
+		*ppenum	= new Enum(this);
+		return S_OK;
+	}
+
+	STDMETHODIMP CopyTo(DWORD ciidExclude, const IID *rgiidExclude, SNB snbExclude, IStorage *dest) override {
+		for (auto i : b) {
+			com_ptr<IStream>	out;
+			if (SUCCEEDED(dest->CreateStream(str16((tag)i.GetName()), STGM_WRITE|STGM_CREATE, 0, 0, &out))) {
+				auto	srce = new ISOStream(i);
+				ULARGE_INTEGER	read, write;
+				read.QuadPart	= i.GetSize();
+				srce->CopyTo(out, read, &read, &write);
+			}
+		}
+		return S_OK;
+	}
+
+	STDMETHODIMP CreateStream(const OLECHAR *pwcsName, DWORD grfMode, DWORD reserved1, DWORD reserved2, IStream **ppstm)						override { return E_NOTIMPL; }
+	STDMETHODIMP CreateStorage(const OLECHAR *pwcsName, DWORD grfMode, DWORD reserved1, DWORD reserved2, IStorage **ppstg)						override { return E_NOTIMPL; }
+	STDMETHODIMP OpenStorage(const OLECHAR *pwcsName, IStorage *pstgPriority, DWORD grfMode, SNB snbExclude, DWORD reserved, IStorage **ppstg)	override { return E_NOTIMPL; }
+	STDMETHODIMP MoveElementTo(const OLECHAR *pwcsName, IStorage *pstgDest, const OLECHAR *pwcsNewName, DWORD grfFlags)							override { return E_NOTIMPL; }
+	STDMETHODIMP Commit(DWORD grfCommitFlags)																									override { return E_NOTIMPL; }
+	STDMETHODIMP Revert()																														override { return E_NOTIMPL; }
+	STDMETHODIMP DestroyElement(const OLECHAR *pwcsName)																						override { return E_NOTIMPL; }
+	STDMETHODIMP RenameElement(const OLECHAR *pwcsOldName, const OLECHAR *pwcsNewName)															override { return E_NOTIMPL; }
+	STDMETHODIMP SetElementTimes(const OLECHAR *pwcsName, const FILETIME *pctime, const FILETIME *patime, const FILETIME *pmtime)				override { return E_NOTIMPL; }
+	STDMETHODIMP SetClass(REFCLSID clsid)																										override { return E_NOTIMPL; }
+	STDMETHODIMP SetStateBits(DWORD grfStateBits, DWORD grfMask)																				override { return E_NOTIMPL; }
+	STDMETHODIMP Stat(STATSTG *pstatstg, DWORD grfStatFlag)																						override { return E_NOTIMPL; }
+};
+
+struct FORMATETC2 : FORMATETC {
+	FORMATETC2(CLIPFORMAT format, TYMED t = TYMED_HGLOBAL, int i = -1, DWORD aspect = DVASPECT_CONTENT, DVTARGETDEVICE *device = nullptr) {
+		cfFormat	= format;
+		tymed		= t;
+		lindex		= i;
+		dwAspect	= aspect;
+		ptd			= device;
+	};
+
+	FORMATETC2(const char *format, TYMED t = TYMED_HGLOBAL, int i = -1, DWORD aspect = DVASPECT_CONTENT, DVTARGETDEVICE *device = nullptr)
+		: FORMATETC2(RegisterClipboardFormat(format), t, i, aspect, device) {}
+
+	bool operator==(const FORMATETC &b) const {
+		return	b.cfFormat	==	cfFormat
+			&&	(b.tymed	&	tymed)  
+			&&	b.dwAspect	==	dwAspect
+			&&	b.lindex	==	lindex;
+	}
+};
+#endif
+
+bool IsFolder(const ISO::Browser2 &b) {
+	if (SkipUser(b.GetTypeDef())->SameAs<anything>())
+		return true;
+
+	if (IsRawData2(b))
+		return false;
+
+	return b.Is("Folder");
 }
 
-class ISODropSource : public com_list<IDataObject, IDropSource> {
+class ISODropSource : public com_list<IDataObject, IDropSource, IDataObjectAsyncCapability> {
 	ISO::Browser2	b;
 	bool			dropping;
+	filename		fn;
+	bool			async		= true;
+	bool			in_async	= false;
+
+#ifdef DROP_VIRTUAL_FILES
+	FORMATETC2	fGroup	= CFSTR_FILEDESCRIPTOR;
+	FORMATETC2	fFile	= {CFSTR_FILECONTENTS,	TYMED_ISTREAM, -1};
+	HierarchyProgress	progress;
+
+	struct File {
+		int	folder, index;
+	};
+	struct Folder {
+		int	folder;
+		ISO::Browser2	b;
+	};
+	dynamic_array<Folder>	folders;
+	dynamic_array<File>		files;
+
+	void	GetFiles(const ISO::Browser2 &b, int folder, int index) {
+		if (IsFolder(b)) {
+			folders.push_back({folder, b});
+			folder	= folders.size() - 1;
+			index	= 0;
+			for (auto i : b) {
+				if ((tag)i.GetName() != ".@__thumb")
+					GetFiles(SkipPointer(i, true), folder, index);
+				++index;
+			}
+		} else {
+			files.push_back({folder, index});
+		}
+	}
+	filename	GetFilename(const File &file) {
+		int			f	= file.folder;
+		filename	fn	= f < 0 ? ""
+						: (tag)folders[f].b[file.index].GetName();
+		while (f >= 0) {
+			fn	= filename((tag)folders[f].b.GetName()) / fn;
+			f	= folders[f].folder;
+		}
+		return fn;
+	}
+
+#endif
 
 public:
 //IDataObject
-	STDMETHODIMP	GetData(FORMATETC *fmt, STGMEDIUM *med) {
-		ISO_TRACEF("GetData %08x\n", fmt->cfFormat);
+	STDMETHODIMP	GetData(FORMATETC *fmt, STGMEDIUM *med) override {
+		char	name[256] = {0};
+		GetClipboardFormatNameA(fmt->cfFormat, name, sizeof(name));
+		ISO_TRACEF("GetData %08x (%s)\n", fmt->cfFormat, name);
+
 		if (fmt->cfFormat == CF_ISOPOD) {
 			med->tymed			= TYMED_HGLOBAL;
 			med->pUnkForRelease	= 0;
 			med->hGlobal		= MakeGlobal(ISO::Browser2(b));
 			return S_OK;
+		}
 
-		} else if (fmt->cfFormat == CF_HDROP && fmt->tymed) {
-			filename		fn	= GetTempPath(b);
+	#ifdef DROP_VIRTUAL_FILES
+		if (fGroup == *fmt) {
+			if (folders.empty())
+				GetFiles(SkipPointer(b, true), -1, 0);
+
+			auto	nfiles		= files.size();
+			global_base			hGroup(sizeof(FILEGROUPDESCRIPTOR) + (nfiles - 1) * sizeof(FILEDESCRIPTOR), GMEM_SHARE);
+			FILEGROUPDESCRIPTOR	*pGroup	= hGroup.lock();
+			pGroup->cItems		= nfiles;
+
+			auto	desc = pGroup->fgd;
+			for (auto& file : files) {
+				clear(*desc);
+				strcpy(desc->cFileName, GetFilename(file));
+				++desc;
+			}
+
+			if (dropping)
+				progress.Create(WindowPos(0, Rect(0, 0, 1000, 100)), "copying files ", files.size());
+
+			med->tymed			= TYMED_HGLOBAL;
+			med->hGlobal		= hGroup;
+			return S_OK;
+
+		} else if (fmt->cfFormat == fFile.cfFormat) {
+			if (fmt->lindex >= files.size())
+				return DV_E_FORMATETC;
+
+			ISO_OUTPUTF("copy file %i\n", fmt->lindex);
+
+			auto	&file = files[fmt->lindex];
+			med->tymed	= TYMED_ISTREAM;
+			med->pstm	= new ISOStream(SkipPointer(file.folder < 0 ? b : folders[file.folder].b[file.index]));
+			progress.Next();
+			return S_OK;
+		}
+	#else
+		if (fmt->cfFormat == CF_HDROP && fmt->tymed) {
+			if (!fn) {
+				::GetTempPath(sizeof(fn), fn);
+
+				tag	id = b.GetName();
+				fn.add_dir(id ? id : "temp");
+
+				if (auto ext = WriteFilesExt(SkipPointer(b, true), id))
+					fn.set_ext(ext);
+			}
 			if (dropping) {
 				Busy	bee;
 				HierarchyProgress	progress(WindowPos(0, Rect(0, 0, 1000, 100)), "progress");
@@ -645,48 +907,59 @@ public:
 			med->pUnkForRelease	= 0;
 			med->hGlobal		= pDrop;
 			return S_OK;
-
-		} else {
-			return DV_E_FORMATETC;
-
 		}
-	}
-	STDMETHODIMP	QueryGetData(FORMATETC *fmt) {
-		ISO_TRACEF("QueryGetData %016p:%08x\n", fmt, fmt->cfFormat);
-		if (fmt->cfFormat == CF_ISOPOD)
-			return S_OK;
-		if (fmt->cfFormat == CF_HDROP && fmt->tymed)
-			return S_OK;
+	#endif
+
 		return DV_E_FORMATETC;
 	}
-	STDMETHODIMP	GetDataHere(FORMATETC *fmt, STGMEDIUM *med)							{ return DATA_E_FORMATETC;}
-	STDMETHODIMP	GetCanonicalFormatEtc(FORMATETC *in, FORMATETC *out)				{ out->ptd = NULL; return E_NOTIMPL; }
-	STDMETHODIMP	SetData(FORMATETC *fmt, STGMEDIUM *med, BOOL release)				{
-		ISO_TRACEF("SetData %08x\n", fmt->cfFormat);
-		return E_NOTIMPL;
+
+	STDMETHODIMP	QueryGetData(FORMATETC *fmt) override {
+		ISO_TRACEF("QueryGetData %016p:%08x\n", fmt, fmt->cfFormat);
+	#ifdef DROP_VIRTUAL_FILES
+		if (is_any(fmt->cfFormat, CF_ISOPOD, fGroup.cfFormat, fFile.cfFormat))
+			return S_OK;
+	#else
+		if (is_any(fmt->cfFormat, CF_ISOPOD, CF_HDROP))
+			return S_OK;
+	#endif
+		return DV_E_FORMATETC;
 	}
-	STDMETHODIMP	EnumFormatEtc(DWORD dir, IEnumFORMATETC **enum_fmt) {
+	STDMETHODIMP	GetDataHere(FORMATETC *fmt, STGMEDIUM *med)							override { return DATA_E_FORMATETC;}
+	STDMETHODIMP	GetCanonicalFormatEtc(FORMATETC *in, FORMATETC *out)				override { out->ptd = NULL; return E_NOTIMPL; }
+	STDMETHODIMP	SetData(FORMATETC *fmt, STGMEDIUM *med, BOOL release)				override { return E_NOTIMPL; }
+
+	STDMETHODIMP	EnumFormatEtc(DWORD dir, IEnumFORMATETC **enum_fmt)					override {
 		if (dir == DATADIR_GET) {
+		#ifdef DROP_VIRTUAL_FILES
+			return SHCreateStdEnumFmtEtc(2, &fGroup, enum_fmt);
+		#else
 			FORMATETC	format = {CF_HDROP, 0, DVASPECT_CONTENT, -1, TYMED_HGLOBAL};
 			return SHCreateStdEnumFmtEtc(1, &format, enum_fmt);
+		#endif
 		}
 		return E_NOTIMPL;
 	}
 
-	STDMETHODIMP	DAdvise(FORMATETC *fmt, DWORD adv, IAdviseSink *sink,  DWORD *conn)	{ return OLE_E_ADVISENOTSUPPORTED; }
-	STDMETHODIMP	DUnadvise(DWORD conn)												{ return OLE_E_ADVISENOTSUPPORTED; }
-	STDMETHODIMP	EnumDAdvise(IEnumSTATDATA **enum_advise)							{ return OLE_E_ADVISENOTSUPPORTED; }
+	STDMETHODIMP	DAdvise(FORMATETC *fmt, DWORD adv, IAdviseSink *sink,  DWORD *conn)	override { return OLE_E_ADVISENOTSUPPORTED; }
+	STDMETHODIMP	DUnadvise(DWORD conn)												override { return OLE_E_ADVISENOTSUPPORTED; }
+	STDMETHODIMP	EnumDAdvise(IEnumSTATDATA **enum_advise)							override { return OLE_E_ADVISENOTSUPPORTED; }
+
+//IDataObjectAsyncCapability
+	STDMETHODIMP SetAsyncMode(BOOL fDoOpAsync)											override { async = fDoOpAsync; return S_OK; }
+	STDMETHODIMP GetAsyncMode(BOOL *pfIsOpAsync)										override { *pfIsOpAsync = async; return S_OK; }
+	STDMETHODIMP StartOperation(IBindCtx *pbcReserved)									override { in_async = true; return S_OK; }
+	STDMETHODIMP InOperation(BOOL *pfInAsyncOp)											override { *pfInAsyncOp = in_async; return S_OK; }
+	STDMETHODIMP EndOperation(HRESULT hResult, IBindCtx *pbcReserved, DWORD dwEffects)	override { in_async = false; return S_OK; }
 
 //IDropSource
-	STDMETHODIMP	QueryContinueDrag(BOOL escape, DWORD key_state) {
+	STDMETHODIMP	QueryContinueDrag(BOOL escape, DWORD key_state) override {
 		if (!(key_state & (MK_LBUTTON | MK_RBUTTON))) {
 			dropping	= true;
-			ISO_TRACEF("DropQuery\n");
 			return DRAGDROP_S_DROP;
 		}
 		return escape ? DRAGDROP_S_CANCEL : S_OK;
 	}
-	STDMETHODIMP	GiveFeedback(DWORD effect) {
+	STDMETHODIMP	GiveFeedback(DWORD effect) override {
 		DWORD	process;
 		uint32	thread = GetWindowThreadProcessId(GetControlAt(GetMousePos()), &process);
 		if (process == GetCurrentProcessId())
@@ -695,10 +968,8 @@ public:
 	}
 
 public:
-	ISODropSource(const ISO::Browser2 &_b) : b(_b), dropping(false) {
-	}
-	~ISODropSource() {
-	}
+	ISODropSource(const ISO::Browser2 &b) : b(b), dropping(false) {}
+	~ISODropSource() {}
 };
 
 struct IStreamReader : reader_mixin<IStreamReader> {
@@ -815,7 +1086,7 @@ class IsoEditor2 : public IsoEditor, com<IDropTarget> {//}; , Composition11{
 		void	Create(IsoEditor2 *main, HTREEITEM _item, int _subitem) {
 			item			= _item;
 			subitem			= _subitem;
-			EditControl2::Create(main->treecolumn, NULL, CHILD | VISIBLE | CLIPSIBLINGS | EditControl::AUTOHSCROLL | EditControl::WANTRETURN, CLIENTEDGE, main->treecolumn.GetItemRect(item, subitem, false, true), ID_EDIT);
+			EditControl2::Create(main->treecolumn, none, CHILD | VISIBLE | CLIPSIBLINGS | EditControl::AUTOHSCROLL | EditControl::WANTRETURN, CLIENTEDGE, main->treecolumn.GetItemRect(item, subitem, false, true), ID_EDIT);
 			SetFont(main->treecolumn.GetTreeControl().GetFont());
 			MoveAfter(HWND_TOP);
 			SetOwner(*main);
@@ -826,7 +1097,7 @@ class IsoEditor2 : public IsoEditor, com<IDropTarget> {//}; , Composition11{
 	struct RecentFilesDevice : DeviceT<RecentFilesDevice> {
 		struct RecentFile : DeviceCreateT<RecentFile> {
 			filename fn;
-			ISO_ptr<void>	operator()(const Control &main) {
+			ISO_ptr_machine<void>	operator()(const Control &main) {
 				tag	id = fn.name();
 				if (LatchMouseButtons::get_clear_buttons() & MK_RBUTTON) {
 					Event	event;
@@ -847,9 +1118,9 @@ class IsoEditor2 : public IsoEditor, com<IDropTarget> {//}; , Composition11{
 					}
 				}
 				Busy bee;
-				if (ISO_ptr<void> p = FileHandler::Read(id, fn))
+				if (auto p = FileHandler::Read64(id, fn))
 					return p;
-				if (ISO_ptr<void> p = FileHandler::Get("bin")->ReadWithFilename(id, fn))
+				if (auto p = FileHandler::Get("bin")->ReadWithFilename(id, fn))
 					return p;
 				throw_accum("Can't read " << fn);
 				return ISO_NULL;
@@ -883,8 +1154,10 @@ class IsoEditor2 : public IsoEditor, com<IDropTarget> {//}; , Composition11{
 			recent.push_back(fn);
 			add2.to_top(fn, &recent.back(), win::Bitmap());
 
-			RegKey	reg = Settings(true).subkey("RecentFiles", KEY_WRITE);
-			reg.values()[to_string(recent.size32())] = fn;
+			RegKey	reg = Settings(true).subkey("RecentFiles", KEY_ALL_ACCESS);
+			reg.del_tree();
+			for (auto &i : recent)
+				reg.values()[to_string(recent.index_of(i))] = i.fn;
 		}
 	} recent_files;
 
@@ -902,13 +1175,13 @@ class IsoEditor2 : public IsoEditor, com<IDropTarget> {//}; , Composition11{
 	bool		selchanged;
 
 	//IDropTarget
-	virtual HRESULT STDMETHODCALLTYPE DragEnter(IDataObject *pDataObj, DWORD buttons, POINTL pt, DWORD *pdwEffect) {
+	virtual STDMETHODIMP DragEnter(IDataObject *pDataObj, DWORD buttons, POINTL pt, DWORD *pdwEffect) {
 		ImageList::DragEnter(treecolumn, Point(pt) - treecolumn.GetRect().TopLeft());
 		*pdwEffect		= DROPEFFECT_COPY;
 		drag_buttons	= buttons;
 		return S_OK;
 	}
-	virtual HRESULT STDMETHODCALLTYPE DragOver(DWORD buttons, POINTL pt, DWORD *pdwEffect) {
+	virtual STDMETHODIMP DragOver(DWORD buttons, POINTL pt, DWORD *pdwEffect) {
 		TreeControl	tree	= treecolumn.GetTreeControl();
 		Point		ptc		= tree.ToClient(Point(pt));
 		HTREEITEM	hit		= tree.HitTest(ptc);
@@ -948,12 +1221,12 @@ class IsoEditor2 : public IsoEditor, com<IDropTarget> {//}; , Composition11{
 		drag_buttons	= buttons;
 		return S_OK;
 	}
-	virtual HRESULT STDMETHODCALLTYPE DragLeave() {
+	virtual STDMETHODIMP DragLeave() {
 		ImageList::DragLeave(treecolumn);
 		treecolumn.SetDropTarget(0);
 		return S_OK;
 	}
-	virtual HRESULT STDMETHODCALLTYPE Drop(IDataObject *pDataObj, DWORD buttons, POINTL pt, DWORD *pdwEffect) {
+	virtual STDMETHODIMP Drop(IDataObject *pDataObj, DWORD buttons, POINTL pt, DWORD *pdwEffect) {
 		ISOTree		tree	= treecolumn.GetTreeControl();
 		FORMATETC	fmte	= {CF_ISOPOD, NULL, DVASPECT_CONTENT, -1, TYMED_HGLOBAL};
 		STGMEDIUM	medium;
@@ -1100,7 +1373,7 @@ class IsoEditor2 : public IsoEditor, com<IDropTarget> {//}; , Composition11{
 
 						} else {
 							tag				id	= fn.name();
-							ISO_ptr<void>	p;
+							ISO_ptr_machine<void>	p;
 
 							if (medium.tymed & TYMED_HGLOBAL) {
 								if (drop_mode >= MODE_LOADAS) {
@@ -1109,7 +1382,7 @@ class IsoEditor2 : public IsoEditor, com<IDropTarget> {//}; , Composition11{
 //									p = ISO::GetDirectory(fn.name().blank() ? (char*)fn.drive() : fn.name(), fn, !!(drop_mode & MODE_RAW));
 								} else if (mode2 == MODE_ASEXTERNAL) {
 									p = ISO::MakePtrExternal<void>(fn, id);
-								} else if (!(p = FileHandler::Read(id, fn))) {
+								} else if (!(p = FileHandler::Read64(id, fn))) {
 									p = ReadRaw(id, lvalue(FileInput(fn)), filelength(fn));
 								}
 							} else if (medium.tymed & TYMED_ISTREAM) {
@@ -1175,8 +1448,8 @@ public:
 	void			DropFiles(HDROP hDrop, HTREEITEM hParent, HTREEITEM hAfter, uint32 buttons);
 	LRESULT			Proc(MSG_ID message, WPARAM wParam, LPARAM lParam);
 
-	IsoEditor2(const Rect &rect) : splitter(SplitterWindow::SWF_VERT), arrangement(arrange, &dummy, 2), selchanged(true) {
-		Create(WindowPos(NULL, rect), "IsoEditor", OVERLAPPEDWINDOW | CLIPCHILDREN, NOEX);
+	IsoEditor2(const Rect &rect, const char *title) : splitter(SplitterWindow::SWF_VERT), arrangement(arrange, &dummy, 2), selchanged(true) {
+		Create(WindowPos(NULL, rect), title, OVERLAPPEDWINDOW | CLIPCHILDREN, NOEX);
 		Rebind(this);
 
 		SendMessage(WM_SETICON, 0, Icon::Load(IDI_ISOPOD));
@@ -2079,23 +2352,32 @@ LRESULT IsoEditor2::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 						IsoEditorCache	cache;
 						TreeControl		tree	= treecolumn.GetTreeControl();
 						HTREEITEM		h		= context_item;
-						ISO::Browser2	b		= GetBrowser(h);
+						ISO::Browser2	b0		= GetBrowser(h);
+						ISO::Browser2	b		= VirtualDeref(b0);
 
-						b	= VirtualDeref(b);
+						if (b.Is("BigBin")) {
+							AddEntry(fh->Read(b.GetName(), istream_ref(BigBinStream(b))), false);
+							return 0;
+						}
+
+						b = b.SkipUser();
 
 						if (b.GetType() == ISO::REFERENCE) {
 							ISO_ptr<void>	*pp	= b;
 
 						#if 1
-							b	= *b;
+							b0	= *b;
+
 							if (auto b1 = *b)
 								b = b1;
 							ISO_ptr<void>	p	= b;
 
 							if (const char *fn = b.External()) {
 								p = fh->ReadWithFilename(p.ID(), fn);
-							} else {
-								p = fh->Read(pp->ID(), b.Is("BigBin") ? istream_ref(BigBinStream(b)) : istream_ref(BinStream(b)));
+
+							} else if (int bin	= FindRawData(b0)) {
+								p = fh->Read(pp->ID(), bin == 3 ? istream_ref(BigBinStream(b0)) : istream_ref(BinStream(b)));
+								//p = fh->Read(pp->ID(), b.Is("BigBin") ? istream_ref(BigBinStream(b)) : istream_ref(BinStream(b)));
 							}
 						#else
 							ISO_ptr<void>	*pp	= b;
@@ -2109,8 +2391,7 @@ LRESULT IsoEditor2::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 							if (p)
 								Do(MakeModifyPtrOp(tree, h, *pp, p));
 						} else {
-							if (ISO_ptr<void> p = fh->Read(b.GetName(), b.Is("BigBin") ? istream_ref(BigBinStream(b)) : istream_ref(BinStream(b))))
-								AddEntry(p, false);
+							AddEntry(fh->Read(b.GetName(), istream_ref(BinStream(b))), false);
 						}
 					} catch (const char *s) {
 						ModalError(s);
@@ -2326,7 +2607,7 @@ LRESULT IsoEditor2::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 					SplitterWindow		*split0	= SplitterWindow::Cast(tab1.Parent());
 					TabSplitter			*split1	= new TabSplitter(split0->_GetPanePos(0), SplitterWindow::SWF_VERT | SplitterWindow::SWF_PROP);
 
-					tab2->Create(*split1, NULL, CHILD | CLIPCHILDREN | VISIBLE, CLIENTEDGE);
+					tab2->Create(*split1, none, CHILD | CLIPCHILDREN | VISIBLE, CLIENTEDGE);
 					tab2->SetFont((HFONT)GetStockObject(DEFAULT_GUI_FONT));
 
 					split0->SetPane(split0->WhichPane(tab1), *split1);
@@ -2579,6 +2860,9 @@ char *ParseCommandLine(char *f, filename &fn) {
 		*d = 0;
 
 		if (char *equals = strchr(fn, '=')) {
+			if (fn.slice_to(equals).find(char_set("\\/")))
+				return f;
+
 			*equals++ = 0;
 			if (ISO::Browser b = ISO::root(fn)) {
 				b.Append().Set(FileHandler::Read(filename(equals).name(), filename(equals)));
@@ -2595,7 +2879,7 @@ char *ParseCommandLine(char *f, filename &fn) {
 
 void stream_lister(const char *dir) {
 	for (directory_iterator d(filename(dir).add_dir("*.*")); d; ++d) {
-		filename fn = filename(dir).add_dir(d);
+		filename fn = filename(dir).add_dir((const char*)d);
 		WIN32_FIND_STREAM_DATA	find;
 		HANDLE	h = FindFirstStreamW(str16(fn), FindStreamInfoStandard, &find, 0);
 		if (h != INVALID_HANDLE_VALUE) {
@@ -2607,6 +2891,31 @@ void stream_lister(const char *dir) {
 
 		if (d.is_dir() && d[0] != '.')
 			stream_lister(fn);
+	}
+}
+
+void TestProperties(const char16 *name) {
+	com_ptr<IPropertyStore>	ps;
+	HRESULT	hr = SHGetPropertyStoreFromParsingName(name, nullptr, GPS_DEFAULT, COM_CREATE(&ps));
+	DWORD	n;
+	ps->GetCount(&n);
+	for (int i = 0; i < n; i++) {
+		PROPERTYKEY	key;
+		com_variant	value;
+		hr = ps->GetAt(i, &key);
+		hr = ps->GetValue(key, &value);
+
+		com_ptr<IPropertyDescription>	pd;
+		hr = PSGetPropertyDescription(key, COM_CREATE(&pd));
+
+		if (SUCCEEDED(hr)) {
+			char16	*str;
+			//hr	= pd->FormatForDisplay(value, PDFF_DEFAULT, &str);
+			hr	= pd->GetCanonicalName(&str);
+			ISO_TRACEF() << str << ": " << value << '\n';
+		} else {
+			ISO_TRACEF() << key.fmtid << ';' << key.pid << ": " << value << '\n';
+		}
 	}
 }
 
@@ -2623,12 +2932,24 @@ ISO::Browser2 app::GetSettings(const char *path) {
 void *NativeWrapMethod();
 void WindowsComposition(HWND h);
 
+malloc_block MOVGetExif(istream_ref file);
+
 
 int __stdcall WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR cmdline, int nCmdShow) {
 	ApplyHooks();
 
-#ifdef _MSC_VER
-	ISO_TRACEF("_MSC_VER = ") << _MSC_VER << '\n';
+	uint16	test[5][5] = {{0}};
+	vec<uint16, 4>	v	= {1,2,3,4};
+	scatter(v, test, vec<int, 4>{0, 5, 10, 15});
+
+	auto	v2 = gather((uint16*)test, vec<int, 4>{0, 5, 10, 15});
+
+//	auto	exif = MOVGetExif(FileInput("D:\\IMG_9792.MOV"));
+
+#ifdef ISO_DEBUG
+	LoadLibrary("D:\\dev\\orbiscrude\\out\\Debug-clang\\dx11crude.dll");
+	IP4::socket_addr	addr(IP4::localhost, PORT(4567));
+	Socket(addr.socket()).putc(2);//INTF_Continue
 #endif
 
 #if 0
@@ -2656,7 +2977,7 @@ int __stdcall WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR cmdlin
 
 //	init_com();
 
-	auto	hr = CoInitializeSecurity(
+	HRESULT	hr = CoInitializeSecurity(
 		NULL,
 		-1,								// COM negotiates service
 		NULL,							// Authentication services
@@ -2668,7 +2989,12 @@ int __stdcall WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR cmdlin
 		NULL							// Reserved
 	);
 
-
+#if 0
+	for (int i = 0; i < 100; i++) {
+		ISO_TRACE("Isoeditor ");
+		Thread::sleep(1);
+	}
+#endif
 
 #if	_WIN32_WINNT >= 0x0A00
 //	SetProcessDpiAwareness(PROCESS_SYSTEM_DPI_AWARE);
@@ -2680,16 +3006,6 @@ int __stdcall WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR cmdlin
 //	_CrtSetDbgFlag(_CrtSetDbgFlag(_CRTDBG_REPORT_FLAG) | _CRTDBG_CHECK_ALWAYS_DF);
 	StartWebServer("D:\\dev\\orbiscrude\\website", 1080, false);
 	StartWebServer("D:\\dev\\orbiscrude\\website", 1443, true);
-
-	Sleep(1000);
-
-//	auto	h = HTTPopenURL("isoeditor", "https://localhost:1443");
-	{
-		WebSocketClient	wsc("isoeditor", "ws://127.0.0.1:1080");
-		wsc.SendPing("ping");
-		wsc.SendText("Hola!");
-		wsc.Process();
-	}
 
 	ISO::allocate_base::flags.set(ISO::allocate_base::TOOL_DELETE);
 	ISO::root().Add(ISO_ptr<anything>("externals"));
@@ -2725,9 +3041,10 @@ int __stdcall WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR cmdlin
 
 	IsoEditor	*editor = 0;
 	WINDOWPLACEMENT	wp = {0};
-	Control		control;
+	Control		control;// = FindWindowA(0, "IsoEditor");
 	filename	fn;
 	Rect		rect(CW_USEDEFAULT, CW_USEDEFAULT, 320, 640);
+	const char	*title = IsCurrentUserLocalAdministrator() ? "IsoEditor (admin)" : "IsoEditor";
 
 	for (char *p = cmdline; p = ParseCommandLine(p, fn);) {
 		if (fn == "-u") {
@@ -2745,7 +3062,7 @@ int __stdcall WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR cmdlin
 			}
 		} else {
 			if (!control) {
-				editor	= new IsoEditor2(rect);
+				editor	= new IsoEditor2(rect, title);
 				control	= *editor;
 			}
 			if (fn[0] != '-') {
@@ -2761,7 +3078,7 @@ int __stdcall WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR cmdlin
 	if (!editor) {
 		if (control)
 			return 0;
-		editor = new IsoEditor2(rect);
+		editor = new IsoEditor2(rect, title);
 	}
 
 #if 0
@@ -2779,7 +3096,6 @@ int __stdcall WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR cmdlin
 	ChangeWindowMessageFilter(WM_DROPFILES, MSGFLT_ADD);
 	ChangeWindowMessageFilter(WM_COPYDATA, MSGFLT_ADD);
 	ChangeWindowMessageFilter(WM_COPYGLOBALDATA, MSGFLT_ADD);
-
 
 #if 1
 	while (ProcessMessage(true));

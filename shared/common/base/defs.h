@@ -32,6 +32,7 @@ inline bool operator!=(const GUID &a, const GUID &b)	{ return compare(a, b) != 0
 namespace iso {
 
 using std::initializer_list;
+template<typename T> constexpr auto make_range(initializer_list<T> c)	{ return make_range(c.begin(), c.end()); }
 
 template<typename T> using is_reader_t		= exists_t<decltype(&noref_t<T>::readbuff), bool>;
 template<typename T> using is_writer_t		= exists_t<decltype(&noref_t<T>::writebuff), bool>;
@@ -116,53 +117,53 @@ template<typename...T>	using promoted_type		= type_from_traits<max_num_traits<T.
 //	holders
 //-----------------------------------------------------------------------------
 
-template<typename T> struct holder {
+template<typename T> struct holder : assignments<holder<T>> {
 	T	t;
 	holder()								: t()	{}
 	template<typename...P> holder(P&&...p)	: t(forward<P>(p)...) {}
 
 	operator	const T&()			const	{ return t; }
+	const T&	operator->()		const	{ return t; }
+	const T*	operator&()			const	{ return &t; }
+//	const T&	get()				const	{ return t; }
+
 	operator	T&()						{ return t; }
 	T&			operator->()				{ return t; }
-	const T&	operator->()		const	{ return t; }
 	T*			operator&()					{ return &t; }
-	const T*	operator&()			const	{ return &t; }
-	template<typename T2> holder&	operator= (T2 &&b)	{ t  = forward<T2>(b); return *this; }
-	template<typename T2> holder&	operator+=(T2 &&b)	{ t += forward<T2>(b); return *this; }
-	template<typename T2> holder&	operator-=(T2 &&b)	{ t -= forward<T2>(b); return *this; }
-	template<typename T2> holder&	operator*=(T2 &&b)	{ t *= forward<T2>(b); return *this; }
-	template<typename T2> holder&	operator/=(T2 &&b)	{ t /= forward<T2>(b); return *this; }
-	template<typename T2> holder&	operator|=(T2 &&b)	{ t |= forward<T2>(b); return *this; }
-	template<typename T2> holder&	operator&=(T2 &&b)	{ t &= forward<T2>(b); return *this; }
-	template<typename T2> holder&	operator^=(T2 &&b)	{ t ^= forward<T2>(b); return *this; }
-	T&			get()						{ return t; }
-	const T&	get()				const	{ return t; }
+//	T&			get()						{ return t; }
+	
 	friend T&		put(holder &p)			{ return p; }
 	friend const T&	get(const holder &p)	{ return p; }
 };
 
-template<typename T> struct holder<T&> {
+template<typename T> struct holder<T&> : assignments<holder<T&>> {
 	T	*t;
 	holder()								: t(0)	{}
 	holder(T& t)							: t(&t) {}
 
 	operator	const T&()			const	{ return *t; }
+	const T&	operator->()		const	{ return *t; }
+	const T*	operator&()			const	{ return t; }
+	const T&	get()				const	{ return *t; }
+
 	operator	T&()						{ return *t; }
 	T*			operator->()				{ return t; }
-	const T&	operator->()		const	{ return *t; }
 	T*			operator&()					{ return t; }
-	const T*	operator&()			const	{ return t; }
-	template<typename T2> holder&	operator= (T2 &&b)	{ *t  = forward<T2>(b); return *this; }
-	template<typename T2> holder&	operator+=(T2 &&b)	{ *t += forward<T2>(b); return *this; }
-	template<typename T2> holder&	operator-=(T2 &&b)	{ *t -= forward<T2>(b); return *this; }
-	template<typename T2> holder&	operator*=(T2 &&b)	{ *t *= forward<T2>(b); return *this; }
-	template<typename T2> holder&	operator/=(T2 &&b)	{ *t /= forward<T2>(b); return *this; }
-	template<typename T2> holder&	operator|=(T2 &&b)	{ *t |= forward<T2>(b); return *this; }
-	template<typename T2> holder&	operator&=(T2 &&b)	{ *t &= forward<T2>(b); return *this; }
-	template<typename T2> holder&	operator^=(T2 &&b)	{ *t ^= forward<T2>(b); return *this; }
 	T&			get()						{ return *t; }
-	const T&	get()				const	{ return *t; }
+
 	friend T&		put(holder &p)			{ return p; }
+	friend const T&	get(const holder &p)	{ return p; }
+};
+
+template<typename T> struct holder<const T&> {
+	const T	*t;
+	holder()								: t(0)	{}
+	holder(const T& t)						: t(&t) {}
+
+	operator	const T&()			const	{ return *t; }
+	const T*	operator->()		const	{ return t; }
+	const T*	operator&()			const	{ return t; }
+//	const T&	get()				const	{ return *t; }
 	friend const T&	get(const holder &p)	{ return p; }
 };
 
@@ -172,27 +173,29 @@ template<typename T, int N> struct holder<T[N]> {
 	holder()								{}
 	holder(const A &_t)						{ memcpy(t, &t, sizeof(A)); }
 	operator	const A&()			const	{ return t; }
+//	const A&	get()				const	{ return t; }
 	operator	A&()						{ return t; }
+//	A&			get()						{ return t; }
 	A*			operator&()					{ return &t; }
-	A&			get()						{ return t; }
-	const A&	get()				const	{ return t; }
 };
 
 template<typename T> struct holder<T*> {
 	T			*t;
 	holder(T *t = 0) : t(t)	{}
-	operator	const T*()			const	{ return t; }
-	operator	T*&()						{ return t; }
-	T*			operator->()				{ return t; }
-	const T*	operator->()		const	{ return t; }
-	T**			operator&()					{ return &t; }
-	T* const*	operator&()			const	{ return &t; }
-	T&			operator*()			const	{ return *t; }
 	holder&		operator=(T *t2)			{ t = t2; return *this; }
 	holder&		operator+=(intptr_t b)		{ t += b; return *this;	}
 	holder&		operator-=(intptr_t b)		{ t -= b; return *this;	}
-	T*&			get()						{ return t; }
-	T*			get()				const	{ return t; }
+
+	operator	T*()				const	{ return t; }
+	T* const*	operator&()			const	{ return &t; }
+//	T*			get()				const	{ return t; }
+
+	operator	T*&()						{ return t; }
+	T**			operator&()					{ return &t; }
+//	T*&			get()						{ return t; }
+
+	T*			operator->()		const	{ return t; }
+	T&			operator*()			const	{ return *t; }
 	friend T*		put(holder &p)			{ return p; }
 	friend const T*	get(const holder &p)	{ return p; }
 };
@@ -202,11 +205,11 @@ template<> struct holder<void*> {
 	holder(void *t = 0) : t(t)	{}
 	void		operator=(void *t2)			{ t = t2; }
 	operator	void*()				const	{ return t; }
+	void* const* operator&()		const	{ return &t; }
+//	void*		get()				const	{ return t; }
 	operator	void*&()					{ return t; }
 	void**		operator&()					{ return &t; }
-	void* const* operator&()		const	{ return &t; }
-	void*&		get()						{ return t; }
-	void*		get()				const	{ return t; }
+//	void*&		get()						{ return t; }
 	friend void*		put(holder &p)		{ return p; }
 	friend const void*	get(const holder &p){ return p; }
 };
@@ -216,11 +219,11 @@ template<> struct holder<const void*> {
 	holder(const void *t = 0) : t(t)	{}
 	void		operator=(const void *t2)	{ t = t2; }
 	operator	const void*()		const	{ return t; }
+	const void* const*	operator&()	const	{ return &t; }
+//	const void*			get()		const	{ return t; }
 	operator	const void*&()				{ return t; }
 	const void**		operator&()			{ return &t; }
-	const void* const*	operator&()	const	{ return &t; }
-	const void*&		get()				{ return t; }
-	const void*			get()		const	{ return t; }
+//	const void*&		get()				{ return t; }
 	friend const void*	put(holder &p)		{ return p; }
 	friend const void*	get(const holder &p){ return p; }
 };
@@ -231,46 +234,63 @@ template<> struct holder<void> {
 	const void*	operator&()			const	{ return this; }
 };
 
-template<typename T> struct num_traits<holder<T> > : num_traits<T> {};
-template<typename T> struct T_swap_endian_type<holder<T> >	: T_type<T_swap_endian<T>> {};
+template<typename T> holder<noref_t<T>> make_holder(T &&t) { return forward<T>(t); }
 
-template<typename T>		struct T_inheritable			{ typedef T					type; };
-template<typename T, int N>	struct T_inheritable<T[N]>		{ typedef holder<T[N]>		type; };
-template<typename T>		struct T_inheritable<T*>		{ typedef holder<T*>		type; };
-template<>					struct T_inheritable<void>		{ typedef holder<void>		type; };
-template<>					struct T_inheritable<bool>		{ typedef holder<bool>		type; };
-template<>					struct T_inheritable<uint8>		{ typedef holder<uint8>		type; };
-template<>					struct T_inheritable<uint16>	{ typedef holder<uint16>	type; };
-template<>					struct T_inheritable<uint32>	{ typedef holder<uint32>	type; };
-template<>					struct T_inheritable<int8>		{ typedef holder<int8>		type; };
-template<>					struct T_inheritable<int16>		{ typedef holder<int16>		type; };
-template<>					struct T_inheritable<int32>		{ typedef holder<int32>		type; };
-template<>					struct T_inheritable<float>		{ typedef holder<float>		type; };
-template<>					struct T_inheritable<double>	{ typedef holder<double>	type; };
+
+template<typename T> struct num_traits<holder<T>> : num_traits<T> {};
+template<typename T> struct T_swap_endian_type<holder<T>>	: T_type<T_swap_endian<T>> {};
+
+template<typename T>		struct T_inheritable			: T_type<T>					{};
+template<typename T, int N>	struct T_inheritable<T[N]>		: T_type<holder<T[N]>>		{};
+template<typename T>		struct T_inheritable<T&>		: T_type<holder<T&>>		{};
+template<typename T>		struct T_inheritable<T*>		: T_type<holder<T*>>		{};
+template<>					struct T_inheritable<void>		: T_type<holder<void>>		{};
+template<>					struct T_inheritable<bool>		: T_type<holder<bool>>		{};
+template<>					struct T_inheritable<uint8>		: T_type<holder<uint8>>		{};
+template<>					struct T_inheritable<uint16>	: T_type<holder<uint16>>	{};
+template<>					struct T_inheritable<uint32>	: T_type<holder<uint32>>	{};
+template<>					struct T_inheritable<int8>		: T_type<holder<int8>>		{};
+template<>					struct T_inheritable<int16>		: T_type<holder<int16>>		{};
+template<>					struct T_inheritable<int32>		: T_type<holder<int32>>		{};
+template<>					struct T_inheritable<float>		: T_type<holder<float>>		{};
+template<>					struct T_inheritable<double>	: T_type<holder<double>>	{};
 #if USE_LONG
-template<>					struct T_inheritable<ulong>		{ typedef holder<ulong>		type; };
-template<>					struct T_inheritable<long>		{ typedef holder<long>		type; };
+template<>					struct T_inheritable<ulong>		: T_type<holder<ulong>>		{};
+template<>					struct T_inheritable<long>		: T_type<holder<long>>		{};
 #endif
 #if USE_64BITREGS
-template<>					struct T_inheritable<uint64>	{ typedef holder<uint64>	type; };
-template<>					struct T_inheritable<int64>		{ typedef holder<int64>		type; };
+template<>					struct T_inheritable<uint64>	: T_type<holder<uint64>>	{};
+template<>					struct T_inheritable<int64>		: T_type<holder<int64>>		{};
 #endif
 
 template<typename T>	using inheritable_t	= typename T_inheritable<T>::type;
+template<typename I, typename T> decltype(auto)	get_inherited(const T &t)	{ return get(static_cast<const inheritable_t<I>&>(t)); }
+
+template<typename T>	struct inheritable : inheritable_t<T> {
+	template<typename...P> inheritable(P&&...p) : inheritable_t<T>(forward<P>(p)...) {}
+	decltype(auto)	get_inherited()	const	{ return get(*static_cast<const inheritable_t<T>*>(this)); }
+	decltype(auto)	get_inherited()			{ return get(*static_cast<inheritable_t<T>*>(this)); }
+};
 
 template<typename T, typename TAG> struct tagged : holder<T> {
 	tagged() {}
-	tagged(const T& t) : holder<T>(t) {}
+	explicit tagged(const T& t) : holder<T>(t) {}
 };
 
 template<typename T> struct T_hold_ref		: T_type<T> {};
 template<typename T> struct T_hold_ref<T&>	: T_type<holder<T&>> {};
 template<typename T>	using hold_ref_t	= typename T_hold_ref<T>::type;
 
-template<typename R, typename T> struct _read_as : holder<T> {
+template<typename A, typename T> struct _read_as : holder<T> {
 	using holder<T>::holder;
-	friend const T&	get(const _read_as &p)	{ return p; }
+	const A&				cast()			const	{ return (const A&)*this; }
+	A&						cast()					{ return (A&)*this; }
+	template<class R> bool	read(R &r)				{ A a; if (r.read(a)) { put(*this) = get(a); return true; } return false; }
+	friend decltype(auto)	get(const _read_as &p)	{ return get((const holder<T>&)p); }
+	friend decltype(auto)	put(_read_as &p)		{ return put((holder<T>&)p); }
 };
+
+template<typename A, typename T>	_read_as<A, T>	read_as(T &&p)	{ return p; }
 
 //-----------------------------------------------------------------------------
 //	constexpr
@@ -390,39 +410,44 @@ template<typename T, bool S> struct T_signed_native	: T_signed<native_endian_t<T
 //	calc_size - dynamic sizeof (for, e.g. trailing_array)
 //-----------------------------------------------------------------------------
 
-template<typename T> struct calc_size_s {
-	template<typename...P> static constexpr size_t f(P&&...) { return sizeof(T); }
-};
-template<typename T, typename...P> constexpr size_t calc_size(P&&...p) {
-	return calc_size_s<T>::f(forward<P>(p)...);
-}
-template<typename T> constexpr size_t calc_size() {
+template<typename T, typename...P> constexpr size_t calc_size(T*, P&&...p) {
 	return sizeof(T);
 }
+
+template<typename T, typename...P> constexpr size_t calc_size(P&&...p) {
+	return calc_size((T*)nullptr, forward<P>(p)...);
+}
+
+template<typename T, typename...P> inline void*	allocatep(P&&...p) { return aligned_alloc(calc_size<T>(forward<P>(p)...), alignof(T));}
+template<typename T, typename...P>	enable_if_t<!is_array<T>, T*>	make(P&&...p)		{ return new(aligned_alloc(calc_size<T>(forward<P>(p)...), alignof(T))) T(forward<P>(p)...); }
 
 //-----------------------------------------------------------------------------
 //	operations
 //-----------------------------------------------------------------------------
+float	mod(float n, float d);
 
-// arthmetic
+// arthmetic - binary
 struct op_add			{ template<typename A, typename B> auto operator()(A &&a, B &&b) const { return forward<A>(a) + forward<B>(b); } };
 struct op_sub			{ template<typename A, typename B> auto operator()(A &&a, B &&b) const { return forward<A>(a) - forward<B>(b); } };
 struct op_mul			{ template<typename A, typename B> auto operator()(A &&a, B &&b) const { return forward<A>(a) * forward<B>(b); } };
 struct op_div			{ template<typename A, typename B> auto operator()(A &&a, B &&b) const { return forward<A>(a) / forward<B>(b); } };
 struct op_rdiv			{ template<typename A, typename B> auto operator()(A &&a, B &&b) const { return forward<A>(b) / forward<B>(a); } };
-struct op_mod			{ template<typename A, typename B> auto operator()(A &&a, B &&b) const { return forward<A>(a) % forward<B>(b); } };
+struct op_mod			{ template<typename A, typename B> auto operator()(A &&a, B &&b) const { return mod(forward<A>(a), forward<B>(b)); } };
 struct op_and			{ template<typename A, typename B> auto operator()(A &&a, B &&b) const { return forward<A>(a) & forward<B>(b); } };
 struct op_or			{ template<typename A, typename B> auto operator()(A &&a, B &&b) const { return forward<A>(a) | forward<B>(b); } };
 struct op_xor			{ template<typename A, typename B> auto operator()(A &&a, B &&b) const { return forward<A>(a) ^ forward<B>(b); } };
 struct op_shl			{ template<typename A, typename B> auto operator()(A &&a, B &&b) const { return forward<A>(a) << forward<B>(b); } };
 struct op_shr			{ template<typename A, typename B> auto operator()(A &&a, B &&b) const { return forward<A>(a) >> forward<B>(b); } };
 struct op_rot			{ template<typename A, typename B> auto operator()(A &&a, B &&b) const { return rotate_bits(a, b); } };
+// arthmetic - unary
 struct op_neg			{ template<typename A> auto operator()(A &&a) const { return -forward<A>(a); } };
-struct op_not			{ template<typename A> auto operator()(A &&a) const { return ~forward<A>(a); } };
+struct op_compl			{ template<typename A> auto operator()(A &&a) const { return ~forward<A>(a); } };
+struct op_not			{ template<typename A> auto operator()(A &&a) const { return !forward<A>(a); } };
 //struct op_recip		{ template<typename A> A operator()(const A &a) const { return reciprocal(a); } };
 
 struct op_min			{ template<typename A, typename B>	A operator()(const A &a, const B &b) const { return min(a, b); } };
 struct op_max			{ template<typename A, typename B>	A operator()(const A &a, const B &b) const { return max(a, b); } };
+struct op_select		{ template<typename A, typename B>	B operator()(const A &a, const B &b0, const B &b1) const { return select(a, b0, b1); } };
 
 // assignment
 struct op_add_eq		{ template<typename A, typename B> A& operator()(A &a, B &&b) const { return a += forward<B>(b); } };
@@ -441,8 +466,8 @@ struct less_equal		{ template<typename A, typename B> bool operator()(A &&a, B &
 struct greater			{ template<typename A, typename B> bool operator()(A &&a, B &&b) const { return forward<A>(a)  > forward<B>(b); } typedef struct less_equal		not_t; };
 struct less				{ template<typename A, typename B> bool operator()(A &&a, B &&b) const { return forward<A>(a)  < forward<B>(b); } typedef struct greater_equal	not_t; };
 struct greater_equal	{ template<typename A, typename B> bool operator()(A &&a, B &&b) const { return forward<A>(a) >= forward<B>(b); } typedef struct less			not_t; };
-struct equal_vec		{ template<typename T> inline bool operator()(const T &a, const T &b) const { return all(a == b); } typedef struct not_equal_vec		not_t; };
-struct not_equal_vec	{ template<typename T> inline bool operator()(const T &a, const T &b) const { return any(a != b); } typedef struct equal_vec			not_t; };
+struct equal_vec		{ template<typename T> bool operator()(const T &a, const T &b) const { return all(a == b); } typedef struct not_equal_vec		not_t; };
+struct not_equal_vec	{ template<typename T> bool operator()(const T &a, const T &b) const { return any(a != b); } typedef struct equal_vec			not_t; };
 
 struct op_deref			{ template<typename A> decltype(auto) operator()(A &&a) const { return *a; } };
 struct op_set			{ template<typename A, typename B>	void operator()(const A &a, B &&b) const { assign(b, a); } };
@@ -452,6 +477,8 @@ struct op_swap			{ template<typename A, typename B>	void operator()(A &a, B &b)	
 struct op_construct		{ template<typename A, typename...B>void operator()(A &a, B&&...b)	const { construct(a, forward<B>(b)...); } };
 struct op_destruct		{ template<typename A>				void operator()(A &a)			const { destruct(a); } };
 struct op_move			{ template<typename A, typename B>	void operator()(A &a, B &&b)	const { a = forward<B>(b); } };
+
+template<typename B> struct op_convert	{ template<typename A>	auto operator()(A &&a)	const { return B(forward<A>(a)); } };
 
 // op_param - pick one parameter
 template<int I> struct op_param { template<typename...P> auto	operator()(P&&... p) const { return PP_index<I>(forward<P>(p)...); } };
@@ -473,13 +500,13 @@ template<typename O1, typename O2> struct op_chain21 : O1, O2 {
 
 template<typename T> struct _not {
 	T	t;
-	_not(T &&t) : t(forward<T>(t)) {}
+	constexpr _not(T &&t) : t(forward<T>(t)) {}
 	template<typename...P> bool operator()(P&&... p) const { return !t(forward<P>(p)...); }
 };
 
 template<> struct _not<bool> {
 	bool	t;
-	_not(bool t = false) : t(t) {}
+	constexpr _not(bool t = false) : t(t) {}
 	operator bool() const { return !t; }
 };
 
@@ -489,12 +516,29 @@ template<class T> const T&	make_not(const _not<T> &t)	{ return t.t; }
 template<class T> const T&	operator!(const _not<T> &t)	{ return t.t; }
 template<class T> const T&	operator~(const _not<T> &t)	{ return t.t; }
 
-template<typename A, typename B> auto	operator&(A&& a, const _not<B>& b)				{ return forward<A>(a) - b; }
-template<typename A, typename B> auto	operator&(const _not<A>& a, B&& b)				{ return forward<B>(b) - a; }
+template<typename A, typename B> A&		operator&=(A& a, const _not<B>& b)				{ return a -= ~b; }
+template<typename A, typename B> auto	operator&(const _not<A>& a, const _not<B>& b)	{ return ~(~a | ~b); }
+template<typename A, typename B> auto	operator&(A&& a, const _not<B>& b)				{ return forward<A>(a) - ~b; }
+template<typename A, typename B> auto	operator&(const _not<A>& a, B&& b)				{ return forward<B>(b) - ~a; }
 
-template<typename A, typename B> auto	operator&(const _not<A>& a, const _not<B>& b)	{ return ~(a | b); }
-template<typename A, typename B> auto	operator|(const _not<A>& a, const _not<B>& b)	{ return ~(a & b); }
-template<typename A, typename B> auto	operator^(const _not<A>& a, const _not<B>& b)	{ return a ^ b; }
+template<typename A, typename B> A&		operator|=(A& a, const _not<B>& b)				{ return a = ~(~b - a); }
+template<typename A, typename B> auto	operator|(const _not<A>& a, const _not<B>& b)	{ return ~(~a & ~b); }
+template<typename A, typename B> auto	operator|(A&& a, const _not<B>& b)				{ return ~(~b - forward<A>(a)); }
+template<typename A, typename B> auto	operator|(const _not<A>& a, B&& b)				{ return ~(~a - forward<B>(b)); }
+
+template<typename A, typename B> A&		operator^=(A& a, const _not<B>& b)				{ return a = ~(a ^ ~b); }
+template<typename A, typename B> auto	operator^(const _not<A>& a, const _not<B>& b)	{ return ~a ^ ~b; }
+template<typename A, typename B> auto	operator^(A&& a, const _not<B>& b)				{ return ~(a ^ ~b); }
+template<typename A, typename B> auto	operator^(const _not<A>& a, B&& b)				{ return ~(~a ^ b); }
+
+template<typename T> struct negated {
+	T	t;
+	constexpr negated(T &&t) : t(forward<T>(t)) {}
+	constexpr negated(const T &t) : t(t) {}
+	template<typename...P> auto operator()(P&&... p) const { return -t(forward<P>(p)...); }
+	constexpr operator auto()	const	{ return -t; }
+};
+template<class T> const T&	operator-(const negated<T> &t)	{ return t.t; }
 
 template<class T> struct flipped {
 	T	t;
@@ -533,13 +577,14 @@ template<typename T, int S> struct shifted {
 template<typename OP, typename T, typename T2, T2 B, typename R = decltype(OP()(declval<T>(), B))> struct with_op {
 	T	raw;
 	constexpr operator R() const	{ return OP()(raw, B); }
+	template<class R> bool read(R &r)	{ return r.read(raw); }
 };
 
 //-----------------------------------------------------------------------------
 //	compact - cram a type into less bits
 //-----------------------------------------------------------------------------
 
-template<typename T, int N> class compact {
+template<typename T, int N> class compact : public assignments<compact<T, N>> {
 	typedef native_endian_t<T>		T0;
 	uintn<(N + 7) / 8, is_bigendian<T>()>	t;
 public:
@@ -548,15 +593,15 @@ public:
 	constexpr T0		get()	const	{ return T0((uint_bits_t<N>)t); }
 	constexpr operator	T0()	const	{ return get(); }
 	T0			operator=(const T0 &t2)	{ t = t2; return t2; }
-	T0			operator+=(const T0 &b)	{ return operator=(get() + b); }
-	T0			operator-=(const T0 &b)	{ return operator=(get() - b); }
-	T0			operator*=(const T0 &b)	{ return operator=(get() * b); }
-	T0			operator/=(const T0 &b)	{ return operator=(get() / b); }
-	T0			operator%=(const T0 &b)	{ return operator=(get() % b); }
-	T0			operator&=(const T0 &b)	{ return operator=(get() & b); }
-	T0			operator|=(const T0 &b)	{ return operator=(get() | b); }
-	T0			operator<<=(int b)		{ return operator=(get() << b); }
-	T0			operator>>=(int b)		{ return operator=(get() >> b); }
+	//T0		operator+=(const T0 &b)	{ return operator=(get() + b); }
+	//T0		operator-=(const T0 &b)	{ return operator=(get() - b); }
+	//T0		operator*=(const T0 &b)	{ return operator=(get() * b); }
+	//T0		operator/=(const T0 &b)	{ return operator=(get() / b); }
+	//T0		operator%=(const T0 &b)	{ return operator=(get() % b); }
+	//T0		operator&=(const T0 &b)	{ return operator=(get() & b); }
+	//T0		operator|=(const T0 &b)	{ return operator=(get() | b); }
+	//T0		operator<<=(int b)		{ return operator=(get() << b); }
+	//T0		operator>>=(int b)		{ return operator=(get() >> b); }
 
 	template<class R, typename = is_reader_t<R>> compact(R &&r) { r.read(*this); }
 };
@@ -568,6 +613,17 @@ template<typename T, int N> struct num_traits<compact<T, N> > : num_traits<T> {
 };
 
 template<typename T, int N>	constexpr uint32 BIT_COUNT<compact<T, N>>	= N;
+
+//-----------------------------------------------------------------------------
+//	auto_conv - automatically convert E1 to E2
+//-----------------------------------------------------------------------------
+
+template<typename E1, typename E2> struct auto_conv {
+	E1 e;
+	auto_conv()	{}
+	auto_conv(E1 e) : e(e) {}
+	constexpr operator E2() const { return conv<E2>(e); }
+};
 
 //-----------------------------------------------------------------------------
 //	spacer/space_for
@@ -610,109 +666,6 @@ template<typename P> placement_helper<P> make_placement_helper(P&& p) {
 }
 
 //-----------------------------------------------------------------------------
-//	optional
-//-----------------------------------------------------------------------------
-
-template<typename T> struct optional {
-	typedef typename T_underlying<T>::type T0;
-	space_for<T>	t;
-	bool			_exists;
-	optional()				: _exists(false)		{}
-	optional(const _none&)	: _exists(false)		{}
-	optional(const T0 &x)	: _exists(true)			{ new(placement(t)) T(x); }
-	optional(T0 &&x)		: _exists(true)			{ new(placement(t)) T(move(x)); }
-	optional(const optional<T&> &x)	: _exists(x.exists())	{ if (_exists) new(t) T(get(x)); }
-	T*				operator->()					{ ISO_ASSERT(exists()); return t; }
-	const T*		operator->()	const			{ ISO_ASSERT(exists()); return t; }
-	operator const	T&()			const			{ ISO_ASSERT(exists()); return *t; }
-	operator		T&()							{ ISO_ASSERT(exists()); return *t; }
-	bool			exists()		const			{ return _exists; }
-	const T&		or_default(const T &def = T()) const	{ return _exists ? *t : def; }
-	friend const T&	get(const optional &t)			{ return t; }
-	friend T&		put(optional &t)				{ t._exists = true; return *new(t.t) T; }
-};
-template<typename T> struct T_underlying<optional<T> > : T_type<T> {};
-
-template<> struct optional<bool> {
-	uint_t<sizeof(bool)>	t;
-	optional()				: t(2)					{}
-	optional(const _none&)	: t(2)					{}
-	optional(bool  x)		: t(x)					{}
-	operator		bool()		const				{ ISO_ASSERT(exists()); return t == 1; }
-	bool			exists()	const				{ return t < 2; }
-	bool			or_default(bool def = false) const	{ return t < 2 ? t == 1 : def; }
-	friend bool		get(const optional &t)			{ return t; }
-	friend bool&	put(optional &t)				{ return (bool&)t.t; }
-};
-
-template<typename T> struct optional<T*> {
-	T				*t;
-	optional()				: t((T*)~uintptr_t(0))	{}
-	optional(const _none&)	: t((T*)~uintptr_t(0))	{}
-	optional(T *x)			: t(x)					{}
-	T*				operator->() const				{ ISO_ASSERT(exists()); return t; }
-	operator		T*()		const				{ ISO_ASSERT(exists()); return t; }
-	bool			exists()	const				{ return !!~uintptr_t(t); }
-	T*				or_default(T *def = 0) const	{ return exists() ? t : def; }
-	friend T*		get(const optional &t)			{ return t; }
-	friend T*&		put(optional &t)				{ return t.t; }
-};
-
-template<typename T> struct optional_temp {
-	T	t;
-	T	*p;
-	optional_temp(T &t)		: p(&t)					{}
-	optional_temp(T &&t)	: t(move(t)), p(&this->t)	{}
-	operator	T&()			const				{ return *p; }
-	auto		operator*()		const				{ return *p; }
-	auto		operator->()	const				{ return p; }
-	auto		operator!()		const				{ return !*p; }
-
-	template<typename U> friend auto operator+(const optional_temp &a, const U &b)	{ return get(a) + b; }
-
-	friend T&	get(const optional_temp &t)			{ return t; }
-	friend T&	put(optional_temp &t)				{ return t; }
-	friend auto	begin(const optional_temp &t)		{ return t->begin(); }
-	friend auto	end(const optional_temp &t)			{ return t->end(); }
-};
-template<typename T> struct optional<T&> {
-	typedef if_t<(sizeof(T) > sizeof(void*)), optional_temp<T>, const T&> T1;
-	T		*t;
-	optional()				: t((T*)0)				{}
-	optional(const _none&)	: t((T*)0)				{}
-	optional(T &x)			: t(__builtin_addressof(x)) {}
-	explicit optional(T *x)	: t(x)					{}
-	T&				operator=(const T &x)			{ ISO_ASSERT(exists()); return *t = x; }
-	T*				operator->()					{ ISO_ASSERT(exists()); return t; }
-	T*				operator&()						{ ISO_ASSERT(exists()); return t; }
-	operator		T&()		const				{ ISO_ASSERT(exists()); return *t; }
-	bool			exists()	const				{ return !!t; }
-	bool			operator!()	const				{ return !t || !*t; }
-	T1				or_default(T &&def = T()) const { if (exists()) return *t; return move(def); }
-	T1				or_default(T &def)		const	{ if (exists()) return *t; return def; }
-	friend T&		get(const optional &t)			{ return t; }
-	friend T&		put(optional &t)				{ return t; }
-};
-template<typename T> struct T_underlying<optional_temp<T>> : T_type<T> {};
-
-template<typename T> struct optional<return_holder<T> > : optional<T&> {
-	using optional<T&>::optional;
-};
-
-template<typename T> struct optional<return_holder<T>&> : optional<T&> {
-	using optional<T&>::optional;
-};
-
-template<typename T> optional<T> onlyif(bool b, T&& t) {
-	return b ? optional<T>(forward<T>(t)) : none;
-}
-
-//template<typename C> constexpr decltype(begin(declval<C>()))		begin(optional<C> &c)		{ return begin(c.or_default());	}
-//template<typename C> constexpr decltype(end(declval<C>()))			end(optional<C> &c)			{ return end(c.or_default());	}
-template<typename C> constexpr decltype(begin(declval<const C>()))	begin(const optional<C> &c)	{ return begin(c.or_default());	}
-template<typename C> constexpr decltype(end(declval<const C>()))	end(const optional<C> &c)	{ return end(c.or_default());	}
-
-//-----------------------------------------------------------------------------
 //	more templated functions
 //-----------------------------------------------------------------------------
 
@@ -732,7 +685,7 @@ template<typename T, typename=void>	constexpr	int		num_elements_v			= 1;
 template<typename T, int N>			constexpr	int		num_elements_v<T[N]>	= N;
 template<typename T>				constexpr	int		num_elements_v<T&>		= num_elements_v<T>;
 
-
+template<typename A, typename B>	constexpr	bool	test_any(A a, B b)						{ return !!(as_unsigned(a) & as_unsigned(b)); }
 template<typename A, typename B>	constexpr	bool	test_all(A a, B b)						{ return (as_unsigned(a) & as_unsigned(b)) == as_unsigned(b); }
 template<typename T>				inline		bool	test_set(T &a, T b)						{ T t = a & b; a |= b; return !!t; }
 template<typename T>				inline		bool	test_set(T &a, T b, bool set)			{ T t = a & b; a ^= t ^ (-int(set) & b); return !!t; }
@@ -743,9 +696,16 @@ template<typename T>				inline		bool	test_set_bit(T &a, int bit, bool set)	{ ret
 template<typename T>				inline		bool	test_clear_bit(T &a, int bit)			{ return test_clear(a, T(1) << bit); }
 template<typename T>				inline		bool	test_flip_bit(T &a, int bit)			{ return test_flip(a, T(1) << bit); }
 
-template<typename B, typename T, int N> inline T B::* member_element(T (B::*array)[N], int i) {
+template<typename B, typename T, int N> inline T B::*	member_element(T (B::*array)[N], int i) {
 	uintptr_t p = uintptr_t(&(((B*)0)->*array)[i]);
 	return *(T B::**)(&p);
+}
+template<typename S1, typename S2, typename T>	constexpr T S1::*	member_chain(S2 S1::*s1, T S2::*t)	{
+	uintptr_t	p	= uintptr_t(&(((S2*)T_get_member_offset(s1))->*t));
+	return *(T S1::**)(&p);
+}
+template<typename S1, typename...S>	constexpr auto		member_chain(S1 s1, S...s)	{
+	return member_chain(s1, member_chain(s...));
 }
 
 template<typename D, typename S>	struct cast_s		{ static inline D f(S s) { return num_traits<D>::cast(s); } };
@@ -759,10 +719,6 @@ template<typename T> struct				destructor		{ void operator()(void *p) const { ((
 
 template<typename T> void				deleter_fn(void *p)		{ iso::deleter<T>()(p); }
 template<typename T> void				destructor_fn(void *p)	{ iso::destructor<T>()(p); }
-template<typename T> void				create(void *p)			{ new(p) T(); }
-template<typename T> auto				create(void *p, T&& t)	{ return new(p) noref_t<T>(forward<T>(t)); }
-template<typename T, typename...P> T*	create(T *t, P&&...p)	{ return new(t) T(forward<P>(p)...); }
-template<typename T> auto				dup(T&& t)				{ return new noref_t<T>(forward<T>(t)); }
 
 template<typename T> void negate(T &t) { t = -t; }
 
@@ -788,16 +744,6 @@ template<int N, typename I>						constexpr auto	prod(I i)				{ return _over_s<N>
 template<typename T>							constexpr bool is_any(T &&t) { return false; }
 template<typename T, typename P0, typename...P>	constexpr bool is_any(T &&t, P0 &&p0, P&&...p) {
 	return t == p0 || is_any(forward<T>(t), forward<P>(p)...);
-}
-
-template<typename P0> static auto select_n(int i, P0&& p0) {
-	return p0;
-}
-template<typename P0, typename...P> static auto select_n(int i, P0&& p0, P&&...p) {
-	return i == 0 ? p0 : select_n<P0>(i - 1, forward<P>(p)...);
-}
-template<typename P0, typename P1, typename P2, typename P3, typename P4, typename P5, typename P6, typename P7, typename P8, typename...P> static auto select_n(int i, P0&& p0, P1&& p1, P2&& p2, P3&& p3, P4&& p4, P5&& p5, P6&& p6, P7&& p7, P8&& p8, P&&...p) {
-	return i < 8 ? select_n<P0>(i, forward<P0>(p0), forward<P1>(p1), forward<P2>(p2), forward<P3>(p3), forward<P4>(p4), forward<P5>(p5), forward<P6>(p6), forward<P7>(p7)) : select_n<P0>(i - 8, forward<P8>(p8), forward<P>(p)...);
 }
 
 template<typename T, typename C0> 					constexpr auto horner(T x, C0 c0) 				{ return c0; }
@@ -831,6 +777,176 @@ template<typename T, typename B> enable_if_t<(is_int<B> && is_signed<B>), T> pow
 	return b < 0 ? rpow_mul(a, -b, c) : pow_mul(a, uint32(b), c);
 }
 
+//-----------------------------------------------------------------------------
+//	select
+//-----------------------------------------------------------------------------
+
+template<typename P0> static auto select_n(int i, P0&& p0) {
+	return p0;
+}
+template<typename P0, typename...P> static auto select_n(int i, P0&& p0, P&&...p) {
+	return i == 0 ? p0 : select_n<P0>(i - 1, forward<P>(p)...);
+}
+template<typename P0, typename P1, typename P2, typename P3, typename P4, typename P5, typename P6, typename P7, typename P8, typename...P> static auto select_n(int i, P0&& p0, P1&& p1, P2&& p2, P3&& p3, P4&& p4, P5&& p5, P6&& p6, P7&& p7, P8&& p8, P&&...p) {
+	return i < 8 ? select_n<P0>(i, forward<P0>(p0), forward<P1>(p1), forward<P2>(p2), forward<P3>(p3), forward<P4>(p4), forward<P5>(p5), forward<P6>(p6), forward<P7>(p7)) : select_n<P0>(i - 8, forward<P8>(p8), forward<P>(p)...);
+}
+
+//-----------------------------------------------------------------------------
+//	which
+//-----------------------------------------------------------------------------
+
+template<typename T> int	which(int next, const T &value, const identity_t<T> &name0) {
+	return value == name0 ? next : -1;
+}
+template<typename T> int	which(int next, const T &value, const identity_t<T> &name0, int enum0) {
+	return value == name0 ? enum0 : -1;
+}
+template<typename T, typename...X> int	which(int next, const T &value, const identity_t<T> &name0, int enum0, X... t) {
+	return value == name0 ? enum0 : which(enum0 + 1, value, t...);
+}
+template<typename T, typename...X> int	which(int next, const T &value, const identity_t<T> &name0, X... t) {
+	return value == name0 ? next : which(next + 1, value, t...);
+}
+
+//-----------------------------------------------------------------------------
+//	switch
+//-----------------------------------------------------------------------------
+
+template<class L, typename E, E...e> void switchT(L &&lambda, E i, meta::value_list<E, e...>) {
+	bool	unused[] = {i == e && (lambda.template operator()<e>(), true)...};
+}
+template<typename R, class L, typename E, E...e> R switchT(L &&lambda, E i, meta::value_list<E, e...>) {
+	R		result;
+	bool	unused[] = {i == e && ((result = lambda.template operator()<e>()), true)...};
+	return result;
+}
+
+//-----------------------------------------------------------------------------
+//	optional
+//-----------------------------------------------------------------------------
+
+template<typename T> struct optional {
+	typedef typename T_underlying<T>::type T0;
+	space_for<T>	t;
+	bool			_exists;
+	optional()				: _exists(false)		{}
+	optional(const _none&)	: _exists(false)		{}
+	optional(const T0 &x)	: _exists(true)			{ new(placement(t)) T(x); }
+	optional(T0 &&x)		: _exists(true)			{ new(placement(t)) T(move(x)); }
+	//	template<typename...U> optional(U&&...u) : _exists(true)	{ new(placement(t)) T(forward<U>(u)...); }
+	optional(const optional<T&> &x)	: _exists(x.exists())	{ if (_exists) new(t) T(get(x)); }
+	~optional()										{ if (_exists) t->~T(); }
+	template<typename...U> T&	put(U&&...u)		{ if (_exists) t->~T(); _exists = true; return *new(placement(t)) T(forward<U>(u)...); }
+	T*				operator->()					{ ISO_ASSERT(exists()); return t; }
+	const T*		operator->()	const			{ ISO_ASSERT(exists()); return t; }
+	operator const	T&()			const			{ ISO_ASSERT(exists()); return *t; }
+	operator		T&()							{ ISO_ASSERT(exists()); return *t; }
+	bool			exists()		const			{ return _exists; }
+	T*				exists_ptr()					{ return _exists ? t : nullptr; }
+	const T*		exists_ptr()	const			{ return _exists ? t : nullptr; }
+	const T&		or_default(const T &def = T()) const	{ return _exists ? *t : def; }
+	friend const T&	get(const optional &t)			{ return t; }
+	friend T&		put(optional &t)				{ if (t._exists) return t; t._exists = true; return *new(t.t) T; }
+	friend T&&		move(optional &&t)				{ ISO_ASSERT(t.exists()); return move(*t.t); }
+};
+template<typename T> struct T_underlying<optional<T> > : T_type<T> {};
+
+template<> struct optional<bool> {
+	uint_t<sizeof(bool)>	t;
+	optional()				: t(2)					{}
+	optional(const _none&)	: t(2)					{}
+	optional(bool  x)		: t(x)					{}
+	operator		bool()		const				{ ISO_ASSERT(exists()); return t == 1; }
+	bool			exists()	const				{ return t < 2; }
+	bool&			put()							{ return (bool&)t; }
+	bool			or_default(bool def = false) const	{ return t < 2 ? t == 1 : def; }
+	friend bool		get(const optional &t)			{ return t; }
+	friend bool&	put(optional &t)				{ return (bool&)t.t; }
+};
+
+template<typename T> struct optional<T*> {
+	T				*t;
+	optional()				: t((T*)~uintptr_t(0))	{}
+	optional(const _none&)	: t((T*)~uintptr_t(0))	{}
+	optional(T *x)			: t(x)					{}
+	T*				operator->() const				{ ISO_ASSERT(exists()); return t; }
+	operator		T*()		const				{ ISO_ASSERT(exists()); return t; }
+	bool			exists()	const				{ return !!~uintptr_t(t); }
+	T*				or_default(T *def = 0) const	{ return exists() ? t : def; }
+	friend T*		get(const optional &t)			{ return t; }
+	friend T*&		put(optional &t)				{ return t.t; }
+};
+
+template<typename T> struct optional_temp {
+	T	t;
+	T	*p;
+	optional_temp(T &t)		: p(&t)					{}
+	optional_temp(T &&t)	: t(move(t)), p(&this->t)	{}
+	operator	T&()			const				{ return *p; }
+	auto		operator*()		const				{ return *p; }
+	auto		operator->()	const				{ return p; }
+	auto		operator!()		const				{ return !*p; }
+	decltype(auto) operator[](intptr_t i)	const	{ return (*p)[i]; }
+
+	template<typename U> friend auto operator+(const optional_temp &a, const U &b)	{ return get(a) + b; }
+
+	friend T&	get(const optional_temp &t)			{ return t; }
+	friend T&	put(optional_temp &t)				{ return t; }
+	friend auto	begin(const optional_temp &t)		{ return t->begin(); }
+	friend auto	end(const optional_temp &t)			{ return t->end(); }
+};
+template<typename T> struct optional<T&> {
+	typedef if_t<(sizeof(T) > sizeof(void*)), optional_temp<T>, const T&> T1;
+	T		*t;
+	optional()				: t((T*)0)				{}
+	optional(const _none&)	: t((T*)0)				{}
+	optional(T &x)			: t(__builtin_addressof(x)) {}
+	explicit optional(T *x)	: t(x)					{}
+	T&				operator=(const T &x)			{ ISO_ASSERT(exists()); return *t = x; }
+	decltype(auto)	operator->()					{ ISO_ASSERT(exists()); return get_ptr1(*t); }
+	T*				operator&()						{ ISO_ASSERT(exists()); return t; }
+	operator		T&()		const				{ ISO_ASSERT(exists()); return *t; }
+	decltype(auto)	operator[](intptr_t i)	const	{ ISO_ASSERT(exists()); return (*t)[i]; }
+	bool			exists()	const				{ return !!t; }
+	T*				exists_ptr()					{ return t; }
+	const T*		exists_ptr()			const	{ return t; }
+	bool			operator!()	const				{ return !t || !*t; }
+	T1				or_default(T &&def = T()) const { if (t) return *t; return move(def); }
+	T1				or_default(T &def)		const	{ if (t) return *t; return def; }
+	friend T&		get(const optional &t)			{ return t; }
+	friend T&		put(optional &t)				{ return t; }
+};
+template<typename T> struct T_underlying<optional_temp<T>> : T_type<T> {};
+
+template<typename T> struct optional<ref_holder<T> > : optional<T&> {
+	using optional<T&>::optional;
+};
+
+template<typename T> struct optional<ref_holder<T>&> : optional<T&> {
+	using optional<T&>::optional;
+};
+
+template<typename T> auto onlyif(bool b, T&& t) {
+	return b ? optional<T>(forward<T>(t)) : none;
+}
+
+//template<typename C> constexpr decltype(begin(declval<C>()))		begin(optional<C> &c)		{ return begin(c.or_default());	}
+//template<typename C> constexpr decltype(end(declval<C>()))			end(optional<C> &c)			{ return end(c.or_default());	}
+template<typename C> constexpr decltype(begin(declval<const C>()))	begin(const optional<C> &c)	{ return begin(c.or_default());	}
+template<typename C> constexpr decltype(end(declval<const C>()))	end(const optional<C> &c)	{ return end(c.or_default());	}
+
+template<typename A, typename B> void assign(optional<A> a, const B &b) { 
+	if (a.exists())
+		assign(get(a), b);
+}
+template<typename A, typename B> void assign(A &a, const optional<B> &b) { 
+	if (b.exists())
+		assign(a, get(b));
+}
+template<typename A, typename B> void assign(optional<A> a, const optional<B> &b) { 
+	if (a.exists() && b.exists())
+		assign(get(a), get(b));
+}
 
 //-----------------------------------------------------------------------------
 //	getter
@@ -852,11 +968,16 @@ template<class C, class K, class T = decltype(declval<C>().get(declval<K>()))> s
 	putter(C &c, const K k)	: c(c), k(k) {}
 	putter(C &c, K &&k)		: c(c), k(move(k)) {}
 	T			get()					const	{ return c.get(k); }
-	T0&			put()					const	{ return c.put(k); }
+//	T0&			put()					const	{ return c.put(k); }
+	template<typename...U> T0&	put(U&&...u)	const	{ return c.put(k, forward<U>(u)...); }
 	auto		remove()				const	{ return c.remove(k); }
 	T			operator->()			const	{ return get(); }
 	operator	T()						const	{ return get(); }
 	template<typename U> auto operator=(U &&u)	{ return c.put(k, forward<U>(u)); }
+	template<typename U> auto operator+=(U &&u)	{ return c.put(k) += forward<U>(u); }
+	template<typename U> auto operator-=(U &&u)	{ return c.put(k) -= forward<U>(u); }
+	template<typename U> auto operator*=(U &&u)	{ return c.put(k) *= forward<U>(u); }
+	template<typename U> auto operator/=(U &&u)	{ return c.put(k) /= forward<U>(u); }
 
 	friend T	get(const putter &m)			{ return m.get(); }
 	friend T	put(putter &m)					{ return m.get(); }
@@ -870,7 +991,8 @@ template<class C, class K, class T> struct putter<C, K, optional<T> > {
 	putter(C &c, const K &k): c(c), k(k) {}
 	putter(C &c, K &&k)		: c(c), k(move(k)) {}
 	optional<T>	get()					const	{ return c.get(k); }
-	T0&			put()					const	{ return c.put(k); }
+//	T0&			put()					const	{ return c.put(k); }
+	template<typename...U> T0&	put(U&&...u)	const	{ return c.put(k, forward<U>(u)...); }
 	auto		remove()				const	{ return c.remove(k); }
 	auto		operator&()				const	{ return get_ptr(c.put(k)); }
 	decltype(auto)	operator->()		const	{ return get_ptr1(c.put(k)); }
@@ -878,10 +1000,18 @@ template<class C, class K, class T> struct putter<C, K, optional<T> > {
 	auto		operator!()				const	{ return !get(); }
 	operator	optional<T>()			const	{ return get(); }
 	operator	T0&()					const	{ return put(); }
+
 	template<typename U> decltype(auto) operator=(U &&u)	{ return c.put(k, forward<U>(u)); }
+	template<typename U> decltype(auto) operator+=(U &&u)	{ auto o = get(); return o.exists() ? (T0&)o += forward<U>(u) : c.put(k, forward<U>(u)); }
+	template<typename U> decltype(auto) operator-=(U &&u)	{ auto o = get(); return o.exists() ? o -= forward<U>(u) : c.put(k, -T0(forward<U>(u))); }
+	template<typename U> decltype(auto) operator|=(U &&u)	{ auto o = get(); return o.exists() ? o |= forward<U>(u) : c.put(k, forward<U>(u)); }
+	template<typename U> decltype(auto) operator^=(U &&u)	{ auto o = get(); return o.exists() ? o ^= forward<U>(u) : c.put(k, ~forward<U>(u)); }
+	template<typename U> decltype(auto) operator*=(U &&u)	{ return c.put(k) *= forward<U>(u); }
+	template<typename U> decltype(auto) operator/=(U &&u)	{ return c.put(k) /= forward<U>(u); }
 
 	bool		exists()				const	{ return get().exists(); }
-	decltype(auto)	or_default(T0 &&def = T0()) const	{ return get().or_default(move(def)); }
+	decltype(auto)	or_default()		const	{ return get().or_default(T0()); }
+	template<typename U> decltype(auto)	or_default(U &&def) const	{ return get().or_default(forward<U>(def)); }
 
 	friend optional<T>	get(const putter &m)	{ return m.get(); }
 	friend optional<T>	put(putter &m)			{ return m.get(); }
@@ -1006,7 +1136,7 @@ template<typename T, typename B, unsigned M = alignof(T), unsigned A = alignof(T
 	friend constexpr T*	begin(const pointer_pair &s)	{ return s;	}
 };
 
-template<typename T, typename B, unsigned M, unsigned A> struct container_traits<pointer_pair<T, B, M, A>> : container_traits<T*> {};
+//template<typename T, typename B, unsigned M, unsigned A> struct container_traits<pointer_pair<T, B, M, A>> : container_traits<T*> {};
 
 //-----------------------------------------------------------------------------
 //	tagged_pointer - store tag in unused (upper) pointer bits
@@ -1045,7 +1175,7 @@ template<typename T> struct tagged_pointer {
 	friend constexpr T*	begin(const tagged_pointer &s)	{ return s;	}
 };
 
-template<typename T> struct container_traits<tagged_pointer<T>> : container_traits<T*> {};
+//template<typename T> struct container_traits<tagged_pointer<T>> : container_traits<T*> {};
 
 //-----------------------------------------------------------------------------
 //	arbitrary
@@ -1138,6 +1268,7 @@ public:
 	template<typename T> const T *operator=(const T *t)				{ p = uintptr_t(t); return t; }
 	friend auto align(arbitrary_const_ptr x, uint32 a)		{ return arbitrary_const_ptr(align(x.p, a)); }
 	friend auto align_down(arbitrary_const_ptr x, uint32 a)	{ return arbitrary_const_ptr(align_down(x.p, a)); }
+	friend auto unconst(arbitrary_const_ptr x)				{ return arbitrary_ptr(x.p); }
 };
 
 //-----------------------------------------------------------------------------
@@ -1170,7 +1301,7 @@ struct memory_block {
 	constexpr memory_block(const _none&)			: p(0), n(0)			{}
 	constexpr memory_block(void *p, size_t n)		: p(p), n(n)			{}
 	constexpr memory_block(void *p, void *e)		: p(p), n((uint8*)e - (uint8*)p) {}
-	constexpr memory_block(const memory_block &t)	: p(t.p), n(t.n)		{}
+//	constexpr memory_block(const memory_block &t)	: p(t.p), n(t.n)		{}
 	template<typename T> explicit	constexpr memory_block(T *t)		: p(t), n(sizeof(T))		{}
 	template<typename T, int N>		constexpr memory_block(T (&t)[N])	: p(&t), n(sizeof(T) * N)	{}
 	template<typename T> operator T*()						const	{ return (T*)p; }
@@ -1185,6 +1316,7 @@ struct memory_block {
 	arbitrary_ptr		begin()								const	{ return p; }
 	arbitrary_ptr		end()								const	{ return (char*)p + n; }
 	bool				contains(const void *x)				const	{ return between(x, p, end()); }
+	intptr_t			offset_of(const void *x)			const	{ return (const uint8*)x - (const uint8*)p; }
 
 	void				clear_contents()					const	{ memset(p, 0, n); }
 	size_t				copy_to(void *dest)					const	{ memcpy(dest, p, n); return n; }
@@ -1197,12 +1329,13 @@ struct memory_block {
 
 	memory_block		begin(size_t i)						const	{ return i < n ? memory_block((char*)p, i) : *this; }
 	memory_block		end(size_t i)						const	{ return i < n ? memory_block((char*)p + n - i, i) : *this; }
-	memory_block		slice(const void *a, const void *b)	const	{ ISO_ASSERT(a >= p && b >= a && b <= end()); return memory_block((void*)a, size_t(b) - size_t(a)); }
+
+ 	memory_block		slice(const void *a, const void *b)	const	{ ISO_ASSERT(a >= p && b >= a && b <= end()); return memory_block((void*)a, (void*)b); }
 	memory_block		slice(const void *a)				const	{ return slice(a, (void*)end()); }
-	memory_block		slice(const void *a, intptr_t b)	const	{ return slice(a, (b < 0 ? (char*)end() : (char*)a) + b); }
+	memory_block		slice(const void *a, intptr_t b)	const	{ return slice(a, b < 0 ? (char*)end() + b : min((char*)a + b, (char*)end())); }
 	memory_block		slice(intptr_t a, intptr_t b)		const	{ return slice((char*)p + (a < 0 ? n + a : a), b); }
 	memory_block		slice(intptr_t a)					const	{ return slice((char*)p + (a < 0 ? n + a : a)); }
-	memory_block		slice_to(intptr_t b)				const	{ return slice(p, min(b, n)); }
+	memory_block		slice_to(size_t b)					const	{ return memory_block(p, min(b, n)); }
 	memory_block		slice_to(void *b)					const	{ return slice(p, b); }
 
 	template<typename T> memory_block operator+(T i)		const	{ return p && i <= n ? memory_block((char*)p + i, n - i) : none; }
@@ -1217,7 +1350,7 @@ struct const_memory_block {
 	size_t		n;
 
 	constexpr const_memory_block()								: p(0), n(0)			{}
-	constexpr const_memory_block(_none)							: p(0), n(0)			{}
+	constexpr const_memory_block(const _none&)					: p(0), n(0)			{}
 	constexpr const_memory_block(const void *p, size_t n)		: p(p), n(n)			{}
 	constexpr const_memory_block(const void *p, const void *e)	: p(p), n((uint8*)e - (uint8*)p) {}
 	constexpr const_memory_block(const memory_block &m)			: p(m.p), n(m.n)		{}
@@ -1239,6 +1372,7 @@ struct const_memory_block {
 	arbitrary_const_ptr	begin()								const	{ return p; }
 	arbitrary_const_ptr	end()								const	{ return (const char*)p + n; }
 	bool				contains(const void *x)				const	{ return between(x, p, end()); }
+	intptr_t			get_offset(const void *x)			const	{ return (const uint8*)x - (const uint8*)p; }
 
 	size_t				copy_to(void *dest)					const	{ memcpy(dest, p, n); return n; }
 	size_t				move_to(void *dest)					const	{ memmove(dest, p, n); return n; }
@@ -1246,12 +1380,12 @@ struct const_memory_block {
 
 	const_memory_block	begin(size_t i)						const	{ return i < n ? const_memory_block((const char*)p, i) : *this; }
 	const_memory_block	end(size_t i)						const	{ return i < n ? const_memory_block((const char*)p + n - i, i) : *this; }
-	const_memory_block	slice(const void *a, const void *b)	const	{ ISO_ASSERT(a >= p && b >= a && b <= end()); return const_memory_block((void*)a, size_t(b) - size_t(a)); }
+	const_memory_block	slice(const void *a, const void *b)	const	{ ISO_ASSERT(a >= p && b >= a && b <= end()); return const_memory_block(a, b); }
 	const_memory_block	slice(const void *a)				const	{ return slice(a, (const void*)end()); }
-	const_memory_block	slice(const void *a, intptr_t b)	const	{ return slice(a, (b < 0 ? (const char*)end() : (const char*)a) + b); }
+	const_memory_block	slice(const void *a, intptr_t b)	const	{ return slice(a, b < 0 ? (const char*)end() + b : min((const char*)a + b, (const char*)end())); }
 	const_memory_block	slice(intptr_t a, intptr_t b)		const	{ return slice((const char*)p + (a < 0 ? n + a : a), b); }
 	const_memory_block	slice(intptr_t a)					const	{ return slice((const char*)p + (a < 0 ? n + a : a)); }
-	const_memory_block	slice_to(intptr_t b)				const	{ return slice(p, b); }
+	const_memory_block	slice_to(size_t b)					const	{ return const_memory_block(p, min(b, n)); }
 	const_memory_block	slice_to(const void *b)				const	{ return slice(p, b); }
 
 	template<typename T> const_memory_block operator+(T i)	const	{ return p && i < n ? const_memory_block((const char*)p + i, n - i) : none; }
@@ -1337,22 +1471,45 @@ public:
 
 	malloc_block&	operator+=(const const_memory_block &b) { extend(b.n).copy_from(b); return *this; }
 	malloc_block&	operator+=(const memory_block &b)		{ extend(b.n).copy_from(b); return *this; }
-	malloc_block&	operator+=(malloc_block &&b)			{ if (n == 0) swap(*this, b); else extend(b.n).copy_from(b); return *this; }
+	malloc_block&	operator+=(malloc_block &&b)			{ if (n == 0) return operator=(move(b)); extend(b.n).copy_from(b); return *this; }
 
 	template<typename R> bool read(R &r, size_t n2)			{ return check_readbuff(r, create(n2), n2); }
 	template<typename R> bool read(R &r)					{ return check_readbuff(r, p, n); }
 	friend void swap(malloc_block &a, malloc_block &b)		{ swap(a.p, b.p); swap(a.n, b.n); }
 };
 
+inline void	duplicate(memory_block &m) { m = malloc_block(m).detach(); }
+
 struct memory_block_own : memory_block {
 	bool	owned	= false;
 	using memory_block::memory_block;
 	memory_block_own(memory_block b)					: memory_block(b), owned(false) {}
 	memory_block_own(malloc_block &&b)					: memory_block(b.detach()), owned(true) {}
+	memory_block_own(const memory_block_own &b)			: memory_block(b), owned(b.owned) { if (owned) duplicate(*this); }
 	memory_block_own(memory_block_own &&b)				: memory_block(b), owned(b.owned) { b.owned = false; }
-	memory_block_own&	operator=(memory_block_own&& b)	{ swap(*this, b); return *this; }
 	~memory_block_own()			{ if (owned) free(p); }
 	void	clear()				{ if (owned) { free(p); owned = false; } p = nullptr; }
+
+	auto&			resize(size_t n2) {
+		if (owned) {
+			p = realloc(p, n2);
+		} else {
+			auto	p2 = malloc(n2);
+			memcpy(p2, p, n);
+			p		= p2;
+			owned	= true;
+		}
+		n = n2;
+		return *this;
+	}
+	memory_block	extend(size_t n2)				{ return resize(n + n2).end(n2); }
+
+	auto&	operator=(const memory_block_own& b)	{ if (owned) free(p); raw_copy(b, *this); if (owned) duplicate(*this); return *this; }
+	auto&	operator=(memory_block_own&& b)			{ swap(*this, b); return *this; }
+	auto&	operator+=(const const_memory_block &b) { extend(b.n).copy_from(b); return *this; }
+	auto&	operator+=(const memory_block &b)		{ extend(b.n).copy_from(b); return *this; }
+	auto&	operator+=(malloc_block &&b)			{ if (n == 0) return operator=(move(b)); extend(b.n).copy_from(b); return *this; }
+
 	friend void swap(memory_block_own &a, memory_block_own &b)	{ swap(a.p, b.p); swap(a.n, b.n); swap(a.owned, b.owned); }
 };
 
@@ -1397,9 +1554,6 @@ struct malloc_block2 : malloc_block {
 	template<typename R> bool read(R &r, size_t n2)			{ return check_readbuff(r, create(n2), n2); }
 	friend void swap(malloc_block2 &a, malloc_block2 &b)	{ swap(a.p, b.p); swap(a.n, b.n); swap(a.max_size, b.max_size); }
 };
-
-
-inline void	duplicate(memory_block &m) { m = malloc_block(m).detach(); }
 
 struct malloc_chain {
 	struct link {
@@ -1469,74 +1623,57 @@ template<typename T, typename K> struct watched_base;
 //	class pair + triple
 //-----------------------------------------------------------------------------
 
-template<class A, class B, int use_union = (int(T_isempty<A>::value) + int(T_isempty<B>::value) * 2)> struct pair_helper {
-#if 0
-	typedef hold_ref_t<A>	A1;
-	typedef hold_ref_t<B>	B1;
-	A1	a;
-	B1	b;
-#else
+//neither empty
+template<class A, class B, int empty> struct pair_helper {
 	A	a;
 	B	b;
-#endif
-	pair_helper() : a(), b() {}
 	template<typename A2, typename B2> pair_helper(A2 &&a, B2 &&b) : a(forward<A2>(a)), b(forward<B2>(b))	{}
 };
 
+//A empty
 template<class A, class B> struct pair_helper<A, B, 1> {
 	typedef hold_ref_t<B>	B1;
 	union {
 		A	a;
 		B1	b;
 	};
-	pair_helper() : b() {}
-	~pair_helper() { a.~A(); b.~B1(); }
 	template<typename A2, typename B2> pair_helper(A2 &&a, B2 &&b) : b(forward<B2>(b))	{}
+	~pair_helper() { a.~A(); b.~B1(); }
 };
 
+//B empty
 template<class A, class B> struct pair_helper<A, B, 2> {
 	typedef hold_ref_t<A>	A1;
 	union {
 		A1	a;
 		B	b;
 	};
-	pair_helper() : a() {}
-	~pair_helper() { a.~A1(); b.~B(); }
 	template<typename A2, typename B2> pair_helper(A2 &&a, B2 &&b) : a(forward<A2>(a))	{}
+	~pair_helper() { a.~A1(); b.~B(); }
 };
 
+//both empty
 template<class A, class B> struct pair_helper<A, B, 3> {
 	union {
 		A	a;
 		B	b;
 	};
-	pair_helper() {}
-	~pair_helper() { a.~A(); b.~B(); }
 	template<typename A2, typename B2> pair_helper(A2 &&a, B2 &&b)	{}
+	~pair_helper() { a.~A(); b.~B(); }
 };
 
-template<typename _A, typename _B> struct pair : comparisons<pair<_A, _B> >, pair_helper<_A, _B> {
+template<typename _A, typename _B, int empty = (int(isempty_v<_A>) + int(isempty_v<_B>) * 2)> struct pair : comparisons<pair<_A, _B, empty>>, pair_helper<_A, _B, empty> {
 	typedef _A	A;
 	typedef _B	B;
-	typedef pair_helper<A, B> base;
-	using base::a; using base::b;
-	pair() {}
-	template<typename A2, typename B2> pair(const pair<A2,B2> &p) : base(p.a, p.b) {}
-#ifdef USE_RVALUE_REFS
-	pair(const pair &p)					= default;
-	pair(pair &&p)						= default;
-	pair&	operator=(const pair &p)	= default;
-	pair&	operator=(pair &&p)			= default;
-	pair(const A &a)															: base(a, B())	{}
+	typedef pair_helper<A, B, empty> base;
+	pair()																		: base(A(), B()) {}
+	pair(const A &a)															: base(a, B()) {}
 	pair(const A &a, const B &b)												: base(a, b)	{}
-//	template<typename A2>				pair(A2 &&a2)							: base(forward<A2>(a2), B()) {}
+	template<typename A2, typename B2>	pair(const pair<A2,B2> &p)				: base(p.a, p.b) {}
 	template<typename A2, typename B2>	pair(pair<A2,B2> &&p)					: base(move_nonref<A2>(p.a), move_nonref<B2>(p.b)) {}
 	template<typename A2, typename B2>	pair(A2 &&a2, B2 &&b2)					: base(forward<A2>(a2), forward<B2>(b2)) {}
-	template<typename A2, typename B2>	pair& operator=(const pair<A2,B2> &p)	{ a = p.a; b = p.b; return *this; }
-	template<typename A2, typename B2>	pair& operator=(pair<A2,B2> &&p)		{ a = move_nonref<A2>(p.a); b = move_nonref<B2>(p.b); return *this; }
-#else
-	pair(typename T_param<_A>::type a, typename T_param<_B>::type b) : base(a, b)	{}
-#endif
+	template<typename A2, typename B2>	pair& operator=(const pair<A2,B2> &p)	{ base::a = p.a; base::b = p.b; return *this; }
+	template<typename A2, typename B2>	pair& operator=(pair<A2,B2> &&p)		{ base::a = move_nonref<A2>(p.a); base::b = move_nonref<B2>(p.b); return *this; }
 	friend void swap(pair &a, pair &b) {
 		swap(a.a, b.a);
 		swap(a.b, b.b);
@@ -1548,34 +1685,30 @@ template<typename _A, typename _B> struct pair : comparisons<pair<_A, _B> >, pai
 	}
 };
 
-#ifdef USE_RVALUE_REFS
+template<typename A, typename B>	struct T_noref<pair<A, B>>	: T_type<pair<noref_t<A>, noref_t<B>>> {};
+
 template<typename A, typename B> force_inline auto make_pair(A &&a, B &&b) {
 	return pair<A, B>(forward<A>(a), forward<B>(b));
 }
-#else
-template<typename A, typename B> force_inline auto make_pair(const A &a, const B &b) {
-	return pair<typename T_noarray<A>::type, typename T_noarray<B>::type>(a, b);
-}
-#endif
 
 template<typename A, typename B> force_inline auto make_pair_noref(const A &a, const B &b) {
 	return pair<A, B>(a, b);
 }
 
-#define PAIR(a,b)		pair<a,b>
-
 template<typename A, typename B> struct pair_iterator {
 	A	a;
 	B	b;
-	pair_iterator(A &&a, B &&b) : a(forward<A>(a)), b(forward<B>(b)) {}
+	pair_iterator(const A &a, const B &b) : a(a), b(b) {}
 	auto	operator*()	const { return make_pair(*a, *b); }
 	bool	operator==(const pair_iterator &i) const { return a == i.a; }
 	bool	operator!=(const pair_iterator &i) const { return a != i.a; }
 	pair_iterator& operator++() { ++a; ++b; return *this; }
 };
 
-template<typename A, typename B> auto	begin(const pair<A,B> &p)	->pair_iterator<decltype(begin(p.a)), decltype(begin(p.b))>	{ return {begin(p.a), begin(p.b)}; }
-template<typename A, typename B> auto	end(const pair<A,B> &p)		->pair_iterator<decltype(end(p.a)), decltype(end(p.b))>		{ return {end(p.a), end(p.b)}; }
+template<typename A, typename B> pair_iterator<A,B> make_pair_iterator(A a, B b) { return {a, b}; }
+
+template<typename A, typename B> auto begin(const pair<A,B> &p)	->decltype(make_pair_iterator(begin(p.a), begin(p.b)))	{ return make_pair_iterator(begin(p.a), begin(p.b)); }
+template<typename A, typename B> auto end(const pair<A,B> &p)	->decltype(make_pair_iterator(end(p.a), end(p.b)))		{ return make_pair_iterator(end(p.a), end(p.b)); }
 
 template<typename _A, typename _B, typename _C> struct triple : comparisons<triple<_A, _B, _C> > {
 	typedef _A	A;
@@ -1586,7 +1719,6 @@ template<typename _A, typename _B, typename _C> struct triple : comparisons<trip
 	C			c;
 	force_inline triple() : a(), b()	{}
 	template<typename A2, typename B2, typename C2> force_inline triple(const triple<A2,B2,C2> &t) : a(t.a), b(t.b), c(t.c) {}
-#ifdef USE_RVALUE_REFS
 	triple(const triple &p)				= default;
 	triple(triple &&p)					= default;
 	triple&	operator=(const triple &p)	= default;
@@ -1595,9 +1727,7 @@ template<typename _A, typename _B, typename _C> struct triple : comparisons<trip
 	template<typename A2, typename B2, typename C2> triple(A2 &&a, B2 &&b, C2 &&c)					: a(forward<A2>(a)), b(forward<B2>(b)), c(forward<C2>(c))	{}
 	template<typename A2, typename B2, typename C2> triple& operator=(const triple<A2,B2,C2> &p)	{ a = p.a; b = p.b; c = p.c; return *this; }
 	template<typename A2, typename B2, typename C2> triple& operator=(triple<A2,B2,C2> &&p)			{ a = move(p.a); b = move(p.b); c = move(p.c); return *this; }
-#else
-	force_inline triple(typename T_param<_A>::type a, typename T_param<_B>::type b, typename T_param<_C>::type c) : a(a), b(b), c(c)	{}
-#endif
+
 	friend void swap(triple &a, triple &b) {
 		swap(a.a, b.a);
 		swap(a.b, b.b);
@@ -1612,20 +1742,13 @@ template<typename _A, typename _B, typename _C> struct triple : comparisons<trip
 	}
 };
 
-#ifdef USE_RVALUE_REFS
 template<typename A, typename B, typename C> force_inline triple<typename T_noarray<typename T_noref<A>::type>::type, typename T_noarray<typename T_noref<B>::type>::type, typename T_noarray<typename T_noref<C>::type>::type> make_triple(A &&a, B &&b, C &&c) {
 	return triple<typename T_noarray<typename T_noref<A>::type>::type, typename T_noarray<typename T_noref<B>::type>::type, typename T_noarray<typename T_noref<C>::type>::type>(forward<A>(a), forward<B>(b), forward<C>(c));
 }
-#else
-template<typename A, typename B, typename C> force_inline triple<A, B, C> make_triple(const A &a, const B &b, const C &c) {
-	return triple<A, B, C>(a, b, c);
-}
-#endif
 
 template<typename A, typename B, typename C> force_inline triple<const A&, const B&, const C&> maketriple_ref(const A &a, const B &b, const C &c) {
 	return triple<const A&, const B&, const C&>(a, b, c);
 }
-#define TRIPLE(a,b,c)	triple<a,b,c>
 
 //-----------------------------------------------------------------------------
 //	class unique_ptr
@@ -1639,10 +1762,10 @@ protected:
 public:
 	template<typename...P> unique_ptr&	emplace(P&&...pp)	{ set(new T(forward<P>(pp)...)); return *this; }
 	constexpr unique_ptr()					: B(nullptr)	{}
-	constexpr unique_ptr(_none)				: B(nullptr)	{}
+	constexpr unique_ptr(const _none&)		: B(nullptr)	{}
 	constexpr unique_ptr(nullptr_t)			: B(nullptr)	{}
 	/*explicit*/ constexpr unique_ptr(T *p)		: B(p)			{}
-	template<typename D1> constexpr unique_ptr(T *p, D1&& d)	: B(p)	{}
+	template<typename D1> constexpr unique_ptr(T *p, D1&& d)	: B(p, forward<D1>(d))	{}
 	unique_ptr(unique_ptr &&b)				: B(b.detach())	{}
 	unique_ptr(malloc_block &&b)			: B(b.detach())	{}
 	~unique_ptr()											{ B::b(a); }
@@ -1664,10 +1787,9 @@ public:
 };
 
 template<typename T, typename D> class unique_ptr<T[],D> : public unique_ptr<T,D> {
-	using unique_ptr<T,D>::a;
 public:
 	using unique_ptr<T,D>::unique_ptr;
-	T&	operator[](intptr_t i)	const	{ return a[i]; }
+	T&	operator[](intptr_t i)	const	{ return this->a[i]; }
 };
 
 template<typename T, size_t N, typename D> class unique_ptr<T[N],D> : public unique_ptr<T,D> {
@@ -1722,7 +1844,7 @@ public:
 template<typename T> bool operator==(const ref_ptr<T> &a, const ref_ptr<T> &b) { return a ? (b && *a == *b) : !b; }
 
 template<typename T, typename R=uint32> class refs {
-friend class ref_ptr<T>;
+//friend class ref_ptr<T>;
 protected:
 	R		nrefs;
 	constexpr refs() : nrefs(0)		{}
@@ -1735,16 +1857,16 @@ public:
 	bool	shared() const	{ return nrefs > 1; }
 };
 
-template<typename T, typename R=uint32> class with_refs : public refs<with_refs<T,R>, R> {
-	T	t;
+template<typename T, typename R=uint32> class with_refs : public refs<with_refs<T,R>, R>, public inheritable<T> {
 public:
-	constexpr with_refs()				{}
-	template<typename...P> constexpr with_refs(P&&...p) : t(forward<P>(p)...) {}
-	template<typename U> T &operator=(U &&u)		{ return t = forward<U>(u); }
-	constexpr T&			operator->()			{ return t; }
-	constexpr const T&		operator->()	const	{ return t; }
-	constexpr operator T&()							{ return t; }
-	constexpr operator const T&()			const	{ return t; }
+	using inheritable<T>::inheritable;
+//	constexpr with_refs()				{}
+//	template<typename...P> constexpr with_refs(P&&...p) : t(forward<P>(p)...) {}
+//	template<typename U> T &operator=(U &&u)		{ return t = forward<U>(u); }
+//	constexpr T*			operator->()			{ return &t; }
+//	constexpr const T*		operator->()	const	{ return &t; }
+//	constexpr operator T&()							{ return t; }
+//	constexpr operator const T&()			const	{ return t; }
 };
 
 template<typename T> with_refs<noref_t<T>> make_with_refs(T &&t)	{ return forward<T>(t); }
@@ -1819,11 +1941,13 @@ template<typename T> struct recursion_checker {
 };
 
 struct stack_depth {
-	thread_local static int	depth;
-	stack_depth(int max)	{ ISO_ALWAYS_ASSERT(++depth < max); }
+	int			&depth;
+	stack_depth(int &depth) : depth(depth) { ++depth; }
+	stack_depth(int &depth, int max) : depth(depth) {
+		ISO_ALWAYS_ASSERT(++depth < max);
+	}
 	~stack_depth()			{ --depth; }
 };
-
 
 //-----------------------------------------------------------------------------
 //	singleton
@@ -1868,8 +1992,6 @@ public:
 	class iterator {
 		T			*p;
 	public:
-		typedef struct forward_iterator_t iterator_category;
-		typedef T	element, *pointer, &reference;
 		iterator(T *p) : p(p)	{}
 		operator T*()		const	{ return p; }
 		T&			operator*()			const	{ return *p; }
@@ -1880,10 +2002,10 @@ public:
 		iterator	operator++(int)				{ iterator i = *this; p = p->next; return i; }
 	};
 
-	static range<iterator>	all()	{ return range<iterator>(single(), NULL); }
+	static range<iterator>	all()	{ return range<iterator>(single(), nullptr); }
 	static iterator	begin()			{ return single(); }
-	static iterator	end()			{ return NULL; }
-	static int		find(T *t)		{ int i = 0; for (T *j = single(); j && j != t; j = j->next) ++i; return i; }
+	static iterator	end()			{ return nullptr; }
+	static int		index_of(T *t)	{ int i = 0; for (T *j = single(); j && j != t; j = j->next) ++i; return i; }
 	static T*		index(int i)	{ T *j = single(); while (j && i--) j = j->next; return j; }
 
 	template<typename U> static T*	find_by(U &&u) {
@@ -1899,14 +2021,13 @@ template<typename T> class static_list_priority : public static_list<T> {
 	int PRI;
 public:
 	static_list_priority(int PRI) : PRI(PRI) {
-		auto	me	= static_cast<T*>(this);
-		auto	p	= this->next, p0 = (decltype(p))nullptr;
-		while (p && me->PRI < p->PRI) {
+		T*	p	= this->next, *p0 = nullptr;
+		while (p && PRI < p->PRI) {
 			p0	= p;
 			p	= p->next;
 		}
 		if (p0) {
-			p0->next = me;
+			p0->next = static_cast<T*>(this);
 			static_list<T>::single() = exchange(this->next, p);
 		}
 	}
@@ -1935,7 +2056,7 @@ template<
 	uint32	_E	= num_traits<F>::exponent_bits,
 	bool	S	= true,
 	uint32	B	= _M + _E + int(S),
-	typename I = uint_bits_t<B>
+	typename I	= uint_bits_t<B>
 > struct float_storage {
 	typedef	I	mant_t;
 	static const int	E	= _E, E_OFF = (1 << (E - 1)) - 1,
@@ -1952,14 +2073,16 @@ template<
 		I	_i;
 		F	_f;
 	};
+	static constexpr float_storage	zero()			{ return {0, 0, 0}; }
 	static constexpr float_storage	max()			{ return {M_MASK, E_MASK - 1, 0}; }
 	static constexpr float_storage	min()			{ return {0, 1, 0}; }
 	static constexpr float_storage	eps()			{ return {0, E_OFF - M, 0}; }
 	static constexpr float_storage	nan()			{ return {M_MASK, E_MASK, 0}; }
-	static constexpr float_storage	inf()			{ return {0, E_MASK, 0}; }
-	static constexpr float_storage	neg_inf()		{ return {0, E_MASK, 1}; }
-	static constexpr float_storage	inf(bool neg)	{ return {0, E_MASK, neg}; }
-	static constexpr float_storage	exp2(int e)		{ return {0, e < -E_OFF ? 0 : e + E_OFF, 0}; }
+	static constexpr float_storage	inf(bool neg = false)	{ return {0, E_MASK, neg}; }
+	static constexpr float_storage	exp2(int e)		{ return e > -E_OFF ? float_storage(0, e + E_OFF, 0) : e > -E_OFF - M ? float_storage(1 << (e + E_OFF + M - 1), 0, 0) : zero(); }
+
+	static constexpr float_storage	_floor_helper(I i, I x, bool s)	{ return (i + (s ? x : 0)) & ~x; }
+	static constexpr float_storage	_round_ne_helper(I i, I x)		{ return (i + ((i & (x * 2 + 1)) == (x + 1) / 2 ? 0 : (x + 1) / 2)) & ~x; }
 
 	float_storage() 		{}
 	constexpr float_storage(F f)	: float_storage(reinterpret_cast<const float_storage&>(f))	{}
@@ -1983,10 +2106,12 @@ template<
 
 	constexpr bool		get_sign()			const	{ return s; }
 	constexpr int		get_exp()			const	{ return e - E_OFF; }
-	constexpr int		get_dexp()			const	{ return (e ? e : highest_set_index(m) - M) - E_OFF; }
 	constexpr I			get_mant()			const	{ return m | (e ? (I(1) << M) : 0); }
 	constexpr uint64	get_mant64()		const	{ return m; }
 	constexpr F			get_mantf()			const	{ return float_storage(m, E_OFF, s).f(); }
+
+	constexpr int		get_dexp()			const	{ return (e ? e : highest_set_index(m) - M) - E_OFF; }
+	constexpr I			get_dmant()			const	{ return e ? (m | (I(1) << M)) : m << (M - highest_set_index(m)); }
 
 	constexpr bool		is_special()		const	{ return e == E_MASK; }
 	constexpr bool		is_nan()			const	{ return e == E_MASK && m; }
@@ -1999,13 +2124,9 @@ template<
 	constexpr float_category get_category()	const	{ return e == E_MASK ? (m ? (m & SIGNAL_MASK ? FLOAT_SNAN : FLOAT_QNAN) : (s ? FLOAT_NEGINF : FLOAT_INF)) : FLOAT_NORMAL; }
 
 	constexpr I				_fracmask()		const	{ return bits<I>(e < E_OFF ? M + E : e > M + E_OFF ? 0 : M - e + E_OFF); }
-	static constexpr float_storage	_floor_helper(I i, I x, bool s)	{ return (i + (s ? x : 0)) & ~x; }
-	static constexpr float_storage	_round_ne_helper(I i, I x)		{ return (i + ((i & (x * 2 + 1)) == (x + 1) / 2 ? 0 : (x + 1) / 2)) & ~x; }
-
 	constexpr float_storage	trunc()			const	{ return i() & ~_fracmask(); }
 	constexpr float_storage	floor()			const	{ return floor_helper(i(), _fracmask(), s); }
 	constexpr float_storage	ceil()			const	{ return floor_helper(i(), _fracmask(), !s); }
-
 	constexpr float_storage	round_ne()		const	{ return e < E_OFF ? float_storage(0, e == E_OFF - 1 && m ? E_OFF : 0, s) : _round_ne_helper(i(), _fracmask()); }
 	constexpr I				monotonic()		const	{ return i() ^ (S_MASK - s) ^ S_MASK; }
 
@@ -2023,12 +2144,13 @@ template<typename F> struct float_components : float_storage<F> {
 	static constexpr F	to_float(S i)			{ F f = to_float(I(i < 0 ? -i : i)); return i < 0 ? -f : f; }
 
 	float_components() 		{}
+	float_components(const B &b)	: B(b) {}
 	constexpr float_components(I m, int e, int s) : B(m, e, s) {}
 	constexpr float_components(F f)	: B(reinterpret_cast<const B&>(f))	{}
 	constexpr float_components(I i)	: B(reinterpret_cast<const B&>(i))	{}
 };
 
-template<typename F> float_components<F>	get_components(F f) { return f; }
+template<typename F> constexpr float_components<F>	get_components(F f) { return f; }
 template<typename F> constexpr auto			get_category(F f)	{ return get_components(f).get_category(); }
 
 typedef float_components<float> iorf;
@@ -2062,7 +2184,7 @@ template<typename T> struct float_info {
 template<int B, typename F> int get_exponent(F f) {
 	auto	comps	= get_components(f);
 	constexpr int ES = 31 - num_traits<F>::exponent_bits;
-	return f ? (comps.get_dexp() * FLOG_BASE(B, 2, ES)) >> ES : 0;
+	return f ? (comps.get_dexp() * klog_fract<B, 2, ES>) >> ES : 0;
 }
 
 template<int B, typename F> int get_scientific(F &f) {
@@ -2102,16 +2224,13 @@ struct number {
 
 	number	to_binary() const;
 
-	constexpr number()			: m(0), e(0), type(NAN), size(SIZE8)	{}
-	constexpr number(int64 m)	: m(m), e(0), type(INT), size(SIZE64)	{}
-	constexpr number(int m)		: m(m), e(0), type(INT), size(SIZE32)	{}
-	constexpr number(uint64 m)	: m(m), e(0), type(UINT), size(SIZE64)	{}
-	constexpr number(uint32 m)	: m(m), e(0), type(UINT), size(SIZE32)	{}
-	constexpr number(int64 m, int e, TYPE type, SIZE size = SIZE64)		: m(m), e(e), type(type), size(size) {}
-	number(float f)		: type(FLT), size(SIZE32) { iorf t(f); m = t.get_mant() * (t.s ? -1 : 1); e = t.get_exp() - iorf::M; }
-#ifdef USE_DOUBLE
-	number(double f)	: type(FLT), size(SIZE64) { iord t(f); m = t.get_mant() * (t.s ? -1 : 1); e = t.get_exp() - iord::M; }
-#endif
+	static constexpr SIZE get_size(size_t s) { return s == 1 ? SIZE8 : s == 2 ? SIZE16 : s == 4 ? SIZE32 : s == 8 ? SIZE64 : s == 10 ? SIZE80 : SIZE_COUNT; }
+	
+	constexpr number()													: m(0), e(0), type(NAN), size(SIZE8)	{}
+	constexpr number(int64 m, int e, TYPE type, SIZE size = SIZE64)		: m(m), e(e), type(type), size(get_size(size)) {}
+	template<typename T> number(const float_components<T> &c)			: m(c.get_mant() * (c.s ? -1 : 1)), e(c.get_exp() - c.M), type(FLT), size(get_size(c.MB / 8)) {}
+	template<typename T> number(T t, enable_if_t<is_float<T>>* = 0)		: number(get_components(t)) {}
+	template<typename T, typename=enable_if_t<is_builtin_int<T>>> number(T t)	: m(t), e(0), type(is_signed<T> ? INT : UINT), size(get_size(sizeof(T))) {}
 
 	constexpr bool		valid()		const { return type != NAN || m != 0; }
 	constexpr bool		isfloat()	const { return type >= FLT; }
@@ -2123,6 +2242,8 @@ struct number {
 		if (type == DEC)
 			return to_binary().get_comps<F>();
 		typedef float_components<F>	C;
+		if (m == 0)
+			return C::zero();
 		uint64	m2	= abs(m);
 		int		i	= leading_zeros(m2);
 		return C((((m2 << i) >> (62 - C::M)) + 1) >> 1, e - i + C::E_OFF + 63, m < 0).f();
@@ -2258,6 +2379,61 @@ template<typename T> union union_of<T> {
 	constexpr size_t				size(int i)	const	{ return sizeof(T); }
 };
 template<template<class> class M, typename...TT> struct meta::map<M, union_of<TT...> > : T_type<union_of<map_t<M, TT>...>> {};
+
+template<typename... T> struct union_first {
+	union_of<T...>	t;
+};
+template<template<class> class M, typename...T> struct meta::map<M, union_first<T...>> : T_type<union_first<map_t<M, T>...>> {};
+
+template<int I, typename... TT> struct selection {
+	union_of<TT...>	t;
+};
+template<template<class> class M, int I, typename...T> struct meta::map<M, selection<I, T...>> : T_type<selection<I, map_t<M, T>...>> {};
+template<int I, typename... TT, typename C, typename T> constexpr auto	make_selection(T C::*p)	{ return element_cast<selection<I, TT...>>(p); }
+
+
+template<typename T, int I, typename P = T*> struct counted {
+	P		p;
+	counted()					{}
+	counted(T *_p)				{ p = _p; }
+	template<typename P2> counted(const counted<T,I,P2> &p) : p(p) {}
+	void	operator=(T *_p)	{ p = _p; }
+	operator T*()	const		{ return p; }
+	T*		begin()	const		{ return p; }
+
+	auto	operator()(uint32 n)	const	{ return make_range_n(p, n); }
+	uint32	index_of(const T& e)	const	{ return &e - p; }
+};
+template<int I, typename T> constexpr counted<T, I, T*>	make_counted(T *p)		{ return p; }
+template<int I, typename C, typename T> constexpr auto	make_counted(T* C::*p)	{ return element_cast<counted<T, I, T*>>(p); }
+
+//-----------------------------------------------------------------------------
+//	after - something that exists after another
+//-----------------------------------------------------------------------------
+
+template<typename T> void *get_after(const T *t) {
+	return (void*)(t + 1);
+}
+
+template<typename T, typename B> T *get_after_aligned(const B *b) {
+	return (T*)align(get_after(b), alignof(T));
+}
+
+template<typename T, typename B> struct after {
+	T&			get()			const	{ return *get_after_aligned<T>((B*)this); }
+	operator	T&()			const	{ return get(); }
+	T*			operator&()		const	{ return &get(); }
+	T*			operator->()	const	{ return &get(); }
+	template<typename T2> T&	operator=(const T2 &t2) { T &t = get(); t = t2; return t; }
+	friend T&	get(const after &a)	{ return a; }
+	friend T&	put(after &a)		{ return a; }
+};
+
+template<typename T, typename B> inline void *get_after(const after<T,B> *t) {
+	return get_after(&t->get());
+}
+
+template<typename T, typename B, typename P>	auto	get(const param_element<after<T,B>&, P> &a)				{ return param_element<T&, P>(a.t, a.p); }
 
 //-----------------------------------------------------------------------------
 //	Time

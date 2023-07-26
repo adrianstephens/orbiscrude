@@ -4,6 +4,12 @@
 #include "soft_float.h"
 #include "hashes/fnv.h"
 #include "allocators/allocator.h"
+#include "extra/random.h"
+
+namespace iso {
+rng<simple_random>				random;
+rng<mersenne_twister32_19937>	random2(123456789);
+}
 
 DECL_ALLOCATOR void*  operator new(size_t size)		{ return iso::malloc(size); }
 DECL_ALLOCATOR void*  operator new[](size_t size)	{ return iso::malloc(size); }
@@ -18,16 +24,16 @@ no_inline size_t strlen(const char *s) {
 	auto	p = s;
 	uint64	v64;
 
-	if (!contains_zero(v64 = load_packed<uint64>(p))) {
+	if (!bits_contains_zero(v64 = load_packed<uint64>(p))) {
 		auto	p8 = (const uint64*)(intptr_t(p + 8) & -intptr_t(8));
-		while (!contains_zero(v64 = *p8))
+		while (!bits_contains_zero(v64 = *p8))
 			++p8;
 		p = (const char*)p8;
 	}
 
 	size_t	r	= p - s;
 	uint32	v32	= lo(v64);
-	if (!contains_zero(v32)) {
+	if (!bits_contains_zero(v32)) {
 		r	+= 4;
 		v32	= hi(v64);
 	}
@@ -83,15 +89,16 @@ int64	hash_get_misses	= 0, hash_get_count	= 0;
 
 
 thread_local arena_allocator<4096> thread_temp_allocator;
-thread_local int stack_depth::depth = 0;
+//thread_local int stack_depth::depth = 0;
 
 initialise::initialise(...)	{}
-_none		none, terminate, empty;
+const _none		none, terminate, empty;
 _i			i;
 _zero		zero;
 _one		one, identity;
 
 constant<__int<2> >		two;
+constant<__int<3> >		three;
 constant<__int<4> >		four;
 constant<__pi>			pi;
 constant<__sign>		sign_mask;
@@ -402,7 +409,7 @@ int numstring_cmp(const char *a, const char *b) {
 			int	na, nb;
 			a = get_unsigned_num(a - 1, na);
 			b = get_unsigned_num(b - 1, nb);
-			if (int d = simple_compare(a, b))
+			if (int d = simple_compare(na, nb))
 				return d;
 		} else {
 			if (int d = simple_compare(ca, cb))
@@ -509,6 +516,9 @@ template<typename T, typename C> void put_int(accum<C> &acc, T x, FORMAT::FLAGS 
 		fill_char(p + len, extra);
 }
 
+template void put_int(accum<char> &acc, uint8 x, FORMAT::FLAGS flags, int width);
+
+
 template<int B, typename C, typename T> void put_float(accum<C> &acc, T m, int frac, int exp, bool sign, uint32 digits, uint32 exp_digits, FORMAT::FLAGS flags, int width) {
 	enum {M = sizeof(T) * 8 - 5};
 
@@ -597,7 +607,7 @@ template void put_float<10, char, uint64>(accum<char> &acc, const float_info<uin
 
 template<int B, typename C, typename T> void put_float(accum<C> &acc, T f, FORMAT::FLAGS flags, int width, uint32 precision) {
 	put_float<B>(acc, get_print_info<B>(f),
-		flags & FORMAT::PRECISION ? precision : (FLOG_BASE(B, 2, 8) * num_traits<T>::mantissa_bits) >> 8,
+		flags & FORMAT::PRECISION ? precision : (klog_fract<B, 2, 8> * num_traits<T>::mantissa_bits) >> 8,
 		num_traits<T>::exponent_bits * 3 / 10,
 		flags,
 		width
@@ -668,10 +678,10 @@ template<typename C> accum<C>& accum<C>::vformat(const C *format, va_list argptr
 			switch (C fmt = *in) {
 				case 'c':
 					if (!(flags & FORMAT::LEFTALIGN))
-						putc(' ', width - 1);
+						*this << repeat(' ', width - 1);
 					putc(va_arg(argptr, int));
 					if (flags & FORMAT::LEFTALIGN)
-						putc(' ', width - 1);
+						*this << repeat(' ', width - 1);
 					break;
 
 				case 'd': case 'i':
@@ -792,17 +802,26 @@ template<> string_accum16& string_accum16::vformat(const char16 *format, va_list
 size_t _format(char *dest, size_t maxlen, const char *format, va_list valist) {
 	return fixed_accum(dest, maxlen).vformat(format, valist).length();
 }
+size_t _format(char *dest, const char *format, va_list valist) {
+	return _format(dest, 256, format, valist);
+}
+
 size_t _format(char *dest, size_t maxlen, const char *format, ...) {
 	va_list valist;
 	va_start(valist, format);
 	return _format(dest, maxlen, format, valist);
 }
-size_t _format(char *dest, const char *format, va_list valist) {
-	return _format(dest, 256, format, valist);
-}
 size_t _format(char *dest, const char *format, ...) {
 	va_list valist;
 	va_start(valist, format);
+	return _format(dest, 256, format, valist);
+}
+
+size_t _format(wchar_t *dest, size_t maxlen, const wchar_t *format, va_list valist) {
+	return fixed_accum16(dest, maxlen).vformat(format, valist).length();
+}
+
+size_t _format(wchar_t *dest, const wchar_t *format, va_list valist) {
 	return _format(dest, 256, format, valist);
 }
 
@@ -811,41 +830,35 @@ size_t sprintf(char *buffer, const char *format, ...) {
 	va_start(valist, format);
 	return _format(buffer, 256, format, valist);
 }
-template<typename C> accum<C> &operator<<(accum<C> &a, const CODE_GUID &g) {
-	//{0x9de1c535, 0x6ae1, 0x11e0, {0x84, 0xe1, 0x18, 0xa9, 0x05, 0xbc, 0xc5, 0x3f}}
-	a << "{0x" << hex(g.Data1) << "u, 0x" << hex(g.Data2) << ", 0x" << hex(g.Data3) << ", {";
-	for (int i = 0; i < 8; i++)
-		a << onlyif(i, ", ") << "0x" << hex(g.Data4[i]);
-	return a << "}}";
-}
-template accum<char> &operator<<(accum<char> &a, const CODE_GUID &g);
 
+/*
 template<typename C> accum<C> &operator<<(accum<C> &a, const GUID &g) {
 	//{9de1c535-6ae1-11e0-84e118a905bcc53f}
 //	return a << '{' << hex(g.Data1) << '-' << hex(g.Data2) << '-' << hex(g.Data3) << '-' << hex((uint64&)g.Data4) << '}';
 	int		n = 36;
 	char	*s = a.getp(n);
-	put_num_base<16>(s, 8, g.Data1);
+	put_num_base<16>(s, 8, g.Data1, 'a');
 	s[8] = '-';
-	put_num_base<16>(s + 9, 4, g.Data2);
+	put_num_base<16>(s + 9, 4, g.Data2, 'a');
 	s[13] = '-';
-	put_num_base<16>(s + 14, 4, g.Data3);
+	put_num_base<16>(s + 14, 4, g.Data3, 'a');
 	s[18] = '-';
-	put_num_base<16>(s + 19, 4, (uint16)*(uint16be*)g.Data4);
+	put_num_base<16>(s + 19, 4, (uint16)*(uint16be*)g.Data4, 'a');
 	s[23] = '-';
-	put_num_base<16>(s + 24, 12, (uint64)(uint64be&)g.Data4);
+	put_num_base<16>(s + 24, 12, (uint64)(uint64be&)g.Data4, 'a');
 	return a;
 }
-template accum<char> &operator<<(accum<char> &a, const GUID &g);
 
+template accum<char> &operator<<(accum<char> &a, const GUID &g);
+*/
 //-----------------------------------------------------------------------------
 //	put_float
 //-----------------------------------------------------------------------------
 
-template<typename T> size_t put_float(char *s, T m, int frac, int exp, bool sign, uint32 digits, uint32 exp_digits) {
+template<typename T, typename C> size_t put_float(C *s, T m, int frac, int exp, bool sign, uint32 digits, uint32 exp_digits) {
 	enum {M = sizeof(T) * 8 - 5};
 
-	char	*out		= s;
+	C	*out		= s;
 	if (sign)
 		*out++ = '-';
 
@@ -893,24 +906,31 @@ template<typename T> size_t put_float(char *s, T m, int frac, int exp, bool sign
 	return out - s;
 }
 
-template<> size_t put_float<uint16>(char *s, uint16 m, int frac, int exp, bool sign, uint32 digits, uint32 exp_digits) {
-	return put_float<uint32>(s, m, frac, exp, sign, digits, exp_digits);
-}
-template size_t put_float<uint64>(char *s, uint64 m, int frac, int exp, bool sign, uint32 digits, uint32 exp_digits);
-template size_t put_float<uint128>(char *s, uint128 m, int frac, int exp, bool sign, uint32 digits, uint32 exp_digits);
+template<> size_t put_float<uint16>(char *s, uint16 m, int frac, int exp, bool sign, uint32 digits, uint32 exp_digits)		{ return put_float<uint32>(s, m, frac, exp, sign, digits, exp_digits); }
+template<> size_t put_float<uint16>(char16 *s, uint16 m, int frac, int exp, bool sign, uint32 digits, uint32 exp_digits)	{ return put_float<uint32>(s, m, frac, exp, sign, digits, exp_digits); }
 
-template<typename T> size_t put_float(char *s, const float_info<T> &f, uint32 digits, uint32 exp_digits) {
+//template size_t put_float(char *s, uint64 m, int frac, int exp, bool sign, uint32 digits, uint32 exp_digits);
+//template size_t put_float(char *s, uint128 m, int frac, int exp, bool sign, uint32 digits, uint32 exp_digits);
+//template size_t put_float(char16 *s, uint64 m, int frac, int exp, bool sign, uint32 digits, uint32 exp_digits);
+//template size_t put_float(char16 *s, uint128 m, int frac, int exp, bool sign, uint32 digits, uint32 exp_digits);
+
+template<typename T, typename C> size_t put_float(C *s, const float_info<T> &f, uint32 digits, uint32 exp_digits) {
 	if (f.cat) {
-		strcpy(s, special_num(f.cat));
-		return strlen(s);
+		string_copy(s, special_num(f.cat));
+		return string_len(s);
 	}
 	return put_float(s, f.mant, f.frac, f.exp, f.sign, digits, exp_digits);
 }
 
-template size_t put_float(char *s, const float_info<uint16> &f, uint32 digits, uint32 exp_digits);
-template size_t put_float(char *s, const float_info<uint32> &f, uint32 digits, uint32 exp_digits);
-template size_t put_float(char *s, const float_info<uint64> &f, uint32 digits, uint32 exp_digits);
-template size_t put_float(char *s, const float_info<uint128> &f, uint32 digits, uint32 exp_digits);
+template size_t put_float<uint16> (char *s, const float_info<uint16> &f, uint32 digits, uint32 exp_digits);
+template size_t put_float<uint32> (char *s, const float_info<uint32> &f, uint32 digits, uint32 exp_digits);
+template size_t put_float<uint64> (char *s, const float_info<uint64> &f, uint32 digits, uint32 exp_digits);
+template size_t put_float<uint128> (char *s, const float_info<uint128> &f, uint32 digits, uint32 exp_digits);
+
+template size_t put_float<uint16> (char16 *s, const float_info<uint16> &f, uint32 digits, uint32 exp_digits);
+template size_t put_float<uint32> (char16 *s, const float_info<uint32> &f, uint32 digits, uint32 exp_digits);
+template size_t put_float<uint64> (char16 *s, const float_info<uint64> &f, uint32 digits, uint32 exp_digits);
+template size_t put_float<uint128> (char16 *s, const float_info<uint128> &f, uint32 digits, uint32 exp_digits);
 
 //-----------------------------------------------------------------------------
 //	utf8
@@ -1009,20 +1029,24 @@ uint32 legalise_utf8(const char *srce, char *dest, size_t maxlen) {
 //	string
 //-----------------------------------------------------------------------------
 
+char_set char_set::cntrl		= char_set(0, 0x1f) + 0x7f;
+char_set char_set::print(' ', 126);
+char_set char_set::graph(33, 126);
 char_set char_set::whitespace("\t\r\n ");
 char_set char_set::digit('0', '9');
 char_set char_set::upper('A', 'Z');
 char_set char_set::lower('a', 'z');
 char_set char_set::alpha		= char_set::upper + char_set::lower;
 char_set char_set::alphanum		= char_set::alpha + char_set::digit;
-char_set char_set::identifier	= char_set::alphanum + '_';
+char_set char_set::wordchar		= char_set::alphanum + '_';
+char_set char_set::punct		= char_set::graph | ~ char_set::alphanum;
+char_set char_set::hex			= char_set('0', '9') | char_set('A', 'F') | char_set('a', 'f');
 char_set char_set::ascii(0, 0x7f);
-char_set char_set::control		= char_set(0, 0x1f) + 0x7f;
 
 uint32 string_hash(const char *s)				{ return FNV1<uint32>(s); }
 uint32 string_hash(const char16 *s)				{ return FNV1<uint32>(s); }
-uint32 string_hash(const char *s, size_t n)		{ return FNV1_str<uint32>(s, n); }
-uint32 string_hash(const char16 *s, size_t n)	{ return FNV1_str<uint32>(s, n); }
+uint32 string_hash(const char *s, size_t n)		{ return FNV1<uint32>(s, n); }
+uint32 string_hash(const char16 *s, size_t n)	{ return FNV1<uint32>(s, n); }
 
 //-----------------------------------------------------------------------------
 //	number
@@ -1217,7 +1241,7 @@ uint64 bin_to_dpd(uint64 x) {
 	if (x < bit64(50))
 		return bcd_to_dpd(to_bcd(x));
 
-	uint64	hi = divmod(x, POW(10, 15));
+	uint64	hi = divmod(x, kpow<10, 15>);
 	return (bcd_to_dpd(to_bcd(x))) | (bcd_to_dpd(to_bcd(hi)) << 50);
 }
 
@@ -1225,11 +1249,11 @@ uint64 dpd_to_bin(uint64 x) {
 	if (x < bit64(50))
 		return from_bcd(dpd_to_bcd(x));
 
-	return from_bcd(dpd_to_bcd(x) & bits64(60)) + from_bcd(dpd_to_bcd(x >> 50)) * POW(10,15);
+	return from_bcd(dpd_to_bcd(x) & bits64(60)) + from_bcd(dpd_to_bcd(x >> 50)) * kpow<10,15>;
 }
 
 uint128 bin_to_dpd(uint128 x) {
-	uint64	lo1, hi1	= fulldivmodc(lo(x), hi(x), POW(10, 15), lo1);
+	uint64	lo1, hi1	= fulldivmodc(lo(x), hi(x), kpow<10, 15>, lo1);
 	lo1	= bcd_to_dpd(to_bcd(lo1));
 
 	if (hi1 < bit64(50)) {
@@ -1237,7 +1261,7 @@ uint128 bin_to_dpd(uint128 x) {
 		return lo_hi(lo1 | (hi1 << 50), hi1 >> (64 - 50));
 	}
 
-	uint64	hi2	= divmod(hi1, POW(10,15));
+	uint64	hi2	= divmod(hi1, kpow<10,15>);
 	hi1	= bcd_to_dpd(to_bcd(hi1));
 	hi2	= bcd_to_dpd(to_bcd(hi2));
 
@@ -1247,12 +1271,12 @@ uint128 bin_to_dpd(uint128 x) {
 uint128	dpd_to_bin(uint128 x) {
 	uint64	lo1	= from_bcd(dpd_to_bcd(lo(x) & bits64(50)));
 	uint64	hi1	= from_bcd(dpd_to_bcd(lo(x >> 50) & bits64(50)));
-	uint64	t	= maddc(hi1, POW(10, 15), lo1, lo1);
+	uint64	t	= maddc(hi1, kpow<10, 15>, lo1, lo1);
 
 	if (hi(x) < bit64(100 - 64))
 		return lo_hi(lo1, t);
 
-	return lo_hi(lo1, t) + fullmul(from_bcd(dpd_to_bcd(lo(x >> 100))), POW(10, 15)) * POW(10, 15);
+	return lo_hi(lo1, t) + fullmul(from_bcd(dpd_to_bcd(lo(x >> 100))), kpow<10, 15>) * kpow<10, 15>;
 }
 
 char *put_bcd_digits(char *s, uint64 m, int x, int dp) {
@@ -1286,14 +1310,14 @@ template<> size_t put_decimal<uint64>(char *s, uint64 m, int dp, bool sign) {
 	if (sign)
 		*s++ = '-';
 
-	if (m < POW(10, 15)) {
+	if (m < kpow<10, 15>) {
 		uint64	b0	= to_bcd(m);
 		int	x = leading_zeros(b0) / 4;
 		return fill_char(put_bcd_digits(put_leading_zeros(s, x + dp - 16), b0, x, 16 - dp), -dp, '0') - s0;
 	}
 
 	uint64	mod, b0, b1;
-	m	= divmod(m, POW(10, 15), mod);
+	m	= divmod(m, kpow<10, 15>, mod);
 	b0	= to_bcd(mod);
 	b1	= to_bcd(m);
 
@@ -1313,10 +1337,10 @@ template<> size_t put_decimal<uint128>(char *s, uint128 m, int dp, bool sign) {
 		*s++ = '-';
 
 	uint64	mod, b0, b1 = 0, b2 = 0;
-	m	= divmod(m, POW(10, 15), mod);
+	m	= divmod(m, kpow<10, 15>, mod);
 	b0	= to_bcd(mod);
 	if (!!m) {
-		m	= divmod(m, POW(10, 15), mod);
+		m	= divmod(m, kpow<10, 15>, mod);
 		b1	= to_bcd(mod);
 		if (uint64 m0 = lo(m))
 			b2	= to_bcd(m0);
@@ -1336,7 +1360,7 @@ template<> size_t put_decimal<uint128>(char *s, uint128 m, int dp, bool sign) {
 //-----------------------------------------------------------------------------
 //	is_square helpers
 //-----------------------------------------------------------------------------
-
+#if 0
 bool check_square_mod128(uint32 a) {
 #if 0
 	static const char rem_128[128] = {
@@ -1351,16 +1375,21 @@ bool check_square_mod128(uint32 a) {
 		1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1,
 	};
 	return !rem_128[a];
-#else
+#elif 0
 	static const uint64 rem_128b[2] = {
 		0b11111101'11111101'11111101'11101101'11111101'11111100'11111101'11101100,
 		0b11111101'11111101'11111101'11101101'11111101'11111101'11111101'11101100,
 	};
 	return !(rem_128b[a / 64] & bit(a & 63));
+#else
+	return a < 64
+		? bit(a)	& 0b11111101'11111101'11111101'11101101'11111101'11111100'11111101'11101100
+		: bit(a&63) & 0b11111101'11111101'11111101'11101101'11111101'11111101'11111101'11101100;
 #endif
 }
 
 bool check_square_mod3_5_7(uint32 a) {
+#if 0
 	static const char rem_105[105] = {
 		0, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1,
 		0, 0, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1,
@@ -1370,9 +1399,20 @@ bool check_square_mod3_5_7(uint32 a) {
 		1, 1, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1, 1, 1, 1,
 		1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1,
 	};
-
 	return !rem_105[a];
+#elif 0
+	static const uint64 rem_105b[2] = {
+		0b111111110101101'111110110111110'111101110111100'111110111101100,
+		0b000000000000000'111100111111101'111100110101111'111101111101110,
+	};
+	return !(rem_105b[a / 64] & bit(a & 63));
+#else
+	return a < 64
+		? bit(a)	& 0b111111110101101'111110110111110'111101110111100'111110111101100
+		: bit(a&63) & 0b000000000000000'111100111111101'111100110101111'111101111101110;
+#endif
 }
+#endif
 
 //-----------------------------------------------------------------------------
 //	gamma/lgamma

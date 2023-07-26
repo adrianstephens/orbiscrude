@@ -116,11 +116,9 @@ class WAVFileHandler : public SampleFileHandler, public WAVformat {
 	const char*		GetMIME()				override { return "audio/wave"; }
 	const char*		GetDescription()		override { return "Wave";	}
 	int				Check(istream_ref file) override {
+		uint32	u0, u1, u2;
 		file.seek(0);
-		if (file.get<uint32>() != "RIFF"_u32)
-			return CHECK_DEFINITE_NO;
-		file.get<uint32>();
-		return file.get<uint32>() == "WAVE"_u32 ? CHECK_PROBABLE : CHECK_DEFINITE_NO;
+		return file.read(u0, u1, u2) && u0 == "RIFF"_u32 && u2 == "WAVE"_u32 ? CHECK_PROBABLE : CHECK_DEFINITE_NO;
 	}
 	ISO_ptr<void>	Read(tag id, istream_ref file) override;
 	bool			Write(ISO_ptr<void> p, ostream_ref file) override;
@@ -138,31 +136,26 @@ public:
 		}
 
 		if (pcm) {
-			sm->Create(chunk.remaining() / ((fmt->wBitsPerSample + 7) / 8 * fmt->nChannels), fmt->nChannels, 16);//fmt->wBitsPerSample);
+			uint32	bytes_per_sample	= (fmt->wBitsPerSample + 7) / 8;
+			auto	p					= sm->Create(chunk.remaining() / (bytes_per_sample * fmt->nChannels), fmt->nChannels, 16);//fmt->wBitsPerSample);
 			sm->SetFrequency(float(fmt->nSamplesPerSec));
 
 			if (fmt->wBitsPerSample == 8) {
-				uint32	len		= chunk.remaining();
-				malloc_block	buffer(len);
-				chunk.readbuff(buffer, len);
-				for (unsigned i = 0; i < len; i++)
-					sm->Samples()[i] = ((int8*)buffer)[i] * 256;
+				malloc_block	buffer = malloc_block::unterminated(chunk);
+				for (auto &i : make_range<int8>(buffer))
+					*p++ = i * 256;
+
+			} else if (fmt->wBitsPerSample > 16) {
+				malloc_block	buffer	= malloc_block::unterminated(chunk);
+				int				shift	= 32 - fmt->wBitsPerSample;
+				for (auto &i : make_strided<int>(buffer, bytes_per_sample))
+					*p++ = (i << shift) >> 16;
 
 			} else {
 				chunk.readbuff(sm->Samples(), chunk.remaining());
-				if (fmt->wBitsPerSample == 16) {
-					uint16		*p = (uint16*)sm->Samples();
-					if (fmt->wFormatTag == 0xfe02) {
-#ifndef ISO_BIGENDIAN
-						for (int n = sm->Length() * sm->Channels(); --n; p++)
-							*p	= *(uint16be*)p;
-#endif
-					} else {
-#ifdef ISO_BIGENDIAN
-						for (int n = sm->Length() * sm->Channels(); --n; p++)
-							*p	= *(uint16le*)p;
-#endif
-					}
+				if ((fmt->wFormatTag == 0xfe02) ^ iso_bigendian) {
+					for (int n = sm->Length() * sm->Channels(); --n; p++)
+						swap_endian_inplace(*p);
 				}
 			}
 			return true;

@@ -269,7 +269,7 @@ bool SaveToRegistry(const ISO::Browser2 &b, RegKey::Value &&v) {
 				ba << ';';
 		}
 #endif
-		v = (const char*)ba;
+		v = ba.term();
 
 	} else if (type->GetType() == ISO::OPENARRAY && type->SubType()->IsPlainData()) {
 		v.set(b[0], b.Count() * b[0].GetSize());
@@ -447,7 +447,7 @@ LRESULT SettingsWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 										((ISO::TypeString*)b2.GetTypeDef())->set(b2, buffer);
 									else
 										ISO::ScriptRead(b, memory_reader(buffer), ISO::SCRIPT_KEEPEXTERNALS | ISO::SCRIPT_DONTCONVERT);
-									v.Update(spec);
+									v.Update(spec.term());
 									treecolumn.Invalidate();
 								} catch (const char *s) {
 									MessageBoxA(*this, s, "Edit Error", MB_ICONERROR | MB_OK);
@@ -474,7 +474,7 @@ LRESULT SettingsWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 							int				i	= GetIndex(tree, h);
 							bp.Remove(i);
 							RemoveTreeItem(tree, bp, hp, i);
-							v.Update(spec);
+							v.Update(spec.term());
 						}
 					}
 					break;
@@ -582,9 +582,10 @@ void SettingsWindow::EditItem(HTREEITEM h) {
 
 	s[int(m.tell())] = 0;
 
-	edit_control.Create(treecolumn, NULL, CHILD | VISIBLE | CLIPSIBLINGS | EditControl::AUTOHSCROLL | EditControl::WANTRETURN, CLIENTEDGE, treecolumn.GetItemRect(h, 2), ID_EDIT);
+	edit_control.Create(treecolumn, none, CHILD | VISIBLE | CLIPSIBLINGS | EditControl::AUTOHSCROLL | EditControl::WANTRETURN, CLIENTEDGE, treecolumn.GetItemRect(h, 2), ID_EDIT);
 	edit_control.SetFont(treecolumn.GetTreeControl().GetFont());
 	edit_control.MoveAfter(HWND_TOP);
+	edit_control.SetOwner(*this);
 	edit_control	= s;
 	edit_item		= h;
 	edit_control.SetSelection(CharRange::all());
@@ -630,11 +631,11 @@ int SettingsWindow::DrawButton(DeviceContext dc, const Rect &rect, HTREEITEM h) 
 }
 
 void SettingsWindow::PressButton(HTREEITEM h) {
-	buffer_accum<256>	spec;
-	ISO::Browser			v;
-	ISO::Browser2		b0		= GetVirtual(h, v, spec);
+	buffer_accum<256>	spec1;
+	ISO::Browser		v;
+	ISO::Browser2		b0		= GetVirtual(h, v, spec1);
 	ISO::Browser2		b		= b0;
-	const ISO::Type*		type	= b.GetTypeDef();
+	const ISO::Type*	type	= b.GetTypeDef();
 
 	if (type->GetType() == ISO::REFERENCE) {
 		b		= *b;
@@ -642,6 +643,7 @@ void SettingsWindow::PressButton(HTREEITEM h) {
 	}
 
 	const ISO::Type*		type2	= type->SkipUser();
+	const char *spec = spec1.term();
 
 	if (type->Is("rgba8")) {
 		CHOOSECOLOR	cc;

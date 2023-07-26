@@ -226,7 +226,7 @@ namespace iso {
 	// BinStream
 	//---------------------------------
 
-	struct BinStream : memory_reader {//memory_reader {
+	struct BinStream : memory_reader {
 		ISO::Browser2	b;
 		BinStream(const ISO::Browser2 &b) : memory_reader(memory_block(b[0], b.Count() * b[0].GetSize())), b(b) {}
 		const ISO::Browser2&	_clone()	const { return b; }
@@ -358,10 +358,10 @@ namespace iso {
 	};
 
 	inline bool IsRawData(const ISO::Type *type) {
-		return type && type->GetType() == ISO::OPENARRAY && type->SubType()->IsPlainData();
+		return type && is_any(type->GetType(), ISO::ARRAY, ISO::OPENARRAY) && type->SubType()->IsPlainData();
 	}
 	inline bool IsRawData(const ISO::Browser2 &b) {
-		return !b.External() && IsRawData(b.GetTypeDef());
+		return !b.External() && IsRawData(SkipUser(b.GetTypeDef()));
 	}
 	inline memory_block GetRawData(const ISO::Browser &b) {
 		return memory_block(b[0], b.Count() * b[0].GetSize());

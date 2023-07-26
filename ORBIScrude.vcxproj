@@ -61,6 +61,7 @@
     <SccAuxPath>Svn</SccAuxPath>
     <SccLocalPath>Svn</SccLocalPath>
     <SccProvider>SubversionScc</SccProvider>
+    <WindowsTargetPlatformVersion>10.0.22621.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="shared\toolset.props" />
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -112,8 +113,7 @@
   </ImportGroup>
   <ImportGroup Label="PropertySheets">
     <Import Project="isopod.props" />
-    <Import Project="sdk\SCE\ORBIS SDKs\6.000\orbis.props" />
-	<Import Project="sdk\SCE\ps3tmapi\ps3tmapi.props" />
+    <!--Import Project="$(SDK)\dxc\2021_12_08\dxc.props" /-->
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <ItemDefinitionGroup>
@@ -121,6 +121,9 @@
       <PreprocessorDefinitions>TOOLSET=$(PlatformToolsetVersion)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(IntDir);$(SharedDir)\platforms\pc;$(BuildDir)Debug-clang</AdditionalIncludeDirectories>
     </ResourceCompile>
+    <ClCompile>
+      <AdditionalIncludeDirectories>.;$(IntDir);shared\isoeditor;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
     <Manifest>
       <AdditionalManifestFiles>manifest.xml</AdditionalManifestFiles>
     </Manifest>
@@ -147,7 +150,6 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>USE_EXPORTS;WIN32;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.;shared\platforms\pc;shared\common;shared\isoeditor;shared;$(SDK);$(dxsdk_dir)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -164,7 +166,6 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>USE_EXPORTS;WIN32;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.;shared\platforms\pc;shared\common;shared\isoeditor;shared;$(SDK);$(dxsdk_dir)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -181,7 +182,6 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>USE_EXPORTS;WIN32;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.;shared\platforms\pc;shared\common;shared\isoeditor;shared;$(SDK);$(dxsdk_dir)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -198,7 +198,6 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>USE_ZLIB;USE_EXPORTS;WIN32;_WINDOWS;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.;shared\platforms\pc\dx9;shared\platforms\pc\x64;shared\platforms\pc;shared\common;shared;shared\isoeditor;$(SDK);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <ShowIncludes>false</ShowIncludes>
       <DiagnosticsFormat>Caret</DiagnosticsFormat>
@@ -217,7 +216,6 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>USE_ZLIB;USE_EXPORTS;WIN32;_WINDOWS;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.;shared\platforms\pc\dx11;shared\platforms\pc\x64;shared\platforms\pc;shared\common;shared;shared\isoeditor;$(IntDir);$(SDK);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <ShowIncludes>false</ShowIncludes>
       <MinimalRebuild>false</MinimalRebuild>
@@ -227,7 +225,7 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>d3d12.lib;d3dcompiler.lib;dbghelp.lib;comctl32.lib;wininet.lib;version.lib;shcore.lib;$(IntDir)all.res;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>d3d12.lib;d3dcompiler.lib;dxcompiler.lib;dbghelp.lib;comctl32.lib;wininet.lib;version.lib;shcore.lib;$(IntDir)all.res;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(SDK);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <ImportLibrary>$(OutDir)$(TargetName).imp</ImportLibrary>
       <DelayLoadDLLs>libSceGpuAddress.dll;libSceShaderWavePsslc.dll;libSceShaderCompiler.dll;libSceShaderBinary.dll;d3dcompiler_46.dll;PS3TMAPIx64.dll;XtfConsoleManager.dll;XtfConsoleControl.dll</DelayLoadDLLs>
@@ -238,7 +236,6 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>USE_ZLIB;USE_EXPORTS;WIN32;_WINDOWS;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.;shared\platforms\pc\dx11;shared\platforms\pc\x64;shared\platforms\pc;shared\common;shared;shared\isoeditor;$(IntDir);$(SDK);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <ShowIncludes>false</ShowIncludes>
       <MinimalRebuild>false</MinimalRebuild>
@@ -248,7 +245,7 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>d3d12.lib;d3dcompiler.lib;dbghelp.lib;comctl32.lib;wininet.lib;version.lib;shcore.lib;libSceGpuAddress_debug.lib;out\ps4_view\$(Configuration)_x64\viewps4gpu.res;out\dx11_view\$(Configuration)_x64\view_dx11gpu.res;out\dx12_view\$(Configuration)_x64\view_dx12gpu.res;out\ps3_view\$(Configuration)_x64\viewps3gpu.res;out\view_wii\$(Configuration)_x64\viewwiigpu.res;out\view_x64\$(Configuration)_x64\view_x64.res;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>d3d12.lib;d3dcompiler.lib;dxcompiler.lib;dbghelp.lib;comctl32.lib;wininet.lib;version.lib;shcore.lib;out\ps4_view\$(Configuration)_x64\viewps4gpu.res;out\dx11_view\$(Configuration)_x64\view_dx11gpu.res;out\dx12_view\$(Configuration)_x64\view_dx12gpu.res;out\ps3_view\$(Configuration)_x64\viewps3gpu.res;out\view_wii\$(Configuration)_x64\viewwiigpu.res;out\view_x64\$(Configuration)_x64\view_x64.res;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(SDK);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <ImportLibrary>$(OutDir)$(TargetName).imp</ImportLibrary>
       <DelayLoadDLLs>libSceGpuAddress.dll;libSceShaderWavePsslc.dll;libSceShaderCompiler.dll;libSceShaderBinary.dll;d3dcompiler_46.dll;PS3TMAPIx64.dll;XtfConsoleManager.dll;XtfConsoleControl.dll</DelayLoadDLLs>
@@ -262,7 +259,6 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.;shared\platforms\pc;shared\common;shared\isoeditor;shared;$(SDK);$(dxsdk_dir)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -283,7 +279,6 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.;shared\platforms\pc;shared\common;shared\isoeditor;shared;$(SDK);$(dxsdk_dir)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -304,7 +299,6 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.;shared\platforms\pc;shared\common;shared\isoeditor;shared;$(SDK);$(dxsdk_dir)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -325,7 +319,6 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>USE_ZLIB;USE_EXPORTS;WIN32;_WINDOWS;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.;shared\platforms\pc\dx9;shared\platforms\pc\x64;shared\platforms\pc;shared\common;shared;shared\isoeditor;$(SDK);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <BrowseInformation>true</BrowseInformation>
       <AdditionalOptions>/d2Zi+ %(AdditionalOptions)</AdditionalOptions>
       <ShowIncludes>false</ShowIncludes>
@@ -356,7 +349,6 @@ svn commit $(OutputPath) --non-interactive --message build</Command>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>USE_ZLIB;USE_EXPORTS;WIN32;_WINDOWS;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.;shared\platforms\pc\dx11;shared\platforms\pc\x64;shared\platforms\pc;shared\common;shared;shared\isoeditor;$(SDK);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AdditionalOptions>/d2Zi+ %(AdditionalOptions)</AdditionalOptions>
       <ShowIncludes>false</ShowIncludes>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -367,7 +359,7 @@ svn commit $(OutputPath) --non-interactive --message build</Command>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>d3d12.lib;d3dcompiler.lib;dbghelp.lib;comctl32.lib;wininet.lib;version.lib;shcore.lib;$(IntDir)all.res;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>d3d12.lib;d3dcompiler.lib;dxcompiler.lib;dbghelp.lib;comctl32.lib;wininet.lib;version.lib;shcore.lib;$(IntDir)all.res;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(SDK);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <ImportLibrary>$(OutDir)$(TargetName).imp</ImportLibrary>
       <DelayLoadDLLs>libSceGpuAddress.dll;libSceShaderWavePsslc.dll;libSceShaderCompiler.dll;libSceShaderBinary.dll;d3dcompiler_46.dll;PS3TMAPIx64.dll</DelayLoadDLLs>
@@ -387,7 +379,6 @@ svn commit $(OutputPath) --non-interactive --message build</Command>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>USE_ZLIB;USE_EXPORTS;WIN32;_WINDOWS;NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.;shared\platforms\pc\dx11;shared\platforms\pc\x64;shared\platforms\pc;shared\common;shared;shared\isoeditor;$(SDK);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AdditionalOptions>/d2Zi+ %(AdditionalOptions)</AdditionalOptions>
       <ShowIncludes>false</ShowIncludes>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
@@ -398,7 +389,7 @@ svn commit $(OutputPath) --non-interactive --message build</Command>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>d3d12.lib;d3dcompiler.lib;dbghelp.lib;comctl32.lib;wininet.lib;version.lib;shcore.lib;libSceGpuAddress.lib;out\ps4_view\$(Configuration)_x64\viewps4gpu.res;out\dx11_view\$(Configuration)_x64\view_dx11gpu.res;out\dx12_view\$(Configuration)_x64\view_dx12gpu.res;out\ps3_view\$(Configuration)_x64\viewps3gpu.res;out\view_wii\$(Configuration)_x64\viewwiigpu.res;out\view_x64\$(Configuration)_x64\view_x64.res;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>d3d12.lib;d3dcompiler.lib;dxcompiler.lib;dbghelp.lib;comctl32.lib;wininet.lib;version.lib;shcore.lib;out\ps4_view\$(Configuration)_x64\viewps4gpu.res;out\dx11_view\$(Configuration)_x64\view_dx11gpu.res;out\dx12_view\$(Configuration)_x64\view_dx12gpu.res;out\ps3_view\$(Configuration)_x64\viewps3gpu.res;out\view_wii\$(Configuration)_x64\viewwiigpu.res;out\view_x64\$(Configuration)_x64\view_x64.res;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(SDK);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <ImportLibrary>$(OutDir)$(TargetName).imp</ImportLibrary>
       <DelayLoadDLLs>libSceGpuAddress.dll;libSceShaderWavePsslc.dll;libSceShaderCompiler.dll;libSceShaderBinary.dll;d3dcompiler_46.dll;PS3TMAPIx64.dll</DelayLoadDLLs>
@@ -497,6 +488,7 @@ copy "$(TargetPath)" bin\</Command>
     <ClCompile Include="shared\common\comms\diffie-hellman.cpp" />
     <ClCompile Include="shared\common\comms\dsa.cpp" />
     <ClCompile Include="shared\common\comms\elliptic-curves.cpp" />
+    <ClCompile Include="shared\common\comms\ip.cpp" />
     <ClCompile Include="shared\common\comms\rsa.cpp" />
     <ClCompile Include="shared\common\comms\srp.cpp" />
     <ClCompile Include="shared\common\comms\ssl.cpp" />
@@ -551,6 +543,7 @@ copy "$(TargetPath)" bin\</Command>
     <ClCompile Include="shared\common\extra\cpp.cpp" />
     <ClCompile Include="shared\filetypes\code\demangle_vc.cpp" />
     <ClCompile Include="shared\filetypes\code\minidump.cpp" />
+    <ClCompile Include="shared\filetypes\code\pdb_ctype.cpp" />
     <ClCompile Include="shared\filetypes\code\pdb_utils.cpp" />
     <ClCompile Include="shared\filetypes\ib.cpp" />
     <ClCompile Include="shared\filetypes\ibz.cpp" />
@@ -613,6 +606,11 @@ copy "$(TargetPath)" bin\</Command>
     <ClInclude Include="shared\common\base\array.h" />
     <ClInclude Include="shared\common\base\atomic.h" />
     <ClInclude Include="shared\common\base\bits.h" />
+    <ClInclude Include="shared\common\base\block.h" />
+    <ClInclude Include="shared\common\base\colour.h" />
+    <ClInclude Include="shared\common\base\constants.h" />
+    <ClInclude Include="shared\common\base\coroutine.h" />
+    <ClInclude Include="shared\common\base\deferred.h" />
     <ClInclude Include="shared\common\base\defs.h" />
     <ClInclude Include="shared\common\base\defs_base.h" />
     <ClInclude Include="shared\common\base\defs_endian.h" />
@@ -652,6 +650,7 @@ copy "$(TargetPath)" bin\</Command>
     <ClInclude Include="shared\common\extra\expression.h" />
     <ClInclude Include="shared\common\extra\filters.h" />
     <ClInclude Include="shared\common\extra\kd_tree.h" />
+    <ClInclude Include="shared\common\extra\marshal.h" />
     <ClInclude Include="shared\common\extra\memory_cache.h" />
     <ClInclude Include="shared\common\extra\octree.h" />
     <ClInclude Include="shared\common\extra\regex.h" />
@@ -695,6 +694,7 @@ copy "$(TargetPath)" bin\</Command>
     <ClInclude Include="shared\isoeditor\viewers\directory_scan.h" />
     <ClInclude Include="shared\isoeditor\viewers\gpu.h" />
     <ClInclude Include="shared\isoeditor\viewers\natvis.h" />
+    <ClInclude Include="shared\isoeditor\viewers\viewbin.h" />
     <ClInclude Include="shared\isoeditor\viewers\viewbin.rc.h" />
     <ClInclude Include="shared\isoeditor\viewers\viewbitmap.rc.h" />
     <ClInclude Include="shared\isoeditor\viewers\viewer_identifier.h" />

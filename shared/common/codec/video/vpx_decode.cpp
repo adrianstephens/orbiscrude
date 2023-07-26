@@ -177,7 +177,7 @@ struct GPU {
 		uint32	eob:10, q0:11, q1:11;
 		uint16	x, y;
 		uint32	coeffs;
-		DCTinfo(int _q0, int _q1, int _eob, uint32 _coeffs, int _x, int _y) : eob(_eob - 1), q0(_q0), q1(_q1), x(_x/4), y(_y), coeffs(_coeffs) {}
+		DCTinfo(int q0, int q1, int eob, uint32 coeffs, int x, int y) : eob(eob - 1), q0(q0), q1(q1), x(x/4), y(y), coeffs(coeffs) {}
 	};
 
 	struct PREDinfo {
@@ -307,11 +307,11 @@ struct GPU {
 
 	dct1								*coeff_block;
 	atomic<circular_allocator>			coeff_alloc;
-	Buffer<dct1>						coeff_buffer;
+	DataBufferT<dct1>					coeff_buffer;
 
 	MotionVector						*mv_block;
 	atomic<circular_allocator>			mv_alloc;
-	Buffer<MotionVector>				mv_buffer;
+	DataBufferT<MotionVector>			mv_buffer;
 
 	memory_block						pred_block;
 	atomic<circular_allocator>			pred_alloc;
@@ -443,8 +443,8 @@ void GPU::BeginFrame(Decoder *dec) {
 	}
 
 #ifndef PLAT_PS4
-	mv_alloc.relocate(mv_buffer.Begin(ctx));
-	ptrdiff_t	diff = coeff_alloc.relocate(coeff_buffer.Begin(ctx)) / sizeof(tran_low_t);
+	mv_alloc.relocate(mv_buffer.WriteData(ctx));
+	ptrdiff_t	diff = coeff_alloc.relocate(coeff_buffer.WriteData(ctx)) / sizeof(tran_low_t);
 	for (auto &td : dec->tile_data) {
 		td.mb.dqcoeff		+= diff;
 		td.mb.dqcoeff_end	+= diff;
@@ -467,8 +467,8 @@ void GPU::EndFrame(Decoder *dec) {
 //	_Texture	_dest, _tex_refs[3];
 //	_Texture	*dest = &_dest, *tex_refs[3] = {_tex_refs + 0, _tex_refs + 1, _tex_refs + 2};
 #else
-	coeff_buffer.End(ctx);
-	mv_buffer.End(ctx);
+	//coeff_buffer.End(ctx);
+	//mv_buffer.End(ctx);
 #endif
 
 	GetTexture(dest, dec->cur_frame);
@@ -666,7 +666,7 @@ void GPU::Frame::End(GPU *gpu, int mi_rows, int mi_cols, _Texture *dest, _Textur
 			dct_buffers.info.Init(tx_buckets[i], num, MEM_USER | MEM_WRITABLE);
 			ctx.SetSRT(&dct_buffers);
 		#else
-			Buffer<DCTinfo>	info;
+			DataBufferT<DCTinfo>	info;
 			info.Init(tx_buckets[i], num);
 			ctx.SetBuffer(info, 1);
 		#endif
@@ -702,7 +702,7 @@ void GPU::Frame::End(GPU *gpu, int mi_rows, int mi_cols, _Texture *dest, _Textur
 		ctx.SetSRT(&inter_buffers);
 	#else
 		//dx11
-		Buffer<INTERinfo>	info(inter_info, mi_cols * mi_rows);
+		DataBufferT<INTERinfo>	info(inter_info, mi_cols * mi_rows);
 		ctx.SetBuffer(gpu->mv_buffer, 0);
 		ctx.SetBuffer(info, 1);
 		ctx.SetTexture(src0, 2);
@@ -749,7 +749,7 @@ void GPU::Frame::End(GPU *gpu, int mi_rows, int mi_cols, _Texture *dest, _Textur
 					pred_buffers.info.Init(start, i - start, MEM_USER);
 					ctx.SetSRT(&pred_buffers);
 				#else
-					Buffer<PREDinfo2>	info(start, i - start);
+					DataBufferT<PREDinfo2>	info(start, i - start);
 					ctx.SetBuffer(info, 0);
 				#endif
 					ctx.Dispatch(i - start, 1, 1);
@@ -767,7 +767,7 @@ void GPU::Frame::End(GPU *gpu, int mi_rows, int mi_cols, _Texture *dest, _Textur
 				pred_buffers.info.Init(start, end - start, MEM_USER);
 				ctx.SetSRT(&pred_buffers);
 			#else
-				Buffer<PREDinfo2>	info(start, end - start);
+				DataBufferT<PREDinfo2>	info(start, end - start);
 				ctx.SetBuffer(info, 0);
 			#endif
 				ctx.Dispatch(end - start, 1, 1);
@@ -801,7 +801,7 @@ void GPU::Frame::End(GPU *gpu, int mi_rows, int mi_cols, _Texture *dest, _Textur
 					pred_buffers.info.Init(start, n1, MEM_USER);
 					ctx.SetSRT(&pred_buffers);
 				#else
-					Buffer<PREDinfo2>	info(start, n1);
+					DataBufferT<PREDinfo2>	info(start, n1);
 					ctx.SetBuffer(info, 0);
 				#endif
 					ctx.Dispatch(n1, 1, 1);
@@ -812,7 +812,7 @@ void GPU::Frame::End(GPU *gpu, int mi_rows, int mi_cols, _Texture *dest, _Textur
 					pred_buffers.info.Init(start2, n2, MEM_USER);
 					ctx.SetSRT(&pred_buffers);
 				#else
-					Buffer<PREDinfo2>	info(start2, n2);
+					DataBufferT<PREDinfo2>	info(start2, n2);
 					ctx.SetBuffer(info, 0);
 				#endif
 					ctx.Dispatch(n2, 1, 1);
@@ -3570,7 +3570,7 @@ void FrameContext::adapt_coef_probs(FrameContext &prev, FrameCounts &counts, uin
 //-----------------------------------------------------------------------------
 
 Common::Common() {
-#if 1//def PLAT_PS4
+#if 0//def PLAT_PS4
 	gpu	= new GPU;
 #endif
 }
@@ -4558,8 +4558,8 @@ RETURN Decoder::decode_partition(vp9::reader &r, TileDecoder *const xd, int mi_r
 	const int ctx				= xd->get_partition_plane_context(mi_row, mi_col, n8x8_l2);
 	const prob *const probs		= partition_probs[ctx];
 	PARTITION_TYPE	partition	= has_rows && has_cols ? (PARTITION_TYPE)r.read_tree(partition_tree, probs)
-		: has_cols	? r.read(probs[1]) ? PARTITION_SPLIT : PARTITION_HORZ
-		: has_rows	? r.read(probs[2]) ? PARTITION_SPLIT : PARTITION_VERT
+		: has_cols	? r.read(probs[2]) ? PARTITION_SPLIT : PARTITION_VERT
+		: has_rows	? r.read(probs[1]) ? PARTITION_SPLIT : PARTITION_HORZ
 		: PARTITION_SPLIT;
 
 	if (xd->counts)

@@ -1,6 +1,12 @@
 #include "iso/iso_files.h"
 #include "base/algorithm.h"
 #include "matroska.h"
+#include "movie.h"
+#include "codec/video/h265.h"
+
+#ifdef ISO_EDITOR
+#include "codec/video/vpx_decode.h"
+#endif
 
 namespace matroska {
 //-----------------------------------------------------------------------------
@@ -2023,12 +2029,6 @@ Block::Frame *MultiTrackReader::GetNextFrame(int *track_index) {
 
 using namespace iso;
 
-class MKVFileHandler : public FileHandler {
-	const char*		GetExt() override { return "mkv"; }
-	ISO_ptr<void>	Read(tag id, istream_ref file) override;
-	bool			Write(ISO_ptr<void> p, ostream_ref file) override;
-} mkv;
-
 ISO_ptr<void> ReadEBML(istream_ref file, int level) {
 	EBMLreader	ebml(file);
 	if (ebml.id == 0)
@@ -2049,72 +2049,253 @@ ISO_ptr<void> ReadEBML(istream_ref file, int level) {
 	return p;
 }
 
-ISO_ptr<void> MKVFileHandler::Read(tag id, istream_ref file) {
-	/*
-		EBMLread	ebml(file);
-		if (ebml.id != EBML_ID_HEADER)
-			return ISO_NULL;
-
-		char	*doctype	= NULL;
-		int		version		= 0;
-
-		while (!ebml.atend()) {
-			EBMLread	ebml2(file);
-			uint64		num;
-			switch (ebml2.id) {
-				case EBML_ID_EBMLREADVERSION: // is our read version uptodate?
-					num = ebml2.read_uint();
-					if (num > EBML_VERSION)
-						return ISO_NULL;
-					break;
-				case EBML_ID_EBMLMAXSIZELENGTH:	// we only handle 8 byte lengths at max
-					num = ebml2.read_uint();
-					if (num > sizeof(uint64))
-						return ISO_NULL;
-					break;
-				case EBML_ID_EBMLMAXIDLENGTH:	// we handle 4 byte IDs at max
-					num = ebml2.read_uint();
-					if (num > sizeof(uint32))
-						return ISO_NULL;
-					break;
-				case EBML_ID_DOCTYPE: {
-					char *text = ebml2.read_ascii();
-					if (doctype)
-						free(doctype);
-					doctype = text;
-					break;
-				}
-				case EBML_ID_DOCTYPEREADVERSION:
-					version = ebml2.read_uint();
-					break;
-				default:
-				case EBML_ID_VOID:
-				case EBML_ID_EBMLVERSION:
-				case EBML_ID_DOCTYPEVERSION:
-					break;
-			}
+class MKVRawFileHandler : public FileHandler {
+	ISO_ptr<void>	Read(tag id, istream_ref file) override {
+		ISO_ptr<anything>	p(id);
+		while (ISO_ptr<void> p2 = ReadEBML(file, 3))
+			p->Append(p2);
+		return p;
+	}
+	bool			Write(ISO_ptr<void> p, ostream_ref file) override {
+		{
+			EBMLwriter	ebml(file, EBMLHeader::ID);
+			ebml.write_uint(EBMLHeader::ID_EBML_Version,		1);
+			ebml.write_uint(EBMLHeader::ID_EBML_ReadVersion,	1);
+			ebml.write_uint(EBMLHeader::ID_EBML_MaxIDLength,	4);
+			ebml.write_uint(EBMLHeader::ID_EBML_MaxSizeLength,	8);
+			ebml.write(EBMLHeader::ID_DocType, "matroska");
+			ebml.write_uint(EBMLHeader::ID_DocTypeVersion,		2);
+			ebml.write_uint(EBMLHeader::ID_DocTypeReadVersion,	2);
 		}
-	*/
-	ISO_ptr<anything>	p(id);
-	while (ISO_ptr<void> p2 = ReadEBML(file, 3))
-		p->Append(p2);
-	return p;
+		{
+			EBMLwriter	ebml(file, matroska::Segment::ID);
+		}
+		return true;
+	}
+} mkv_raw;
+
+#ifdef VPX_DECODE_H
+struct MKV_VP9Decoder : matroska::Decoder {
+	vp9::Decoder	decoder;
+	bool init(const matroska::VideoTrack* video_track, int threads) {
+		decoder.threads	= threads;
+		//decoder.use_gpu	= false;
+		return true;
+	}
+	bool decode_frame(const void *buffer, size_t size, int f) {
+		int		ret = decoder.decode_frame((uint8*)buffer, (uint8*)buffer + size);
+		if (ret < 0)
+			ISO_TRACEF("Failed to decode frame %d: %i\n", f, ret);
+		return ret >= 0;
+	}
+	bool get_frame(vbitmap_yuv *bm) {
+		bm->width = decoder.width;
+		bm->height	= decoder.height;
+		bm->format	= {decoder.cs.bit_depth, decoder.cs.bit_depth, decoder.cs.bit_depth, 0};
+		bm->planes.planes[1] = bm->planes.planes[2] = {decoder.cs.subsampling_x, decoder.cs.subsampling_y};
+		for (int i = 0; i < 3; i++) {
+			bm->texels[i]	= decoder.cur_frame->buffer(i).buffer;
+			bm->strides[i]	= decoder.cur_frame->buffer(i).stride;
+		}
+		return true;
+	}
+};
+matroska::DecoderType	MKV_VP9DecoderType("V_VP9", []()->matroska::Decoder* {return new MKV_VP9Decoder;});
+#endif
+
+struct MKV_HEVCDecoder : matroska::Decoder {
+	h265::decoder_context	decoder;
+	h265::NAL::Parser		parser;
+
+	bool init(const matroska::VideoTrack* video_track, int threads) {
+		h265::Configuration *hvc = video_track->codec_private;
+		for (auto &e : hvc->entries()) {
+			for (auto& unit : e.units())
+				parser.push_nal(unit, 0, nullptr);
+		}
+		return true;
+	}
+	bool decode_frame(const void *buffer, size_t size, int f) {
+		for (auto j : chunked_mem(const_memory_block(buffer, size)))
+			parser.push_nal(j, 0, nullptr);
+		
+		parser.end_of_frame = true;
+
+		while (decoder.decode(parser) == h265::decoder_context::RES_ok) {
+			if (auto img = decoder.get_next_picture_in_output_queue())
+				break;
+		}
+
+		return true;
+	}
+	bool get_frame(vbitmap_yuv *bm) {
+		if (auto img = decoder.get_next_picture_in_output_queue()) {
+			bm->width	= img->get_width();
+			bm->height	= img->get_height();
+			bm->format	= {img->planes[0].bit_depth, img->planes[1].bit_depth, img->planes[2].bit_depth, 0};
+			bm->planes.planes[1] = bm->planes.planes[2] = {get_shift_W(img->chroma_format), get_shift_H(img->chroma_format)};
+			for (int i = 0; i < 3; i++) {
+				bm->texels[i]	= img->planes[i].pixels;
+				bm->strides[i]	= img->planes[i].stride;
+			}
+			decoder.pop_next_picture_in_output_queue(0, true);
+			return true;
+		}
+		return false;
+	}
+};
+matroska::DecoderType	MKV_HEVCDecoderType("V_MPEGH/ISO/HEVC", []()->matroska::Decoder* {return new MKV_HEVCDecoder;});
+
+
+struct MKV_frames : public ISO::VirtualDefaults {
+	istream_ptr				file;
+	malloc_block			buffer;
+	uint64					timestamp_ns;
+	matroska::TrackReader	video;
+
+	uint32					width;
+	uint32					height;
+	rational<int>			pixel_aspect_ratio;
+
+	float					framerate;
+	float					duration;
+	int						last_frame;
+	ISO_ptr<vbitmap_yuv>	bm;
+
+	matroska::Decoder		*decoder	= nullptr;
+
+	MKV_frames(istream_ref file) : file(file.clone()), pixel_aspect_ratio(1,1), last_frame(-1), bm("MKV") {}
+	~MKV_frames() {
+		delete decoder;
+	}
+	bool				Init();
+	int					Count()		const	{ return duration * framerate; }
+	ISO::Browser2		Index(int i);
+	int					Width()		const	{ return width; }
+	int					Height()	const	{ return height; }
+	float				FrameRate()	const	{ return framerate; }
+};
+
+bool MKV_frames::Init() {
+	EBMLHeader			header;
+	matroska::Segment	*segment;
+
+	if (!header.read(file)
+		|| matroska::Segment::CreateInstance(file, file.tell(), segment)
+		|| segment->Load() < 0
+		)
+		return false;
+
+	const matroska::Tracks *const tracks	= segment->tracks;
+	const matroska::VideoTrack* video_track = NULL;
+	const matroska::AudioTrack* audio_track = NULL;
+	for (uint32 i = 0; i < tracks->size32(); ++i) {
+		const matroska::Track* const track = (*tracks)[i];
+		switch (track->type) {
+			case matroska::Track::kVideo: video_track = static_cast<const matroska::VideoTrack*>(track); break;
+			case matroska::Track::kAudio: audio_track = static_cast<const matroska::AudioTrack*>(track); break;
+		}
+	}
+
+	if (!video_track || !video_track->codec_id)
+		return false;
+
+	width		= video_track->width;
+	height		= video_track->height;
+	framerate	= video_track->rate;
+	duration	= segment->info->GetDuration() / 1e9;
+
+	video.Init(segment, video_track->number);
+	video.Rewind();
+	if (framerate == 0) {
+		uint32 i				= 0;
+		while (i < 50 && video.GetNextFrame() && video.GetTimestamp() < 1000000000)
+			++i;
+		framerate = i * 1e9 / video.GetTimestamp();
+		video.Rewind();
+	}
+#if 1
+	if (auto type = matroska::DecoderType::find_by(video_track->codec_id)) {
+		decoder = type->f();
+	}
+#else
+	if (video_track->codec_id == "V_MPEG4/ISO/AVC") {
+
+	} else if (video_track->codec_id == "V_MPEGH/ISO/HEVC") {
+		decoder = new MKV_HEVCDecoder;
+
+	} else if (video_track->codec_id == "V_VP9") {
+		decoder = new MKV_VP9Decoder;
+	}
+#endif
+	if (decoder)
+		return decoder->init(video_track, 0);
+
+	return false;
 }
 
-bool MKVFileHandler::Write(ISO_ptr<void> p, ostream_ref file) {
-	{
-		EBMLwriter	ebml(file, EBMLHeader::ID);
-		ebml.write_uint(EBMLHeader::ID_EBML_Version,		1);
-		ebml.write_uint(EBMLHeader::ID_EBML_ReadVersion,	1);
-		ebml.write_uint(EBMLHeader::ID_EBML_MaxIDLength,	4);
-		ebml.write_uint(EBMLHeader::ID_EBML_MaxSizeLength,	8);
-		ebml.write(EBMLHeader::ID_DocType, "matroska");
-		ebml.write_uint(EBMLHeader::ID_DocTypeVersion,		2);
-		ebml.write_uint(EBMLHeader::ID_DocTypeReadVersion,	2);
+ISO::Browser2 MKV_frames::Index(int i) {
+	if (i == last_frame)
+		return bm;
+
+	i = last_frame + 1;
+
+	if (i < last_frame) {
+		video.Rewind();
+		last_frame	= -1;
 	}
-	{
-		EBMLwriter	ebml(file, matroska::Segment::ID);
+
+	while (last_frame < i) {
+		if (matroska::Block::Frame *frame = video.GetNextFrame()) {
+			timestamp_ns	= video.GetTimestamp();
+			size_t	bytes_in_buffer	= frame->len;
+			if (bytes_in_buffer > buffer.size32())
+				buffer.create(bytes_in_buffer);
+
+			file.seek(frame->pos);
+			file.readbuff(buffer, bytes_in_buffer);
+			decoder->decode_frame(buffer, bytes_in_buffer, i);
+		} else {
+			decoder->decode_frame(0, 0, i);
+		}
+		++last_frame;
 	}
-	return true;
+
+	if (decoder->get_frame(bm))
+		return bm;
+	return {};
 }
+
+ISO_DEFVIRT(MKV_frames);
+
+class MKVFileHandler : public FileHandler {
+	const char*		GetExt()				override { return "mkv"; }
+	const char*		GetDescription()		override { return "Matroska"; }
+	int				Check(istream_ref file) override {
+		file.seek(0);
+
+		int		first = file.getc();
+		if (first <= 0)
+			return CHECK_DEFINITE_NO;
+
+		uint32	id = first;
+		while (!(first & 0x80)) {
+			id = (id << 8) | file.getc();
+			first <<= 1;
+		}
+		return id == EBMLHeader::ID ? CHECK_PROBABLE : CHECK_DEFINITE_NO;
+	}
+	ISO_ptr<void>	Read(tag id, istream_ref file) override {
+		ISO_ptr<MKV_frames>	frames(0, file);
+		if (frames->Init())
+			return ISO_ptr<movie>(id, frames);
+		return ISO_NULL;
+	}
+} mkv;
+
+class WebmMFileHandler : public MKVFileHandler {
+	const char*		GetExt()				override { return "Webm"; }
+	const char*		GetDescription()		override { return "google webm movie"; }
+	int				Check(istream_ref file)	override { return CHECK_DEFINITE_NO; }
+} webm;
 

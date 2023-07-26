@@ -265,7 +265,7 @@ class ViewProfile : public aligned<Window<ViewProfile>, 16>, public TimerT<ViewP
 			if (handle != isolink_invalid_handle && isolink_receive(handle, &sizebe, 4)) {
 				malloc_block	buffer(sizebe);
 				if (isolink_receive(handle, buffer, sizebe) == sizebe)
-					p = ISO::binary_data.Read(0, memory_reader(buffer));
+					p = ISO::binary_data.Read(none, memory_reader(buffer));
 				isolink_close(handle);
 			}
 			reentry = false;
@@ -274,7 +274,7 @@ class ViewProfile : public aligned<Window<ViewProfile>, 16>, public TimerT<ViewP
 	}
 
 public:
-	LRESULT Proc(UINT message, WPARAM wParam, LPARAM lParam);
+	LRESULT Proc(MSG_ID message, WPARAM wParam, LPARAM lParam);
 
 	void	operator()(Timer*) {
 		if (ISO_ptr<void> p = GetData(target, spec)) {
@@ -306,7 +306,7 @@ public:
 	}
 };
 
-LRESULT ViewProfile::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+LRESULT ViewProfile::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 		case WM_CREATE:
 //			Timer::Next(0);
@@ -315,7 +315,7 @@ LRESULT ViewProfile::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 
 		case WM_SIZE:
 			client = GetClientRect();
-			if (d2d.Resize(Point(lParam))) {
+			if (!d2d.Resize(Point(lParam))) {
 				DiscardDeviceResources();
 				Invalidate();
 			}

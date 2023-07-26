@@ -48,13 +48,17 @@ class ShaderParameters : public singleton<ShaderParameters> {
 	Texture					bones;
 #elif defined(SKIN_BUFFER)
 //	Buffer<float4x4>		bones;
-	DataBuffer				bones;
+	DataBufferT<float4x4>	bones;
 #endif
 
 public:
 	arbitrary_ptr &get(crc32 name) {
 		return hash[name]->data;
 	}
+	arbitrary_ptr &get(string_ref name) {
+		return get(crc32(name));
+	}
+
 	void SetSkinning(const float3x4 *mats, int nmats) {
 #ifdef SKIN_REGISTERS
 		bones.p		= unconst(mats);
@@ -72,16 +76,15 @@ public:
 			bones.Init(TEXF_A32B32G32R32F, 1024 * 4, 1, 1, 1, MEM_CPU_WRITE);
 		memcpy(bones.Data(), mats, nmats * sizeof(mats[0]));
 #elif defined(SKIN_BUFFER)
-		Buffer<float4x4>		&bones2 = bones;
-		if (!bones2)
-			bones2.Init(1024, MEM_CPU_WRITE);
-		memcpy(bones2.WriteData(), mats, nmats * sizeof(mats[0]));
+		if (!bones)
+			bones.Init(1024, MEM_CPU_WRITE);
+		memcpy(bones.WriteData().begin(), mats, nmats * sizeof(mats[0]));
 #endif
 	}
 
 	ShaderParameters() {
-		get("bones")	= &bones;
-		get("_refmap")	= &refmap;
+		get("bones"_crc32)		= &bones;
+		get("_refmap"_crc32)	= &refmap;
 	}
 };
 

@@ -90,7 +90,7 @@ struct MovieTexture  : AVTexture {
 //-----------------------------------------------------------------------------
 
 #include "filetypes\video\matroska.h"
-#include "filetypes\video\vpx_decode.h"
+#include "common\codec\video\vpx_decode.h"
 
 template<typename T, int N> struct Pipeline {
 	Semaphore			used_count, free_count;

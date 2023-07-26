@@ -66,7 +66,7 @@ namespace iso {
 		void				DrawHidden(GraphicsContext &ctx, const RenderView &v) const	{ return output->DrawHidden(ctx, v); }
 
 		Application(const char *title);
-		LRESULT		Proc(UINT message, WPARAM wParam, LPARAM lParam);
+		LRESULT		Proc(win::MSG_ID message, WPARAM wParam, LPARAM lParam);
 		void		Run();
 	};
 

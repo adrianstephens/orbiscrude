@@ -7,173 +7,68 @@
 namespace iso {
 
 //-----------------------------------------------------------------------------
-//	index_iterator/ed	- only indices are swapped
-//-----------------------------------------------------------------------------
-
-template<typename C, typename CI> class index_container {
-	typedef iterator_t<CI>	I;
-	const C		&c;
-	CI			&i;
-public:
-	class element {
-		typedef typename iterator_traits<C>::element	T;
-		typedef typename iterator_traits<I>::reference	X;
-		const C	&c;
-		X		i;
-	public:
-		element(const C &_c, const X _i) : c(_c), i(_i)	{}
-		operator	T&()							const	{ return c[i];	}
-		T&			operator*()						const	{ return c[i];	}
-		T*			operator->()					const	{ return &c[i];	}
-		X			index()							const	{ return i; }
-
-		auto		operator==(const element &b)	const	{ return c[i] == *b; }
-		auto		operator!=(const element &b)	const	{ return c[i] != *b; }
-		auto		operator< (const element &b)	const	{ return c[i] <  *b; }
-		auto		operator<=(const element &b)	const	{ return c[i] <= *b; }
-		auto		operator>=(const element &b)	const	{ return c[i] >= *b; }
-		auto		operator> (const element &b)	const	{ return c[i] >  *b; }
-
-		element&	operator=(const element &b)				{ i = b.index(); return *this; }
-		friend void swap(element a, element b)				{ swap(a.i, b.i); }
-	};
-
-	class iterator {
-		const C	&c;
-		I		i;
-	public:
-		typedef typename index_container::element					element, reference;
-		typedef typename iterator_traits<I>::iterator_category		iterator_category;
-
-		iterator(const C &_c, const I &_i) : c(_c), i(_i)	{}
-		iterator&	operator=(const iterator &b)			{ i = b.i; return *this; }
-
-		element		operator*()						const	{ return element(c, *i);	}
-		element		operator->()					const	{ return element(c, *i);	}
-		element		operator[](int j)				const	{ return element(c, i[j]);	}
-
-		bool		operator==(const iterator &b)	const	{ return i == b.i; }
-		bool		operator!=(const iterator &b)	const	{ return i != b.i; }
-		bool		operator< (const iterator &b)	const	{ return i <  b.i; }
-		bool		operator<=(const iterator &b)	const	{ return i <= b.i; }
-		bool		operator>=(const iterator &b)	const	{ return i >= b.i; }
-		bool		operator> (const iterator &b)	const	{ return i >  b.i; }
-
-		iterator&	operator+=(intptr_t j)			{ i += j; return *this; }
-		iterator&	operator-=(intptr_t j)			{ i -= j; return *this; }
-		iterator&	operator++()					{ ++i; return *this;	}
-		iterator&	operator--()					{ --i; return *this;	}
-		iterator	operator++(int)					{ iterator t(*this); ++i; return t; }
-		iterator	operator--(int)					{ iterator t(*this); --i; return t; }
-		iterator	operator+(intptr_t j)	const	{ return iterator(c, i + j); }
-		iterator	operator-(intptr_t j)	const	{ return iterator(c, i - j); }
-
-		typename iterator_traits<I>::reference index() const	{ return *i; }
-
-		friend auto	operator-(const iterator &a, const iterator &b) {
-			return a.i - b.i;
-		}
-	};
-
-	typedef	element		reference;
-	typedef	iterator	const_iterator;
-
-	index_container(const C &_c, CI &_i) : c(_c), i(_i)	{}
-
-	element				operator[](int j)	const	{ return element(c, i[j]); }
-	int					size()				const	{ return i.size(); }
-	iterator			begin()				const	{ return iterator(c, i.begin()); }
-	iterator			end()				const	{ return iterator(c, i.end()); }
-
-	void				pop_back()					{ i.pop_back(); }
-	element				pop_back_value()			{ return i.pop_back_value(); }
-};
-
-template<typename C, typename CI> force_inline index_container<C,CI>	make_index_container(const C &c, CI &ci) {
-	return index_container<C,CI>(c, ci);
-}
-template<typename C, typename I> force_inline typename index_container<C,range<I> >::iterator make_index_iterator(const C &c, I i) {
-	return typename index_container<C,range<I> >::iterator(c, i);
-}
-
-//-----------------------------------------------------------------------------
 //	double_index_iterator/ed - maintains reverse mapping
 //-----------------------------------------------------------------------------
 
-template<typename R, typename CI> class double_index_container {
-	R		&r;
-	CI		&c;
-	typedef iterator_t<CI>	I;
+template<typename R, typename C> class double_index_container {
+	R		r;
+	C		c;
+	typedef iterator_t<C>	I;
 public:
-	class element {
-		typedef typename iterator_traits<I>::element	X;
+	class element : comparisons<element> {
+		typedef it_element_t<I>	X;
 		R		&r;
-		CI		&c;
-		X		&i;
+		C		&c;
+		X		&x;
 	public:
-		element(R &_r, CI &_c, X &_i) : r(_r), c(_c), i(_i) 	{}
-		operator X()	const	{ return i;	}
+		element(R &r, C &c, X &x) : r(r), c(c), x(x) 	{}
+		operator auto()	const	{ return get(x);	}
 
 		element&	operator=(const element &b) {
-			r[b.i]	= index_of(c, &i);
-			i		= b.i;
+			r[b.x]	= index_of(c, x);
+			x		= b.x;
 			return *this;
 		}
 		friend void swap(element &a, element &b) {
-			swap(a.i, b.i);
-			swap(a.r[a.i], b.r[b.i]);
+			swap(a.x, b.x);
+			swap(a.r[a.x], b.r[b.x]);
 		}
+		friend int	compare(const element &a, const element &b) {
+			return simple_compare(get(*a.i), get(*b.i));
+		}
+		template<typename C2> friend indexed_element<C2&, element> deindex(C2 &c, element &&x)	{ return {c, x}; }
 	};
 
-	class iterator {
+	class iterator : public iterator_wrapper<iterator, I> {
+		typedef iterator_wrapper<iterator, I> B;
+		using B::i;
 		R	&r;
-		CI	&c;
-		I	i;
+		C	&c;
 	public:
-		typedef typename double_index_container::element		element, reference;
-		typedef typename iterator_traits<I>::iterator_category	iterator_category;
+		iterator(R &r, C &c, I i) : B(i), r(r), c(c)	{}
+		iterator&	operator=(const iterator &b)		{ i = b.i; return *this; }
+		element		operator*()				const	{ return {r, c, *i};	}
+		element		operator->()			const	{ return {r, c, *i};	}
+		element		operator[](intptr_t j)	const	{ return {r, c, i[j]}; }
+		iterator	operator+(intptr_t j)	const	{ return {r, c, i + j}; }
+		iterator	operator-(intptr_t j)	const	{ return {r, c, i - j}; }
 
-		iterator(R &_r, CI &_c, I _i) : r(_r), c(_c), i(_i)	{}
-		iterator& operator=(const iterator &b)		{ i = b.i; return *this; }
-
-		element		operator*()						const	{ return element(r, c, *i);	}
-		element		operator->()					const	{ return element(r, c, *i);	}
-		element		operator[](int j)				const	{ return element(r, c, i[j]);	}
-		bool		operator==(const iterator &b)	const	{ return i == b.i;	}
-		bool		operator!=(const iterator &b)	const	{ return i != b.i;	}
-		bool		operator< (const iterator &b)	const	{ return i <  b.i;	}
-		bool		operator<=(const iterator &b)	const	{ return i <= b.i;	}
-		bool		operator>=(const iterator &b)	const	{ return i >= b.i;	}
-		bool		operator> (const iterator &b)	const	{ return i >  b.i;	}
-
-		iterator&	operator+=(intptr_t j)			{ i += j; return *this; }
-		iterator&	operator-=(intptr_t j)			{ i -= j; return *this; }
-		iterator&	operator++()					{ ++i; return *this;	}
-		iterator&	operator--()					{ --i; return *this;	}
-		iterator	operator++(int)					{ iterator t(*this); ++i; return t; }
-		iterator	operator--(int)					{ iterator t(*this); --i; return t; }
-		iterator	operator+(intptr_t j)	const	{ return iterator(r, c, i + j); }
-		iterator	operator-(intptr_t j)	const	{ return iterator(r, c, i - j); }
-
-		friend auto	operator-(const iterator &a, const iterator &b) {
-			return a.i - b.i;
-		}
+		friend auto	operator-(const iterator &a, const iterator &b) { return a.i - b.i; }
 	};
 
-	typedef	iterator	const_iterator;
-	typedef element		reference;
-
-	double_index_container(R &_r, CI &_c) : r(_r), c(_c)	{}
-	iterator	begin()				const	{ return iterator(r, c, iso::begin(c)); }
-	iterator	end()				const	{ return iterator(r, c, iso::end(c)); }
+	double_index_container(R &&r, C &&c) : r(forward<R>(r)), c(forward<C>(c))	{}
+	iterator	begin()				const	{ using iso::begin; return {r, c, begin(c)}; }
+	iterator	end()				const	{ using iso::end; return {r, c, end(c)}; }
+	auto		size()				const	{ return c.size(); }
 	void		pop_back()					{ c.pop_back(); }
 	element		pop_back_value()			{ return c.pop_back_value(); }
+	element		operator[](int j)	const	{ return {r, c, c[j]}; }
 };
 
-template<typename R, typename CI> force_inline double_index_container<R,CI> make_double_index_container(R &r, CI &c) {
-	return double_index_container<R,CI>(r, c);
+template<typename R, typename C> force_inline double_index_container<R,C> make_double_index_container(R &&r, C &&c) {
+	return double_index_container<R,C>(forward<R>(r), forward<C>(c));
 }
-template<typename R, typename I> force_inline typename double_index_container<R,range<I> >::iterator make_double_index_iterator(R &r, I i) {
+template<typename R, typename I> force_inline typename double_index_container<R, range<I>>::iterator make_double_index_iterator(R &&r, I i) {
 	return typename double_index_container<R,range<I> >::iterator(r, i);
 }
 
@@ -225,7 +120,7 @@ public:
 
 template<typename I> template<typename C, typename P>
 void Indexer<I>::FindLink(const C &values, int i, I ix, P pred) {
-	typedef typename iterator_traits<C>::element	E;
+	typedef it_element_t<C>	E;
 	E	v		= values[i];
 	I	pix;
 
@@ -263,7 +158,7 @@ int Indexer<I>::Process(const C &values, P pred) {
 
 template<typename I> template<typename C, typename P>
 int Indexer<I>::ProcessFirst(const C &values, P pred) {
-	typedef typename iterator_traits<C>::element	E;
+	typedef it_element_t<C>	E;
 	hash_map<E, I>	m;
 	for (int i = 0; i < num_indices; i++)
 		links[i] = 0;

@@ -151,7 +151,7 @@ template<bool be> ISO_ptr<void> MakeBlock(MATLAB::TYPE type, const const_memory_
 		case MATLAB::UTF8:		return MakeBlock<be, char>(data);
 		case MATLAB::UTF16:		return MakeBlock<be, char16>(data);
 		case MATLAB::UTF32:		return MakeBlock<be, char32>(data);
-		default:				return ISO::MakePtr(0, data);
+		default:				return ISO::MakePtr(none, data);
 	}
 }
 
@@ -166,10 +166,10 @@ template<bool be> ISO_ptr<void> ReadRaw(tag id, istream_ref file, uint64 end = ~
 
 		ISO_ASSERT(type <= MATLAB::MAX_TYPE);
 		if (type == MATLAB::MATRIX) {
-			p->Append(ReadRaw<be>(0, file, file.tell() + e.size));
+			p->Append(ReadRaw<be>(none, file, file.tell() + e.size));
 
 		} else if (type == MATLAB::COMPRESSED) {
-			p->Append(ReadRaw<be>(0, zlib_reader(file).me()));
+			p->Append(ReadRaw<be>(none, zlib_reader(file).me()));
 			file.seek(align(tell + e.size + 8, 8));
 
 		} else {

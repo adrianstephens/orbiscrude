@@ -55,7 +55,8 @@ struct ViewBinMode {
 	uint16	bytes_per_line;
 
 	static ViewBinMode	&Current()	{
-		static ViewBinMode mode; return mode;
+		static ViewBinMode mode;
+		return mode;
 	}
 
 	void	SetBytesPerElement(int n) {
@@ -348,7 +349,7 @@ class ViewBin : ViewBin_base, public win::Window<ViewBin> {
 		return ViewBin_base::AddressAtLine(si.Pos() + line);
 	}
 	uint64	AddressFromWindow(const win::Point &p, bool *is_ascii = 0) {
-		int	x = OffsetFromChar(int(p.x / (char_width * zoom)), is_ascii);
+		int	x = OffsetFromChar(int(p.x / (char_width * zoom) + sih.Pos()), is_ascii);
 		return x >= bytes_per_line
 			? ~uint64(0)
 			: AddressAtLine(int((p.y - rects[1].top) / (line_height * zoom))) + x;
@@ -389,7 +390,7 @@ class ViewBin : ViewBin_base, public win::Window<ViewBin> {
 public:
 	bool	operator()(int state, interval<uint64> &found);
 
-	LRESULT	Proc(UINT message, WPARAM wParam, LPARAM lParam);
+	LRESULT	Proc(win::MSG_ID msg, WPARAM wParam, LPARAM lParam);
 	int		GetMouseWheel(WPARAM wParam);
 	ViewBin(const win::WindowPos &wpos, const char *title, const ISO::Browser2 &b, win::ID id = win::ID());
 };

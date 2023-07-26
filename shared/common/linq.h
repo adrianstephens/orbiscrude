@@ -51,7 +51,8 @@ template<typename T, typename R> impl<T, R> implement(R &&range, op<T> &&b) {
 
 template<typename T, typename R> struct iterator {
 	impl<T,R>	*r;
-	iterator(impl<T,R> *r) : r(r->empty() ? nullptr : r) {}
+	iterator(impl<T,R> *r)	: r(r->empty() ? nullptr : r) {}
+	iterator(nullptr_t)		: r(nullptr) {}
 	auto		operator*()						const	{ return r->front(); }
 	bool		operator!=(const iterator &b)	const	{ return r != b.r; }
 	iterator&	operator++()							{ if (!r->next()) r = nullptr; return *this; }

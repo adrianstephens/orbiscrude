@@ -12,12 +12,12 @@ template<typename T> constexpr uint32	BIT_HOLD(int N)	{ return (N + BIT_COUNT<T>
 // masks
 //-----------------------------------------------------------------------------
 
-template<typename T> constexpr bool	bit_test(T v, uint32 e)				{ return !!(v & e); }
-template<typename T> constexpr bool	bit_test_all(T v, uint32 e)			{ return (v & e) == e; }
-template<typename T> inline bool	bit_test_set(T &v, uint32 e)		{ return !!(v & e) | ((v |= e), false); }
-template<typename T> inline bool	bit_test_set(T &v, uint32 e, bool b){ return !!(v & e) | ((v ^= (v ^ -T(b)) & e), false); }
-template<typename T> inline bool	bit_test_clear(T &v, uint32 e)		{ return !!(v & e) | ((v &= ~e), false); }
-template<typename T> inline bool	bit_test_flip(T &v, uint32 e)		{ return !!(v & e) | ((v ^= e), false); }
+template<typename T> constexpr bool	bit_test(T v, T e)					{ return !!(v & e); }
+template<typename T> constexpr bool	bit_test_all(T v, T e)				{ return (v & e) == e; }
+template<typename T> inline bool	bit_test_set(T &v, T e)				{ return !!(v & e) | ((v |= e), false); }
+template<typename T> inline bool	bit_test_set(T &v, T e, bool b)		{ return !!(v & e) | ((v ^= (v ^ -T(b)) & e), false); }
+template<typename T> inline bool	bit_test_clear(T &v, T e)			{ return !!(v & e) | ((v &= ~e), false); }
+template<typename T> inline bool	bit_test_flip(T &v, T e)			{ return !!(v & e) | ((v ^= e), false); }
 
 template<typename T> inline T&		bit_set(T &v, T m)					{ return v |= m; }
 template<typename T> inline T&		bit_set(T &v, T m, bool b)			{ return v = (v & ~m) | (-int(b) & m); }
@@ -36,7 +36,7 @@ template<typename T, int N>			constexpr T bit_every				= N >= BIT_COUNT<T> ? 1 :
 template<typename T, int N, T V>	constexpr T val_every				= bit_every<T, N> * V;
 
 template<typename T, int S, int N>	constexpr T bit_repeat				= kbits<T, N * S> / kbits<T, S>;
-template<typename T, int S, int N, T V>	constexpr T val_repeat			= bit_repeat<T, S, N> *V;
+template<typename T, int S, int N, T V>	constexpr T val_repeat			= bit_repeat<T, S, N> * V;
 
 // V bits every N
 template<typename T, int N, int V>	constexpr T bitblocks				= bit_every<T,N> * kbits<T, V>;
@@ -58,6 +58,7 @@ template<int X, int Y, int Z> auto block_mask(int x, int y, int z) {
 //-----------------------------------------------------------------------------
 // shifts/rotates
 //-----------------------------------------------------------------------------
+
 template<typename T> constexpr T	bits_mask(T m, uint32 n)		{ return (m << n) - m; }
 template<typename T> constexpr T	bits_dup(T m, uint32 n)			{ return m | (m << n); }
 
@@ -87,6 +88,9 @@ template<int Y, int N, typename T> constexpr enable_if_t<N != Y * 2, T> rotate_l
 // nth set index
 
 #ifdef __BMI2__
+
+inline uint64 lowest_n_set(uint64 x, unsigned n) { return _pdep_u64(bits<uint64>(n), x); }
+inline uint32 lowest_n_set(uint32 x, unsigned n) { return _pdep_u32(bits<uint32>(n), x); }
 
 inline uint64 nth_set(uint64 x, unsigned n) { return _pdep_u64(bit<uint64>(n), x); }
 inline uint32 nth_set(uint32 x, unsigned n) { return _pdep_u32(bit<uint32>(n), x); }
@@ -121,42 +125,12 @@ template<typename T> constexpr enable_if_t<!is_signed<T>, uint32> nth_set_index(
 	return _nth_set_index(i, i - ((i >> 1) & (~T(0) / 3)), n);
 }
 
+template<typename T> constexpr T lowest_n_set(T x, unsigned n) { return x & bits<T>(nth_set_index(x, n)); }
+
 #endif
 
 template<typename T> constexpr enable_if_t< is_signed<T>, uint32> nth_set_index(T i, unsigned n) {
 	return nth_set_index(uint_for_t<T>(i), n);
-}
-
-// assumes x has only 1 bit set
-inline int	bit_index(uint8 x) {
-	uint8	m = x | (x >> 4);
-	m |= (m & 0xcc) >> 2;
-	m |= (m & 0xaa) >> 1;
-	return	((m >> 2) & 4) | ((m >> 1) & 3);
-}
-inline int	bit_index(uint16 x) {
-	uint16	m = x | (x >> 8);
-	m |= (m & 0xf0f0) >> 4;
-	m |= (m & 0xcccc) >> 2;
-	m |= (m & 0xaaaa) >> 1;
-	return	((m >> 5) & 8) | ((m >> 2) & 4) | ((m >> 1) & 3);
-}
-inline int	bit_index(uint32 x) {
-	uint32	m = x | (x >> 16);
-	m |= (m & 0xff00ff00) >> 8;
-	m |= (m & 0xf0f0f0f0) >> 4;
-	m |= (m & 0xcccccccc) >> 2;
-	m |= (m & 0xaaaaaaaa) >> 1;
-	return	((m >> 12) & 16) | ((m >> 5) & 8) | ((m >> 2) & 4) | ((m >> 1) & 3);
-}
-inline int	bit_index(uint64 x) {
-	uint64	m = x | (x >> 32);
-	m |= (m & 0xffff0000ffff0000ull) >> 16;
-	m |= (m & 0xff00ff00ff00ff00ull) >> 8;
-	m |= (m & 0xf0f0f0f0f0f0f0f0ull) >> 4;
-	m |= (m & 0xccccccccccccccccull) >> 2;
-	m |= (m & 0xaaaaaaaaaaaaaaaaull) >> 1;
-	return	((m >> 27) & 32) | ((m >> 12) & 16) | ((m >> 5) & 8) | ((m >> 2) & 4) | ((m >> 1) & 3);
 }
 
 // lowest consecutive n bits (starting at bits set in starts)
@@ -187,8 +161,8 @@ template<typename T> constexpr bool bits_subset(const T &a, const T &b)			{ retu
 template<typename T> constexpr bool bits_proper_subset(const T &a, const T &b)	{ return a != b && bits_subset(a, b); }
 
 // is there a B-bit zero  (at a B-bit boundary) - cf. simd::contains_zero
-template<typename T, int B = 8> inline bool contains_zero(T x) {
-	return (x - val_every<T, B, 0x01>) & ~x & val_every<T, B, 1 << (B - 1)>;
+template<typename T, int B = 8> inline bool bits_contains_zero(T x) {
+	return (x - val_every<T, B, 0x01>) & ~x & val_every<T, B, T(1) << (B - 1)>;
 }
 
 template<typename T, typename V> inline bool contains_value(T x, V v) {
@@ -270,55 +244,55 @@ template<int N, int M, int B, int O=0, typename T> inline auto unpart_bits(T x) 
 #else
 
 //part_by_1(T) (=part_bits<1,1>(T))
-template<typename T, int N> struct s_part_by_1	{ static inline T f(T x) { return s_part_by_1<T, N / 2>::f((x ^ (x << N)) & chunkmask<T,N>); } };
-template<typename T> struct s_part_by_1<T,0>	{ static inline T f(T x) { return x; } };
-template<typename T> inline auto part_by_1(T x) { return s_part_by_1<uint_t<sizeof(T) * 2>, sizeof(T) * 4>::f(x); }
+template<typename T, int N> struct s_part_by_1		{ static constexpr T f(T x) { return s_part_by_1<T, N / 2>::f((x ^ (x << N)) & chunkmask<T,N>); } };
+template<typename T> struct s_part_by_1<T,0>		{ static constexpr T f(T x) { return x; } };
+template<typename T> constexpr auto part_by_1(T x)	{ return s_part_by_1<uint_t<sizeof(T) * 2>, sizeof(T) * 4>::f(x); }
 
 //even_bits(T) (=unpart_bits<1,1>(T))
-template<typename T, int N> struct s_even_bits	{ static inline T f(T x) { x = s_even_bits<T, N / 2>::f(x) & chunkmask<T,N>; return x | (x >> N); } };
-template<typename T> struct s_even_bits<T,0>	{ static inline T f(T x) { return x; } };
-template<typename T> inline auto even_bits(T x)	{ return s_even_bits<T, sizeof(T) * 2>::f(x); }
-template<typename T> inline auto odd_bits(T x)	{ return even_bits(x >> 1); }
+template<typename T, int N> struct s_even_bits		{ static constexpr T f(T x) { x = s_even_bits<T, N / 2>::f(x) & chunkmask<T,N>; return x | (x >> N); } };
+template<typename T> struct s_even_bits<T,0>		{ static constexpr T f(T x) { return x; } };
+template<typename T> constexpr auto even_bits(T x)	{ return s_even_bits<T, sizeof(T) * 2>::f(x); }
+template<typename T> constexpr auto odd_bits(T x)	{ return even_bits(x >> 1); }
 
 //interleave(T) & uninterleave(T)
 template<typename T, int N> struct s_interleave {
-	static const T	m = chunkmask<T, N> << N;
-	static inline T f(T x) { return s_interleave<T, N / 2>::f((x & ~(m | (m << N))) | ((x & m) << N) | ((x >> N) & m)); }
-	static inline T g(T x) { x = s_interleave<T, N / 2>::g(x); return (x & ~(m | (m << N))) | ((x & m) << N) | ((x >> N) & m); }
+	static constexpr T	m = chunkmask<T, N> << N;
+	static constexpr T f(T x) { return s_interleave<T, N / 2>::f((x & ~(m | (m << N))) | ((x & m) << N) | ((x >> N) & m)); }
+	static constexpr T g(T x) { x = s_interleave<T, N / 2>::g(x); return (x & ~(m | (m << N))) | ((x & m) << N) | ((x >> N) & m); }
 };
 template<typename T> struct s_interleave<T,0>	{
-	static inline T f(T x) { return x; }
-	static inline T g(T x) { return x; }
+	static constexpr T f(T x) { return x; }
+	static constexpr T g(T x) { return x; }
 };
-template<typename T> inline T interleave(T x)	{ return s_interleave<uint_for_t<T>, sizeof(T) * 2>::f(as_unsigned(x)); }
-template<typename T> inline T uninterleave(T x) { return s_interleave<uint_for_t<T>, sizeof(T) * 2>::g(as_unsigned(x)); }
+template<typename T> constexpr T interleave(T x)	{ return s_interleave<uint_for_t<T>, sizeof(T) * 2>::f(as_unsigned(x)); }
+template<typename T> constexpr T uninterleave(T x)	{ return s_interleave<uint_for_t<T>, sizeof(T) * 2>::g(as_unsigned(x)); }
 
 //part_bits(T) & unpart_bits(T)
 template<typename T, int N, int M, int I, bool = (M < N)> struct s_part_bits {
 	static const T	m = bitblocks<T, (N + M) << I, N << I>;
-	static inline T f(T x) { return s_part_bits<T, N, M, I - 1>::f((x ^ (x << (M << I))) & m); }
-	static inline T g(T x) { x = s_part_bits<T, N, M, I - 1>::g(x) & m; return x ^ (x >> (M << I)); }
+	static constexpr T f(T x) { return s_part_bits<T, N, M, I - 1>::f((x ^ (x << (M << I))) & m); }
+	static constexpr T g(T x) { x = s_part_bits<T, N, M, I - 1>::g(x) & m; return x ^ (x >> (M << I)); }
 };
 template<typename T, int N, int M> struct s_part_bits<T, N, M, 0, false> {
 	static const T	m = bitblocks<T, N + M, N>;
-	static inline T f(T x) { return (x ^ (x << M)) & m; }
-	static inline T g(T x) { x &= m; return x ^ (x >> M); }
+	static constexpr T f(T x) { return (x ^ (x << M)) & m; }
+	static constexpr T g(T x) { x &= m; return x ^ (x >> M); }
 };
 template<typename T, int N, int M, int I> struct s_part_bits<T, N, M, I, true> {
 	static const T	m0	= bitblocks<T, (N + M) << (I + 1), N << I>, m1 = m0 << (N << I);
-	static inline T f(T x) { return s_part_bits<T, N, M, I - 1>::f((x & m0) ^ ((x & m1) << (M << I))); }
-	static inline T g(T x) { x = s_part_bits<T, N, M, I - 1>::g(x); return (x & m0) ^ ((x >> (M << I)) & m1); }
+	static constexpr T f(T x) { return s_part_bits<T, N, M, I - 1>::f((x & m0) ^ ((x & m1) << (M << I))); }
+	static constexpr T g(T x) { x = s_part_bits<T, N, M, I - 1>::g(x); return (x & m0) ^ ((x >> (M << I)) & m1); }
 };
 template<typename T, int N, int M> struct s_part_bits<T, N, M, 0, true> {
 	static const T	m0 = bitblocks<T, (N + M) * 2, N>, m1 = m0 << N;
-	static inline T f(T x) { return (x & m0) ^ ((x & m1) << M); }
-	static inline T g(T x) { return (x & m0) ^ ((x >> M) & m1); }
+	static constexpr T f(T x) { return (x & m0) ^ ((x & m1) << M); }
+	static constexpr T g(T x) { return (x & m0) ^ ((x >> M) & m1); }
 };
 
-template<int N, int M, int B, int O=0, typename T> inline auto part_bits(T x) {
+template<int N, int M, int B, int O=0, typename T> constexpr auto part_bits(T x) {
 	return s_part_bits<uint_bits_t<B / N * (N + M) + B % N>, N, M, klog2<(B - 1) / N>>::f(x) << O;
 }
-template<int N, int M, int B, int O=0, typename T> inline auto unpart_bits(T x) {
+template<int N, int M, int B, int O=0, typename T> constexpr auto unpart_bits(T x) {
 	return (uint_bits_t<B / (N + M) * N + B % (N + M)>)s_part_bits<T, N, M, klog2<(B - 1) / N>>::g(x >> O);//M<N was forced to true?
 }
 
@@ -344,15 +318,15 @@ template<typename T> inline auto collect_bits(T x, T mask) {
 
 #endif
 
-template<int N, int M, typename T> inline auto part_bits(T x) {
+template<int N, int M, typename T> constexpr auto part_bits(T x) {
 	return part_bits<N, M, BIT_COUNT<T>, 0, T>(x);
 }
-template<int N, int M, typename T> inline auto unpart_bits(T x) {
+template<int N, int M, typename T> constexpr auto unpart_bits(T x) {
 	return unpart_bits<N, M, (BIT_COUNT<T> + N + M - 1) / (N + M) * N, 0, T>(x);
 }
 
-template<typename T, T mask> inline auto spread_bits(T x)	{ return spread_bits(x, mask);  }
-template<typename T, T mask> inline auto collect_bits(T x)	{ return collect_bits(x, mask); }
+template<typename T, T mask> constexpr auto spread_bits(T x)	{ return spread_bits(x, mask);  }
+template<typename T, T mask> constexpr auto collect_bits(T x)	{ return collect_bits(x, mask); }
 
 //-----------------------------------------------------------------------------
 // transpose
@@ -386,10 +360,30 @@ template<> struct s_transpose<8, 8, 1, 8> {
 	}
 };
 
-
 template<int X, int Y, int N = 1, int S = X * N, typename T> T transpose(T x) {
 	return s_transpose<X, Y, N, S>::f(x);
 }
+
+//-----------------------------------------------------------------------------
+//	bit_container
+//-----------------------------------------------------------------------------
+
+template<typename T> struct bit_container {
+	T	t;
+
+	struct iterator {
+		T	t;
+		iterator(T t) : t(t) {}
+		auto&	operator++()						{ t = clear_lowest(t); return *this; }
+		auto	operator*()					const	{ return lowest_set_index(t); }
+		bool operator!=(const iterator &b)	const	{ return t != b.t; }
+	};
+	bit_container(T t) : t(t) {}
+	iterator	begin()	const { return t; }
+	iterator	end()	const { return T(0); }
+	auto		size()	const { return count_bits(t); }
+};
+template<typename T> bit_container<T>	make_bit_container(T t) { return t; }
 
 //-----------------------------------------------------------------------------
 //	bit_pointer, bit_reference
@@ -406,6 +400,9 @@ struct bit_address {
 
 	bit_address(const void *p)			: p(intptr_t(p) << 3) {}
 	constexpr bit_address(intptr_t p)	: p(p) {}
+
+	bit_address&	operator+=(intptr_t a)						{ p += a; return *this; }
+	bit_address&	operator-=(intptr_t a)						{ p -= a; return *this; }
 
 	bit_address		operator+(intptr_t a)				const	{ return bit_address(p + a); }
 	bit_address		operator-(intptr_t a)				const	{ return bit_address(p - a); }
@@ -480,9 +477,6 @@ template<typename T> struct bit_reference<const T> : bit_address {
 //-----------------------------------------------------------------------------
 //	bitfields
 //-----------------------------------------------------------------------------
-
-//-------------------------------------
-// extract bits
 
 template<typename T> inline auto read2(const T *p)					{ return lo_hi(p[0], p[1]); }
 template<typename T> inline auto read2(const T_swap_endian<T> *p)	{ return lo_hi((T)p[1], (T)p[0]); }
@@ -582,7 +576,7 @@ template<typename T, typename U, int B> struct bitfield_reference<const T, U, B>
 //-------------------------------------
 // bitfield
 
-template<typename T, int S, int N> struct bitfield_base {
+template<typename T, int S, int N, bool REVERSE = (N < 0)> struct bitfield_base {
 	enum { BITS = N };
 	typedef uint_for_t<T>	U;
 	static constexpr U		mask	= kbits<U, N, S>;
@@ -595,7 +589,20 @@ template<typename T, int S, int N> struct bitfield_base {
 	U				operator^=(U a)	{ T &u = data[S / BIT_COUNT<T>]; return u ^= (a << (S & BIT_MASK<T>)) &  kbits<U, N, S & BIT_MASK<T>>; }
 };
 
-template<typename T, int S, int N, typename U = uint_t<N + (S & 7) <= 8 ? 1 : N + (S & 15) <= 16 ? 2 : N + (S & 31) <= 32 ? 4 : 8>> struct bitfield : bitfield_base<U, S, N> {
+template<typename T, int S, int N> struct bitfield_base<T, S, N, true> : bitfield_base<T, S, -N> {
+	typedef bitfield_base<T, S, -N> B;
+	using typename B::U;
+	constexpr	U	get()	const	{ return reverse_bits<-N>(B::get()); }
+	void			set(U a)		{ B::set(reverse_bits<-N>(a)); }
+	U				operator&=(U a)	{ return B::operator&=(reverse_bits<-N>(a)); }
+	U				operator|=(U a)	{ return B::operator|=(reverse_bits<-N>(a)); }
+	U				operator^=(U a)	{ return B::operator^=(reverse_bits<-N>(a)); }
+};
+
+template<typename T, int S, int N> struct bitfield_holder_type : T_type<uint_t<N + (S & 7) <= 8 ? 1 : N + (S & 15) <= 16 ? 2 : N + (S & 31) <= 32 ? 4 : 8>> {};
+template<typename T, int S, int N> struct bitfield_holder_type<packed<T>, S, N> : T_type<packed<typename bitfield_holder_type<T, S, N>::type>> {};
+
+template<typename T, int S, int N, typename U = typename bitfield_holder_type<T, S, N>::type> struct bitfield : bitfield_base<U, S, N> {
 	constexpr	operator T()			const	{ return T(this->get()); }
 	void		operator=(T a)					{ this->set(force_cast<U>(a)); }
 	auto		operator&()						{ return bitfield_pointer<T, U, N, N>(bit_address(this->data) + S); }
@@ -714,9 +721,10 @@ template<typename T0, typename... T>	static constexpr uint32 BIT_COUNT<type_list
 //-------------------------------------
 // separated bitfield
 
-template<typename T, int S, int N, int...B> struct bitfield_multi0 {
+template<typename T, int S, int NS, int...B> struct bitfield_multi0 {
+	static const int N = meta::abs_v<NS>;
 	union {
-		bitfield_base<T, S, N>		lo;
+		bitfield_base<T, S, NS>		lo;
 		bitfield_multi0<T, B...>	hi;
 	};
 	enum { BITS = N + bitfield_multi0<T, B...>::BITS };
@@ -774,10 +782,10 @@ template<typename T> bit_pointer<T> bit_next(bit_pointer<T> i, bit_pointer<T> en
 		T	flip	= T(set) - 1;
 		T*	p		= i.ptr();
 
-		if (T t = (*p ^ flip) & i.rmask())
+		if (auto t = (*p ^ flip) & i.rmask())
 			return min(bit_pointer<T>(p) + lowest_set_index(t), end);
 
-		for (const T* endp = end.ptr(); ++p != endp;) {
+		for (const T* endp = end.ptr(); ++p < endp;) {
 			if (T t = *p ^ flip)
 				return min(bit_pointer<T>(p) + lowest_set_index(t), end);
 		}
@@ -860,11 +868,11 @@ template<typename T> bool bits_all(bit_pointer<T> begin, bit_pointer<T> end, boo
 		return true;
 
 	--end;
-	T	flip	= -T(set);
-	T	m0		= begin.rmask();
-	T	m1		= end.lmask();
-	const T	*p	= begin.ptr();
-	const T	*e	= end.ptr();
+	T		flip	= -T(set);
+	auto	m0		= begin.rmask();
+	auto	m1		= end.lmask();
+	const T	*p		= begin.ptr();
+	const T	*e		= end.ptr();
 
 	if (p < e) {
 		auto	all = (*p++ ^ flip) & m0;
@@ -880,8 +888,8 @@ template<typename T> uint32 bits_count_set(bit_pointer<T> begin, bit_pointer<T> 
 		return 0;
 
 	--end;
-	T	m0		= begin.rmask();
-	T	m1		= end.lmask();
+	auto	m0	= begin.rmask();
+	auto	m1	= end.lmask();
 	const T	*p	= begin.ptr();
 	const T	*e	= end.ptr();
 
@@ -933,10 +941,10 @@ struct mode_flip {
 template<typename M, typename T> void bits_fill(bit_pointer<T> begin, bit_pointer<T> end) {
 	if (begin != end) {
 		--end;
-		T	m0	= begin.rmask();
-		T	m1	= end.lmask();
-		T	*p	= begin.ptr();
-		T	*e	= end.ptr();
+		auto	m0	= begin.rmask();
+		auto	m1	= end.lmask();
+		T		*p	= begin.ptr();
+		T		*e	= end.ptr();
 
 		if (p < e) {
 			M::f(p++, m0);
@@ -947,6 +955,7 @@ template<typename M, typename T> void bits_fill(bit_pointer<T> begin, bit_pointe
 		M::f(p, m0 & m1);
 	}
 }
+
 template<typename T> void bits_fill(bit_pointer<T> begin, bit_pointer<T> end, bool set) {
 	if (set)
 		bits_fill<mode_set>(begin, end);
@@ -971,10 +980,10 @@ template<typename M, typename T, typename I> bool bits_compare(bit_pointer<T> be
 		return true;
 
 	--end0;
-	T	*p0	= begin0.ptr();
-	T	*e0	= end0.ptr();
-	T	m0	= begin0.rmask();
-	T	m1	= end0.lmask();
+	T		*p0	= begin0.ptr();
+	T		*e0	= end0.ptr();
+	auto	m0	= begin0.rmask();
+	auto	m1	= end0.lmask();
 
 	if (p0 < e0) {
 		if (!M::f(*p0++, *i1++, m0))
@@ -988,12 +997,11 @@ template<typename M, typename T, typename I> bool bits_compare(bit_pointer<T> be
 	return M::f(*p0, *i1, m0 & m1);
 }
 
-
-template<typename M, typename T> void bits_compare(bit_pointer<T> begin0, bit_pointer<T> end0, bit_pointer<T> begin1) {
+template<typename M, typename T> bool bits_compare(bit_pointer<T> begin0, bit_pointer<T> end0, bit_pointer<T> begin1) {
 	int	shift	= (begin1 - begin0) & BIT_MASK<T>;
 	return shift
-		? bits_compare<T, M>(begin0, end0, shifted_iterator<T>(begin1.ptr(), shift))
-		: bits_compare<T, M>(begin0, end0, begin1.ptr());
+		? bits_compare<M>(begin0, end0, shifted_iterator<T>(begin1.ptr(), shift))
+		: bits_compare<M>(begin0, end0, begin1.ptr());
 }
 
 //-------------------------------------
@@ -1041,10 +1049,10 @@ struct mode_xornot {
 template<typename M, typename T, typename I1, typename I2> void bits_copy(bit_pointer<T> begin0, bit_pointer<T> end0, I1 i1, I2 i2) {
 	if (begin0 != end0) {
 		--end0;
-		T	*p0	= begin0.ptr();
-		T	*e0	= end0.ptr();
-		T	m0	= begin0.rmask();
-		T	m1	= end0.lmask();
+		T		*p0	= begin0.ptr();
+		T		*e0	= end0.ptr();
+		auto	m0	= begin0.rmask();
+		auto	m1	= end0.lmask();
 
 		if (p0 < e0) {
 			*p0 = masked_write(*p0, M::c(*i1++, *i2++), m0);
@@ -1074,10 +1082,10 @@ template<typename M, typename T, typename S> void bits_copy(bit_pointer<T> begin
 template<typename M, typename T, typename I> void bits_copy(bit_pointer<T> begin0, bit_pointer<T> end0, I i1) {
 	if (begin0 != end0) {
 		--end0;
-		T	*p0	= begin0.ptr();
-		T	*e0	= end0.ptr();
-		T	m0	= begin0.rmask();
-		T	m1	= end0.lmask();
+		T		*p0	= begin0.ptr();
+		T		*e0	= end0.ptr();
+		auto	m0	= begin0.rmask();
+		auto	m1	= end0.lmask();
 
 		if (p0 < e0) {
 			M::c(p0++, *i1++, m0);
@@ -1104,7 +1112,8 @@ template<typename T> inline	void copy_new_n(bit_pointer<T> begin, bit_pointer<T>
 }
 
 //-----------------------------------------------------------------------------
-//	class where_container<T,set> - to iterate over set (/unset) bits
+//	class where_container<T> - to iterate over set/unset bits
+//	class where_container2<T> - to iterate over groups of set/unset bits
 //-----------------------------------------------------------------------------
 
 template<typename T> class where_container {
@@ -1128,17 +1137,44 @@ public:
 	constexpr iterator	end()	const { return iterator(a, b, b, set); }
 };
 
-template<typename T> where_container<T> make_where_container(bit_pointer<T> begin, bit_pointer<T> end, bool set) { return { begin, end, set }; }
+template<typename T> where_container<T>		make_where_container(bit_pointer<T> begin, bit_pointer<T> end, bool set) { return { begin, end, set }; }
+
+template<typename T> class where_container2 {
+	bit_pointer<T>	a, b;
+	int				n;
+	bool			set;
+	T				starts;
+public:
+	class iterator {
+		bit_pointer<T>	a, b, i;
+		int				n;
+		bool			set;
+		T				starts;
+	public:
+		constexpr iterator(bit_pointer<T> a, bit_pointer<T> b, bit_pointer<T> i, int n, bool set, T starts) : a(a), b(b), i(i), n(n), set(set), starts(starts) {}
+		iterator&		operator++()							{ i = bits_next(i + 1, b, n, set, starts); return *this; }
+		iterator&		operator--()							{ i = bits_prev(i - 1, a, n, set, starts); return *this; }
+		constexpr int	operator*()						const	{ return i - a; }
+		constexpr bool	operator==(const iterator &b)	const	{ return i == b.i; }
+		constexpr bool	operator!=(const iterator &b)	const	{ return i != b.i; }
+	};
+
+	constexpr where_container2(bit_pointer<T> begin, bit_pointer<T> end, int n, bool set, T starts) : a(begin), b(end),  n(n), set(set), starts(starts)	{}
+	constexpr iterator	begin() const { return iterator(a, b, bits_next(a, b, n, set, starts), n, set, starts); }
+	constexpr iterator	end()	const { return iterator(a, b, b, n, set, starts); }
+};
+
+template<typename T> where_container2<T>	make_where_container(bit_pointer<T> begin, bit_pointer<T> end, int n, bool set, T starts) { return { begin, end, n, set, starts }; }
 
 //-----------------------------------------------------------------------------
 //	mixin class bits_mixout
 // A must provide: begin, end
 //-----------------------------------------------------------------------------
 
-template<typename A, typename T> class bits_mixout : public A {
+template<typename A> class bits_mixout : public A {
 public:
-	using A::A;
-	using A::begin; using A::end;
+	typedef decltype(declval<A>().begin().mask())	T;
+	using A::A; using A::begin; using A::end;
 	operator			auto()							{ return begin(); }
 	operator			auto()					const	{ return begin(); }
 	constexpr auto		size()					const	{ return end() - begin(); }
@@ -1152,16 +1188,15 @@ public:
 	constexpr bool		contains(bit_address e)	const	{ return e >= begin() && e < end(); }
 	constexpr intptr_t	index_of(bit_address e)	const	{ return e - begin(); }
 
-	_not<const bits_mixout&>	operator~()		const	{ return *this; }
 	constexpr auto		operator[](int i)				{ ISO_ASSERT(i >= 0 && i < size()); return begin()[i]; }
 	constexpr auto		operator[](int i)		const	{ return begin()[i]; }
 	constexpr auto		where(bool set)			const	{ return make_where_container(begin(), end(), set); }
+	constexpr auto		where(int n, bool set, T starts = ~T(0))	const	{ return make_where_container(begin(), end(), n, set, starts); }
 
 	//single bits
 	constexpr bool	test(int i)					const	{ return begin()[i]; }
 	constexpr void	set(int i)							{ return begin()[i].set(); }
 	constexpr void	clear(int i)						{ return begin()[i].clear(); }
-
 	int				lowest(bool set)			const	{ return bit_next(begin(), end(), set) - begin(); }
 	int				highest(bool set)			const	{ return bit_prev(end() - 1, begin(), set) - begin(); }
 	int				next(int i, bool set)		const	{ return bit_next(begin() + i, end(), set) - begin(); }
@@ -1173,46 +1208,49 @@ public:
 	uint32			count_clear()				const	{ return size() - count_set(); }
 	void			set_all()							{ bits_fill<mode_set>(begin(), end()); }
 	void			clear_all()							{ bits_fill<mode_clear>(begin(), end()); }
-
 	int				lowest(int n, bool set, T starts = ~T(0))		const	{ return bits_next(begin(), end(), n, set, starts) - begin(); }
 	int				highest(int n, bool set, T starts = ~T(0))		const	{ return bits_prev(end(), begin(), n, set, starts) - begin(); }
 	int				next(int i, int n, bool set, T starts = ~T(0))	const	{ return bits_next(begin() + i, end(), n, set, starts) - begin(); }
 	int				prev(int i, int n, bool set, T starts = ~T(0))	const	{ return bits_prev(begin() + i, begin(), n, set, starts) - begin(); }
+	
+	_not<const bits_mixout&>	operator~()		const	{ return *this; }
 
+	template<typename B> auto&	operator= (const bits_mixout<B> &b)			{ auto AN = size(); auto BN = b.size();		ISO_ASSERT(AN>=BN); bits_copy<mode_copy	 >(begin(), begin() + min(AN, BN), b.begin()); if (AN > BN) slice(BN, AN - BN).clear_all(); return *this; }
+	template<typename B> auto&	operator&=(const bits_mixout<B> &b)			{ auto AN = size(); auto BN = b.size();							bits_copy<mode_and	 >(begin(), begin() + min(AN, BN), b.begin()); return *this; }
+	template<typename B> auto&	operator|=(const bits_mixout<B> &b)			{ auto AN = size(); auto BN = b.size();		ISO_ASSERT(AN>=BN); bits_copy<mode_or	 >(begin(), begin() + min(AN, BN), b.begin()); return *this; }
+	template<typename B> auto&	operator^=(const bits_mixout<B> &b)			{ auto AN = size(); auto BN = b.size();		ISO_ASSERT(AN>=BN); bits_copy<mode_xor	 >(begin(), begin() + min(AN, BN), b.begin()); return *this; }
+	template<typename B> auto&	operator-=(const bits_mixout<B> &b)			{ auto AN = size(); auto BN = b.size();							bits_copy<mode_andnot>(begin(), begin() + min(AN, BN), b.begin()); return *this; }
 
-	template<typename B> auto&	operator= (const bits_mixout<B,T> &b)			{ auto AN = size(); auto BN = b.size();		ISO_ASSERT(AN>=BN); bits_copy<mode_copy	 >(begin(), begin() + min(AN, BN), b.begin());	if (AN > BN) slice(BN, AN - BN).clear_all(); return *this; }
-	template<typename B> auto&	operator= (_not<const bits_mixout<B,T>&> b)		{ auto AN = size(); auto BN = b.t.size();	ISO_ASSERT(AN>=BN); bits_copy<mode_not	 >(begin(), begin() + min(AN, BN), b.t.begin());if (AN > BN) slice(BN, AN - BN).set_all(); return *this; }
-	template<typename B> auto&	operator+=(const bits_mixout<B,T> &b)			{ auto AN = size(); auto BN = b.size();		ISO_ASSERT(AN>=BN); bits_copy<mode_or	 >(begin(), begin() + min(AN, BN), b.begin());	return *this; }
-	template<typename B> auto&	operator^=(const bits_mixout<B,T> &b)			{ auto AN = size(); auto BN = b.size();		ISO_ASSERT(AN>=BN); bits_copy<mode_xor	 >(begin(), begin() + min(AN, BN), b.begin());	return *this; }
-	template<typename B> auto&	operator-=(const bits_mixout<B,T> &b)			{ auto AN = size(); auto BN = b.size();							bits_copy<mode_andnot>(begin(), begin() + min(AN, BN), b.begin());	return *this; }
-	template<typename B> auto&	operator*=(const bits_mixout<B,T> &b)			{ auto AN = size(); auto BN = b.size();							bits_copy<mode_and	 >(begin(), begin() + min(AN, BN), b.begin());	return *this; }
-	template<typename B> auto&	operator+=(_not<const bits_mixout<B,T>&> b)		{ auto AN = size(); auto BN = b.size();		ISO_ASSERT(AN>=BN); bits_copy<mode_ornot >(begin(), begin() + min(AN, BN), b.begin());	return *this; }
-	template<typename B> auto&	operator^=(_not<const bits_mixout<B,T>&> b)		{ auto AN = size(); auto BN = b.size();		ISO_ASSERT(AN>=BN); bits_copy<mode_xornot>(begin(), begin() + min(AN, BN), b.begin());	return *this; }
-	template<typename B> auto&	operator-=(_not<const bits_mixout<B, T>&> b)	{ return *this *= b.t; }
-	template<typename B> auto&	operator*=(_not<const bits_mixout<B,T>&> b)		{ return *this -= b.t; }
+	template<typename B> auto&	operator= (_not<const bits_mixout<B>&> b)	{ auto AN = size(); auto BN = b.t.size();	ISO_ASSERT(AN>=BN); bits_copy<mode_not	 >(begin(), begin() + min(AN, BN), b.t.begin());if (AN > BN) slice(BN, AN - BN).set_all(); return *this; }
+	template<typename B> auto&	operator|=(_not<const bits_mixout<B>&> b)	{ auto AN = size(); auto BN = b.t.size();	ISO_ASSERT(AN>=BN); bits_copy<mode_ornot >(begin(), begin() + min(AN, BN), b.t.begin()); return *this; }
+	template<typename B> auto&	operator^=(_not<const bits_mixout<B>&> b)	{ auto AN = size(); auto BN = b.t.size();	ISO_ASSERT(AN>=BN); bits_copy<mode_xornot>(begin(), begin() + min(AN, BN), b.t.begin()); return *this; }
 
-	template<typename B> bool	operator==(const bits_mixout<B,T> &b)	const	{
+	template<typename X> auto&	operator*=(const X &b)						{ return operator&=(b); }
+	template<typename X> auto&	operator+=(const X &b)						{ return operator|=(b); }
+
+	template<typename B> bool	operator==(const bits_mixout<B> &b)	const {
 		auto AN = size(), BN = b.size();
 		return bits_compare<mode_equal>(begin(), begin() + min(AN, BN), b.begin()) && (
 			AN < BN ? b.slice(AN, BN - AN).all(false) : slice(BN, AN - BN).all(false)
 		);
 	}
-	template<typename B> bool	operator<=(const bits_mixout<B,T> &b)	const	{
+	template<typename B> bool	operator<=(const bits_mixout<B> &b)	const {
 		auto AN = size(), BN = b.size();
 		return bits_compare<mode_subset>(begin(), begin() + min(AN, BN), b.begin()) && (
 			AN < BN || slice(BN, AN - BN).all(false)
 		);
 	}
-	template<typename B> bool	operator< (const bits_mixout<B,T> &b)	const	{
+	template<typename B> bool	operator< (const bits_mixout<B> &b)	const {
 		auto AN = size(), BN = b.size();
 		return bits_compare<mode_subset>(begin(), begin() + min(AN, BN), b.begin()) && (
 			bits_compare<mode_equal>(begin(), begin() + min(AN, BN), b.begin())
-				? (AN < BN && !slice(BN, AN - BN).all(false))
+				? (AN < BN && !b.slice(AN, BN - AN).all(false))
 				: (AN < BN ||  slice(BN, AN - BN).all(false))
 		);
 	}
-	template<typename B> bool	operator> (const bits_mixout<B,T> &b)	const	{ return b <  *this; }
-	template<typename B> bool	operator>=(const bits_mixout<B,T> &b)	const	{ return b <= *this; }
+	template<typename B> bool	operator!=(const bits_mixout<B> &b)	const	{ return !(*this == b); }
+	template<typename B> bool	operator> (const bits_mixout<B> &b)	const	{ return b <  *this; }
+	template<typename B> bool	operator>=(const bits_mixout<B> &b)	const	{ return b <= *this; }
 
 	friend auto num_elements(const bits_mixout& b) { return b.size(); }
 };
@@ -1230,7 +1268,7 @@ public:
 	constexpr auto	end()		const	{ return b; }
 };
 
-template<typename T> class range<bit_pointer<T>> : public bits_mixout<_bitrange<T>, T> {
+template<typename T> class range<bit_pointer<T>> : public bits_mixout<_bitrange<T>> {
 public:
 	struct range_assign : range {
 		range_assign(const range &r) : range(r) {}
@@ -1239,15 +1277,15 @@ public:
 			return *this;
 		}
 	};
-	constexpr range(bit_pointer<T> a, bit_pointer<T> b) : bits_mixout<_bitrange<T>, T>(a, b) {}
-	constexpr range_assign		operator*()			const	{ return *this;	}
+	constexpr range(bit_pointer<T> a, bit_pointer<T> b) : bits_mixout<_bitrange<T>>(a, b) {}
+	constexpr range_assign	operator*()	const	{ return *this;	}
 };
 
 //-----------------------------------------------------------------------------
 //	class bitarray<T>
 //-----------------------------------------------------------------------------
 
-template<int N, typename T = uint32> class _bitarray {
+template<int N, typename T> class _bitarray {
 protected:
 	T	data[BIT_HOLD<T>(N)];
 public:
@@ -1255,27 +1293,35 @@ public:
 	constexpr bit_pointer<const T>	end()	const	{ return begin() + N; }
 	constexpr bit_pointer<T>		begin()			{ return data; }
 	constexpr bit_pointer<T>		end()			{ return begin() + N; }
-	operator range<bit_pointer<T>>() const	{ return {begin(), end()}; }
+	operator range<bit_pointer<T>>()		const	{ return {begin(), end()}; }
 };
 
-template<int N, typename T = uint32> class bitarray : public bits_mixout<_bitarray<N, T>, T> {
-	typedef	bits_mixout<_bitarray<N, T>, T>	B;
+template<int N, typename T = uint32> class bitarray : public bits_mixout<_bitarray<N, T>> {
+	typedef	bits_mixout<_bitarray<N, T>>	B;
 public:
+	using B::operator=;
 	bitarray()						{ iso::clear(B::data); }
 	bitarray(_not<const B&> b)		{ bits_copy<mode_not>(B::begin(), B::end(), b.t.begin()); }
 
-	friend bitarray	operator+(const bitarray &a, const bitarray &b)	{ bitarray d; bits_copy<mode_or		>(d.begin(), a.begin(), b.begin());	return d; }
-	friend bitarray	operator-(const bitarray &a, const bitarray &b)	{ bitarray d; bits_copy<mode_andnot	>(d.begin(), a.begin(), b.begin());	return d; }
-	friend bitarray	operator*(const bitarray &a, const bitarray &b)	{ bitarray d; bits_copy<mode_and	>(d.begin(), a.begin(), b.begin());	return d; }
+	friend bitarray	operator&(const bitarray &a, const bitarray &b)	{ bitarray d; bits_copy<mode_and	>(d.begin(), a.begin(), b.begin()); return d; }
+	friend bitarray	operator|(const bitarray &a, const bitarray &b)	{ bitarray d; bits_copy<mode_or		>(d.begin(), a.begin(), b.begin()); return d; }
+	friend bitarray	operator^(const bitarray &a, const bitarray &b)	{ bitarray d; bits_copy<mode_xor	>(d.begin(), a.begin(), b.begin()); return d; }
+	friend bitarray	operator-(const bitarray &a, const bitarray &b)	{ bitarray d; bits_copy<mode_andnot	>(d.begin(), a.begin(), b.begin()); return d; }
+
+	friend bitarray	operator|(const bitarray &a, _not<const B&> b)	{ bitarray d; bits_copy<mode_ornot	>(d.begin(), a.begin(), b.t.begin()); return d; }
+	friend bitarray	operator^(const bitarray &a, _not<const B&> b)	{ bitarray d; bits_copy<mode_xornot	>(d.begin(), a.begin(), b.t.begin()); return d; }
+
+	//template<typename X> friend bitarray	operator+(const bitarray &a, const X &b)	{ return *a | b; }
+	//template<typename X> friend bitarray	operator*(const bitarray &a, const X &b)	{ return *a & b; }
 };
 
 //-----------------------------------------------------------------------------
 //	class dynamic_bitarray<T>
 //-----------------------------------------------------------------------------
 
-template<typename T = uint32> class _dynamic_bitarray {
+template<typename T> class _dynamic_bitarray {
 protected:
-	T* data;
+	T*	data;
 	int	N;
 
 	auto	_expand(size_t n) {
@@ -1294,18 +1340,19 @@ public:
 	constexpr bit_pointer<T>		begin()			{ return data; }
 	constexpr bit_pointer<T>		end()			{ return begin() + N; }
 
-	_dynamic_bitarray()								: data(0), N(0)						{}
+	_dynamic_bitarray()								: data(0), N(0)								{}
 	_dynamic_bitarray(int N)						: data(allocate<T>(BIT_HOLD<T>(N))), N(N)	{}
 	_dynamic_bitarray(const _dynamic_bitarray &b)	: _dynamic_bitarray(b.N)					{ bits_copy<mode_copy>(begin(), end(), b.begin()); }
 	_dynamic_bitarray(_dynamic_bitarray &&b)		: data(exchange(b.data, nullptr)), N(b.N)	{}
+	template<typename C, typename=enable_if_t<has_begin_v<C>>> 		_dynamic_bitarray(C &&c)	: _dynamic_bitarray(num_elements(c))	{ bits_copy<mode_copy>(begin(), end(), b.begin()); }
 
 	~_dynamic_bitarray()							{ deallocate(data, BIT_HOLD<T>(N)); }
 	
 	operator range<bit_pointer<const T>>() const	{ return {begin(), end()}; }
 };
 
-template<typename T = uint32> class dynamic_bitarray : public bits_mixout<_dynamic_bitarray<T>, T> {
-	typedef bits_mixout<_dynamic_bitarray<T>, T>	B;
+template<typename T = uint32> class dynamic_bitarray : public bits_mixout<_dynamic_bitarray<T>> {
+	typedef bits_mixout<_dynamic_bitarray<T>>	B;
 	using B::N;
 
 	T*		grow0(int N1) {
@@ -1313,22 +1360,24 @@ template<typename T = uint32> class dynamic_bitarray : public bits_mixout<_dynam
 		return BIT_HOLD<T>(N1) > BIT_HOLD<T>(N) ? exchange(B::data, allocate<T>(BIT_HOLD<T>(N1))) : nullptr;
 	}
 	void	grow1(int N1) {
-		if (T* old = grow0(N1)) {
+		if (auto old = grow0(N1)) {
 			bits_copy<mode_copy>(begin(), end(), old);
-			delete[] old;
+			deallocate(old, BIT_HOLD<T>(N));
 		}
 	}
 	void	resize0(int N1) {
-		if (N1 > N)
-			delete grow0(N1);
-		N		= N1;
+		if (N1 > N) {
+			if (auto old = grow0(N1))
+				deallocate(old, BIT_HOLD<T>(N));
+		}
+		N	= N1;
 	}
 	template<typename M, typename MX, typename B> void	combine(const B& b) {
 		auto AN = this->size(), BN = b.size();
 		if (BN > AN) {
-			if (T* old = grow0(BN)) {
+			if (auto old = grow0(BN)) {
 				bits_copy<M>(begin(), end(), old, b.begin());
-				delete[] old;
+				deallocate(old, BIT_HOLD<T>(AN));
 			} else {
 				bits_copy<M>(begin(), end(), b.begin());
 			}
@@ -1352,16 +1401,15 @@ public:
 
 	dynamic_bitarray(dynamic_bitarray&&)		= default;
 	dynamic_bitarray(const dynamic_bitarray&)	= default;
-
 	dynamic_bitarray(int N, bool set)										: dynamic_bitarray(N)			{ bits_fill(begin(), end(), set); }
-	template<typename B> dynamic_bitarray(const bits_mixout<B,T> &b)		: dynamic_bitarray(b.size())	{ bits_copy<mode_copy>(begin(), end(), b.begin()); }
-	template<typename B> dynamic_bitarray(_not<const bits_mixout<B,T>&> b)	: dynamic_bitarray(b.t.size())	{ bits_copy<mode_not>(begin(), end(), b.begin()); }
+	template<typename B> dynamic_bitarray(const bits_mixout<B> &b)			: dynamic_bitarray(b.size())	{ bits_copy<mode_copy>(begin(), end(), b.begin()); }
+	template<typename B> dynamic_bitarray(_not<const bits_mixout<B>&> b)	: dynamic_bitarray(b.t.size())	{ bits_copy<mode_not>(begin(), end(), b.t.begin()); }
 	template<typename R, typename = is_reader_t<R>>	dynamic_bitarray(R &&r, int N)	: dynamic_bitarray(N)	{ read(r); }
 	template<typename C, typename=enable_if_t<has_begin_v<C>>> dynamic_bitarray(C &&c)	: dynamic_bitarray(num_elements(c))	{
 		T	*p	= this->data;
 		T	t	= bit<T>(BIT_COUNT<T> - 1);
 		for (bool i : c) {
-			T	prev = exchange(t, (t >> 1) | (i << (BIT_COUNT<T> - 1)));
+			T	prev = exchange(t, (t >> 1) | (T(i) << (BIT_COUNT<T> - 1)));
 			if (prev & 1)
 				*p++ = exchange(t, bit<T>(BIT_COUNT<T> - 1));
 		}
@@ -1369,21 +1417,7 @@ public:
 			*p = t >> (lowest_set_index(t) + 1);
 	}
 
-	auto&						operator=(dynamic_bitarray &&b)				{ N = b.N; swap(data, b.data); return *this; }
-	auto&						operator=(const dynamic_bitarray &b)		{ resize0(b.N); bits_copy<mode_copy>(begin(), end(), b.begin()); return *this; }
-	template<typename B> auto&	operator=(const bits_mixout<B,T> &b)		{ resize0(b.N); bits_copy<mode_copy>(begin(), end(), b.begin()); return *this; }
-	template<typename B> auto&	operator=(_not<const bits_mixout<B,T>&> b)	{ resize0(b.N); bits_copy<mode_not >(begin(), end(), b.begin()); return *this; }
-
-	template<typename B> auto&	operator+=(const bits_mixout<B,T> &b)		{ combine<mode_or, mode_copy>(b);		return *this; }
-	template<typename B> auto&	operator^=(const bits_mixout<B,T> &b)		{ combine<mode_xor, mode_copy>(b);		return *this; }
-	template<typename B> auto&	operator-=(const bits_mixout<B,T> &b)		{ bits_copy<mode_andnot>(begin(), begin() + min(size(), b.size()), b.begin());	return *this; }
-	template<typename B> auto&	operator*=(const bits_mixout<B,T> &b)		{ N = min(size(), b.size()); bits_copy<mode_and>(begin(), end(), b.begin());	return *this; }
-	template<typename B> auto&	operator+=(_not<const bits_mixout<B,T>&> b)	{ combine<mode_ornot, mode_set>(b);		return *this; }
-	template<typename B> auto&	operator^=(_not<const bits_mixout<B,T>&> b)	{ combine<mode_xornot, mode_not>(b);	return *this; }
-	template<typename B> auto&	operator-=(_not<const bits_mixout<B,T>&> b)	{ return *this *= b.t; }
-	template<typename B> auto&	operator*=(_not<const bits_mixout<B,T>&> b)	{ return *this -= b.t; }
-
-	operator bool() const { return !!data; }
+	explicit operator bool() const { return !!data; }
 
 	template<typename R> bool	read(R&& r) {
 		return check_readbuff(r, data, (N + 7) / 8);
@@ -1417,9 +1451,30 @@ public:
 	bool	pop_back()				{ --N; }
 	bool	pop_back_value()		{ return test(--N); }
 
-	template<typename B> friend auto	operator+(const dynamic_bitarray& a, const bits_mixout<B,T> &b)			{ return combine2<mode_or, mode_copy>(a, b); }
-	template<typename B> friend auto	operator^(const dynamic_bitarray& a, const bits_mixout<B,T> &b)			{ return combine2<mode_xor, mode_copy>(a, b); }
-	template<typename B> friend auto	operator-(const dynamic_bitarray& a, const bits_mixout<B,T> &b) {
+	auto&						operator=(dynamic_bitarray &&b)				{ N = b.N; swap(data, b.data); return *this; }
+	auto&						operator=(const dynamic_bitarray &b)		{ resize0(b.N); bits_copy<mode_copy>(begin(), end(), b.begin()); return *this; }
+
+	template<typename B> auto&	operator= (const bits_mixout<B> &b)			{ resize0(b.N); bits_copy<mode_copy>(begin(), end(), b.begin()); return *this; }
+	template<typename B> auto&	operator&=(const bits_mixout<B> &b)			{ N = min(size(), b.size()); bits_copy<mode_and>(begin(), end(), b.begin()); return *this; }
+	template<typename B> auto&	operator|=(const bits_mixout<B> &b)			{ combine<mode_or, mode_copy>(b); return *this; }
+	template<typename B> auto&	operator^=(const bits_mixout<B> &b)			{ combine<mode_xor, mode_copy>(b); return *this; }
+	template<typename B> auto&	operator-=(const bits_mixout<B> &b)			{ bits_copy<mode_andnot>(begin(), begin() + min(size(), b.size()), b.begin()); return *this; }
+
+	template<typename B> auto&	operator= (_not<const bits_mixout<B>&> b)	{ resize0(b.N); bits_copy<mode_not >(begin(), end(), b.t.begin()); return *this; }
+	template<typename B> auto&	operator|=(_not<const bits_mixout<B>&> b)	{ combine<mode_ornot, mode_set>(b.t);	return *this; }
+	template<typename B> auto&	operator^=(_not<const bits_mixout<B>&> b)	{ combine<mode_xornot, mode_not>(b.t);	return *this; }
+
+	template<typename X> auto&	operator*=(const X &b)						{ return *this &= b; }
+	template<typename X> auto&	operator+=(const X &b)						{ return *this |= b; }
+
+	template<typename B> friend auto	operator|(const dynamic_bitarray& a, const bits_mixout<B> &b)	{ return combine2<mode_or, mode_copy>(a, b); }
+	template<typename B> friend auto	operator^(const dynamic_bitarray& a, const bits_mixout<B> &b)	{ return combine2<mode_xor, mode_copy>(a, b); }
+	template<typename B> friend auto	operator&(const dynamic_bitarray& a, const bits_mixout<B>& b) {
+		dynamic_bitarray r(min(a.size(), b.size()));
+		bits_copy<mode_and>(r.begin(), r.end(), a.begin(), b.begin());
+		return r;
+	}
+	template<typename B> friend auto	operator-(const dynamic_bitarray& a, const bits_mixout<B> &b) {
 		auto AN = a.size(), BN = b.size();
 		dynamic_bitarray r(AN);
 		bits_copy<mode_andnot>(r.begin(), r.begin() + min(AN, BN), a.begin(), b.begin());
@@ -1427,19 +1482,12 @@ public:
 			bits_copy<mode_copy>(r.begin() + BN, r.end(), a.begin() + BN);
 		return r;
 	}
-	template<typename B> friend auto	operator*(const dynamic_bitarray& a, const bits_mixout<B, T>& b) {
-		dynamic_bitarray r(min(a.size(), b.size()));
-		bits_copy<mode_and>(r.begin(), r.begin(), a.begin(), b.begin());
-		return r;
-	}
-	
-	template<typename B> friend auto	operator+(const dynamic_bitarray& a, _not<const bits_mixout<B,T>&> b)	{ return combine2<mode_ornot, mode_set>(a, b); }
-	template<typename B> friend auto	operator^(const dynamic_bitarray& a, _not<const bits_mixout<B,T>&> b)	{ return combine2<mode_xornot, mode_not>(a, b); }
-	template<typename B> friend auto	operator-(const dynamic_bitarray& a, _not<const bits_mixout<B,T>&> b)	{ return a * b.t; }
-	template<typename B> friend auto	operator*(const dynamic_bitarray& a, _not<const bits_mixout<B,T>&> b)	{ return a - b.t; }
+	template<typename B> friend auto	operator|(const dynamic_bitarray& a, _not<const bits_mixout<B>&> b)		{ return combine2<mode_ornot, mode_set>(a, b.t); }
+	template<typename B> friend auto	operator^(const dynamic_bitarray& a, _not<const bits_mixout<B>&> b)		{ return combine2<mode_xornot, mode_not>(a, b.t); }
+
+	template<typename X> friend auto	operator+(const dynamic_bitarray &a, const X &b)	{ return a | b; }
+	template<typename X> friend auto	operator*(const dynamic_bitarray &a, const X &b)	{ return a & b; }
 };
-
-
 
 #ifdef ARRAY_H
 template<typename T = uint32> struct dynamic_bitarray2 : dynamic_mixout<dynamic_bitarray<T>, bool> {
@@ -1453,8 +1501,30 @@ template<typename T = uint32> struct dynamic_bitarray2 : dynamic_mixout<dynamic_
 #endif
 
 //-----------------------------------------------------------------------------
-//	bitmatrix_aligned
+//	bitmatrix
 //-----------------------------------------------------------------------------
+
+template<int R, int C, typename T> class bitmatrix {
+	T	data[BIT_HOLD<T>(R * C)];
+public:
+	auto	col(int i)			const	{ return make_range_n(bit_pointer<T>(data + BIT_HOLD<T>(R) * i), R); }
+	auto	operator[](int i)	const	{ return col(i); }
+
+	auto operator*(range<bit_pointer<T>> b) const {
+		bitarray<C,T>	a;
+		for (auto i : b.where(true))
+			a += cow(i);
+		return a;
+	}
+};
+
+template<int R, int X, int C, typename T> auto operator*(const bitmatrix<R, X, T> &a, const bitmatrix<X, C, T> &b) {
+	bitmatrix<R, C, T>	r;
+	for (int i = 0; i < C; i++)
+		*r[i] = a * b[i];
+	return r;
+}
+
 
 template<typename T> struct bitmatrix_aligned {
 	T		*p;
@@ -1469,11 +1539,7 @@ template<typename T> struct bitmatrix_aligned {
 	auto	row(int i)			const	{ return make_range_n(bit_pointer<T>(p + BIT_HOLD<T>(c) * i), c); }
 	auto	operator[](int i)	const	{ return row(i); }
 
-	void reflexive_closure() {
-		for (int i = 0; i < r; i++)
-			row(i).set(i);
-	}
-
+	// warshall
 	void transitive_closure() {
 		for (int i = 0; i < r; i++) {
 			for (int j = 0; j < r; ++j) {
@@ -1482,6 +1548,19 @@ template<typename T> struct bitmatrix_aligned {
 			}
 		}
 	}
+	void reflexive_transitive_closure() {
+		transitive_closure();
+		for (int i = 0; i < r; i++)
+			row(i).set(i);
+	}
+
+
+	auto operator*(range<bit_pointer<T>> b) const {
+		dynamic_bitarray<T>	a(r, false);
+		for (auto i : b.where(true))
+			a += row(i);
+		return a;
+	}
 };
 
 template<typename T> struct bitmatrix_aligned_own : bitmatrix_aligned<T>  {
@@ -1489,6 +1568,9 @@ template<typename T> struct bitmatrix_aligned_own : bitmatrix_aligned<T>  {
 	bitmatrix_aligned_own() {}
 	bitmatrix_aligned_own(int r, int c) : bitmatrix_aligned<T>(allocate<T>(BIT_HOLD<T>(c) * r), r, c) {
 		memset(B::p, 0, BIT_HOLD<T>(c) * r * sizeof(T));
+	}
+	bitmatrix_aligned_own(bitmatrix_aligned_own &&b) : B(b) {
+		b.p = nullptr;
 	}
 	bitmatrix_aligned_own& operator=(bitmatrix_aligned_own &&b) {
 		swap((B&)*this, (B&)b);
@@ -1501,6 +1583,14 @@ template<typename T> struct bitmatrix_aligned_own : bitmatrix_aligned<T>  {
 		return *this = bitmatrix_aligned_own(r, c);
 	}
 };
+
+template<typename T> auto operator*(const bitmatrix_aligned<T> &a, const bitmatrix_aligned<T> &b) {
+	bitmatrix_aligned_own<T>	r(a.num_cols(), b.num_rows());
+	for (int i = 0; i < b.num_rows(); i++)
+		*r[i] = a * b[i];
+	return r;
+}
+
 
 //-----------------------------------------------------------------------------
 // BCD

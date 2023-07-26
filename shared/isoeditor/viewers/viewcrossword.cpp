@@ -40,14 +40,14 @@ class ViewCrossword : public Window<ViewCrossword>, public WindowTimer<ViewCross
 	ISO_ptr<void>	p;
 
 public:
-	LRESULT Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+	LRESULT Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 		switch (message) {
 			case WM_CREATE:
 				break;
 
 			case WM_SIZE: {
 				Point	size(lParam);
-				if (target.Resize(size))
+				if (!target.Resize(size))
 					target.DeInit();
 				Invalidate();
 				break;

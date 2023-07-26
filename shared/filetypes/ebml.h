@@ -7,7 +7,7 @@ using namespace iso;
 struct file_range {
 	uint64	start, size;
 	file_range() {}
-	file_range(uint64 _start, uint64 _size = ~0ull) : start(_start), size(_size) {}
+	file_range(uint64 start, uint64 size = ~0ull) : start(start), size(size) {}
 	uint64	end()		const	{ return unended() ? ~0 : start + size; }
 	bool	unended()	const	{ return !~size; }
 	void	set_end(uint64 end) { size = end - start; }
@@ -96,7 +96,6 @@ public:
 	void	write(uint32 id, int64 n)					{ write_sint(id, n);	}
 };
 
-
 //-----------------------------------------------------------------------------
 //	structures
 //-----------------------------------------------------------------------------
@@ -124,7 +123,6 @@ template<uint32 ID> struct EBMLstruct {
 };
 
 struct EBMLHeader {
-
 	enum {
 		VERSION	= 1,
 		ID		= 0x1A45DFA3,

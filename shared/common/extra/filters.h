@@ -241,7 +241,7 @@ template<typename T, int N> bool is_seperable(const block<T, N> &filter, float *
 	auto	i0	= filter[imax];
 	for (auto i : filter) {
 		float	scale = 1;
-		if (i != i0 && !find_scalar_multiple(i0, i, scale))
+		if (i.begin() != i0.begin() && !find_scalar_multiple(i0, i, scale))
 			return false;
 		if (factors)
 			*factors++ = scale;

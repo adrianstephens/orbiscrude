@@ -226,7 +226,10 @@ public:
 	template<typename U> inline void put(const U &u)	{ put((uintn<sizeof(U)>&)u, BIT_COUNT<U>); }
 
 	void				flush(uint8 fill = 0)			{ put(fill, 7); T::dump(file); T::reset(); }
-	inline void			align(int n, int off = 0, buffer_t fill = 0)	{ put(fill, (T::bits_held() + sizeof(buffer_t) * 8 - off) % n); }
+	inline void			align(int n, int off = 0, buffer_t fill = 0)	{
+		put(fill, (uint32)(-(tell_bit() + off)) % n);
+		//put(fill, (sizeof(buffer_t) * 8 - T::bits_held() - off) % n);
+	}
 
 	state_t				get_state()		const			{ return *this; }
 	void				set_state(const state_t &s)		{ T::operator=(s); }

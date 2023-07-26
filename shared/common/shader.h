@@ -147,6 +147,8 @@ template<typename T> void AddShaderParameter(crc32 name, const T* t)					{ GetSh
 template<typename T> void AddShaderParameter(crc32 name, const iso::ISO_ptr<T> &t)		{ GetShaderParameter(name) = (const T*)t;	}
 inline void AddShaderParameter(crc32 name, const arbitrary_ptr &t)						{ GetShaderParameter(name) = t;	}
 
+template<typename T> void AddShaderParameter(string_ref name, T&& t)		{ AddShaderParameter(crc32(name), t); }
+
 template<uint32 name> inline arbitrary_ptr&		GetShaderParameter()					{ return GetShaderParameter(name); }
 template<uint32 name, typename T> inline void	AddShaderParameter(const T &t)			{ AddShaderParameter(name, t);	}
 template<uint32 name> inline arbitrary_ptr		GetShaderParameter(const ISO::Browser &parameters)	{ return GetShaderParameter(name, parameters); }

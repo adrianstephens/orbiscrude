@@ -19,7 +19,8 @@ template<typename F> class AnonymousMatrix;
 
 template<typename F> class LPmatrix : dynamic_matrix<F> {
 	typedef	dynamic_matrix<F>	B;
-	friend AnonymousMatrix;
+	typedef class AnonymousMatrix<F>	AM;
+	friend AM;
 protected:
 	mutable F		det;
 	mutable bool	determinant_up_to_date;
@@ -30,7 +31,7 @@ public:
 	LPmatrix()					: LPmatrix(0, 0) {}
 	LPmatrix(int n)				: LPmatrix(n, n) {}
 	LPmatrix(int n, F v)		: LPmatrix(n, n, v) {}
-	LPmatrix(AnonymousMatrix m);
+	LPmatrix(AM m)				: rows(m.rows), columns(m.columns), determinant_up_to_date(false) { swap(values, m.values); }
 
 	pair<int, int> dim()		const { return make_pair(rows, columns); }
 	bool	is_square()			const { return (rows == columns); }
@@ -38,8 +39,8 @@ public:
 	bool	less_equal_than(F value, F tol) const;
 
 	//Mathematical and manipulation operators
-	AnonymousMatrix operator-(AnonymousMatrix m) const;
-	AnonymousMatrix operator+(AnonymousMatrix m) const;
+	AM operator-(AM m) const;
+	AM operator+(AM m) const;
 	void	swap_columns(int r, int w);
 	void	swap_rows(int r, int w);
 	void	set_identity();
@@ -57,14 +58,14 @@ public:
 	void		solve(LPmatrix& x, LPmatrix const& b) const;
 
 	//Multiplication operators
-	AnonymousMatrix operator*(AnonymousMatrix m) const;
-	AnonymousMatrix operator*(LPmatrix const& m);
+	AM operator*(AM m) const;
+	AM operator*(LPmatrix const& m);
 	LPmatrix&		operator*=(LPmatrix const& m);
-	LPmatrix&		operator*=(AnonymousMatrix m);
+	LPmatrix&		operator*=(AM m);
 
 	//Assignments
 	LPmatrix&		operator=(LPmatrix const& m);
-	LPmatrix&		operator=(AnonymousMatrix m);
+	LPmatrix&		operator=(AM m);
 
 	//Retrieval and cast operators
 	F&			operator()(int i)				{ ISO_ASSERT(rows == 1 || columns == 1); return values[i]; }
@@ -81,7 +82,7 @@ template<typename F> class AnonymousMatrix : public LPmatrix<F> {
 public:
 	AnonymousMatrix(int r, int c) : B(r, c, 0) {}
 	AnonymousMatrix(const AnonymousMatrix& m) : B(m.n, m.m) { swap(LPmatrix::values, const_cast<storage&>(b.values)); }
-	AnonymousMatrix(const LPmatrix& b) : B(b.n, b.m)		{ memcpy(values, b.values, b.rows * b.columns * sizeof(F)); }
+	AnonymousMatrix(const B& b) : B(b.n, b.m)		{ memcpy(values, b.values, b.rows * b.columns * sizeof(F)); }
 	AnonymousMatrix operator*(const B& b) {
 		ISO_ASSERT(m == b.n);
 		// Allocate return matrix filled with zeroes
@@ -98,11 +99,10 @@ public:
 	}
 };
 
-LPmatrix::LPmatrix(AnonymousMatrix m) : rows(m.rows), columns(m.columns), determinant_up_to_date(false) { swap(values, m.values); }
 
-AnonymousMatrix LPmatrix::operator*(LPmatrix const& m) {
+template<typename F> AnonymousMatrix<F> LPmatrix<F>::operator*(LPmatrix<F> const& m) {
 	ISO_ASSERT(columns == m.rows);
-	AnonymousMatrix r(rows, m.columns);
+	AnonymousMatrix<F> r(rows, m.columns);
 	for (int i = 0; i < rows; ++i)
 		for (int j = 0; j < m.columns; ++j)
 			for (int h = 0; h < columns; ++h)
@@ -110,10 +110,10 @@ AnonymousMatrix LPmatrix::operator*(LPmatrix const& m) {
 	return r;
 }
 
-LPmatrix& LPmatrix::operator*=(LPmatrix const& m) {
+template<typename F> LPmatrix<F>& LPmatrix<F>::operator*=(LPmatrix<F> const& m) {
 	ISO_ASSERT(columns == m.rows);
 	// No fear to change matrix size
-	LPmatrix r(rows, m.columns);
+	LPmatrix<F> r(rows, m.columns);
 	for (int i = 0; i < rows; ++i)
 		for (int j = 0; j < m.columns; ++j)
 			for (int h = 0; h < columns; ++h)
@@ -125,10 +125,10 @@ LPmatrix& LPmatrix::operator*=(LPmatrix const& m) {
 	return *this;
 }
 
-LPmatrix& LPmatrix::operator*=(AnonymousMatrix m) {
+template<typename F> LPmatrix<F>& LPmatrix<F>::operator*=(AnonymousMatrix<F> m) {
 	ISO_ASSERT(columns == m.rows);
 	// No fear to change matrix size
-	LPmatrix r(rows, m.columns);
+	LPmatrix<F> r(rows, m.columns);
 	for (int i = 0; i < rows; ++i)
 		for (int j = 0; j < m.columns; ++j)
 			for (int h = 0; h < columns; ++h)
@@ -140,10 +140,10 @@ LPmatrix& LPmatrix::operator*=(AnonymousMatrix m) {
 	return *this;
 }
 
-AnonymousMatrix LPmatrix::operator*(AnonymousMatrix m) const {
+template<typename F> AnonymousMatrix<F> LPmatrix<F>::operator*(AnonymousMatrix<F> m) const {
 	ISO_ASSERT(columns == m.rows);
 	// Allocate return matrix filled with zeroes
-	AnonymousMatrix r(rows, m.columns);
+	AnonymousMatrix<F> r(rows, m.columns);
 	for (int i = 0; i < rows; ++i)
 		for (int j = 0; j < m.columns; ++j)
 			for (int h = 0; h < columns; ++h)
@@ -155,7 +155,7 @@ AnonymousMatrix LPmatrix::operator*(AnonymousMatrix m) const {
 	return m;
 }
 
-LPmatrix& LPmatrix::operator=(LPmatrix const& m) {
+template<typename F> LPmatrix<F>& LPmatrix<F>::operator=(LPmatrix<F> const& m) {
 	if (&m != this) {
 		rows	= m.rows;
 		columns = m.columns;
@@ -164,33 +164,33 @@ LPmatrix& LPmatrix::operator=(LPmatrix const& m) {
 	return *this;
 }
 
-LPmatrix& LPmatrix::operator=(AnonymousMatrix m) {
-	// Swap values, m will destroy old LPmatrix values
+template<typename F> LPmatrix<F>& LPmatrix<F>::operator=(AnonymousMatrix<F> m) {
+	// Swap values, m will destroy old LPmatrix<F> values
 	swap(values, m.values);
 	rows	= m.rows;
 	columns = m.columns;
 	return *this;
 }
 
-AnonymousMatrix LPmatrix::operator-(AnonymousMatrix m) const {
+template<typename F> AnonymousMatrix<F> LPmatrix<F>::operator-(AnonymousMatrix<F> m) const {
 	ISO_ASSERT(dim() == m.dim());
-	AnonymousMatrix r(rows, columns);
+	AnonymousMatrix<F> r(rows, columns);
 	for (int i = 0; i < rows; ++i)
 		for (int j = 0; j < columns; ++j)
 			r(i, j) = at(i, j) - m(i, j);
 	return r;
 }
 
-AnonymousMatrix LPmatrix::operator+(AnonymousMatrix m) const {
+template<typename F> AnonymousMatrix<F> LPmatrix<F>::operator+(AnonymousMatrix<F> m) const {
 	ISO_ASSERT(dim() == m.dim());
-	AnonymousMatrix r(rows, columns);
+	AnonymousMatrix<F> r(rows, columns);
 	for (int i = 0; i < rows; ++i)
 		for (int j = 0; j < columns; ++j)
 			r(i, j) = at(i, j) + m(i, j);
 	return r;
 }
 
-bool LPmatrix::more_equal_than(F value, F tol) const {
+template<typename F> bool LPmatrix<F>::more_equal_than(F value, F tol) const {
 	for (int i = 0; i < rows; ++i)
 		for (int j = 0; j < columns; ++j)
 			if (at(i, j) + tol < value)
@@ -198,7 +198,7 @@ bool LPmatrix::more_equal_than(F value, F tol) const {
 	return true;
 }
 
-bool LPmatrix::less_equal_than(F value, F tol) const {
+template<typename F> bool LPmatrix<F>::less_equal_than(F value, F tol) const {
 	for (int i = 0; i < rows; ++i)
 		for (int j = 0; j < columns; ++j)
 			if (at(i, j) - tol > value)
@@ -206,19 +206,19 @@ bool LPmatrix::less_equal_than(F value, F tol) const {
 	return true;
 }
 
-void LPmatrix::swap_columns(int r, int w) {
+template<typename F> void LPmatrix<F>::swap_columns(int r, int w) {
 	for (int i = 0; i < rows; ++i)
 		swap(values[i * columns + r], values[i * columns + w]);
 	det = -det;
 }
 
-void LPmatrix::swap_rows(int r, int w) {
+template<typename F> void LPmatrix<F>::swap_rows(int r, int w) {
 	for (int i = 0; i < columns; ++i)
 		swap(values[r * columns + i], values[w * columns + i]);
 	det = -det;
 }
 
-void LPmatrix::set_identity() {
+template<typename F> void LPmatrix<F>::set_identity() {
 	ISO_ASSERT(is_square());
 	for (int i = 0; i < rows; ++i)
 		for (int j = 0; j < columns; ++j)
@@ -227,14 +227,14 @@ void LPmatrix::set_identity() {
 	determinant_up_to_date = true;
 }
 
-void LPmatrix::transpose() {
+template<typename F> void LPmatrix<F>::transpose() {
 	// If matrix is square just swap the elements
 	if (rows == columns) {
 		for (int j = 1; j < columns; ++j)
 			for (int i = 0; i < j; ++i)
 				swap(at(i, j), at(j, i));
 	} else {
-		AnonymousMatrix tps(columns, rows);
+		AnonymousMatrix<F> tps(columns, rows);
 		for (int i = 0; i < rows; ++i)
 			for (int j = 0; j < columns; ++j)
 				tps(j, i) = at(i, j);
@@ -246,13 +246,13 @@ void LPmatrix::transpose() {
 // LU factorization with Gaussian Elimination and Partial Pivoting
 // stores the l, u matrices and permutation data respective into l, u and p
 // The third parameter determines the format of permutation data p (vector or matrix)
-void LPmatrix::get_lupp(LPmatrix& l, LPmatrix& u, LPmatrix& p, PermutationFormat pf) const {
+template<typename F> void LPmatrix<F>::get_lupp(LPmatrix<F>& l, LPmatrix<F>& u, LPmatrix<F>& p, PermutationFormat pf) const {
 	ISO_ASSERT(is_square());
 
 	F determinant = 1;
 
 	// Initialize passed u
-	u = AnonymousMatrix(*this);												// u will evolve from the original matrix
+	u = AnonymousMatrix<F>(*this);												// u will evolve from the original matrix
 
 	// Resize passed l
 	l.resize(rows, columns);												// total l
@@ -265,8 +265,8 @@ void LPmatrix::get_lupp(LPmatrix& l, LPmatrix& u, LPmatrix& p, PermutationFormat
 	}
 
 	// p_vector and o_vector for efficient permutation handling
-	AnonymousMatrix p_vector(rows, 1);
-	AnonymousMatrix o_vector(rows, 1);
+	AnonymousMatrix<F> p_vector(rows, 1);
+	AnonymousMatrix<F> o_vector(rows, 1);
 
 	// Initialize p_vector, o_vector
 	for (int i = 0; i < rows; ++i) {
@@ -276,7 +276,7 @@ void LPmatrix::get_lupp(LPmatrix& l, LPmatrix& u, LPmatrix& p, PermutationFormat
 
 	for (int j = 0; j < columns; ++j) {
 		// Reset tem and tpm elements
-		LPmatrix tem(rows, 1, 0);
+		LPmatrix<F> tem(rows, 1, 0);
 		tem(j) = 1;
 
 		// Write tpm:
@@ -334,7 +334,7 @@ void LPmatrix::get_lupp(LPmatrix& l, LPmatrix& u, LPmatrix& p, PermutationFormat
 
 		// Optimization of tem * u that takes into account the shape of tem and u
 		for (int i = j + 1; i < rows; ++i) {
-			LPmatrix r(1, columns, 0);
+			LPmatrix<F> r(1, columns, 0);
 
 			for (int o = j; o < columns; ++o)
 				r(o) = tem(i) * u(j, o) + u(i, o);
@@ -365,20 +365,20 @@ void LPmatrix::get_lupp(LPmatrix& l, LPmatrix& u, LPmatrix& p, PermutationFormat
 	determinant_up_to_date = true;
 }
 
-void LPmatrix::get_inverse(LPmatrix& inverse) const {
+template<typename F> void LPmatrix<F>::get_inverse(LPmatrix<F>& inverse) const {
 	ISO_ASSERT(is_square());
 
 	// Adjust inverse size
 	inverse.resize(rows, columns);
 
 	// Temporary matrices to hold factorization products
-	LPmatrix l_inverse, u_inverse, p_vector;
+	LPmatrix<F> l_inverse, u_inverse, p_vector;
 
 	// Compute and store LUPP
 	get_lupp(l_inverse, u_inverse, p_vector, PF_VECTOR);
 
 	// Set original permutation vector
-	LPmatrix o_vector(rows, 1);
+	LPmatrix<F> o_vector(rows, 1);
 	for (int i = 0; i < rows; ++i)
 		o_vector(i) = i;
 
@@ -427,7 +427,7 @@ void LPmatrix::get_inverse(LPmatrix& inverse) const {
 				inverse(i, j) += u_inverse(i, h) * l_inverse(h, j);
 
 	// Smart way to translate a row permutation vector to obtain a column permutation vector
-	LPmatrix p_vector_t(rows, 1);
+	LPmatrix<F> p_vector_t(rows, 1);
 	for (int i = 0; i < rows; ++i)
 		p_vector_t(p_vector(i)) = i;
 
@@ -443,9 +443,9 @@ void LPmatrix::get_inverse(LPmatrix& inverse) const {
 		}
 }
 
-void LPmatrix::get_inverse_with_column(LPmatrix const& old_inverse, LPmatrix const& new_column, int q, LPmatrix& new_inverse) {
+template<typename F> void LPmatrix<F>::get_inverse_with_column(LPmatrix<F> const& old_inverse, LPmatrix<F> const& new_column, int q, LPmatrix<F>& new_inverse) {
 	new_inverse.resize(old_inverse.rows, old_inverse.columns);
-	LPmatrix a_tilde(old_inverse * new_column);
+	LPmatrix<F> a_tilde(old_inverse * new_column);
 
 	for (int i = 0; i < old_inverse.rows; ++i)
 		for (int j = 0; j < old_inverse.columns; ++j)
@@ -455,9 +455,9 @@ void LPmatrix::get_inverse_with_column(LPmatrix const& old_inverse, LPmatrix con
 				new_inverse(i, j) = old_inverse(q, j) / a_tilde(q);
 }
 
-void LPmatrix::solve(LPmatrix& x, LPmatrix const& b) const {
+template<typename F> void LPmatrix<F>::solve(LPmatrix<F>& x, LPmatrix<F> const& b) const {
 	// Invert L and U
-	LPmatrix l_inverse, u_inverse, p_vector;
+	LPmatrix<F> l_inverse, u_inverse, p_vector;
 
 	// Calculate LUPP factorization
 	get_lupp(l_inverse, u_inverse, p_vector, PF_VECTOR);
@@ -501,7 +501,7 @@ void LPmatrix::solve(LPmatrix& x, LPmatrix const& b) const {
 			u_inverse(i, j) = 0;
 
 	// Optimization of p * b
-	LPmatrix pb(rows, 1);
+	LPmatrix<F> pb(rows, 1);
 	for (int i = 0; i < rows; ++i)
 		pb(i) = b(p_vector(i));
 
@@ -530,12 +530,12 @@ void LPmatrix::solve(LPmatrix& x, LPmatrix const& b) const {
 //	ColumnSet
 //-----------------------------------------------------------------------------
 
-class Simplex;
+template<typename F> class Simplex;
 
-class ColumnSet {
+template<typename F> class ColumnSet {
 	// A int vector stores the indices of the columns in the set.
 	dynamic_array<int> columns;
-	friend Simplex;
+	friend Simplex<F>;
 public:
 	void insert(int column) {
 		columns.push_back(column);
@@ -572,8 +572,8 @@ public:
 //	Constraint	- A_i * x_j = b_i.
 //-----------------------------------------------------------------------------
 
-class Constraint {
-	friend Simplex;
+template<typename F> class Constraint {
+	friend Simplex<F>;
 
 	enum Type {
 		CT_LESS_EQUAL,
@@ -583,24 +583,24 @@ class Constraint {
 		CT_BOUNDS
 	};
 	Type	type;
-	LPmatrix	coefficients;
+	LPmatrix<F>	coefficients;
 	F		value;
 	F		upper;
 	F		lower;
 
 public:
-	Constraint(LPmatrix const & coefficients, Type type, F value) : type(type), coefficients(coefficients), value(value) {
+	Constraint(LPmatrix<F> const & coefficients, Type type, F value) : type(type), coefficients(coefficients), value(value) {
 		// Coefficients must be a row vector
 		ISO_ASSERT(coefficients.dim().a == 1);
 	}
 
-	Constraint(LPmatrix const & coefficients, Type type, F lower, F upper) : type(type), coefficients(coefficients), lower(lower), upper(upper) {
+	Constraint(LPmatrix<F> const & coefficients, Type type, F lower, F upper) : type(type), coefficients(coefficients), lower(lower), upper(upper) {
 		// Coefficients must be a row vector
 		ISO_ASSERT(type == CT_BOUNDS && coefficients.dim().a == 1);
 	}
 
 	void add_column(F value) {
-		AnonymousMatrix row(1, coefficients.dim().b + 1);
+		AnonymousMatrix<F> row(1, coefficients.dim().b + 1);
 		for (int i = 0; i < coefficients.dim().b; ++i)
 			row(i) = coefficients(i);
 
@@ -616,30 +616,30 @@ public:
 // ObjectiveFunction
 //-----------------------------------------------------------------------------
 
-class ObjectiveFunction {
-	friend Simplex;
+template<typename F> class ObjectiveFunction {
+	friend Simplex<F>;
 	enum Type {
 		OFT_MAXIMIZE,
 		OFT_MINIMIZE
 	};
 	Type	type;
-	LPmatrix	costs;
+	LPmatrix<F>	costs;
 public:
 	ObjectiveFunction() {}
-	ObjectiveFunction(Type type, LPmatrix const &costs) : type(type), costs(costs) {}
+	ObjectiveFunction(Type type, LPmatrix<F> const &costs) : type(type), costs(costs) {}
 	ObjectiveFunction& operator=(ObjectiveFunction const &objective_function) {
 		type	= objective_function.type;
 		costs	= objective_function.costs;
 		return *this;
 	}
 	// Solution value
-	LPmatrix const & get_value(LPmatrix const & x) const {
+	LPmatrix<F> const & get_value(LPmatrix<F> const & x) const {
 		return costs * x;
 	}
 
 	// Manipulation
 	void add_column(F value) {
-		AnonymousMatrix row(1, costs.dim().b + 1);
+		AnonymousMatrix<F> row(1, costs.dim().b + 1);
 		for (int i = 0; i < costs.dim().b; ++i)
 			row(i) = costs(i);
 
@@ -652,14 +652,14 @@ public:
 // Variable
 //-----------------------------------------------------------------------------
 
-class Variable {
-	friend Simplex;
-	Simplex * creator;
+template<typename F> class Variable {
+	friend Simplex<F>;
+	Simplex<F>	*creator;
 
 public:
-	Variable(Simplex *creator) : creator(creator) {}
+	Variable(Simplex<F> *creator) : creator(creator) {}
 	virtual ~Variable()	{}
-	virtual void process(LPmatrix& calculated_solution, LPmatrix& solution, int index) {
+	virtual void process(LPmatrix<F>& calculated_solution, LPmatrix<F>& solution, int index) {
 		solution(index) = calculated_solution(index);
 	}
 };
@@ -669,25 +669,27 @@ public:
 //	created when transforming a variable in a splitted variable
 //	The relation: x = x+ - x- holds between the original variable, the SplittedVariable and the AuxiliaryVariable
 //-----------------------------------------------------------------------------
-class AuxiliaryVariable : public Variable {
-	friend Simplex;
-	friend class SplittedVariable;
+template<typename F> class SplittedVariable;
+
+template<typename F> class AuxiliaryVariable : public Variable<F> {
+	friend Simplex<F>;
+	friend class SplittedVariable<F>;
 	int index;
 public:
-	AuxiliaryVariable(Simplex* creator, int index) : Variable(creator), index(index) {}
-	void process(LPmatrix& calculated_solution, LPmatrix& solution, int index) {}
+	AuxiliaryVariable(Simplex<F>* creator, int index) : Variable<F>(creator), index(index) {}
+	void process(LPmatrix<F>& calculated_solution, LPmatrix<F>& solution, int index) {}
 };
 
 //-----------------------------------------------------------------------------
 //	SplittedVariable
 //	Variables that are splitted in two (one) AuxiliaryVariables during the translation in standard form
 //-----------------------------------------------------------------------------
-class SplittedVariable : public Variable {
-	friend Simplex;
-	AuxiliaryVariable* aux;
+template<typename F> class SplittedVariable : public Variable<F> {
+	friend Simplex<F>;
+	AuxiliaryVariable<F>* aux;
 public:
-	SplittedVariable(Simplex* creator, AuxiliaryVariable* aux) : Variable(creator), aux(aux) {}
-	void process(LPmatrix& calculated_solution, LPmatrix& solution, int index) {
+	SplittedVariable(Simplex<F>* creator, AuxiliaryVariable<F>* aux) : Variable<F>(creator), aux(aux) {}
+	void process(LPmatrix<F>& calculated_solution, LPmatrix<F>& solution, int index) {
 		solution(index) = calculated_solution(index) - calculated_solution(aux->index);
 	}
 };
@@ -696,43 +698,43 @@ public:
 //	SlackVariable
 //	Type of variable added when transforming a <= or >= constraint into a = constraint
 //-----------------------------------------------------------------------------
-class SlackVariable : public Variable {
-	friend Simplex;
+template<typename F> class SlackVariable : public Variable<F> {
+	friend Simplex<F>;
 public:
-	SlackVariable(Simplex * creator) : Variable(creator) {}
-	void process(LPmatrix& calculated_solution, LPmatrix& solution, int index)	{}
+	SlackVariable(Simplex<F> * creator) : Variable<F>(creator) {}
+	void process(LPmatrix<F>& calculated_solution, LPmatrix<F>& solution, int index)	{}
 };
 
 //-----------------------------------------------------------------------------
-//	Simplex
+//	Simplex<F>
 //-----------------------------------------------------------------------------
 
-class Simplex {
+template<typename F> class Simplex {
 protected:
 	// Column sets
-	ColumnSet suggested_base;
-	ColumnSet current_base;
-	ColumnSet current_out_of_base;
+	ColumnSet<F> suggested_base;
+	ColumnSet<F> current_base;
+	ColumnSet<F> current_out_of_base;
 
 	// Data
-	ObjectiveFunction			objective_function;
-	dynamic_array<Constraint>	constraints;
-	dynamic_array<Constraint>	nn_constraints;
-	dynamic_array<Variable*>	variables;
+	ObjectiveFunction<F>			objective_function;
+	dynamic_array<Constraint<F>>	constraints;
+	dynamic_array<Constraint<F>>	nn_constraints;
+	dynamic_array<Variable<F>*>	variables;
 
 	// Processed data
-	LPmatrix	costs;
-	LPmatrix	coefficients_matrix;
-	LPmatrix	constraints_vector;
-	LPmatrix	base_inverse;
-	LPmatrix	dual_variables;
-	LPmatrix	column_p;
+	LPmatrix<F>	costs;
+	LPmatrix<F>	coefficients_matrix;
+	LPmatrix<F>	constraints_vector;
+	LPmatrix<F>	base_inverse;
+	LPmatrix<F>	dual_variables;
+	LPmatrix<F>	column_p;
 	int		solution_dimension, old_column;
 
 	// Results
-	LPmatrix	base_solution;
-	LPmatrix	solution;
-	LPmatrix	reduced_cost;
+	LPmatrix<F>	base_solution;
+	LPmatrix<F>	solution;
+	LPmatrix<F>	reduced_cost;
 	F		solution_value;
 
 	bool	optimal, unlimited, overconstrained, has_to_be_fixed, changed_sign;
@@ -743,7 +745,7 @@ protected:
 	void process_to_artificial_problem();
 
 	// Solving
-	void solve_with_base(ColumnSet const& base);
+	void solve_with_base(ColumnSet<F> const& base);
 
 public:
 	Simplex() : solution_dimension(0), changed_sign(false), inverse_recalculation_rate(10) {}
@@ -754,21 +756,21 @@ public:
 	}
 
 	// Settings
-	void add_variable(Variable* variable) {
+	void add_variable(Variable<F>* variable) {
 		variables.push_back(variable);
 	}
-	void add_constraint(Constraint const & constraint) {
+	void add_constraint(Constraint<F> const & constraint) {
 		if (constraints.size() != 0)
 			ISO_ASSERT(solution_dimension == constraint.coefficients.dim().b);
 		else
 			solution_dimension = constraint.size();
 
-		if (constraint.type == Constraint::CT_NON_NEGATIVE)
+		if (constraint.type == Constraint<F>::CT_NON_NEGATIVE)
 			nn_constraints.push_back(constraint);
 		else
 			constraints.push_back(constraint);
 	}
-	void set_objective_function(ObjectiveFunction const &of) {
+	void set_objective_function(ObjectiveFunction<F> const &of) {
 		ISO_ASSERT(solution_dimension == of.costs.dim().b);
 		objective_function = of;
 	}
@@ -779,11 +781,11 @@ public:
 	bool is_unlimited()					const { return unlimited; }
 	bool has_solutions()				const { return !overconstrained; }
 	bool must_be_fixed()				const { return has_to_be_fixed; }
-	LPmatrix const &get_dual_variables()	const { return dual_variables; }
+	LPmatrix<F> const &get_dual_variables()	const { return dual_variables; }
 };
 
-void Simplex::process_to_standard_form() {
-	// Constraint iterator
+template<typename F> void Simplex<F>::process_to_standard_form() {
+	// Constraint<F> iterator
 
 	// Process non-negative constraints
 	int initial_solution_dimension = solution_dimension;
@@ -797,31 +799,31 @@ void Simplex::process_to_standard_form() {
 
 		if (!has_constraint) {
 			// Add a non-negativity constraint
-			LPmatrix eye(1, solution_dimension);
+			LPmatrix<F> eye(1, solution_dimension);
 			eye(i) = 1;
-			add_constraint(Constraint(eye, Constraint::CT_NON_NEGATIVE, 0));
+			add_constraint(Constraint<F>(eye, Constraint<F>::CT_NON_NEGATIVE, 0));
 
 			++solution_dimension;
 
 			// Add a column to all constraints
-			for (Constraint *mit = nn_constraints.begin(); mit != nn_constraints.end(); ++mit)
+			for (Constraint<F> *mit = nn_constraints.begin(); mit != nn_constraints.end(); ++mit)
 				mit->add_column(0);
 
 			// Add another non-negativity constraint
-			LPmatrix n_eye(1, solution_dimension);
+			LPmatrix<F> n_eye(1, solution_dimension);
 			n_eye(solution_dimension - 1) = 1;
 
-			this->add_constraint(Constraint(n_eye, Constraint::CT_NON_NEGATIVE, 0));
+			this->add_constraint(Constraint<F>(n_eye, Constraint<F>::CT_NON_NEGATIVE, 0));
 
 			// Add a regular constraint
-			for (Constraint *mit = constraints.begin(); mit != constraints.end(); ++mit)
+			for (Constraint<F> *mit = constraints.begin(); mit != constraints.end(); ++mit)
 				mit->add_column(-mit->coefficients(i));
 
 			objective_function.add_column(-objective_function.costs(i));
 
 			// Update variables status
-			Variable* auxiliary = new AuxiliaryVariable(this, variables.size32());
-			Variable* splitted	= new SplittedVariable(this, (AuxiliaryVariable*)auxiliary);
+			Variable<F>* auxiliary = new AuxiliaryVariable<F>(this, variables.size32());
+			Variable<F>* splitted	= new SplittedVariable(this, (AuxiliaryVariable<F>*)auxiliary);
 
 			// Modify variables
 			variables.at(i) = splitted;
@@ -831,48 +833,48 @@ void Simplex::process_to_standard_form() {
 
 	// Process regular constraints
 	for (auto it = constraints.begin(); it != constraints.end(); ++it) {
-		if (it->type == Constraint::CT_MORE_EQUAL) {
+		if (it->type == Constraint<F>::CT_MORE_EQUAL) {
 			// Add empty column to all regular constraints except the current
-			for (Constraint *mit = constraints.begin(); mit != constraints.end(); ++mit)
+			for (Constraint<F> *mit = constraints.begin(); mit != constraints.end(); ++mit)
 				if (mit != it)
 					mit->add_column(0);
 
-			for (Constraint *mit = nn_constraints.begin(); mit != nn_constraints.end(); ++mit)
+			for (Constraint<F> *mit = nn_constraints.begin(); mit != nn_constraints.end(); ++mit)
 				mit->add_column(0);
 
 			// Add a 1 column to the current
 			it->add_column(-1);
-			it->type = Constraint::CT_EQUAL;
+			it->type = Constraint<F>::CT_EQUAL;
 			objective_function.add_column(0);
 			++solution_dimension;
 
 			// Add constraint
-			LPmatrix eye(1, solution_dimension);
+			LPmatrix<F> eye(1, solution_dimension);
 			eye(solution_dimension - 1) = 1;
-			add_constraint(Constraint(eye, Constraint::CT_NON_NEGATIVE, 0));
+			add_constraint(Constraint<F>(eye, Constraint<F>::CT_NON_NEGATIVE, 0));
 
 			// Update variables vector
 			variables.push_back(new SlackVariable(this));
 
-		} else if (it->type == Constraint::CT_LESS_EQUAL) {
+		} else if (it->type == Constraint<F>::CT_LESS_EQUAL) {
 			// Add empty column to all regular constraints except the current
-			for (Constraint *mit = constraints.begin(); mit != constraints.end(); ++mit)
+			for (Constraint<F> *mit = constraints.begin(); mit != constraints.end(); ++mit)
 				if (mit != it)
 					mit->add_column(0);
 
-			for (Constraint *mit = nn_constraints.begin(); mit != nn_constraints.end(); ++mit)
+			for (Constraint<F> *mit = nn_constraints.begin(); mit != nn_constraints.end(); ++mit)
 				mit->add_column(0);
 
 			// Add a 1 column to the current
 			it->add_column(1);
-			it->type = Constraint::CT_EQUAL;
+			it->type = Constraint<F>::CT_EQUAL;
 			objective_function.add_column(0);
 			++solution_dimension;
 
 			// Add constraint
-			LPmatrix eye(1, solution_dimension);
+			LPmatrix<F> eye(1, solution_dimension);
 			eye(solution_dimension - 1) = 1;
-			add_constraint(Constraint(eye, Constraint::CT_NON_NEGATIVE, 0));
+			add_constraint(Constraint<F>(eye, Constraint<F>::CT_NON_NEGATIVE, 0));
 
 			// Update variables vector
 			variables.push_back(new SlackVariable(this));
@@ -880,16 +882,16 @@ void Simplex::process_to_standard_form() {
 	}
 
 	// Manipulate objective function
-	if (objective_function.type == ObjectiveFunction::OFT_MAXIMIZE) {
-		objective_function.type = ObjectiveFunction::OFT_MINIMIZE;
-		LPmatrix zero(1, solution_dimension, 0);
+	if (objective_function.type == ObjectiveFunction<F>::OFT_MAXIMIZE) {
+		objective_function.type = ObjectiveFunction<F>::OFT_MINIMIZE;
+		LPmatrix<F> zero(1, solution_dimension, 0);
 		changed_sign = true;
 		objective_function.costs = zero - objective_function.costs;
 	}
 }
 
-void Simplex::process_to_artificial_problem() {
-	ColumnSet identity;
+template<typename F> void Simplex<F>::process_to_artificial_problem() {
+	ColumnSet<F> identity;
 
 	// Scan all the columns, when I find a column that is an eye for i put it in the base at position i
 	for (uint32 i = 0; i < constraints.size(); ++i) {
@@ -926,7 +928,7 @@ void Simplex::process_to_artificial_problem() {
 				++solution_dimension;
 
 				// Create non-negative constraint for new variable
-				LPmatrix eye(1, solution_dimension);
+				LPmatrix<F> eye(1, solution_dimension);
 				eye(solution_dimension - 1) = 1;
 
 				for (uint32 k = 0; k < nn_constraints.size(); ++k)
@@ -934,14 +936,14 @@ void Simplex::process_to_artificial_problem() {
 
 				// Objective function costs updated
 				objective_function.add_column(1);
-				add_constraint(Constraint(eye, Constraint::CT_NON_NEGATIVE, 0));
+				add_constraint(Constraint<F>(eye, Constraint<F>::CT_NON_NEGATIVE, 0));
 			}
 		}
 	}
 	suggested_base = identity;
 }
 
-void Simplex::solve_with_base(ColumnSet const& initial_base) {
+template<typename F> void Simplex<F>::solve_with_base(ColumnSet<F> const& initial_base) {
 	// Preprocess constraints data to lead to matrices
 
 	// A
@@ -971,7 +973,7 @@ void Simplex::solve_with_base(ColumnSet const& initial_base) {
 
 	int		step = 0;
 	while (!optimal && !unlimited) {
-		LPmatrix	base_costs(1, (int)current_base.size());	// Costs of base
+		LPmatrix<F>	base_costs(1, (int)current_base.size());	// Costs of base
 
 		// populate current_out_of_base
 		current_out_of_base.columns.clear();
@@ -981,7 +983,7 @@ void Simplex::solve_with_base(ColumnSet const& initial_base) {
 
 		// every inverse_recalculation steps recompute inverse from scratch
 		if (step % inverse_recalculation_rate == 0) {
-			LPmatrix	base_matrix((int)current_base.size());
+			LPmatrix<F>	base_matrix((int)current_base.size());
 
 			// unpack current base and objective costs
 			for (uint32 j = 0; j < current_base.size(); ++j) {
@@ -998,10 +1000,10 @@ void Simplex::solve_with_base(ColumnSet const& initial_base) {
 			for (uint32 j = 0; j < current_base.size(); ++j)
 				base_costs(j) = costs(current_base.column(j));
 
-			LPmatrix old_inverse = base_inverse;
+			LPmatrix<F> old_inverse = base_inverse;
 
 			// compute inverse
-			LPmatrix::get_inverse_with_column(old_inverse, column_p, old_column, base_inverse);
+			LPmatrix<F>::get_inverse_with_column(old_inverse, column_p, old_column, base_inverse);
 
 		}
 
@@ -1011,7 +1013,7 @@ void Simplex::solve_with_base(ColumnSet const& initial_base) {
 		base_solution = base_inverse * constraints_vector;
 
 		// Compute u = c_B * A
-		LPmatrix	u = base_costs * base_inverse;
+		LPmatrix<F>	u = base_costs * base_inverse;
 
 		// Compute reduced cost
 		reduced_cost	= costs - u * coefficients_matrix;
@@ -1039,7 +1041,7 @@ void Simplex::solve_with_base(ColumnSet const& initial_base) {
 			for (uint32 i = 0; i < constraints.size(); ++i)
 				column_p(i) = coefficients_matrix(i, p);
 
-			LPmatrix a_tilde	= base_inverse * column_p;
+			LPmatrix<F> a_tilde	= base_inverse * column_p;
 			unlimited		= a_tilde.less_equal_than(0, TOL);
 
 			if (!unlimited) {
@@ -1058,8 +1060,8 @@ void Simplex::solve_with_base(ColumnSet const& initial_base) {
 			}
 
 		} else {
-			LPmatrix objective_function_base(1, (int)current_base.size(), 0);
-			LPmatrix full_solution(solution_dimension, 1, 0);
+			LPmatrix<F> objective_function_base(1, (int)current_base.size(), 0);
+			LPmatrix<F> full_solution(solution_dimension, 1, 0);
 
 			// update dual variables
 			dual_variables = u;
@@ -1082,8 +1084,8 @@ void Simplex::solve_with_base(ColumnSet const& initial_base) {
 	}
 }
 
-void Simplex::solve() {
-	ColumnSet initial_base;
+template<typename F> void Simplex<F>::solve() {
+	ColumnSet<F> initial_base;
 
 	// Create problem to work on
 	Simplex standard_form_problem = *this;
@@ -1126,7 +1128,7 @@ void Simplex::solve() {
 			//		*	(B^-1)_q * A^j != 0
 
 			int		q = artificial_problem.current_base.index_of(artificial_variable);
-			LPmatrix	bi_row_q(1, (int)artificial_problem.current_base.size());
+			LPmatrix<F>	bi_row_q(1, (int)artificial_problem.current_base.size());
 
 			for (uint32 k = 0; k < artificial_problem.current_base.size(); ++k)
 				bi_row_q(k) = artificial_problem.base_inverse(q, k);
@@ -1137,7 +1139,7 @@ void Simplex::solve() {
 
 				// Pick the ones that doesn't refer to an artificial variable
 				if (artificial_problem.costs(i) == 0) {
-					LPmatrix column_j(standard_form_problem.current_base.size(), 1);
+					LPmatrix<F> column_j(standard_form_problem.current_base.size(), 1);
 
 					for (uint32 k = 0; k < standard_form_problem.current_base.size(); ++k)
 						column_j(k) = artificial_problem.coefficients_matrix(k, i);
@@ -1202,7 +1204,7 @@ void Simplex::solve() {
 // sparse matrix-matrix multiply for the product A.D.AT where D is a diagonal matrix
 // used to form the so-called normal equations in the interior-point method for linear programming
 
-struct ADAT {
+template<typename F> struct ADAT {
 	const sparse_matrix<F>	&a, &at;
 	sparse_matrix<F>		adat;
 
@@ -1214,8 +1216,8 @@ struct ADAT {
 };
 
 //Allocates compressed column storage for A.AT, where A and AT are input in compressed column format, and fills in values of ia() and ja()
-//Each column must be in sorted order in input matrices. LPmatrix is output with each column sorted
-ADAT::ADAT(const sparse_matrix<F> &A, const sparse_matrix<F> &AT) : a(A), at(AT) {
+//Each column must be in sorted order in input matrices. LPmatrix<F> is output with each column sorted
+template<typename F> ADAT<F>::ADAT(const sparse_matrix<F> &A, const sparse_matrix<F> &AT) : a(A), at(AT) {
 	int		m		= AT.cols();
 	int		*done	= alloc_auto(int, m);
 
@@ -1268,7 +1270,7 @@ ADAT::ADAT(const sparse_matrix<F> &A, const sparse_matrix<F> &AT) : a(A), at(AT)
 	}
 }
 
-void ADAT::updateD(const dynamic_vector<F> &D) {
+template<typename F> void ADAT<F>::updateD(const dynamic_vector<F> &D) {
 	int		m = a.rows(), n = a.cols();
 	dynamic_vector<F>	temp(n), temp2(m, 0);
 
@@ -1297,7 +1299,7 @@ void ADAT::updateD(const dynamic_vector<F> &D) {
 	}
 }
 
-struct LDL {
+template<typename F> struct LDL {
 	sparse_matrix<F>	&A;
 	sparse_matrix<F>	L;
 	sparse_layout		Ls;
@@ -1343,7 +1345,7 @@ struct LDL {
 //	The solution is returned in x
 //-----------------------------------------------------------------------------
 
-int lp_interior_point(const sparse_matrix<F> &a, const dynamic_vector<F> &b, const dynamic_vector<F> &c, dynamic_vector<F> &x) {
+template<typename F> int lp_interior_point(const sparse_matrix<F> &a, const dynamic_vector<F> &b, const dynamic_vector<F> &c, dynamic_vector<F> &x) {
 	const int	MAXITS	= 200;				//maximum iterations
 	const F		EPS		= F(1.0e-6);		//tolerance for optimality and feasibility
 	const F		SIGMA	= F(0.9);			//stepsize reduction factor(conservative choice)
@@ -1355,7 +1357,7 @@ int lp_interior_point(const sparse_matrix<F> &a, const dynamic_vector<F> &b, con
 	dynamic_vector<F>	rp(m), rd(n), d(n), tempn(n), tempm(m);
 
 	sparse_matrix<F> at = transpose(a);
-	ADAT		adat(a, at);				//setup for A.D.AT, where D=D.X.invZ
+	ADAT<F>		adat(a, at);				//setup for A.D.AT, where D=D.X.invZ
 	LDL			solver(adat);
 
 	//compute factors for convergence test
@@ -1438,7 +1440,7 @@ int lp_interior_point(const sparse_matrix<F> &a, const dynamic_vector<F> &b, con
 	return 3; //Maximum iterations exceeded
 }
 
-struct constraint : dynamic_vector<F> {
+template<typename F> struct constraint : dynamic_vector<F> {
 	enum Type {
 		CT_LESS_EQUAL,
 		CT_MORE_EQUAL,
@@ -1457,7 +1459,7 @@ struct constraint : dynamic_vector<F> {
 	}
 };
 
-void process_to_standard_form(dynamic_array<constraint> &constraints, dynamic_vector<F> &costs, bool maximise) {
+template<typename F> void process_to_standard_form(dynamic_array<constraint<F>> &constraints, dynamic_vector<F> &costs, bool maximise) {
 	enum VarType {
 		VT_NORMAL,
 		VT_SLACK,
@@ -2042,13 +2044,13 @@ static struct test {
 	test() {
 		rng<simple_random>	random;
 		dynamic_matrix<float>	m(4, 4);
-		LPmatrix				x(4, 4), x1;
+		LPmatrix<F>				x(4, 4), x1;
 		for (int i = 0; i < 4; i++)
 			for (int j = 0; j < 4; j++)
 				m(i, j) = x(j, i) = random;
 
 		x.get_inverse(x1);
-		LPmatrix	x2 = x1 * x;
+		LPmatrix<F>	x2 = x1 * x;
 
 		dynamic_matrix<float>	m1 = inverse(m);
 		dynamic_matrix<float>	m2 = m1 * m;

@@ -139,9 +139,6 @@ template<typename T, uint64 I0, uint64 I1, int D, char... C> struct float_reader
 //	soft_float - arbitrary mantissa, exponent sizes
 //-----------------------------------------------------------------------------
 
-// in defs.cpp
-template<typename T> size_t put_float(char *s, const float_info<T> &f, uint32 digits, uint32 exp_digits);
-
 struct mantissa_low64 { uint64 m0; };
 
 template<uint32 _M, uint32 E, bool S, uint32 T = int(S) + E + _M> struct soft_float_storage {
@@ -309,9 +306,6 @@ public:
 	friend force_inline float_category	get_category(const soft_float_imp &a)	{
 		return a.e == (1 << E) - 1 ? (a.m ? FLOAT_QNAN : (a.s ? FLOAT_NEGINF : FLOAT_INF)) : FLOAT_NORMAL;
 	}
-	friend size_t to_string(char *s, const soft_float_imp &a) {
-		return put_float(s, get_print_info<10>(a), M * 3 / 10, E * 3 / 10);
-	}
 	friend B	get_components(const soft_float_imp &a) { return a; }
 };
 
@@ -373,7 +367,7 @@ template<uint32 M, uint32 E, bool S> class soft_float_imp<M, E, S, false> : soft
 	}
 public:
 	soft_float_imp() {}
-	force_inline constexpr soft_float_imp(F f)	{ auto t = get_components(f); normalise_set(f < 0, t.get_exp(), shift_bits_round<mant_t>(t.get_mant(), M - t.M)); }
+	force_inline constexpr soft_float_imp(F f)	{ auto t = get_components(f); normalise_set(f < 0, t.get_exp(), shift_bits_round(t.get_mant(), M - t.M)); }
 	force_inline constexpr operator F() const	{ return float_components<F>(B::get_mant() << (float_components<F>::M - M), B::get_exp() + float_components<F>::E_OFF, B::get_sign()).f(); }
 
 	template<typename B> force_inline auto&	operator+=(B b)	{ return *this = *this + b;	}
@@ -493,8 +487,8 @@ template<typename T> struct soft_decimal_helpers {
 
 	template<int DIGITS> static typename T_enable_if<(DIGITS > 3), int>::type strip_zeros(uint128 &m, int e) {
 		enum {D0 = DIGITS / 2, D1 = DIGITS - D0};
-		if (e < D1 && !(m % POW(10, D0))) {
-			m /= POW(10, D0);
+		if (e < D1 && !(m % kpow<10, D0>)) {
+			m /= kpow<10, D0>;
 			e += D0;
 		}
 		return strip_zeros<D1>(m, e - D0) + D0;
@@ -574,7 +568,7 @@ template<> inline int soft_decimal_helpers<uint128>::div_pow10(uint128 &m, uint3
 	uint64	mod;
 	bool	sticky	= false;
 	while (n > 9) {
-		uint64	pow10	= POW(10, 9);
+		uint64	pow10	= kpow<10, 9>;
 		m				= divmod(m, pow10, mod);
 		sticky			= sticky || !!mod;
 		n -= 9;
@@ -589,7 +583,7 @@ template<uint32 M, uint32 E, bool S, bool DPD, typename T = uint_bits_t<int(S) +
 	enum { MC = M - 3, EC = E - 2, E_OFF = 3 << (EC - 1), MB = sizeof(mant_t) * 8, DIGITS = MC * 3 / 10 + 1, DIGITS64 = DIGITS };
 	T	m:MC, e:EC, c:5, s:1;
 
-	static const mant_t	max_store = POW(10, DIGITS);
+	static const mant_t	max_store = kpow<10, DIGITS>;
 
 	void	set(bool sign, int exp, T mant) {
 		exp		+= E_OFF;
@@ -896,6 +890,8 @@ typedef scaled<uint8,	0xff>		unorm8;
 typedef scaled<uint16,	0xffff>		unorm16;
 typedef scaled<int32,	0x7fffffff>	norm32;
 typedef scaled<uint32,	0xffffffff>	unorm32;
+typedef scaled<int64,	0x7fffffffffffffffll>	norm64;
+typedef scaled<uint64,	0xffffffffffffffffll>	unorm64;
 typedef BE(norm16)					norm16be;
 typedef BE(unorm16)					unorm16be;
 typedef BE(norm32)					norm32be;

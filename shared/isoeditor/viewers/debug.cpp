@@ -4,6 +4,8 @@
 #include "filename.h"
 #include "resource.h"
 #include "main.h"
+#include "directory.h"
+#include "windows/d2d.h"
 
 using namespace app;
 
@@ -11,31 +13,47 @@ using namespace app;
 //	Source/Disassembly
 //-----------------------------------------------------------------------------
 
-void app::SetSourceWindow(win::RichEditControl &text, const SyntaxColourer &colourer, const memory_block &s, int *active, size_t num_active) {
-	if (s) {
-		text.SetFont(colourer.font);
-		text.SendMessage(EM_EXLIMITTEXT, 0, ~0);
-		text.SetFont(colourer.font);
-		memory_reader	r(s);
-		text.StreamIn(SF_TEXT, [&r](void *p, uint32 n) { return r.readbuff(p, n); });
-		colourer.Process(text, active, num_active);
+struct GetColours {
+	Disassembler::File	&file;
+	GetColours(Disassembler::File &file) : file(file) {}
+	const char	*buffer;
+	void	Begin(const SyntaxColourer *col, const char* p) { buffer = p; }
+	void	End() {}
+	void	AddColourTo(const char *i, const SyntaxColourer::Token &c) {
+		file.token_starts.emplace_back(i - buffer, c.i);
+	}
+};
+
+void app::SetSourceWindow(win::RichEditControl &text, const Disassembler::File *file, const SyntaxColourer &colourer, range<int*> active) {
+	if (!file->token_starts) {
+		GetColours	ret(unconst(*file));
+		colourer.Process(ret, file->source, active);
+	}
+
+	text.SetFont(colourer.font);
+	text.SendMessage(EM_EXLIMITTEXT, 0, ~0);
+	text.SetFont(colourer.font);
+
+	memory_reader	r(file->source);
+	text.StreamIn(SF_TEXT, [&r](void *p, uint32 n) { return r.readbuff(p, n); });
+
+	uint32	prev	= 0;
+	for (auto &j : file->token_starts) {
+		text.SetSelection(win::CharRange(prev, j.a));
+		text.SetFormat(win::CharFormat().Colour(colourer.Colour(j.b)));
+		prev = j.a;
 	}
 }
-EditControl app::MakeSourceWindow(const WindowPos &wpos, const char *title, const SyntaxColourer &colourer, const memory_block &s, int *active, size_t num_active, Control::Style style, Control::StyleEx styleEx) {
-	if (s) {
-#if 0
-		TextWindow *tw = new TextWindow(wpos, title, style, styleEx);
-		tw->SendMessage(EM_EXLIMITTEXT, 0, ~0);
-		tw->SetFont(colourer.font);
-		tw->SetText2(colourer.RTF(s, active, num_active));
-		return *tw;
-#else
-		D2DTextWindow *tw = new D2DTextWindow(wpos, title, style | Control::CHILD, styleEx);
-		SetSourceWindow(*tw, colourer, s, active, num_active);
-		return *tw;
-#endif
+
+EditControl app::MakeSourceWindow(const WindowPos &wpos, const Disassembler::File *file, const SyntaxColourer &colourer, range<int*> active, Control::Style style, Control::StyleEx styleEx, ID id) {
+	if (!file->token_starts) {
+		GetColours	ret(unconst(*file));
+		colourer.Process(ret, file->source, active);
 	}
-	return EditControl();
+
+	CodeWindow *tw = new CodeWindow(wpos, filename(file->name).name_ext(), style | Control::CHILD, styleEx, id);
+	SetSourceWindow(*tw, file, colourer, active);
+	return *tw;
 }
 
 void app::ShowSourceLine(EditControl edit, uint32 line) {
@@ -82,20 +100,17 @@ template<typename L> void DumpDisassemble(win::RichEditControl &text, Disassembl
 				text.SetFormat(win::CharFormat().Colour(0, 0, 0).Size(10));
 			}
 
-			if (const char *start = files.get_line(*loc)) {
-				const char	*end = strchr(start, '\n');
-				if (!end)
-					end = string_end(start);
-
+			if (auto line = files.get_line(*loc)) {
 				uint32		len		= text.GetTextLength();
-				const char	*offset	= start - len;
+				const char	*offset	= line.begin() - len;
 
 				text.SetSelection(CharRange::end());
-				text.ReplaceSelection(str(start, end) + "\n");
+				text.ReplaceSelection(str(line) + "\n");
 				text.SetSelection(CharRange(len).to_end());
 				text.SetFormat(win::CharFormat().Colour(0, 0, 0));
 
-				string_scan s(start, end);
+				string_scan s(line);
+				const char *start = line.begin();
 				while (s.remaining()) {
 					auto type = colourer.GetNext(s, &start);
 
@@ -104,7 +119,7 @@ template<typename L> void DumpDisassemble(win::RichEditControl &text, Disassembl
 				}
 			} else {
 				buffer_accum<256>	ba("missing source");
-				if (auto* f = files.check(loc->file)) {
+				if (auto f = files[loc->file].or_default()) {
 					ba << " @ " << f->name;
 				} else {
 					ba << " @ unknown#" << loc->file;
@@ -127,9 +142,49 @@ template<typename L> void DumpDisassemble(win::RichEditControl &text, Disassembl
 	}
 }
 
+void app::DrawBreakpoints(RichEditControl edit, void *_target, int pc_line, const dynamic_array<uint32> &bp_lines, bool line_nos) {
+	auto	target = (d2d::Target*)_target;
+	d2d::Write		write;
+	d2d::Font		symfont(write, "Segoe MDL2 Assets", 16);
+	d2d::Font		lnfont(write, "Arial", 9);
+	d2d::SolidBrush	lnbrush(*target, d2d::colour(0.5f,0.5f,0.5f,1));
+
+	target->SetTransform(identity);
+
+	Rect	rect		= edit.GetClientRect();
+	int		first_line	= edit.GetLine(edit.GetChar(rect.TopLeft()));
+	int		last_line	= edit.GetLine(edit.GetChar(rect.BottomRight()));
+	auto	bpi			= lower_boundc(bp_lines, first_line);
+
+	for (int i = first_line; i <= last_line; i++) {
+		Point	pos = edit.GetCharPos(edit.GetLineStart(i));
+		if (line_nos)
+			target->DrawText(d2d::rect(0, pos.y, 32, pos.y + 16), to_string(i + 1), lnfont, lnbrush);
+
+		if (bpi != bp_lines.end() && *bpi == i) {
+			target->DrawText(d2d::rect(0, pos.y, 32, pos.y + 16), L"\uea3b", symfont, d2d::SolidBrush(*target, d2d::colour(1, 0, 0)));
+			++bpi;
+		}
+		if (i == pc_line)
+			target->DrawText(d2d::rect(0, pos.y, 32, pos.y + 16), L"\uf0d6", symfont, d2d::SolidBrush(*target, d2d::colour(0,0.8f,0,1)));
+	}
+}
+
 //-----------------------------------------------------------------------------
 //	CodeHelper
 //-----------------------------------------------------------------------------
+
+uint32	CodeHelper::NextSourceOffset(uint32 offset, uint32 funcid) const {
+	auto	locs	= GetLocations();
+	auto	loc		= lower_boundc(locs, offset);
+	if (loc == locs.end())
+		return 0;
+
+	for (auto loc0 = loc; ++loc != locs.end() && ((loc->line == loc0->line && loc->file == loc0->file) || (funcid && loc->func_id != funcid));)
+		;
+
+	return loc == locs.end() ? 0 : loc->offset;
+}
 
 void CodeHelper::FixLocations(uint64 _base) {
 	base		= _base;
@@ -139,14 +194,11 @@ void CodeHelper::FixLocations(uint64 _base) {
 	indexed.erase(unique(indexed.begin(), indexed.end()), indexed.end());
 }
 
-void CodeHelper::SetDisassembly(RichEditControl c, Disassembler::State *_state) {
-	state		= _state;
+void CodeHelper::UpdateDisassembly(RichEditControl c) {
 	DumpDisassemble(c, state, mode, sym_finder);
 }
 
-void CodeHelper::SetDisassembly(RichEditControl c, Disassembler::State *_state, const Disassembler::Files &files) {
-	state		= _state;
-
+void CodeHelper::UpdateDisassembly(RichEditControl c, const Disassembler::Files &files) {
 	if (state && state->Count()) {
 		if (!(mode & Disassembler::SHOW_SOURCE)) {
 			c.SetFont(colourer.font);
@@ -156,12 +208,18 @@ void CodeHelper::SetDisassembly(RichEditControl c, Disassembler::State *_state, 
 		auto indexed = make_indexed_container(locations, make_const(loc_indices));
 		loc_indices_combine.clear();
 
-		auto	i	= lower_boundc(indexed, state->GetAddress(0) - base);
-		uint64	end	= state->GetAddress(state->Count() - 1) - base;
+		auto	i		= lower_boundc(indexed, state->GetAddress(0) - base);
+		uint64	end		= state->GetAddress(state->Count() - 1) - base;
+		auto	addr0	= 0;
 
 		while (i != indexed.end() && i->offset < end) {
-			if (i == indexed.begin() || !state->IgnoreLoc(i, base, !(mode & Disassembler::SHOW_ALLSOURCE)))
-				loc_indices_combine.push_back(i.index());
+			if (i == indexed.begin() || !state->IgnoreLoc(i, base, !(mode & Disassembler::SHOW_ALLSOURCE))) {
+				auto	addr1	= LegalAddress(i->offset + base);
+				if (addr1 > addr0) {
+					loc_indices_combine.push_back(i.index());
+					addr0	= addr1;
+				}
+			}
 			++i;
 		}
 		::DumpDisassemble(c, state, mode, sym_finder, base, make_indexed_container(locations, make_const(loc_indices_combine)), files, colourer);
@@ -188,19 +246,117 @@ void CodeHelper::Select(EditControl click, EditControl dis, TabControl2 *tabs) {
 }
 
 void CodeHelper::SourceTabs(TabControl2 &tabs, const Disassembler::Files &files) {
-	for (auto i : with_iterator(files)) {
-		EditControl c = MakeSourceWindow(tabs.GetChildWindowPos(), filename(i->name).name_ext(), colourer, i->source, 0, 0, EditControl::READONLY);
-		c.id = i.hash();
-		tabs.AddItemControl(c);
+	for (auto i : files)
+		tabs.AddItemControl(MakeSourceWindow(tabs.GetChildWindowPos(), i.b, colourer, none, EditControl::READONLY, Control::NOEX, i.a));
+}
+
+void CodeHelper::RemapFromHashLine(Disassembler::Files &files, const char *search_path, Disassembler::SharedFiles &shared_files) {
+	struct LineLoc {
+		uint32	file, line;
+		LineLoc() : file(0), line(0) {}
+		LineLoc(uint32 file, uint32 line) : file(file), line(line) {}
+	};
+	struct Preprocessed {
+		sparse_array<LineLoc,uint32,uint32>	lines;
+	};
+
+	struct NewFile {
+		uint32		id;
+		string		name;
+		filename	fn;
+		NewFile(uint32 id, const char *name, const filename &fn) : id(id), name(name), fn(fn) {}
+	};
+
+	hash_map<uint32, Preprocessed>	map;
+	hash_map<const char*, uint32>	name_to_id;
+	dynamic_array<NewFile>			new_files;
+
+	for (auto &i : files)
+		name_to_id[i.b->name] = i.a;
+
+	for (auto &i : files) {
+		for (const char *p = i.b->source; p = string_find(p, "#line "); ++p) {
+			string_scan	ss(p);
+			uint32	line	= 0;
+			auto&	lines	= map[i.a].put().lines;
+
+			ss.check("#line ");
+			ss >> line;
+			if (ss.skip_whitespace().check('"')) {
+				filename	name	= filename::cleaned(ss.get_token(~char_set('"')));
+				ss.scan_skip('\n');
+				if (ss.begins("#line "))
+					continue;
+
+				auto		id		= 0;
+
+				if (name_to_id[name].exists()) {
+					id		= name_to_id[name];
+
+				} else {
+					filename	fn;
+
+					if (exists(name)) {
+						fn	= name;
+
+					} else if (search_path) {
+						for (auto path : parts<';'>(search_path)) {
+							for (filename t = name; !t.blank(); t = t.rem_first()) {
+								filename	fn1	= filename(path).add_dir(t);
+								if (exists(fn1)) {
+									fn = fn1;
+									break;
+								}
+							}
+							if (!fn.blank())
+								break;
+						}
+					}
+
+					if (!fn.blank()) {
+						id	= hash((const char*)name);
+						new_files.emplace_back(id, name, fn);
+						name_to_id[name] = id;
+					}
+
+				}
+
+				//ss.scan_skip('\n');
+				if (id) {
+					int		iline	= i.b->get_line_num(p) + 1;
+					while (ss.remaining()) {
+						auto data = ss.get_raw(~char_set('\n'));
+						if (data.begins("#line "))
+							break;
+						lines[iline++] = LineLoc(id, line++);
+						ss.move(1);
+					}
+				}
+
+			}
+		}
+	}
+
+	for (auto &i : new_files)
+		files[i.id] = shared_files.get(i.fn);
+
+	for (auto& i : locations) {
+		if (auto *p = map.check(i.file)) {
+			if (auto *p2 = p->lines.check(i.line)) {
+				i.file = p2->file;
+				i.line = p2->line;
+			}
+		}
 	}
 }
 
 //-----------------------------------------------------------------------------
-//	DebugWindow
+//	CodeWindow
 //-----------------------------------------------------------------------------
 
-Accelerator DebugWindow::GetAccelerator() {
+Accelerator CodeWindow::GetAccelerator() {
 	static const ACCEL a[] = {
+		{FVIRTKEY | FNOINVERT,				VK_SPACE,	ID_DEBUG_SWITCHSOURCE,	},
 		{FVIRTKEY | FNOINVERT,				VK_F9,		ID_DEBUG_BREAKPOINT,	},
 		{FVIRTKEY | FNOINVERT,				VK_F10,		ID_DEBUG_STEPOVER,		},
 		{FVIRTKEY | FSHIFT | FNOINVERT,		VK_F10,		ID_DEBUG_STEPBACK,		},
@@ -215,40 +371,21 @@ Accelerator DebugWindow::GetAccelerator() {
 	return Accelerator(a);
 }
 
-void DebugWindow::SetMode(int new_mode) {
-	dynamic_array<uint64>	bp_addr = transformc(bp, [this](uint32 line) { return LineToAddress(line); });
-	uint64					pc_addr = LineToAddress(pc_line);
-
-	mode = new_mode;
-	CodeHelper::SetDisassembly(*this, state, files);
-
-	transform(bp_addr, bp, [this](uint64 addr) { return AddressToLine(addr); });
-	pc_line = AddressToLine(pc_addr);
-}
-
-DebugWindow::DebugWindow(const SyntaxColourerRE &colourer, Disassembler::AsyncSymbolFinder &&sym_finder, int mode)
-	: CodeHelper(colourer, move(sym_finder), mode)
-	, images(ID("IDB_IMAGELIST_DEBUG"), 16, LR_CREATEDIBSECTION)
-	, pc_line(0)
-	, orig_mode(mode)
-{}
-
-LRESULT DebugWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
+LRESULT CodeWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 		case WM_CREATE:
 			return 0;
 
 		case WM_SIZE: {
 			Point	pt(lParam);
-			SetEditRect(Rect(16, 0, pt.x - 16, pt.y));
+			SetEditRect(Rect(margin, 0, pt.x - margin, pt.y));
 			break;
 		}
-
 		case WM_LBUTTONDOWN: {
 			Point	pt(lParam);
 			if (Margin().Contains(pt)) {
-				SetSelection(GetChar(pt));
-				Parent()(WM_COMMAND, ID_DEBUG_BREAKPOINT);
+				//SetSelection(GetChar(pt));
+				Parent()(WM_COMMAND, ID_DEBUG_BREAKPOINT, GetLine(GetChar(pt)));
 			} else {
 				Super(message, wParam, lParam);
 			}
@@ -256,12 +393,39 @@ LRESULT DebugWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 			return 0;
 		}
 
+		case WM_NCDESTROY:
+			return Super(message, wParam, lParam);
+
+	}
+	return D2DTextWindow::Proc(message, wParam, lParam);
+}
+
+//-----------------------------------------------------------------------------
+//	DebugWindow
+//-----------------------------------------------------------------------------
+
+void DebugWindow::SetMode(Disassembler::MODE new_mode) {
+	mode = new_mode;
+	CodeHelper::SetDisassembly(*this, state, files);
+}
+
+DebugWindow::DebugWindow(const SyntaxColourerRE &colourer, Disassembler::AsyncSymbolFinder &&sym_finder, Disassembler::MODE mode)
+	: CodeHelper(colourer, move(sym_finder), mode)
+	, orig_mode(mode)
+{}
+
+LRESULT DebugWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
+	switch (message) {
+
 		case WM_CONTEXTMENU: {
-			Menu	menu = Menu(IDR_MENU_SUBMENUS).GetSubMenuByName("Text");
-			Menu::Item("Show Source", ID_DEBUG_SHOWSOURCE).State(mode & Disassembler::SHOW_SOURCE ? MFS_CHECKED : 0).InsertByPos(menu, 0);
+			Menu	menu	= Menu::Popup();
+			menu.AppendMulti("Show Source",		ID_DEBUG_SHOWSOURCE,	mode & Disassembler::SHOW_SOURCE ? MFS_CHECKED : 0);
+			menu.AppendMulti("Show Line Numbers", ID_DEBUG_SHOWLINENOS,	mode & Disassembler::SHOW_LINENOS ? MFS_CHECKED : 0,
+				none,
+				Menu(IDR_MENU_SUBMENUS).GetSubMenuByName("Text")
+			);
 			if (mode & Disassembler::SHOW_SOURCE)
-				Menu::Item("Combine Source", ID_DEBUG_COMBINESOURCE).State(mode & Disassembler::SHOW_ALLSOURCE ? 0 : MFS_CHECKED).InsertByPos(menu, 1);
-			Menu::Item::Separator().InsertByPos(menu, 2);
+				menu.InsertByPos(2, "Combine Source", ID_DEBUG_COMBINESOURCE, mode & Disassembler::SHOW_ALLSOURCE ? 0 : MFS_CHECKED);
 			menu.Track(*this, Point(lParam), TPM_NONOTIFY | TPM_RIGHTBUTTON);
 			return 0;
 		}
@@ -277,40 +441,16 @@ LRESULT DebugWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 					SetMode(mode ^ Disassembler::SHOW_ALLSOURCE);
 					Invalidate();
 					return 1;
+
+				case ID_DEBUG_SHOWLINENOS:
+					SetMode(mode ^ Disassembler::SHOW_LINENOS);
+					Invalidate();
+					return 1;
+
 			}
 			break;
-
-		case WM_PAINT: {
-			Rect	rect;
-			GetUpdateRect(*this, &rect, FALSE);
-			D2DTextWindow::Proc(message, wParam, lParam);
-			DeviceContext	dc(*this);
-
-			rect	= Margin();
-			dc.Fill(rect, COLOR_WINDOW);
-			int		first_line	= GetLine(GetChar(rect.TopLeft()));
-			int		last_line	= GetLine(GetChar(rect.BottomRight()));
-			auto	bpi			= lower_boundc(bp, first_line), bpe = bp.end();
-
-			for (int i = first_line; i <= last_line; i++) {
-				Point	pos = GetCharPos(GetLineStart(i));
-				if (bpi != bpe && *bpi == i) {
-					dc.DrawImage(images, 1, 0, pos.y);
-					++bpi;
-				}
-				if (i == pc_line) {
-					dc.SetBackground(Colour::none);
-					dc.DrawImage(images, 2, 0, pos.y);
-				}
-
-			}
-			return 0;
-		}
-		case WM_NCDESTROY:
-			return Super(message, wParam, lParam);
-
 	}
-	return D2DTextWindow::Proc(message, wParam, lParam);
+	return CodeWindow::Proc(message, wParam, lParam);
 }
 
 //-----------------------------------------------------------------------------
@@ -333,7 +473,7 @@ string_accum& RegisterWindow::Entry::GetValue(string_accum &a, int col, uint32 *
 			}
 
 		case 2:
-			if (fields)
+			if (!(flags & UNSET) && fields)
 				return PutFields(a, IDFMT_CAMEL | IDFMT_NOSPACES, fields, val, 0, ", ");
 			return a << "-";
 
@@ -345,7 +485,7 @@ string_accum& RegisterWindow::Entry::GetValue(string_accum &a, int col, uint32 *
 	}
 }
 
-LRESULT RegisterWindow::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+LRESULT RegisterWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 		case WM_CREATE:
 			return 0;
@@ -446,51 +586,67 @@ void RegisterWindow::Init(ListViewControl lv) {
 //	LocalsWindow
 //-----------------------------------------------------------------------------
 
-void FrameData::_add_block(uint32 offset, uint64 addr, uint32 size, bool remote) {
+void FrameData::_add_block(uint32 offset, uint64 addr, uint32 size, bool remote, bool replace) {
 	uint32	end		= offset + size;
-	uint64	adelta	= addr - offset;
-	auto	b		= upper_boundc(blocks, offset);
+	auto	b		= lower_boundc(blocks, offset);
 
-	if (b != blocks.begin()) {
-		--b;
-		offset	= max(offset, b->offset + b->size);
-	}
-	while (b != blocks.end()) {
-		if (offset < b->offset)
-			b = blocks.emplace(b, adelta + offset, offset, min(end, b->offset) - offset, remote);
+	if (replace) {
+		// new block takes precedence
+		//if (b == blocks.end() || offset < b->offset) {
+			b = blocks.emplace_insert(b, addr, offset, size, remote);
+			++b;
+		//}
 
-		uint32	bend	= b->end();
+		while (b != blocks.end() && b->end() <= end)
+			b = blocks.erase(b);
 
-		if (b->addr - b->offset == adelta && b->remote == remote) {
-			if (offset < b->offset) {
-				b->offset	= offset;
-				b->addr		= adelta + offset;
-				b->size		= bend - offset;
-			}
-			if (end > bend) {
-				bend		= b + 1 == blocks.end() ? end : min(end, b[1].offset);
-				b->size		= bend - b->offset;
-			}
+		if (b != blocks.end() && b->offset < end) {
+			uint32	cut = end - b->offset;
+			b->addr		+= cut;
+			b->size		-= cut;
+			b->offset	= end;
 		}
 
-		offset		= bend;
-		if (offset >= end)
-			return;
+	} else {
+		// keep old blocks
+		uint64	adelta	= addr - offset;
+		while (b != blocks.end()) {
+			if (offset < b->offset)
+				b = blocks.emplace_insert(b, adelta + offset, offset, min(end, b->offset) - offset, remote);
 
-		++b;
-//		if (b != blocks.end())
-//			b = blocks.emplace(b, adelta + offset, offset, min(end, b->offset) - offset, remote);
+			uint32	bend	= b->end();
+
+			if (b->addr - b->offset == adelta && b->remote == remote) {
+				if (offset < b->offset) {
+					b->offset	= offset;
+					b->addr		= adelta + offset;
+					b->size		= bend - offset;
+				}
+				if (end > bend) {
+					bend		= b + 1 == blocks.end() ? end : min(end, b[1].offset);
+					b->size		= bend - b->offset;
+				}
+			}
+
+			offset		= bend;
+			if (offset >= end)
+				return;
+
+			++b;
+			//if (b != blocks.end())
+			//	b = blocks.emplace(b, adelta + offset, offset, min(end, b->offset) - offset, remote);
+		}
+		b = blocks.emplace_insert(b, adelta + offset, offset, end - offset, remote);
 	}
-	b = blocks.emplace(b, adelta + offset, offset, end - offset, remote);
 }
 
 bool FrameData::read(void *buffer, size_t size, uint32 offset, memory_interface *mem) const {
-	uint32	end		= offset + uint32(size);
-	auto	b		= upper_boundc(blocks, offset);
-	if (b == blocks.begin())
+	auto	b		= lower_boundc(blocks, offset);
+	if (b == blocks.end())
 		return false;
 
-	for (--b; b != blocks.end() && offset < end; ++b) {
+	uint32	end		= offset + uint32(size);
+	while (b != blocks.end() && offset < end) {
 		if (!between(offset, b->offset, b->end()))
 			return false;
 
@@ -504,9 +660,37 @@ bool FrameData::read(void *buffer, size_t size, uint32 offset, memory_interface 
 		}
 		buffer = (uint8*)buffer + size2;
 		offset += size2;
+		++b;
 	}
 	return offset == end;
 }
+
+uint32 FrameData::next(uint32 offset, uint64& size, bool dir) const {
+	auto	b		= lower_boundc(blocks, offset);
+	if (b == blocks.end()) {
+		if (dir || !b) {
+			size = 0;
+			return 0;
+		}
+		--b;
+	} else if (!dir && b != blocks.begin() && b->offset > offset) {
+		--b;
+	}
+	if (dir) {
+		uint32	start = b->offset;
+		while (b != blocks.end() && b[1].offset == b->end())
+			++b;
+		size	= b->end() - start;
+		return start;
+	} else {
+		uint32	end = b->end();
+		while (b != blocks.begin() && b[-1].end() == b->offset)
+			--b;
+		size = end - b->offset;
+		return b->offset;
+	}
+}
+
 /*
 template<typename C> uint64 GetStringLength(memory_interface *mem, uint64 addr) {
 	uint64	len;
@@ -687,6 +871,37 @@ LRESULT LocalsWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 					return 0;
 				}
 
+				case NM_CUSTOMDRAW:
+					if (nmh->hwndFrom == tc.GetTreeControl()) {
+						NMCUSTOMDRAW	*nmcd	= (NMCUSTOMDRAW*)nmh;
+						switch (nmcd->dwDrawStage) {
+							case CDDS_PREPAINT:
+								return CDRF_NOTIFYITEMDRAW;
+
+							case CDDS_ITEMPREPAINT: {
+								NMTVCUSTOMDRAW *nmtvcd	= (NMTVCUSTOMDRAW*)nmcd;
+								ast::noderef	node0	= tc.GetItemParam((HTREEITEM)nmcd->dwItemSpec);
+								auto			node	= const_fold(node0, none, mem);
+								node0->type = node->type;
+
+								switch (Visibility(node, mem, mem)) {
+									case 0:
+										nmtvcd->clrText = win::Colour(192,192,192);
+										break;
+									case 1:
+										nmtvcd->clrText = win::Colour(128, 128, 128);
+										break;
+									//default:
+									//	nmtvcd->clrText = win::Colour(192,0,0);
+									//	break;
+								}
+								break;
+							}
+						}
+					}
+					return CDRF_DODEFAULT;
+
+
 				default:
 					return Parent()(message, wParam, lParam);
 			}
@@ -710,8 +925,8 @@ LRESULT LocalsWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 	return Super(message, wParam, lParam);
 }
 
-void LocalsWindow::AppendEntry(string_param &&id, const C_type *type, uint64 addr, bool local) {
-	TreeControl::Item(id).BothImages(I_IMAGECALLBACK).Children(HasChildren(type, natvis)).Param((new ast::lit_node(id, type, addr, ast::ADDRESS | (local ? ast::LOCALMEM : 0)))->addref()).Insert(tc, TVI_ROOT);
+HTREEITEM LocalsWindow::AppendEntry(string_param &&id, const C_type *type, uint64 addr, bool local) {
+	return TreeControl::Item(id).BothImages(I_IMAGECALLBACK).Children(HasChildren(type, natvis)).Param((new ast::lit_node(id, type, addr, ast::ADDRESS | (local ? ast::LOCALMEM : 0)))->addref()).Insert(tc, TVI_ROOT);
 }
 
 //-----------------------------------------------------------------------------
@@ -953,7 +1168,7 @@ LRESULT WatchWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 //	TraceWindow
 //-----------------------------------------------------------------------------
 
-LRESULT TraceWindow::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+LRESULT TraceWindow::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 		case WM_CREATE:
 			return 0;

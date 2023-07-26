@@ -780,9 +780,8 @@ bool close(float a, float b, float part=1000) {
 
 struct rand_xorshift32 {
 	static const uint32 init_seed = 2463534242UL;
-	uint32	seed;
+	uint32	seed	= init_seed;
 
-	rand_xorshift32()	{ seed = init_seed; }
 	void	reset()		{ seed = init_seed; }
 	uint32	next()		{ seed ^= seed << 13; seed ^= seed >> 17; return seed ^= seed << 5; }
 	operator float()	{ return iorf((next() >> 9) | 0x3f800000).f() - 1.5f;	}
@@ -802,10 +801,7 @@ void make_tpdf_noise(float *table, size_t count) {
 
 void make_highpass_tpdf_noise(float *table, size_t count, size_t lap) {
 	rand_xorshift32	r;
-
-	float	xv[9], yv[9];
-	clear(xv);
-	clear(yv);
+	float	xv[9] = {0}, yv[9] = {0};
 
 	lap	= min(lap, count / 2);	// Ensure some minimum lap for keeping the high-pass filter circular.
 	for (int i = 0; i < count + lap; i++) {
@@ -834,7 +830,7 @@ void make_highpass_tpdf_noise(float *table, size_t count, size_t lap) {
 }
 
 void dither_filter::init(type t) {
-	buffer	= (float*)malloc(DITHERSIZE * sizeof(float));
+	buffer	= new float[DITHERSIZE];
 	switch (t) {
 		case white_noise:			make_white_noise(buffer, DITHERSIZE); break;
 		case tpdf_noise:			make_tpdf_noise(buffer, DITHERSIZE); break;
@@ -897,64 +893,23 @@ template<class O, typename T, typename FILTER> void synth0(O out, const T *windo
 		));
 }
 
-template<typename T, int STEP> struct sample_out;
+template<typename T> struct sample_clip {
+	int		clips	= 0;
+	int		min(int a, int b) { return a > b ? (++clips, b) : a; }
+	T		get(float f);
+};
 
-template<int STEP> struct sample_out<float, STEP> {
-	fixed_stride_iterator<float,STEP>	p;
-	int		clip;
-	sample_out(float *_p) : p(_p), clip(0) {}
-	inline void	put(float f) { *p++ = f; }
-};
-template<int STEP> struct sample_out<int8, STEP> {
-	fixed_stride_iterator<int8,STEP>	p;
-	int		clip;
-	sample_out(int8 *_p) : p(_p), clip(0) {}
-	inline int min(int a, int b) { clip += a > b; return a > b ? b : a; }
-	inline void	put(float f) {
-		*p	= f < 0
-			? -min(iorf(65536 - f).m, 0x80)
-			:  min(iorf(65536 + f).m, 0x7f);
-		p += STEP;
-	}
-};
-template<int STEP> struct sample_out<int16, STEP> {
-	fixed_stride_iterator<int16,STEP>	p;
-	int		clip;
-	sample_out(int16 *_p) : p(_p), clip(0) {}
-	inline int min(int a, int b) { clip += a > b; return a > b ? b : a; }
-	inline void	put(float f) {
-		*p++	= f < 0
-			? -min(iorf(256 - f).m, 0x8000)
-			:  min(iorf(256 + f).m, 0x7fff);
-	}
-};
-template<int STEP> struct sample_out<int32, STEP> {
-	fixed_stride_iterator<int32,STEP>	p;
-	int		clip;
-	sample_out(int32 *_p) : p(_p), clip(0) {}
-	inline float min(float a, float b) { clip += a > b; return a > b ? b : a; }
-	inline void	put(float f) {
-		*p++	= (f < 0
-			? -iorf(min(1 - f, 2)).m
-			:  iorf(min(f + 1, 2)).m
-		) << 7;
-	}
-};
-template<int STEP> struct sample_out<alaw, STEP> {
-	fixed_stride_iterator<alaw,STEP>	p;
-	int		clip;
-	sample_out(int32 *_p) : p(_p), clip(0) {}
-	inline void	put(float f) {
-		*p++	= int16(f > 32767 ? (++clip, 32767) : f < -32768 ? (++clip, -32768) : f);
-	}
-};
-template<int STEP> struct sample_out<ulaw, STEP> {
-	fixed_stride_iterator<ulaw,STEP>	p;
-	int		clip;
-	sample_out(int32 *_p) : p(_p), clip(0) {}
-	inline void	put(float f) {
-		*p++	= int16(f > 32767 ? (++clip, 32767) : f < -32768 ? (++clip, -32768) : f);
-	}
+template<> float	sample_clip<float>::get(float f)	{ return f; }
+template<> int8		sample_clip<int8>::get(float f)		{ return f < 0 ? -this->min(iorf(65536 - f).m, 0x80) : this->min(iorf(65536 + f).m, 0x7f); }
+template<> int16	sample_clip<int16>::get(float f)	{ return f < 0 ? -this->min(iorf(256 - f).m, 0x8000) : this->min(iorf(256 + f).m, 0x7fff); }
+template<> int32	sample_clip<int32>::get(float f)	{ return (f < 0 ? -iorf(f < -1 ? (++clips, 2) : 1 - f).m : iorf(f >= 1 ? (++clips, 2) : 1 + f).m) << 7; }
+template<> alaw		sample_clip<alaw>::get(float f)		{ return int16(f > 32767 ? (++clips, 32767) : f < -32768 ? (++clips, -32768) : f); }
+template<> ulaw		sample_clip<ulaw>::get(float f)		{ return int16(f > 32767 ? (++clips, 32767) : f < -32768 ? (++clips, -32768) : f); }
+
+template<typename T, int STEP> struct sample_out : sample_clip<T> {
+	fixed_stride_iterator2<T, STEP>	p;
+	sample_out(T *p) : p(p) {}
+	inline void	put(float f) { *p++ = sample_clip<T>::get(f); }
 };
 
 int mpg123::synth_mono(float *bandPtr) {
@@ -980,14 +935,14 @@ int mpg123::synth_mono(float *bandPtr) {
 		null_filter n;
 		synth0(samples, decode + 0x10 - bo1, decode + 0x1f0 + bo1, b0, n);
 	}
-	return samples.clip;
+	return samples.clips;
 }
 
 int mpg123::synth_stereo(float *bandPtr_l, float *bandPtr_r) {
 	if (params.test(PARAM_EQUALIZER)) {
 		for (int i = 0; i < 32; i++) {
-			bandPtr_l[i] = bandPtr_l[i] * equalizer[0][i];
-			bandPtr_r[i] = bandPtr_r[i] * equalizer[1][i];
+			bandPtr_l[i] *= equalizer[0][i];
+			bandPtr_r[i] *= equalizer[1][i];
 		}
 	}
 
@@ -1003,7 +958,7 @@ int mpg123::synth_stereo(float *bandPtr_l, float *bandPtr_r) {
 	sample_out<int16, 2>	samples(s);
 
 	if (params.test(PARAM_DITHER)) {
-		int	di	= dither.need(32);
+		auto	di	= dither.need(32);
 		synth0(samples, decode + 0x10 - bo1, decode + 0x1f0 + bo1, b0, dither);
 		b0		= real_buffs[1][bo & 1];
 		b1		= real_buffs[1][~bo & 1];
@@ -1020,7 +975,7 @@ int mpg123::synth_stereo(float *bandPtr_l, float *bandPtr_r) {
 		samples.p = s + 1;
 		synth0(samples, decode + 0x10 - bo1, decode + 0x1f0 + bo1, b1, n);
 	}
-	return samples.clip;
+	return samples.clips;
 }
 
 //-----------------------------------------------------------------------------
@@ -1030,9 +985,11 @@ int mpg123::synth_stereo(float *bandPtr_l, float *bandPtr_r) {
 struct Layer12 {
 	enum {SCALE_BLOCK = 12};
 	struct al_table { int16 bits, d; };
+	struct entry { uint8 a, b, c; };
+	struct table { entry *table; uint32 len; uint8 *base; };
 
+	static const table		tables[3];
 	static const al_table	alloc_0[], alloc_1[], alloc_2[], alloc_3[], alloc_4[];
-	static int				grp_3tab[32 * 3], grp_5tab[128 * 3], grp_9tab[1024 * 3];
 	static const float		mulmul[27];
 
 	struct scratch {
@@ -1161,8 +1118,6 @@ const Layer12::al_table Layer12::alloc_4[] = {
 	{2,0},{5,3},{7,5},{10,9}
 };
 
-int Layer12::grp_3tab[32 * 3], Layer12::grp_5tab[128 * 3], Layer12::grp_9tab[1024 * 3];
-
 const float Layer12::mulmul[27] = {
 	+0,			-2/3.f,		+2/3.f,
 	+2/7.f,		+2/15.f,	+2/31.f,	2/63.f,		2/127.f,	2/255.f,
@@ -1172,28 +1127,21 @@ const float Layer12::mulmul[27] = {
 	-8/9.f,		-4/9.f,		-2/9.f,		2/9.f,		4/9.f,		8/9.f
 };
 
+const Layer12::table Layer12::tables[3] = {
+	{(entry[32]){},		3, (uint8[]){ 1,  0,  2 }},
+	{(entry[128]){},	5, (uint8[]){17, 18,  0, 19, 20}},
+	{(entry[1024]){},	9, (uint8[]){21,  1, 22, 23, 0, 24, 25, 2, 26}},
+};
+
 void Layer12::init() {
-	static int base3[] = {1 , 0, 2};
-	static int base5[] = {17, 18, 0, 19, 20};
-	static int base9[] = {21, 1, 22, 23, 0, 24, 25, 2, 26};
-
-	struct { int len, *table, *base; } tables[3] = {
-		{3, grp_3tab, base3},
-		{5, grp_5tab, base5},
-		{9, grp_9tab, base9},
-	};
-
-	for (int i = 0; i < 3; i++) {
-		int	*table	= tables[i].table;
-		int	*base	= tables[i].base;
-		int	len		= tables[i].len;
-		for (int j = 0; j < len; j++) {
-			for (int k = 0; k < len; k++) {
-				for (int l = 0; l < len; l++) {
-					*table++ = base[l];
-					*table++ = base[k];
-					*table++ = base[j];
-				}
+	for (auto &i : tables) {
+		entry	*table	= i.table;
+		uint8	*base	= i.base;
+		uint32	len		= i.len;
+		for (uint32 j = 0; j < len; j++) {
+			for (uint32 k = 0; k < len; k++) {
+				for (uint32 l = 0; l < len; l++)
+					*table++ = {base[l], base[k], base[j]};
 			}
 		}
 	}
@@ -1376,11 +1324,14 @@ struct Layer2 : Layer12 {
 
 Layer2::Layer2(mpg123 *fr) {
 	static const int		translate[3][2][16] = { {
-		{0,2,2,2,2,2,2,0,0,0,1,1,1,1,1,0}, {0,2,2,0,0,0,1,1,1,1,1,1,1,1,1,0}
+		{0,2,2,2,2,2,2,0,0,0,1,1,1,1,1,0},
+		{0,2,2,0,0,0,1,1,1,1,1,1,1,1,1,0}
 	}, {
-		{0,2,2,2,2,2,2,0,0,0,0,0,0,0,0,0}, {0,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0}
+		{0,2,2,2,2,2,2,0,0,0,0,0,0,0,0,0},
+		{0,2,2,0,0,0,0,0,0,0,0,0,0,0,0,0}
 	}, {
-		{0,3,3,3,3,3,3,0,0,0,1,1,1,1,1,0}, {0,3,3,0,0,0,1,1,1,1,1,1,1,1,1,0}
+		{0,3,3,3,3,3,3,0,0,0,1,1,1,1,1,0},
+		{0,3,3,0,0,0,1,1,1,1,1,1,1,1,1,0}
 	} };
 	static const al_table*	tables[5] = { alloc_0, alloc_1, alloc_2, alloc_3 , alloc_4 };
 	static const int		sblims[5] = { 27 , 30 , 8, 12 , 30 };
@@ -1505,13 +1456,12 @@ void Layer2::step_two(vlc_reader &vlc, int channels, int x1) {
 					s->fraction[j][1][i] = (vlc.get(k) + d1) * cm;
 					s->fraction[j][2][i] = (vlc.get(k) + d1) * cm;
 				} else {
-					const int *table[] = { 0,0,0,grp_3tab,0,grp_5tab,0,0,0,grp_9tab };
 					uint32	m	= sca[x1];
 					uint32	idx	= vlc.get(k);
-					uint32*	tab	= (uint32*)(table[d1] + idx + idx + idx);
-					s->fraction[j][0][i] = s->muls[tab[0]][m];
-					s->fraction[j][1][i] = s->muls[tab[1]][m];
-					s->fraction[j][2][i] = s->muls[tab[2]][m];
+					auto&	tab	= tables[d1 == 3 ? 0 : d1 == 5 ? 1 : 2].table[idx];
+					s->fraction[j][0][i] = s->muls[tab.a][m];
+					s->fraction[j][1][i] = s->muls[tab.b][m];
+					s->fraction[j][2][i] = s->muls[tab.c][m];
 				}
 				sca += 3;
 			} else {
@@ -1541,17 +1491,16 @@ void Layer2::step_two(vlc_reader &vlc, int channels, int x1) {
 				s->fraction[0][1][i] = s->fraction[0][1][i] * cm;
 				s->fraction[0][2][i] = s->fraction[0][2][i] * cm;
 			} else {
-				const int *table[] = { 0,0,0,grp_3tab,0,grp_5tab,0,0,0,grp_9tab };
 				uint32	m1	= sca[x1];
 				uint32	m2	= sca[x1 + 3];
 				uint32	idx	= (uint32)vlc.get(k);
-				uint32*	tab = (uint32*)(table[d1] + idx + idx + idx);
-				s->fraction[0][0][i] = s->muls[tab[0]][m1];
-				s->fraction[0][1][i] = s->muls[tab[1]][m1];
-				s->fraction[0][2][i] = s->muls[tab[2]][m1];
-				s->fraction[1][0][i] = s->muls[tab[0]][m2];
-				s->fraction[1][1][i] = s->muls[tab[1]][m2];
-				s->fraction[1][2][i] = s->muls[tab[2]][m2];
+				auto&	tab	= tables[d1 == 3 ? 0 : d1 == 5 ? 1 : 2].table[idx];
+				s->fraction[0][0][i] = s->muls[tab.a][m1];
+				s->fraction[0][1][i] = s->muls[tab.b][m1];
+				s->fraction[0][2][i] = s->muls[tab.c][m1];
+				s->fraction[1][0][i] = s->muls[tab.a][m2];
+				s->fraction[1][1][i] = s->muls[tab.b][m2];
+				s->fraction[1][2][i] = s->muls[tab.c][m2];
 			}
 			sca += 6;
 		} else {
@@ -1838,13 +1787,10 @@ const Layer3::hufftable Layer3::ht[] = {
 	{4, tab24}, {5, tab24}, {6, tab24}, {7, tab24}, {8, tab24}, {9, tab24}, {11, tab24}, {13, tab24}
 };
 
-static const short tab_c0[] = {
- -29, -21, -13,  -7,  -3,  -1,  11,  15,  -1,  13,  14,  -3,  -1,   7,   5,   9,  -3,  -1,   6,   3,  -1,  10,  12,  -3,  -1,   2,   1,  -1,   4,   8,   0
+const Layer3::hufftable Layer3::htc[] = {
+	{0, (short[]) {-29, -21, -13,  -7,  -3,  -1,  11,  15,  -1,  13,  14,  -3,  -1,   7,   5,   9,  -3,  -1,   6,   3,  -1,  10,  12,  -3,  -1,   2,   1,  -1,   4,   8,   0}},
+	{0, (short[]) {-15,  -7,  -3,  -1,  15,  14,  -1,  13,  12,  -3,  -1,  11,  10,  -1,   9,   8,  -7,  -3,  -1,   7,   6,  -1,   5,   4,  -3,  -1,   3,   2,  -1,   1,   0}}
 };
-static const short tab_c1[] = {
- -15,  -7,  -3,  -1,  15,  14,  -1,  13,  12,  -3,  -1,  11,  10,  -1,   9,   8,  -7,  -3,  -1,   7,   6,  -1,   5,   4,  -3,  -1,   3,   2,  -1,   1,   0
-};
-const Layer3::hufftable Layer3::htc[] = { {0, tab_c0} , {0, tab_c1}};
 
 Layer3::Layer3(mpg123 *fr) {
 	s		= fr->layerscratch;
@@ -2516,14 +2462,14 @@ void Layer3::granule::hybrid(float in[SBLIMIT][SSLIMIT], float *ts, const float 
 	float	*w1 = win1[block_type];
 	if (block_type == 2) {
 		for (; sb < maxb; sb += 2, ts += 2) {
-			fixed_stride_iterator<float, SBLIMIT>	out0(ts + 0);
+			fixed_stride_iterator2<float, SBLIMIT>	out0(ts + 0);
 			out0[0] = prev[0]; out0[1] = prev[1]; out0[2] = prev[2]; out0[3] = prev[3]; out0[4] = prev[4]; out0[5] = prev[5];
 			mdct12<float>::process(in[sb + 0],	prev + 6,	next,	w0,	out0 + 6);
 			memset(next + 12, 0, 6 * sizeof(float));
 			prev += 18;
 			next += 18;
 
-			fixed_stride_iterator<float, SBLIMIT>	out1(ts + 1);
+			fixed_stride_iterator2<float, SBLIMIT>	out1(ts + 1);
 			out1[0] = prev[0]; out1[1] = prev[1]; out1[2] = prev[2]; out1[3] = prev[3]; out1[4] = prev[4]; out1[5] = prev[5];
 			mdct12<float>::process(in[sb + 1],	prev + 6,	next,	w1,	out1 + 6);
 			memset(next + 12, 0, 6 * sizeof(float));
@@ -2754,9 +2700,9 @@ void scandir_mp3(const char *d) {
 	for (directory_iterator di(filename(d).add_dir("*.*")); di; ++di) {
 		if (di.is_dir()) {
 			if (di[0] != '.')
-				scandir_mp3(filename(d).add_dir(di));
+				scandir_mp3(filename(d).add_dir((const char*)di));
 		} else {
-			FileInput	file(filename(d).add_dir(di));
+			FileInput	file(filename(d).add_dir((const char*)di));
 			mpg123		m(file);
 			m.decode_frame(0, 0, 0);
 			ISO_TRACEF(m.get_title()) << '\n';

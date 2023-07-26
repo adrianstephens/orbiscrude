@@ -58,6 +58,9 @@ template<class A, int N, int M> struct get_bits2_s<A, N, M, false> {
 template<class A, int M> struct get_bits2_s<A, 0, M, false> {
 	static void	f(A *a, void *p)	{}
 };
+template<class A, int M> struct get_bits2_s<A, 0, M, true> {
+	static void	f(A *a, void *p)	{}
+};
 
 template<typename T> struct random_to_s<T, enable_if_t<is_vec<T>>> {
 	template<class A, int...I> static T f(A *a, T x, meta::value_list<int, I...>) { return T{a->to(x[I])...}; }
@@ -77,27 +80,27 @@ template<typename T> struct random_get_s<T, enable_if_t<is_vec<T> && is_float<el
 		typedef sint_for_t<E>	I;
 		typedef float_components<E>	F;
 		auto	i = a->template get<vec<I, num_elements_v<T>>>();
-		return as<E>((i & bits<I>(F::M)) | (F::E_OFF << F::M)) - one;
+		return as<E>((i & bits<I>(F::M)) | (I(F::E_OFF) << F::M)) - one;
 	}
 };
 #endif
 
 template<class A> class random_mixin {
-	A*					a()								{ return static_cast<A*>(this); }
+	A*						a()								{ return static_cast<A*>(this); }
 public:
-	getter<random_mixin>	get()						{ return *this; }
-	template<typename T> T	get()						{ return random_get_s<T>::f(a()); }
-//	template<typename T>	operator T()				{ return random_get_s<T>();	}
-	template<typename T, typename U = typename T_enable_if<is_num<T>, T>::type> operator T() { return get<T>();	}
-	template<class T> T		to(T x)						{ return random_to_s<T>::f(a(), x); }
-	template<class T> T		from(T x0, T x1)			{ return x0 + to(x1 - x0); }
-	template<class T> T		from(const interval<T> &i)	{ return from(i.a, i.b); }
-	template<class T> typename container_traits<T>::reference		fromc(T &t)			{ return t[to(num_elements(t))]; }
-	template<class T> typename container_traits<const T>::reference	fromc(const T &t)	{ return t[to(num_elements(t))]; }
-	template<class T> T		operator()(T x)				{ return to(x); }
-	template<class T> T&	set(T &t)					{ return t = get<T>(); }
-	template<class T> void	fill(T &t)					{ for (auto &i : t) set(i); }
-	template<class T> void	fill(const T &t)			{ for (auto &i : t) set(i); }
+	getter<random_mixin>	get()							{ return *this; }
+	template<typename T> T	get()							{ return random_get_s<T>::f(a()); }
+	template<typename T, typename U = enable_if_t<is_num<T>, T>> operator T() { return get<T>();	}
+	template<typename T> T	to(T x)							{ return random_to_s<T>::f(a(), x); }
+	template<typename T> T	from(T x0, T x1)				{ return x0 + to(x1 - x0); }
+	template<typename T> T	from(const interval<T> &i)		{ return from(i.a, i.b); }
+	template<typename T> decltype(auto) fromc(T &t)			{ return t[to(num_elements(t))]; }
+	template<typename T> decltype(auto) fromc(const T &t)	{ return t[to(num_elements(t))]; }
+	template<typename T> T	operator()(T x)					{ return to(x); }
+	template<typename T> T&	set(T &t)						{ return t = get<T>(); }
+	template<class C> void	fill(C &c)						{ for (auto &i : c) set(i); }
+	template<class C, typename T> void	fill(C &c, T x)		{ for (auto &i : c) i = to(x); }
+	template<class C> void	fill(const C &c)				{ for (auto &i : c) set(i); }
 };
 
 template<class A> struct rng : A, random_mixin<rng<A> > {
@@ -678,6 +681,13 @@ template<typename C, typename I, typename R> void shuffle_cycle(C &c, I s, R &r)
 		*j = *s;
 	}
 }
+
+//-----------------------------------------------------------------------------
+//	built-in
+//-----------------------------------------------------------------------------
+
+extern rng<simple_random>				random;
+extern rng<mersenne_twister32_19937>	random2;
 
 } // namespace iso
 

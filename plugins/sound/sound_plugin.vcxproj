@@ -149,7 +149,6 @@
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\shared\common\base\vector.cpp" />
     <ClCompile Include="..\..\shared\common\sound.cpp" />
     <ClCompile Include="..\..\shared\filetypes\sound\wav.cpp" />
     <ClCompile Include="..\..\shared\isoeditor\plugin.cpp" />

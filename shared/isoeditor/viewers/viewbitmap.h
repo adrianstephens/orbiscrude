@@ -13,7 +13,7 @@ using namespace win;
 const GUID CLSID_MyCustomEffect = {0xB7B36C92, 0x3498, 0x4A94, {0x9E, 0x95, 0x9F, 0x24, 0x6F, 0x92, 0x45, 0xBF}};
 const GUID GUID_PixelShader		= {0xB7B36C92, 0x3498, 0x4A94, {0x9E, 0x95, 0x9F, 0x24, 0x6F, 0x92, 0x45, 0xC0}};
 
-class MyCustomEffect : public com_inherit<type_list<ID2D1Transform>, com2<ID2D1DrawTransform, d2d::CustomEffect> > {
+class MyCustomEffect : public com_inherit<type_list<ID2D1Transform>, com<ID2D1DrawTransform, d2d::CustomEffect> > {
 	friend d2d::CustomEffect;
 	com_ptr2<ID2D1DrawInfo> draw_info;
 	D2D1_RECT_L				rect;
@@ -129,55 +129,70 @@ public:
 
 
 //-----------------------------------------------------------------------------
-//	histogram
+//	histogram4
 //-----------------------------------------------------------------------------
 
-enum CHANS {
-	CHAN_R			= 1,
-	CHAN_G			= 2,
-	CHAN_B			= 4,
-	CHAN_A			= 8,
-	CHAN_INDEX		= 16,
-	CHAN_MASK		= 32,
-	CHAN_DEPTH		= 64,
-	CHAN_RGB		= 7,
-	CHAN_RGBA		= 15,
+template<typename T, int N> struct histogram {
+	typedef uint_bits_t<log2(N)>	U;
+	T		h[N];
+	U		order[N];
+	U		first_nonzero;
+
+	histogram()						{ clear(h); }
+	void	reset()					{ clear(h); }
+	T		median_value()	const	{ return h[order[(first_nonzero + N) / 2]]; }
+	T		max_value()		const	{ return h[order[N - 1]]; }
+
+	void	init_medians() {
+		for (int j = 0; j < N; j++)
+			order[j] = j;
+
+		sort(order, order + N, [this](uint8 i0, uint8 i1) { return h[i0] < h[i1]; });
+		int	a = 0, b = N;
+		while (a < b) {
+			int	c = (a + b) / 2;
+			if (h[order[c]] == 0)
+				a = c + 1;
+			else
+				b = c;
+		}
+		first_nonzero = a;
+	}
 };
 
-struct histogram {
-	uint32	h[4][256];
-	uint8	order[4][256];
-	uint8	first_nonzero[4];
+struct histogram4 : array<histogram<uint32, 256>, 4> {
 
 	struct scale_offset {
 		float4 o, s;
-		scale_offset(HDRpixel minpix, HDRpixel maxpix) {
-			float4	a{minpix.r, minpix.g, minpix.b, minpix.a};
-			float4	b{maxpix.r, maxpix.g, maxpix.b, maxpix.a};
-			s	= reciprocal(select(a == b, float4(one), b - a)) * 255.f;
-			o	= -a;
-		}
+		scale_offset(float4 a, float4 b) : o(-a), s(reciprocal(select(a == b, float4(one), b - a)) * 255.f) {}
+		auto operator()(float4 x) const { return to_sat<uint8>(select(x == x, (x + o) * s, zero)); }
 	};
 
-	histogram()		{ clear(h); }
-	void	reset()	{ clear(h); }
-	void	init_medians();
-	void	add(const block<ISO_rgba, 1> &b);
-	void	add(const block<ISO_rgba, 2> &b);
+	void	reset()	{ 
+		for (auto &i : *this)
+			i.reset();
+	}
+	void	init_medians() {
+		for (auto &i : *this)
+			i.init_medians();
+	}
+	template<typename T, typename F> void add(const block<T, 1>& b, F &&f) {
+		for (auto &i : b) {
+			auto	a = f(i);
+			++t[0].h[a.x];
+			++t[1].h[a.y];
+			++t[2].h[a.z];
+			++t[3].h[a.w];
+		}
+	}
+	template<typename T, int N, typename F> void add(const block<T, N>& b, F &&f) {
+		for (auto i : b)
+			add(i, f);
+	}
+
 	void	init(bitmap64 *bm);
-
-	void	add(const block<HDRpixel, 1> &b, const scale_offset &s);
-	void	add(const block<HDRpixel, 2> &b, const scale_offset &s);
 	void	init(HDRbitmap64 *bm, HDRpixel minpix, HDRpixel maxpix);
-
-	uint32	median_value(int c) const {
-		return h[c][order[c][(first_nonzero[c] + 256) / 2]];
-	}
-	uint32	max_value(int c) const {
-		return h[c][order[c][255]];
-	}
 };
-void DrawHistogram(d2d::Target &target, win::Rect &rect, const histogram &hist, int c);
 
 //-----------------------------------------------------------------------------
 //	marker
@@ -248,6 +263,18 @@ protected:
 		CUBEMAP				= 1 << 7,
 		DISP_GRID			= 1 << 8,
 		SEPARATE_SLICES		= 1 << 9,
+		HAVE_STATS			= 1 << 15,
+	};
+	enum CHANS {
+		CHAN_R				= 1,
+		CHAN_G				= 2,
+		CHAN_B				= 4,
+		CHAN_A				= 8,
+		CHAN_INDEX			= 16,
+		CHAN_MASK			= 32,
+		CHAN_DEPTH			= 64,
+		CHAN_RGB			= 7,
+		CHAN_RGBA			= 15,
 	};
 	enum DRAG {
 		DRAG_OFF			= 0,
@@ -274,15 +301,14 @@ protected:
 	d2d::point				pos;
 
 	ISO_ptr_machine<void>	bm;
-	bitmap					prev_bm;
 	ISO_ptr<bitmap_anim>	anim;
 	win::Rect				bitmap_rect;
 	uint32					bitmap_depth;
 	int						num_slices, sel_slice;
 
-	interval<HDRpixel>		col_range;
+	interval<float4>		chan_range;
 	interval<float>			disp_range;
-	interval<float>			chan_range;
+	interval<float>			rgb_range;
 	interval<float>			alpha_range;
 	interval<uint32>		depth_range;
 
@@ -295,8 +321,12 @@ protected:
 
 	void	Autoscale(int sw, int sh);
 	bool	SetBitmap(const ISO_ptr_machine<void> &p);
+	void	GetStats();
 	void	UpdateBitmap(d2d::Target &target, ID2D1Bitmap *d2d_bitmap);
 	void	UpdateBitmapRect();
+
+	static void DrawHistogram(d2d::Target &target, win::Rect &rect, const histogram4 &hist, int c);
+
 
 	void	DrawBitmapPaint(d2d::Target &target, win::Rect &rect, ID2D1Bitmap *d2d_bitmap);
 	void	DrawSelection(d2d::Target &target, win::Rect &rect);
@@ -307,9 +337,5 @@ protected:
 public:
 	static bool Matches(const ISO::Type *type);
 };
-
-template<typename T, typename V, int B> T* test_cast(const ISO::ptr<V, B> &p, int crit = 0) {
-	return p.IsType(ISO::getdef<T>(), crit) ? (T*)p : nullptr;
-}
 
 } //namespace app

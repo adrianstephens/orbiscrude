@@ -20,6 +20,7 @@ class _directory_iterator {
 	HANDLE				h;
 protected:
 	_directory_iterator() : h(INVALID_HANDLE_VALUE) {}
+	_directory_iterator(_directory_iterator &&d) : find(d.find), h(d.h) { d.h = INVALID_HANDLE_VALUE; }
 	bool	open(const char *pattern) {
 #ifdef PLAT_X360
 		h = FindFirstFileA(pattern, &find);
@@ -184,9 +185,9 @@ public:
 
 class directory_iterator : public _directory_iterator {
 	bool	ok;
-	directory_iterator(const directory_iterator &d);
+//	directory_iterator(const directory_iterator &d);
 public:
-	directory_iterator(directory_iterator &&d)=default;
+	directory_iterator(directory_iterator &&d) = default;
 	directory_iterator() : ok(false)		{}
 	directory_iterator(const char *pattern) { ok = open(pattern); }
 	~directory_iterator()					{ close(); }
@@ -250,7 +251,7 @@ template<typename I, typename B> struct directory_helper : B {
 	}
 };
 
-inline auto directory_recurse(const filename &dir, const char *pattern)				{ return recursive_directory_iterator(dir, pattern); }
+inline auto directory_recurse(const string_param &dir, const char *pattern)				{ return recursive_directory_iterator(dir, pattern); }
 
 template<typename I> auto directories(I begin, I end, const char *pattern)			{ return directory_helper<I, directory_iterator2>(begin, end, pattern); }
 template<typename I> auto directories_recurse(I begin, I end, const char *pattern)	{ return directory_helper<I, recursive_directory_iterator>(begin, end, pattern); }

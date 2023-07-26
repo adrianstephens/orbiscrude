@@ -11,12 +11,6 @@
 
 namespace iso {
 
-struct std_writer {
-	FILE *f;
-	std_writer(FILE *_f) : f(_f) {}
-	void write(const char *s) const { fputs(s, f); }
-};
-
 force_inline float squareness(int w, int h) {
 	return min(w, h) / float(max(w, h));
 }
@@ -54,7 +48,7 @@ private:
 	virtual type			Set()												{ return PT_NOTFOUND;	}
 	virtual ISO_ptr<void>	Convert(ISO_ptr<void> p, const ISO::Type *type)		{ return ISO_NULL;		}
 public:
-	Platform(const char *_platform) : platform(_platform)						{}
+	Platform(const char *platform) : platform(platform)							{}
 	const char*			Name()	const											{ return platform;		}
 
 	virtual ISO_rgba	DefaultColour()											{ return ISO_rgba(255,255,255,255); }
@@ -69,8 +63,8 @@ public:
 		return squareness(w1, h1) > squareness(w0, h0);
 	}
 
-	virtual ISO_ptr<void> ReadFX(tag id, istream_ref file, const filename *fn);
-	virtual ISO_ptr<void> MakeShader(const ISO_ptr<ISO_openarray<ISO_ptr<string> > > &shader) { return ISO_NULL; }
+	virtual ISO_ptr<void> ReadFX(tag id, istream_ref file, const filename *fn) { return ISO_NULL; }
+	virtual ISO_ptr<void> MakeShader(const ISO_ptr<ISO_openarray<ISO_ptr<string>>> &shader) { return ISO_NULL; }
 
 	static type			Set(const char *_platform);
 	static Platform*	Get(const char *_platform);
@@ -158,7 +152,7 @@ template<typename T> cast_iterator<T>	operator-(const cast_iterator<T> &s, int i
 //-----------------------------------------------------------------------------
 
 template<typename I> class scaling_iterator : public T_inheritable<I>::type {
-	typedef typename iterator_traits<I>::element	element;
+	typedef it_element_t<I>	element;
 	float	s;
 public:
 	scaling_iterator(I i, float _s) : T_inheritable<I>::type(i), s(_s)				{}

@@ -4,16 +4,9 @@ using namespace iso;
 using namespace win;
 using namespace app;
 
-template<> struct C_types::type_getter<float16> {
-	static const C_type *f(C_types &types)	{ return C_type_float::get<float16>(); }
-};
-template<typename I, I S> struct C_types::type_getter<scaled<I,S> > {
-	static const C_type *f(C_types &types)	{ return C_type_int::get<I>(); }
-};
-
 C_types	iso::ctypes, iso::user_ctypes;
 
-C_types&	iso::builtin_ctypes() {
+C_types& iso::builtin_ctypes() {
 	static struct Read_C_types : C_types {
 		Read_C_types() {
 			win::Resource	r(0, "CTYPES.H", "BIN");
@@ -69,7 +62,7 @@ string_accum &RegisterList::FillSubItem(string_accum &b, const field *pf, const 
 
 	if (pf->offset == field::MODE_CUSTOM) {
 		if (pf->shift)
-			((field_callback_func)pf->values)(b, pf, p, offset, 0);
+			((field_callback_func*)pf->values)(b, pf, p, offset, 0);
 		else
 			Callback(b, pf, p, offset);
 
@@ -101,7 +94,7 @@ void RegisterList::FillRow(ListViewControl::Item &item, const field *pf, const u
 					}
 
 					case field::MODE_RELPTR: {
-						const uint32le	*p0 = (uint32le*)((char*)p + (offset + pf->start) / 8);
+						const int32le	*p0 = (int32le*)((char*)p + (offset + pf->start) / 8);
 						if (*p0 && (format & IDFMT_FOLLOWPTR)) {
 							if (pf->shift)
 								FillRowArray(item, (const field*)pf->values, (uint32le*)((char*)p0 + *p0), 0, pf->get_companion_value(p, offset));
@@ -174,20 +167,11 @@ int app::MakeHeaders(win::ListViewControl lv, int nc, const C_type *type, string
 	return nc;
 }
 
-int app::MakeHeaders(win::ListViewControl lv, int nc, const SoftType &type, string_accum &prefix) {
-	for (int i = 0, n = type.Count(); i < n; i++) {
-		char	*startp = prefix.getp();
-		win::ListViewControl::Column(type.Name(prefix, i)).Width(75).Insert(lv, nc++);
-		prefix.move(startp - prefix.getp());
-	}
-	return nc;
-}
-
 //-----------------------------------------------------------------------------
 //	RegisterTree
 //-----------------------------------------------------------------------------
 
-void app::StructureHierarchy(RegisterTree &c, HTREEITEM h, const C_types &types, const char *name, const C_type *type, uint32 offset, const void *data, const uint64 *valid) {
+HTREEITEM app::StructureHierarchy(RegisterTree &c, HTREEITEM h, const C_types &types, string_param name, const C_type *type, uint32 offset, const void *data, const uint64 *valid) {
 	buffer_accum<256>	acc;
 
 	if (const char *type_name = types.get_name(type)) {
@@ -201,9 +185,7 @@ void app::StructureHierarchy(RegisterTree &c, HTREEITEM h, const C_types &types,
 
 	h = c.AddText(h, acc.term());
 
-	if (!type)
-		return;
-
+	if (type) {
 	switch (type->type) {
 		case C_type::ARRAY: {
 			C_type_array	*a		= (C_type_array*)type;
@@ -214,7 +196,7 @@ void app::StructureHierarchy(RegisterTree &c, HTREEITEM h, const C_types &types,
 					offset += stride;
 				}
 			}
-			return;
+			break;
 		}
 		case C_type::TEMPLATE:
 		case C_type::STRUCT: {
@@ -224,12 +206,14 @@ void app::StructureHierarchy(RegisterTree &c, HTREEITEM h, const C_types &types,
 
 			for (auto *i = s->elements.begin(), *e = s->elements.end(); i != e; ++i)
 				StructureHierarchy(c, h, types, i->id, i->type, offset + i->offset, data, valid);
-			return;
+			break;
 		}
 
 		default:
 			break;
 	}
+	}
+	return h;
 }
 
 //-----------------------------------------------------------------------------
@@ -311,30 +295,10 @@ int ColourList::AddColumns(int nc, const C_type *type, string_accum &prefix, win
 //	ColourTree
 //-----------------------------------------------------------------------------
 
-LRESULT ColourTree::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+win::Font	temp_font;
+
+LRESULT ColourTree::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
-		case WM_CREATE: {
-			ToolTipControl	oldtt = GetToolTipControl();
-			TTTOOLINFOA		ti;
-			clear(ti);
-			ti.cbSize		= sizeof(TOOLINFO);
-			ti.hwnd			= *this;
-			ti.uId			= (UINT_PTR)ti.hwnd;
-			oldtt(TTM_GETTOOLINFO, 0, (LPARAM)&ti);
-
-			ToolTipControl	tt(*this, NULL, POPUP |ToolTipControl::ALWAYSTIP);
-			tt(TTM_ADDTOOLA, 0, (LPARAM)&ti);
-			//tt.Attach(*this);
-			SetToolTipControl(tt);
-
-			TTTOOLINFOA		ti2;
-			clear(ti2);
-			ti2.cbSize		= sizeof(TOOLINFO);
-			ti2.hwnd			= *this;
-			ti2.uId			= (UINT_PTR)ti.hwnd;
-			tt(TTM_GETTOOLINFO, 0, (LPARAM)&ti2);
-			return 0;
-		}
 		case WM_MOUSEMOVE: {
 			uint32		flags;
 			HTREEITEM	hit = HitTest(Point(lParam), &flags);
@@ -359,9 +323,9 @@ LRESULT ColourTree::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 			Parent().SendMessage(message, wParam, lParam);
 			break;
 
-		case WM_DESTROY:
-			ISO_TRACE("Destroy ColourTree\n");
-			break;
+		//case WM_DESTROY:
+		//	ISO_TRACE("Destroy ColourTree\n");
+		//	break;
 
 	}
 	return Super(message, wParam, lParam);
@@ -383,7 +347,9 @@ LRESULT	ColourTree::CustomDraw(NMCUSTOMDRAW	*nmcd) const {
 			if (hItem == hot || colour.x) {
 				DeviceContext	dc(nmcd->hdc);
 				auto			font = dc.Current<win::Font>().GetParams();
-				dc.Select(win::Font(font.Underline(hItem == hot).Bold(colour.x & 2).Italic(colour.x & 1)));
+				temp_font.Destroy();
+				temp_font	= win::Font(font.Underline(hItem == hot).Bold(colour.x & 2).Italic(colour.x & 1));
+				dc.Select(temp_font);
 				return CDRF_NEWFONT;
 
 			} else {

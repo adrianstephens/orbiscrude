@@ -121,7 +121,7 @@ ISO_ptr<void> TgaFileHandler::Read(tag id, istream_ref file) {
 		file.readbuff(pal, pallen);
 
 		if (type == TARGA_HEADER::CI) {
-			ISO_rgba	*c = bm->CreateClut(th.CMapLength);
+			ISO_rgba	*c = bm->CreateClut(th.CMapLength).begin();
 			switch (th.CMapDepth) {
 				case 16: copy_n((Texel<TARGA_RGB16>*)pal, c, th.CMapLength); break;
 				case 24: copy_n((Texel<TARGA_RGB24>*)pal, c, th.CMapLength); break;

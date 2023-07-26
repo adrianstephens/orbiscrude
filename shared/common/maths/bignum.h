@@ -40,16 +40,16 @@ inline int security_bits(int L, int N) {
 template<typename T, T... args> struct mpi_const;
 
 template<typename IL, typename VL> struct mpi_u8;
-template<int...II, typename VL> struct mpi_u8<index_list<II...>, VL> : static_ref_array<uint32, uint32(meta::VL_index<VL::count - 1 - II*4, VL>::value + (meta::VL_index<VL::count - 2 - II*4, VL>::value<<8) + (meta::VL_index<VL::count - 3 - II*4, VL>::value<<16) + (meta::VL_index<VL::count - 4 - II*4, VL>::value<<24))...> {};
+template<int...II, typename VL> struct mpi_u8<index_list<II...>, VL> : static_ref_array<uint32, uint32(VL::template get<VL::count - 1 - II*4>::value + (VL::template get<VL::count - 2 - II*4>::value<<8) + (VL::template get<VL::count - 3 - II*4>::value<<16) + (VL::template get<VL::count - 4 - II*4>::value<<24))...> {};
 template<uint8... args> struct mpi_const<uint8, args...> : mpi_u8<meta::make_index_list<sizeof...(args) / 4>, meta::value_list<uint8, args...> > {};
 
 
 template<typename IL, typename VL> struct mpi_u32;
-template<int...II, typename VL> struct mpi_u32<index_list<II...>, VL> : static_ref_array<uint32, (meta::VL_index<VL::count - 1 - II, VL>::value)...> {};
+template<int...II, typename VL> struct mpi_u32<index_list<II...>, VL> : static_ref_array<uint32, (VL::template get<VL::count - 1 - II>::value)...> {};
 template<uint32... args> struct mpi_const<uint32, args...> : mpi_u32<meta::make_index_list<sizeof...(args)>, meta::value_list<uint32, args...> > {};
 
 template<typename IL, typename VL> struct mpi_u64;
-template<int...II, typename VL> struct mpi_u64<index_list<II...>, VL> : static_ref_array<uint32, uint32(meta::VL_index<VL::count - 1 - II / 2, VL>::value >> ((II & 1) * 32))...> {};
+template<int...II, typename VL> struct mpi_u64<index_list<II...>, VL> : static_ref_array<uint32, uint32(VL::template get<VL::count - 1 - II / 2>::value >> ((II & 1) * 32))...> {};
 template<uint64... args> struct mpi_const<uint64, args...> : mpi_u64<meta::make_index_list<sizeof...(args) * 2>, meta::value_list<uint64, args...> > {};
 
 template<int I> struct mpi_const1 : static_ref_array<uint32, (I < 0 ? -I : I)>	{};

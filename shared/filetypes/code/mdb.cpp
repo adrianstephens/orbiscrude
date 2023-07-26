@@ -39,11 +39,11 @@ struct LineNumberEntry {
 	const int	Offset;
 	const bool	IsHidden;	// Obsolete is never used
 
-	LineNumberEntry() : File(0), Row(0), Column(0), EndRow(-1), EndColumn(-1), Offset(0), IsHidden(false) {}
-	LineNumberEntry(int file, int row, int column, int offset) : File(file), Row(row), Column(column), EndRow(-1), EndColumn(-1), Offset(offset), IsHidden(false) {}
-	LineNumberEntry(int file, int row, int offset) : File(file), Row(row), Column(-1), EndRow(-1), EndColumn(-1), Offset(offset), IsHidden(false) {}
-	LineNumberEntry(int file, int row, int column, int offset, bool is_hidden) : File(file), Row(row), Column(column), EndRow(-1), EndColumn(-1), Offset(offset), IsHidden(false) {}
-	LineNumberEntry(int file, int row, int column, int end_row, int end_column, int offset, bool is_hidden) : File(file), Row(row), Column(column), EndRow(end_row), EndColumn(end_column), Offset(offset), IsHidden(false) {}
+	LineNumberEntry() : Row(0), Column(0), EndRow(-1), EndColumn(-1), File(0), Offset(0), IsHidden(false) {}
+	LineNumberEntry(int file, int row, int column, int offset) : Row(row), Column(column), EndRow(-1), EndColumn(-1), File(file), Offset(offset), IsHidden(false) {}
+	LineNumberEntry(int file, int row, int offset) : Row(row), Column(-1), EndRow(-1), EndColumn(-1), File(file), Offset(offset), IsHidden(false) {}
+	LineNumberEntry(int file, int row, int column, int offset, bool is_hidden) : Row(row), Column(column), EndRow(-1), EndColumn(-1), File(file), Offset(offset), IsHidden(false) {}
+	LineNumberEntry(int file, int row, int column, int end_row, int end_column, int offset, bool is_hidden) : Row(row), Column(column), EndRow(end_row), EndColumn(end_column), File(file), Offset(offset), IsHidden(false) {}
 };
 
 struct LineNumberTableOpts {

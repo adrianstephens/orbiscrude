@@ -1,9 +1,10 @@
 #include "base/vector.h"
 #include "directory.h"
 #include "codec/base64.h"
+#include "codec/apple_compression.h"
+#include "hashes/md5.h"
 #include "filetypes/bitmap/bitmap.h"
 #include "filetypes/sound/sample.h"
-#include "codec/apple_compression.h"
 #include "iso/iso_binary.h"
 #include "iso/iso_convert.h"
 #include "iso/iso_files.h"
@@ -183,7 +184,7 @@ bool RelativePathsRecurse(ISO::Browser b, const char* from, const char* to) {
 				}
 
 				if (fn.ext() == ".ib" || fn.ext() == ".ibz" || fn.ext() == ".ix") {
-					if (ISO_ptr<void> p = FileHandler::Read(0, fn)) {
+					if (ISO_ptr<void> p = FileHandler::Read(none, fn)) {
 						if (p.Flags() & ISO::Value::HASEXTERNAL) {
 							if (RelativePathsRecurse(ISO::Browser(p), from, to) && (fn.ext() == ".ib" || fn.ext() == ".ibz")) {
 								if (!ISO::binary_data.Write(p, FileOutput(fn).me(), fn, ISO::BIN_RELATIVEPATHS | ISO::BIN_WRITEALLTYPES | ISO::BIN_DONTCONVERT | ISO::BIN_STRINGIDS))
@@ -220,13 +221,13 @@ void _WildCard(ISO_ptr<anything>& p, const filename& fn) {
 
 		for (directory_iterator name(filename(fn2).add_dir("*.*")); name; ++name) {
 			if (name.is_dir() && name[0] != '.')
-				_WildCard(p, filename(fn2).add_dir(name).add_dir("*").add_dir(fn.name_ext()));
+				_WildCard(p, filename(fn2).add_dir((const char*)name).add_dir("*").add_dir(fn.name_ext()));
 		}
 
 	} else {
 		for (directory_iterator name(fn); name; ++name) {
 			if (!name.is_dir())
-				p->Append(FileHandler::Read((const char*)name, filename(fn).rem_dir().add_dir(name)));
+				p->Append(FileHandler::Read((const char*)name, filename(fn).rem_dir().add_dir((const char*)name)));
 		}
 	}
 }
@@ -275,6 +276,12 @@ auto EncodeLZFSE(const malloc_block &a) {
 auto DecodeLZFSE(const malloc_block &a) {
 	return transcode(LZFSE::decoder(), a);
 }
+
+array<xint8, 16> HashMD5(const malloc_block &a) {
+	MD5	md5(a);
+	return md5.terminate();
+}
+
 
 //-----------------------------------------------------------------------------
 //	PlatformToggle
@@ -333,5 +340,7 @@ static initialise init(
 	ISO_get_operation(EncodeLZVN),
 	ISO_get_operation(DecodeLZVN),
 	ISO_get_operation(EncodeLZFSE),
-	ISO_get_operation(DecodeLZFSE)
+	ISO_get_operation(DecodeLZFSE),
+
+	ISO_get_operation(HashMD5)
 );

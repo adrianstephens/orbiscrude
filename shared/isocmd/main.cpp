@@ -3,6 +3,8 @@
 #define USING_VSMATH
 #endif
 
+#define ISO_TEST
+
 #include "main.h"
 #include "iso/iso_script.h"
 #include "iso/iso_binary.h"
@@ -14,7 +16,7 @@
 #include "filetypes/sound/sample.h"
 #include "filetypes/sound/xma.h"
 #include "comms/zlib_stream.h"
-#include "comms/websocket.h"
+#include "comms/WebSocket.h"
 #include "directory.h"
 #include "scenegraph.h"
 #include "systems/communication/isolink.h"
@@ -26,6 +28,7 @@
 #include "jobs.h"
 #include "sound.h"
 #include "linq.h"
+#include "maths/polynomial.h"
 
 namespace iso {
 	ISO_INIT(NurbsModel)	{}
@@ -189,9 +192,9 @@ struct CommandLine : static_array<string, 3>, Options {
 
 			buffer_accum<512>	fs;
 			if (timer)
-				fs << "t=" << time << ": ";
+				fs << "t=" << (float)time << ": ";
 			fs.vformat(format, valist);
-			_iso_debug_print(fs);
+			_iso_debug_print(fs.term());
 		}
 	}
 	void			InitFlags();
@@ -464,7 +467,8 @@ ISO_ptr<void> CommandLine::ReadWild(tag id, const filename &fn, bool raw) {
 
 			for (directory_iterator name(filename(fn2).add_dir("*.*")); name; ++name) {
 				if (name.is_dir() && name[0] != '.') {
-					if (ISO_ptr<void> p2 = ReadWild(filename(name).name(), filename(fn2).add_dir(name).add_dir("*").add_dir(fn.name_ext()), raw)) {
+					const char *n = name;
+					if (ISO_ptr<void> p2 = ReadWild(filename(n).name(), filename(fn2).add_dir(n).add_dir("*").add_dir(fn.name_ext()), raw)) {
 						if (!p)
 							p.Create(id);
 						p->Append(p2);
@@ -475,7 +479,8 @@ ISO_ptr<void> CommandLine::ReadWild(tag id, const filename &fn, bool raw) {
 		} else {
 			for (directory_iterator name(fn); name; ++name) {
 				if (!name.is_dir()) {
-					if (ISO_ptr<void> p2 = ReadWild(raw ? (const char*)name : (const char*)filename(name).name(), filename(fn).rem_dir().add_dir(name), raw)) {
+					const char *n = name;
+					if (ISO_ptr<void> p2 = ReadWild(raw ? n : (const char*)filename(n).name(), filename(fn).rem_dir().add_dir(n), raw)) {
 						if (!p)
 							p.Create(id);
 						p->Append(p2);
@@ -594,7 +599,7 @@ void CommandLine::ProcessSingle(const filename &fnin, const filename &fnout, boo
 	ISO_ptr<void>	p;
 	if (script) {
 		vars.SetMember("i", ReadSingle("i", fnin));
-		p = ISO::ScriptRead(0/*"input"*/, fnin, memory_reader(script.data()),
+		p = ISO::ScriptRead(none/*"input"*/, fnin, memory_reader(script.data()),
 			(vars["keepexternals"].GetInt()	? ISO::SCRIPT_KEEPEXTERNALS	: 0)
 		|	(vars["dontconvert"].GetInt()	? ISO::SCRIPT_DONTCONVERT		: 0)
 		|	ISO::SCRIPT_KEEPID
@@ -637,8 +642,8 @@ void CommandLine::ProcessWild(const filename &fnin, const filename &fnout, bool 
 		for (directory_iterator name(fnin1); name; ++name) {
 			if (name.is_dir() && name[0] != '.') {
 				ProcessWild(
-					filename(fnin2).add_dir(name).add_dir("*").add_dir(fnin.name_ext()),
-					filename(fnout2).add_dir(name).add_dir(fnout.name_ext()),
+					filename(fnin2).add_dir((const char*)name).add_dir("*").add_dir(fnin.name_ext()),
+					filename(fnout2).add_dir((const char*)name).add_dir(fnout.name_ext()),
 					extract
 				);
 			}
@@ -646,8 +651,8 @@ void CommandLine::ProcessWild(const filename &fnin, const filename &fnout, bool 
 	} else if (extract || is_wild(fnout.name())) {
 		for (directory_iterator name(fnin); name; ++name) {
 			if (!name.is_dir()) {
-				filename	src	= filename(fnin).rem_dir().add_dir(name);
-				filename	dst	= filename(fnout).rem_dir().add_dir(name).set_ext(fnout.ext());
+				filename	src	= filename(fnin).rem_dir().add_dir((const char*)name);
+				filename	dst	= filename(fnout).rem_dir().add_dir((const char*)name).set_ext(fnout.ext());
 
 				printf("%s => %s: ", (const char*)src, (const char*)dst);
 				if (!extract && !CheckDate(src, dst)) {
@@ -1007,7 +1012,7 @@ int main(int argc, char* argv[], char* envp[]) {
 
 			if (com.script) {
 				com.printf("Parsing script\n");
-				if (!(p = ISO::ScriptRead(/*"input"*/0, 0, memory_reader(const_memory_block(com.script.begin(), com.script.length())).me(),
+				if (!(p = ISO::ScriptRead(/*"input"*/none, 0, memory_reader(const_memory_block(com.script.begin(), com.script.length())).me(),
 					(com.keepexternals	? ISO::SCRIPT_KEEPEXTERNALS	: 0)
 				|	(com.dontconvert	? ISO::SCRIPT_DONTCONVERT		: 0)
 				|	ISO::SCRIPT_KEEPID

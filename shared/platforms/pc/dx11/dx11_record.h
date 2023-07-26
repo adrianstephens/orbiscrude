@@ -269,6 +269,8 @@ struct RecItem2 : RecItem {
 	}
 
 	size_t GetSize() const {
+		if (!info)
+			return  0;
 		switch (undead(type)) {
 			case Buffer:	return ((const D3D11_BUFFER_DESC*)info)->ByteWidth;
 			case Texture1D:	return dx11::GetResourceSize((const D3D11_TEXTURE1D_DESC*)info);
@@ -407,7 +409,7 @@ struct DeviceContext_State {
 	ID3D11DepthStencilState		*depth_stencil;
 	UINT						stencil_ref;
 
-	DeviceContext_State()							{}
+	DeviceContext_State()							{}// clear(*this); }
 	DeviceContext_State(ID3D11DeviceContext *ctx)	{ Get(ctx); }
 
 	auto					Stages()				const { return make_range(&vs, &cs + 1); };

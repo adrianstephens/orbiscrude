@@ -55,7 +55,7 @@ public:
 class svn_string : public svn_item, public memory_block {
 public:
 	svn_type	type()						{ return SVN_STRING;	}
-	svn_string(const char *v)		: memory_block(v ? iso::strdup(v) : 0, v ? strlen(v) : 0)	{}
+	svn_string(string_ref v)		: memory_block(v ? iso::strdup(v) : 0, v ? strlen(v) : 0)	{}
 	svn_string(void *v, uint32 len)	: memory_block(v, len)			{}
 	svn_string(const memory_block &v)		: memory_block(v)		{}
 	~svn_string()							{ iso::free(p); }

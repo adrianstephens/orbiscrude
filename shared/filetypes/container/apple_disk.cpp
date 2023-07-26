@@ -638,10 +638,10 @@ struct UDIF {
 		file.read(koly);
 		if (koly.verify()) {
 			file.seek(koly.XMLOffset);
-			istream_offset	offset(file, koly.XMLLength);
+			istream_offset	offset(copy(file), koly.XMLLength);
 			XPLISTreader	reader(offset);
 			if (reader.valid()) {
-				for (auto i : ISO::Browser2(reader.get_item(0))["resource-fork"]["blkx"])
+				for (auto i : ISO::Browser2(reader.get_item(none))["resource-fork"]["blkx"])
 					new (block_tables) BlockTableEntry(i);
 			}
 		}
@@ -669,7 +669,7 @@ struct UDIF {
 
 class UDIFPartStream : UDIF::BlockTableEntry, public stream_defaults<UDIFPartStream> {
 	istream_ptr		file;
-	streamptr		end, ptr;
+	streamptr		ptr, end;
 	streamptr		block_offset, block_size;
 	uint32			block_type;
 	malloc_block	data, temp;
@@ -852,7 +852,7 @@ ISO::Browser2 HFS_file::Deref()	{
 		}
 
 	}
-	return ISO::MakePtr(0, hfs->ReadFork(cat->dataFork));
+	return ISO::MakePtr(none, hfs->ReadFork(cat->dataFork));
 }
 
 anything HFS::ReadFolder(uint32 nid) {

@@ -1,7 +1,7 @@
 #ifndef COLOUR_H
 #define COLOUR_H
 
-#include "vector.h"
+#include "base/vector.h"
 
 namespace iso {
 
@@ -94,7 +94,9 @@ struct colour_XYZ;
 class colour {
 public:
 	static constexpr float3 luminance_factors = { 0.3086f, 0.6094f, 0.0820f };
-	template<typename R, typename G, typename B> struct colour_const {};
+	template<typename R, typename G, typename B> struct colour_const {
+		constexpr operator colour() const { return {R(), G(), B()}; }
+	};
 	static constexpr colour_const<_zero,_zero,_zero>	black	= {};
 	static constexpr colour_const<_one,_zero,_zero>		red		= {};
 	static constexpr colour_const<_zero,_one,_zero>		green	= {};
@@ -118,7 +120,7 @@ public:
 	constexpr colour(float3 rgb, float a)	: rgba(concat(rgb, a)) {}
 	constexpr colour(float r, float g, float b, float a = one)	: rgba{r, g, b, a} {}
 
-	template<typename R, typename G, typename B> constexpr colour(const colour_const<R, G, B>&) : colour(R(), G(), B()) {}
+//	template<typename R, typename G, typename B> constexpr colour(const colour_const<R, G, B>&) : colour(R(), G(), B()) {}
 
 	colour(const srgb<float3> &c, float a = one)	: colour(srgb_to_linear(c.t), a) {}
 	colour(const colour_XYZ& c);
@@ -132,10 +134,10 @@ public:
 	force_inline bool		operator==(const colour &b)	{ return all(rgba == b.rgba); }
 	template<typename B> friend IF_SCALAR(B,colour) operator*(const colour &a, const B &b)	{ return colour(a.rgba * b); }
 	template<typename B> friend IF_SCALAR(B,colour) operator/(const colour &a, const B &b)	{ return a * reciprocal(b); }
-
-	friend colour	blend(colour c)					{ return colour(c.rgb * c.a, c.a); }
-	friend colour	additive(colour c)				{ return colour(c.rgb * c.a, zero); }
-	friend colour	desaturate(colour c, float x)	{ return colour(lerp(c.rgb, c.luminance(), x)); }
+	friend colour	lerp(colour x, colour y, float t)	{ return colour(lerp(x.rgba, y.rgba, t)); }
+	friend colour	blend(colour c)						{ return colour(c.rgb * c.a, c.a); }
+	friend colour	additive(colour c)					{ return colour(c.rgb * c.a, zero); }
+	friend colour	desaturate(colour c, float x)		{ return colour(lerp(c.rgb, c.luminance(), x)); }
 
 };
 
@@ -215,11 +217,11 @@ struct colour_HSV {
 };
 
 //-----------------------------------------------------------------------------
-// chromaticity
+// chromaticity	- just the xy of Colour_xyY
 //-----------------------------------------------------------------------------
 
 struct chromaticity {
-	enum white {
+	enum illuminant {
 		A,			// Incandescent / Tungsten
 		B,			// {obsolete} Direct sunlight at noon
 		C,			// {obsolete} Average / North sky Daylight
@@ -301,29 +303,28 @@ struct chromaticity {
 	}
 	static chromaticity from_cct(float temp);
 	static chromaticity from_cct_approx(float T) {
-		float x	= 	T < 4000 	?	horner(1000 / T, +0.179910, +0.8776956, -0.2343589, -0.2661239)
-								:	horner(1000 / T, +0.240390, +0.2226347, +2.1070379, -3.0258469);
-		float y	= 	T < 222		? 	horner(x, -0.20219683, +2.18555832, -1.34811020, -1.1063814)
-			:		T < 4000 	? 	horner(x, -0.16748867, +2.09137015, -1.37418593, -0.9549476)
-			:						horner(x, -0.37001483, +3.75112997, -5.87338670, +3.0817580);
+		float x	= 	T < 4000 	?	horner(1000 / T, +0.179910f, +0.8776956f, -0.2343589f, -0.2661239f)
+								:	horner(1000 / T, +0.240390f, +0.2226347f, +2.1070379f, -3.0258469f);
+		float y	= 	T < 222		? 	horner(x, -0.20219683f, +2.18555832f, -1.34811020f, -1.1063814f)
+			:		T < 4000 	? 	horner(x, -0.16748867f, +2.09137015f, -1.37418593f, -0.9549476f)
+			:						horner(x, -0.37001483f, +3.75112997f, -5.87338670f, +3.0817580f);
 		return {x, y};
 	}
 	
 	float2 v;
-	chromaticity(float x, float y) 	: v{x, y} {}
-	chromaticity(white r) 			: v(ref_white[(int)r]) {}
-	chromaticity(colour_XYZ c);
+	explicit constexpr chromaticity(float2 v)	: v(v) {}
+	constexpr chromaticity(float x, float y) 	: v{x, y} {}
+	constexpr chromaticity(illuminant r) 		: v(ref_white[(int)r]) {}
 
-
+	//colour temperature
 	float cct() {
 		float	temp = cct_approx(v, float2{0.3366f, 0.1735f}, float3{0.92159f, 0.20039f, 0.07125f}, float3{6253.80338f, 28.70599f, 0.00004f}) - 949.86315f;
 		return temp < 50000 ? temp : cct_approx(v, float2{0.3356f, 0.1691f}, float2{0.07861f, 0.01543f}, float2{0.00228f, 5.4535e-36f}) + 36284.48953f;
 	}
+	friend float cct(chromaticity c) {
+		return c.cct();
+	}
 };
-
-force_inline float cct(chromaticity c) {
-	return c.cct();
-}
 
 //-----------------------------------------------------------------------------
 // colour_XYZ
@@ -380,21 +381,21 @@ struct colour_XYZ {
 		return t;
 	}
 
+	colour_XYZ() {}
 	constexpr colour_XYZ(float x, float y, float z)	: v{x, y, z} {}
 	explicit constexpr colour_XYZ(float3 v)			: v(v) {}
 	explicit colour_XYZ(colour c)					: v(c.rgb * from_rgb) {}
-	colour_XYZ(chromaticity c)						: v(concat(c.v, one - c.v.x - c.v.y)) {}
+//	colour_XYZ(chromaticity c)						: v(concat(c.v, one - c.v.x - c.v.y)) {}
+	auto	chromaticity() const { return iso::chromaticity(v.xy / reduce_add(v)); }
 };
 
 inline colour::colour(const colour_XYZ& c) : colour(c.v * colour_XYZ::to_rgb) {}
-
-inline chromaticity::chromaticity(colour_XYZ c) : v(c.v.xy / reduce_add(c.v)) {}
 
 inline chromaticity chromaticity::from_cct(float temp) {
 	float3	xyz(zero);
 	for (float nm = 360; nm <= 830; nm += 5)
 		xyz += blackbody_rel(nm, temp) * colour_XYZ::from_wavelength(nm).v;
-	return colour_XYZ(xyz);
+	return colour_XYZ(xyz).chromaticity();
 }
 
 //-----------------------------------------------------------------------------
@@ -409,7 +410,8 @@ struct colour_xyY {
 	constexpr colour_xyY(float x, float y, float Y)		: v{x, y, Y} {}
 	explicit constexpr colour_xyY(float3 v)				: v(v) {}
 	explicit colour_xyY(const colour_XYZ &c)			: v(concat(c.v.xy / reduce_add(c.v), c.v.y)) {}
-	operator colour_XYZ() const { return colour_XYZ(float3{x * Y / y, Y, (1 - x - y) * Y / y}); }
+	operator colour_XYZ()			const { return colour_XYZ(float3{x * Y / y, Y, (1 - x - y) * Y / y}); }
+	auto	chromaticity()	const { return iso::chromaticity(v.xy); }
 };
 
 //-----------------------------------------------------------------------------
@@ -431,31 +433,6 @@ struct colour_Lab {
 		v = float3{116 * t.y - 16, 500 * (t.x - t.y), 200 * (t.y - t.z)};
 	}
 	operator colour_XYZ() const { return colour_XYZ(r(float3{a / 500, zero, b / 200} + (L + 16) / 116)); }
-};
-
-//-----------------------------------------------------------------------------
-// colour_YCbCr
-//-----------------------------------------------------------------------------
-
-struct colour_YCbCr {
-	static constexpr float3x3c	from_srgb = {{
-		{+0.299f, +0.587f, +0.114f },
-		{-0.169f, -0.331f, +0.499f },
-		{+0.499f, -0.418f, -0.0813f}
-	}};
-	static constexpr float3x3c	to_srgb = {{
-		{one,	zero,		+1.40200f},
-		{one, -0.34414f,	-0.71414f},
-		{one, +1.77200f,	zero}
-	}};
-	union {
-		struct {float Y, Cb, Cr; };
-		float3	v;
-	};
-	constexpr colour_YCbCr(float Y, float Cb, float Cr)	: v{Y, Cb, Cr}	{}
-	explicit constexpr colour_YCbCr(float3 v) 			: v(v)			{}
-	explicit colour_YCbCr(const srgb<float3> &c) 		: colour_YCbCr(c.t * from_srgb) {}
-	operator srgb<float3>() const { return v * to_srgb; }
 };
 
 //-----------------------------------------------------------------------------
@@ -484,6 +461,86 @@ struct colour_YUV {
 };
 
 //-----------------------------------------------------------------------------
+// colour_YCbCr
+//-----------------------------------------------------------------------------
+
+struct colour_YCbCr {
+	static constexpr float3x3c	from_srgb = {{
+		{+0.299f, +0.587f, +0.114f },
+		{-0.169f, -0.331f, +0.499f },
+		{+0.499f, -0.418f, -0.0813f}
+	}};
+	static constexpr float3x3c	to_srgb = {{
+		{one,	zero,		+1.40200f},
+		{one, -0.34414f,	-0.71414f},
+		{one, +1.77200f,	zero}
+	}};
+	union {
+		struct {float Y, Cb, Cr; };
+		float3	v;
+	};
+
+	constexpr colour_YCbCr(float Y, float Cb, float Cr)	: v{Y, Cb, Cr}	{}
+	explicit constexpr colour_YCbCr(float3 v) 			: v(v)			{}
+	explicit colour_YCbCr(const srgb<float3> &c) 		: colour_YCbCr(c.t * from_srgb) {}
+	operator srgb<float3>() const { return v * to_srgb; }
+};
+
+//-----------------------------------------------------------------------------
+// colour profiles
+//-----------------------------------------------------------------------------
+
+struct colour_primaries {
+	float4	X, Y;	//rgbw
+};
+
+struct srgb_converter {
+	//float r_cr, g_cr, g_cb, b_cb;
+	float4	coeffs = {1.402f, -0.714136f, -0.344136f, 1.772f};
+	srgb_converter() {}
+	srgb_converter(float r_cr, float g_cr, float g_cb, float b_cb) : coeffs{r_cr, g_cr, g_cb, b_cb} {}
+	srgb<float3> operator()(colour_YCbCr v) const {
+		//return float3{r_cr * v.Cr, g_cb * v.Cb + g_cr * v.Cr, b_cb * v.Cb} + v.Y;
+		return extend_right<3>(v.Cr * coeffs.xy) + extend_left<3>(v.Cb * coeffs.zw) + v.Y;
+	}
+};
+
+struct Kr_Kb {
+	float Kr, Kb;
+	Kr_Kb(float Kr, float Kb) : Kr(Kr), Kb(Kb) {}
+	Kr_Kb(float4 X, float4 Y) {
+		float4	Z	= one - (X + Y);
+		float denom	= Y.w * dot(X.rgb, cross(Y.rgb, Z.rgb));
+
+		Kr	=(X.w * cross(Y.gb, Z.gb)
+			+ Y.w * cross(X.bg, Z.bg)
+			+ Z.w * cross(X.gb, Y.gb)
+			) * Y.r / denom;
+		Kb	=(X.w * cross(Y.rg, Z.rg)
+			+ Y.w * cross(X.gr, Z.gr)
+			+ Z.w * cross(X.rg, Y.rg)
+			) * Y.b / denom;
+	}
+	Kr_Kb(colour_primaries p) : Kr_Kb(p.X, p.Y) {}
+
+	float3x3 srgb_to_YCbCr() const {
+		return {
+			float3{Kr,					1 - Kr - Kb,					Kb},
+			float3{-Kr / (1 - Kb) / 2,	-(1 - Kr - Kb) / (1 - Kb) / 2,	0.5f},
+			float3{0.5f,				-(1 - Kr - Kb) / (1 - Kr) / 2,	-Kb / (1 - Kr) / 2}
+		};
+	}
+	operator srgb_converter() const {
+		return {
+			2 * (1 - Kr),
+			2 * Kr * (1 - Kr) / (Kb + Kr - 1),
+			2 * Kb * (1 - Kb) / (Kb + Kr - 1),
+			2 * (1 - Kb)
+		};
+	}
+};
+
+//-----------------------------------------------------------------------------
 // colour_AdobeRGB
 //-----------------------------------------------------------------------------
 
@@ -506,6 +563,15 @@ struct colour_AdobeRGB {
 	explicit constexpr colour_AdobeRGB(float3 v)			: v(v)			{}
 	colour_AdobeRGB(const colour_XYZ& c)					: v(pow(c.v * from_xyz, 563 / 256.f)) {}
 	operator colour_XYZ() const { return colour_XYZ(pow(v, 256 / 563.f) * to_xyz); }
+};
+
+
+struct checked_memory_block : const_memory_block {
+	using const_memory_block::const_memory_block;
+	template<typename T> operator const T*() {
+		auto	t = (const T*)p;
+		return t->valid() ? t : nullptr;
+	}
 };
 
 //-----------------------------------------------------------------------------

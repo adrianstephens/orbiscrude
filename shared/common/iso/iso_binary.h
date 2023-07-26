@@ -43,7 +43,7 @@ public:
 	BinaryData(void *p = 0, uint32 size = 0) : ram_buffer(p), ram_total(size)	{}
 	size_t		Size()					const	{ return ram_total; }
 	size_t		Write(ostream_ref file)	const;
-	bool		Write(const ptr<void> &p, ostream_ref file, const char *fn = 0, uint32 flags = 0);
+	bool Write(const ptr_machine<void> &p, ostream_ref file, const char *fn = 0, uint32 flags = 0);
 };
 
 class BinaryData2 : public BinaryData {
@@ -104,12 +104,6 @@ public:
 		Read(p, id, file, fn, flags);
 		return p;
 	}
-
-#ifdef USE_ISTREAM
-	static ptr<void>	Read(tag id, istream_ref file, const char *fn = 0, uint32 flags = BIN_EXPANDEXTERNALS) {
-		return Read(id, file, fn, flags);
-	}
-#endif
 };
 
 template<int B> ptr<void,B>	BinaryData2::Fixup(Value *header, tag2 id, uint32 flags, void *phys_ram, uint32 phys_size) {
@@ -147,7 +141,7 @@ extern BinaryData2 binary_data;
 class PtrBrowser2 : public PtrBrowser {
 public:
 	PtrBrowser2(Value &header, void *phys_ram = 0, uint32 phys_size = 0) : PtrBrowser(BinaryData2::Fixup<32>(&header, 0, 0, phys_ram, phys_size)) {
-		header.flags &= ~Value::ROOT;
+		header.flags -= Value::ROOT;
 		--header.refs;
 	}
 };

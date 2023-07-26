@@ -30,8 +30,12 @@ namespace iso {
 			return _get(&t, sizeof(T), address);
 		}
 
+		//ast interop
 		bool	operator()(uint64 address, void *buffer, uint64 size) {
 			return _get(buffer, size, address);
+		}
+		uint64	operator()(uint64 address, bool dir, uint64 &size) {
+			return _next(address, size, dir);
 		}
 
 	};
@@ -70,11 +74,12 @@ namespace iso {
 	template<typename T> class memory_cache {
 	protected:
 		struct rec : e_link<rec> {
-			atomic<uint32>	nrefs;
 			T				start, end;
-			rec(T start, T end) : nrefs(1), start(start), end(end) {}
+			atomic<uint32>	nrefs	= 1;
+			alignas(16) T	_data[];
+			rec(T start, T end) : start(start), end(end) {}
 			~rec()								{ ISO_ASSERT(nrefs == 0); }
-			uint8	*data()				const	{ return (uint8*)(this + 1); }
+			uint8	*data()				const	{ return (uint8*)_data; }//(this + 1); }
 			T		size()				const	{ return end - start; }
 			void	addref()					{ ++nrefs; }
 			void	release()					{ if (!--nrefs) delete this; }
@@ -84,6 +89,12 @@ namespace iso {
 		e_list<rec> list;
 
 		auto	find_block(T start) {
+			auto r	= list.begin();
+			while (r != list.end() && r->end < start)	// don't need r->end <= start
+				++r;
+			return r;
+		}
+		auto	find_block(T start) const {
 			auto r	= list.begin();
 			while (r != list.end() && r->end < start)	// don't need r->end <= start
 				++r;
@@ -132,8 +143,9 @@ namespace iso {
 		void	remove(T start, T len);
 		void	add_block(T start, const const_memory_block &mem)		{ memcpy(add_block(start, (T)mem.length()), mem, mem.length()); }
 
-		cache_block operator()(T start);
-		cache_block operator()(T start, T len, memory_interface *m = 0);
+		auto operator()(T start)		const;
+		auto operator()(T start, T len)	const;
+		auto operator()(T start, T len, memory_interface *m = 0);
 
 		template<typename U> U *get(T start, memory_interface *m = 0) {
 			return (U*)operator()(start, sizeof(U), m);
@@ -154,12 +166,17 @@ namespace iso {
 			list.pop_back()->release();
 	}
 
-	template<typename T> typename memory_cache<T>::cache_block memory_cache<T>::operator()(T start) {
+	template<typename T> auto memory_cache<T>::operator()(T start) const {
 		auto	r = find_block(start);
-		return r != list.end() && r->start <= start && r->end > start ? cache_block(r.get(), start, r->end - start) : cache_block();
+		return r != list.end() && r->start <= start && r->end > start ? cache_block(unconst(r.get()), start, r->end - start) : cache_block();
 	}
 
-	template<typename T> typename memory_cache<T>::cache_block memory_cache<T>::operator()(T start, T len, memory_interface *m) {
+	template<typename T> auto memory_cache<T>::operator()(T start, T len) const {
+		auto	r	= find_block(start);
+		return r != list.end() && r->start <= start && r->end >= start + len ? cache_block(unconst(r.get()), start, len) : cache_block();
+	}
+
+	template<typename T> auto memory_cache<T>::operator()(T start, T len, memory_interface *m) {
 		auto	r	= find_block(start);
 		T		end	= start + len;
 
@@ -274,6 +291,8 @@ namespace iso {
 		Mutex		mutex;
 	public:
 		using typename memory_cache<T>::cache_block;
+		cache_block operator()(T start)	const							{ return with(mutex), base::operator()(start); }
+		cache_block operator()(T start, T len)	const					{ return with(mutex), base::operator()(start, len); }
 		cache_block operator()(T start)									{ return with(mutex), base::operator()(start); }
 		cache_block operator()(T start, T len, memory_interface *m = 0)	{ return with(mutex), base::operator()(start, len, m); }
 		template<typename U> U *get(T start, memory_interface *m = 0)	{ return (U*)operator()(start, sizeof(U), m); }

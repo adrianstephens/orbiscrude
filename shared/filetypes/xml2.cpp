@@ -12,7 +12,7 @@ using namespace iso;
 
 class XMLFileHandler : public FileHandler {
 protected:
-	void	Read(XMLreader &xml, XMLreader::Data &data, ISO_ptr<anything> &top);
+	void	Read(XMLreader &xml, XMLreader::Data &data, ISO_ptr<anything_machine> &top);
 	void	Write(XMLwriter &xml, ISO::Browser2 b);
 
 	const char*		GetExt() override {
@@ -31,7 +31,7 @@ protected:
 		XMLreader::Data	data;
 		xml.SetFlag(XMLreader::UNQUOTEDATTRIBS);
 		try {
-			ISO_ptr<anything>	p(id);
+			ISO_ptr<anything_machine>	p(id);
 			Read(xml, data, p);
 			return p;
 		} catch (const char *error) {
@@ -54,11 +54,11 @@ protected:
 	}
 } xml;
 
-void XMLFileHandler::Read(XMLreader &xml, XMLreader::Data &data, ISO_ptr<anything> &top) {
+void XMLFileHandler::Read(XMLreader &xml, XMLreader::Data &data, ISO_ptr<anything_machine> &top) {
 	while (XMLreader::TagType tag = xml.ReadNext(data)) {
 		switch (tag) {
 			case XMLreader::TAG_BEGIN: case XMLreader::TAG_BEGINEND: {
-				ISO_ptr<anything>	p(data.Name());
+				ISO_ptr<anything_machine>	p(data.Name());
 				top->Append(p);
 
 				for (auto &i : data.Attributes())

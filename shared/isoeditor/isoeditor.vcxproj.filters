@@ -113,9 +113,6 @@
     <Filter Include="Resource Files\isocmd">
       <UniqueIdentifier>{691f9572-c867-44f9-aebc-176d4abc728c}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Devices\DeviceIcons">
-      <UniqueIdentifier>{a859b9a4-e985-4071-b27f-f7c6a8752be4}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Common">
       <UniqueIdentifier>{300ad80d-ee29-4669-b6c1-96960d76d1eb}</UniqueIdentifier>
     </Filter>
@@ -143,9 +140,6 @@
     <Filter Include="Systems\shadows">
       <UniqueIdentifier>{0b9e9bb0-01a7-4d9b-bfa2-22b27ab0777d}</UniqueIdentifier>
     </Filter>
-    <Filter Include="FileTypes\video\vpx">
-      <UniqueIdentifier>{1e9c61d5-5e58-4077-bcfe-6356f6f771aa}</UniqueIdentifier>
-    </Filter>
     <Filter Include="PC\dx">
       <UniqueIdentifier>{a8ce0389-30e5-461a-b03e-e85926bc52ac}</UniqueIdentifier>
     </Filter>
@@ -166,6 +160,12 @@
     </Filter>
     <Filter Include="Common\codec\mesh">
       <UniqueIdentifier>{428cedad-8b75-4409-a453-62d3a9baa583}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resource Files\DeviceIcons">
+      <UniqueIdentifier>{a859b9a4-e985-4071-b27f-f7c6a8752be4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Common\codec\video">
+      <UniqueIdentifier>{32277a5f-f3a4-463d-854f-e4e2fe1910d5}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -1088,9 +1088,6 @@
       <Filter>Common\comms</Filter>
     </ClCompile>
     <ClCompile Include="webserver.cpp" />
-    <ClCompile Include="..\filetypes\video\h264.cpp">
-      <Filter>FileTypes\video</Filter>
-    </ClCompile>
     <ClCompile Include="..\filetypes\pem.cpp">
       <Filter>FileTypes</Filter>
     </ClCompile>
@@ -1555,6 +1552,54 @@
     </ClCompile>
     <ClCompile Include="..\common\codec\reed_solomon.cpp">
       <Filter>Common\codec</Filter>
+    </ClCompile>
+    <ClCompile Include="disassemblers\dis_bitcode.cpp">
+      <Filter>Disassemblers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\oodle_file.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\codec\oodle.cpp">
+      <Filter>Common\codec</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\container\hdf5.cpp">
+      <Filter>FileTypes\container</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\codec\mesh\meshopt.cpp">
+      <Filter>Common\codec\mesh</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\code\wasm_c.cpp">
+      <Filter>FileTypes\code</Filter>
+    </ClCompile>
+    <ClCompile Include="disassemblers\dis_wasm.cpp">
+      <Filter>Disassemblers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\3d\stl.cpp">
+      <Filter>FileTypes\3d</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\maths\bspline.cpp">
+      <Filter>Common\maths</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\codec\video\h264.cpp">
+      <Filter>Common\codec\video</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\codec\video\h265.cpp">
+      <Filter>Common\codec\video</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\codec\video\nal.cpp">
+      <Filter>Common\codec\video</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\codec\video\sei.cpp">
+      <Filter>Common\codec\video</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\codec\video\vpx_decode.cpp">
+      <Filter>Common\codec\video</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\codec\video\vpx_filter.cpp">
+      <Filter>Common\codec\video</Filter>
+    </ClCompile>
+    <ClCompile Include="..\filetypes\video\y4m.cpp">
+      <Filter>FileTypes\video</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -2315,9 +2360,6 @@
     <ClInclude Include="..\common\maths\geometry.h">
       <Filter>Common\maths</Filter>
     </ClInclude>
-    <ClInclude Include="..\common\base\colour.h">
-      <Filter>Common\base</Filter>
-    </ClInclude>
     <ClInclude Include="..\common\base\soft_float.h">
       <Filter>Common\base</Filter>
     </ClInclude>
@@ -2534,6 +2576,46 @@
     <ClInclude Include="viewers\viewer2d.h">
       <Filter>Viewers</Filter>
     </ClInclude>
+    <ClInclude Include="..\filetypes\code\bitcode.h">
+      <Filter>FileTypes\code</Filter>
+    </ClInclude>
+    <ClInclude Include="disassemblers\dis_bitcode.h">
+      <Filter>Disassemblers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\mesh\meshopt.h">
+      <Filter>Common\codec\mesh</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\2d\fonts.h">
+      <Filter>FileTypes\2d</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\maths\bspline.h">
+      <Filter>Common\maths</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\cabac.h">
+      <Filter>Common\codec</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\extra\colour.h">
+      <Filter>Common\extra</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\bitmap\tiff.h" />
+    <ClInclude Include="..\common\codec\video\h265.h">
+      <Filter>Common\codec\video</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\video\nal.h">
+      <Filter>Common\codec\video</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\video\h265_internal.h">
+      <Filter>Common\codec\video</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\codec\video\vpx_decode.h">
+      <Filter>Common\codec\video</Filter>
+    </ClInclude>
+    <ClInclude Include="..\filetypes\ebml.h">
+      <Filter>FileTypes</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\extra\icc_profile.h">
+      <Filter>Common\extra</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\assets\shaders\particle.fxh">
@@ -2658,7 +2740,7 @@
       <Filter>Resource Files\isocmd</Filter>
     </IsoCmd>
     <IsoCmd Include="devices\icons\dot.psd">
-      <Filter>Devices\DeviceIcons</Filter>
+      <Filter>Resource Files\DeviceIcons</Filter>
     </IsoCmd>
     <IsoCmd Include="..\systems\roads\roads.fx">
       <Filter>Systems\roads</Filter>
@@ -2695,61 +2777,58 @@
   </ItemGroup>
   <ItemGroup>
     <Image Include="devices\icons\Code.png">
-      <Filter>Devices\DeviceIcons</Filter>
+      <Filter>Resource Files\DeviceIcons</Filter>
     </Image>
     <Image Include="devices\icons\Console.png">
-      <Filter>Devices\DeviceIcons</Filter>
+      <Filter>Resource Files\DeviceIcons</Filter>
     </Image>
     <Image Include="devices\icons\Folder.png">
-      <Filter>Devices\DeviceIcons</Filter>
+      <Filter>Resource Files\DeviceIcons</Filter>
     </Image>
     <Image Include="devices\icons\Harddrive.png">
-      <Filter>Devices\DeviceIcons</Filter>
+      <Filter>Resource Files\DeviceIcons</Filter>
     </Image>
     <Image Include="devices\icons\Hue.png">
-      <Filter>Devices\DeviceIcons</Filter>
+      <Filter>Resource Files\DeviceIcons</Filter>
     </Image>
     <Image Include="devices\icons\PlayStation.png">
-      <Filter>Devices\DeviceIcons</Filter>
+      <Filter>Resource Files\DeviceIcons</Filter>
     </Image>
     <Image Include="devices\icons\Processes.png">
-      <Filter>Devices\DeviceIcons</Filter>
+      <Filter>Resource Files\DeviceIcons</Filter>
     </Image>
     <Image Include="devices\icons\Registry Editor.png">
-      <Filter>Devices\DeviceIcons</Filter>
+      <Filter>Resource Files\DeviceIcons</Filter>
     </Image>
     <Image Include="devices\icons\Settings.png">
-      <Filter>Devices\DeviceIcons</Filter>
+      <Filter>Resource Files\DeviceIcons</Filter>
     </Image>
     <Image Include="devices\icons\UPnP.png">
-      <Filter>Devices\DeviceIcons</Filter>
+      <Filter>Resource Files\DeviceIcons</Filter>
     </Image>
     <Image Include="devices\icons\URL.png">
-      <Filter>Devices\DeviceIcons</Filter>
+      <Filter>Resource Files\DeviceIcons</Filter>
     </Image>
     <Image Include="devices\icons\VideoCap.png">
-      <Filter>Devices\DeviceIcons</Filter>
+      <Filter>Resource Files\DeviceIcons</Filter>
     </Image>
     <Image Include="devices\icons\Windows.png">
-      <Filter>Devices\DeviceIcons</Filter>
+      <Filter>Resource Files\DeviceIcons</Filter>
     </Image>
     <Image Include="devices\icons\Xbox.png">
-      <Filter>Devices\DeviceIcons</Filter>
+      <Filter>Resource Files\DeviceIcons</Filter>
     </Image>
     <Image Include="devices\icons\Clipboard.png">
-      <Filter>Devices\DeviceIcons</Filter>
+      <Filter>Resource Files\DeviceIcons</Filter>
     </Image>
     <Image Include="devices\icons\File.png">
-      <Filter>Devices\DeviceIcons</Filter>
+      <Filter>Resource Files\DeviceIcons</Filter>
     </Image>
     <Image Include="devices\icons\SVN.png">
-      <Filter>Devices\DeviceIcons</Filter>
+      <Filter>Resource Files\DeviceIcons</Filter>
     </Image>
     <Image Include="devices\icons\Fonts.png">
-      <Filter>Devices\DeviceIcons</Filter>
-    </Image>
-    <Image Include="devices\icons\Landscape.png">
-      <Filter>Resource Files</Filter>
+      <Filter>Resource Files\DeviceIcons</Filter>
     </Image>
     <Image Include="devices\icons\Root.png">
       <Filter>Resource Files</Filter>
@@ -2761,7 +2840,10 @@
       <Filter>Resource Files</Filter>
     </Image>
     <Image Include="devices\icons\p4.png">
-      <Filter>Devices\DeviceIcons</Filter>
+      <Filter>Resource Files\DeviceIcons</Filter>
+    </Image>
+    <Image Include="devices\icons\Landscape.png">
+      <Filter>Resource Files\DeviceIcons</Filter>
     </Image>
   </ItemGroup>
   <ItemGroup>

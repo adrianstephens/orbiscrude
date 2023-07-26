@@ -423,7 +423,7 @@ template<> void MAXColourSourceCreatorT<NoiseParams>::Source::WriteShader(Shader
 			"noise_fractal",
 			"noise_turb",
 		};
-		shader.Arg() << fns[type] << "(float4(worldpos, " << phase << ") / " << size << ", " << levels << ")";
+		shader.Arg() << fns[type] << "(float4(worldpos, " << phase << ") / " << (float)size << ", " << levels << ")";
 
 		if (thresholdLow < thresholdHigh) {
 			shader.Arg() << thresholdLow << ", " << thresholdHigh << ", smooth_width(worldpos)";
@@ -555,7 +555,7 @@ template<> void MAXColourSourceCreatorT<FalloffParams>::Source::WriteShader(Shad
 				break;
 		}
 
-		shader.Arg() << nearDistance << ", " << farDistance;
+		shader.Arg() << (float)nearDistance << ", " << (float)farDistance;
 		shader.Close();
 
 		shader.Close();

@@ -1,3 +1,5 @@
+//#define HAS_COMPUTE
+
 #include "dxt_compute.h"
 
 #ifdef HAS_COMPUTE

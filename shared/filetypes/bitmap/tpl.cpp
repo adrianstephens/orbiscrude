@@ -129,7 +129,7 @@ void TPL::Read(const block<ISO_rgba, 2> &b, void *srce, uint32 srce_swizzle, GXT
 	if (format == GX_TF_XFB) {
 		int	scan = align(width, 16) / 2;
 		for (uint32 y = 0; y < height; y++) {
-			ISO_rgba	*dest	= b[y];
+			ISO_rgba	*dest	= b[y].begin();
 			WiiYUV2		*yuv	= (WiiYUV2*)srce + scan * y;
 			for (uint32 x = 0; x < width; x += 2, dest += 2, yuv++)
 				yuv->ToRGB(dest);
@@ -487,7 +487,7 @@ ISO_ptr<void> TPLFileHandler::Read(tag id, istream_ref file) {
 
 	ISO_ptr<ISO_openarray<ISO_ptr<bitmap> > > p(id, ntex);
 	for (int i = 0; i < ntex; i++)
-		(*p)[i] = Read1(0, file, td[i]);
+		(*p)[i] = Read1(none, file, td[i]);
 
 	delete[] td;
 	return p;

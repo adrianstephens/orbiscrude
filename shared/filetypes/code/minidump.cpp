@@ -138,8 +138,8 @@ class MinidumpFileHandler : public FileHandler {
 	const char*		GetDescription() override { return "Minidump";	}
 	int				Check(istream_ref file) override {
 		file.seek(0);
-		MINIDUMP_HEADER	h	= file.get();
-		return h.Signature == MINIDUMP_SIGNATURE ? CHECK_PROBABLE : CHECK_DEFINITE_NO;
+		MINIDUMP_HEADER	h;
+		return file.read(h) && h.Signature == MINIDUMP_SIGNATURE ? CHECK_PROBABLE : CHECK_DEFINITE_NO;
 	}
 
 	ISO_ptr<void>	ReadWithFilename(tag id, const filename &fn) override;

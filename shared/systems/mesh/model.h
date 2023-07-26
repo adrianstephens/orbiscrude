@@ -15,13 +15,13 @@ void				AddBatch(ISO_ptr<Model3> &model, param(float3x4) world);
 void				DrawBatches(int mode);
 
 #ifdef ISO_EDITOR
-struct SubMeshPlat : SubMesh {
+struct SubMeshPlat : SubMeshBase {
 	struct renderdata {
 		int					vert_size:16, prim:8, :8;
 		int					nverts;
 		int					nindices;
 		_VertexBuffer		vb;
-		IndexBuffer<uint16>	ib;
+		IndexBuffer<uint32>	ib;
 		VertexDescription	vd;
 	};
 	void	Init(void *physram);

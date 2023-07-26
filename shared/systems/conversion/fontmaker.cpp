@@ -1,8 +1,11 @@
 #include "platformdata.h"
-#include "systems/ui/font.h"
+#include "scenegraph.h"
+#include "2d/fonts.h"
 #include "systems/ui/font_iso.h"
 #include "iso/iso_files.h"
 #include "allocators/allocator2D.h"
+#include "maths/geometry_iso.h"
+#include "extra/indexer.h"
 
 #ifdef PLAT_MAC
 #include <CoreText/CTFont.h>
@@ -570,18 +573,19 @@ public:
 		gi[c] = g;
 	}
 
-	int		Write(GlyphInfo *out, int offset) {
-		GlyphInfo	*p	= out + offset;
-		offset			+= NumEntries();
+	int		Write(stride_iterator<GlyphInfo> out, int offset) {
+		auto	p	= out + offset;
+		offset	+= NumEntries();
 		for (int i = first; i <= last; i++, p++) {
 			if (subbank[i]) {
-				p->n		= subbank[i]->NumEntries();
-				p->f		= subbank[i]->FirstEntry();
-				p->flags	= Font::GLYPH_TABLE;
-				p->offset	= offset;
+				p->flags	= GlyphInfo::TABLE;
+				auto	p2	= unconst(p->get_table());
+				p2->n		= subbank[i]->NumEntries();
+				p2->f		= subbank[i]->FirstEntry();
+				p2->offset	= offset;
 				offset		= subbank[i]->Write(out, offset);
 			} else if (gi[i]) {
-				*p			= *gi[i];
+				memcpy(&*p, gi[i], out.stride());
 			} else {
 				clear(*p);
 			}
@@ -597,16 +601,16 @@ struct RootFontBank : public FontBank {
 			bank = bank->Subbank(chars[i]);
 		bank->SetGlyph(chars[num - 1], gi);
 	}
-	void	Write(GlyphInfo *out) {
+	void	Write(stride_iterator<GlyphInfo> out) {
 		FontBank::Write(out, 0);
 	}
 };
 
 uint8 GetGlyphFlags(int c) {
 	if (c == ' ' || (c >= 0x4e00 && c < 0xa000) || (c >= 0x3040 && c < 0x30a0) || c == 0x3002)
-		return Font::GLYPH_BREAKABLE;
+		return GlyphInfo::BREAKABLE;
 	if (c == '?' || c == '!' || c == ';' || c == ':' || c == '.')	// some languages require a space before these punctuation symbols
-		return Font::GLYPH_NOT_SOL;
+		return GlyphInfo::NOT_SOL;
 	return 0;
 }
 
@@ -614,7 +618,7 @@ uint8 GetGlyphFlags(int c) {
 //	Conversions
 //-----------------------------------------------------------------------------
 
-ISO_ptr_machine<bitmap> FontBitmap(Font &p) {
+ISO_ptr_machine<bitmap> FontBitmap(TexFont &p) {
 	return *(ISO_ptr_machine<bitmap>*)&p.tex;
 }
 
@@ -787,18 +791,18 @@ FontParams2 FontMaker1(FontParams &p) {
 	return fp2;
 }
 
-Font FontMaker2(FontParams2 &p) {
+TexFont FontMaker2(FontParams2 &p) {
 	if (p.xspacing == 0)
 		throw_accum("Need at least x-spacing");
 
 	if (p.yspacing == 0)
 		p.yspacing = p.xspacing;
 
-	Font		font;
+	TexFont		font;
 	bitmap		&bm			= *p.bm;
 	int			across		= bm.Width() / p.xspacing;
 	int			num			= p.chars.Count();
-	GlyphInfo*	glyph_info	= new GlyphInfo[num];
+	auto		glyph_info	= new TexGlyphInfo[num];
 
 	int	font_maxy = 0, font_miny = p.yspacing,
 		font_maxx = 0, font_minx = p.xspacing,
@@ -806,7 +810,7 @@ Font FontMaker2(FontParams2 &p) {
 
 	for (int i = 0; i < num; i++) {
 		int			c	= p.chars[i];
-		GlyphInfo	&gi	= glyph_info[i];
+		auto&		gi	= glyph_info[i];
 		int			x = (i % across) * p.xspacing,
 					y = (i / across) * p.yspacing;
 		FontRect	rect(bm.Block(x, y, p.xspacing, p.yspacing - 1));
@@ -815,7 +819,7 @@ Font FontMaker2(FontParams2 &p) {
 		clear(gi);
 		gi.w		= rect.Width();
 //		if ((p.flags & FF2_PACK) && CheckPack(bm.Block(x, y, p.xspacing, p.yspacing - 1)))
-//			gi.flags = Font::GLYPH_TABLE;
+//			gi.flags = GlyphInfo::TABLE;
 
 		if (kern.Any()) {
 			gi.k	= rect.MinX() - kern.MinX();
@@ -838,14 +842,14 @@ Font FontMaker2(FontParams2 &p) {
 
 			for (int j = 0; j < i; j++) {
 				if (gi.w == glyph_info[j].w && CompareRects(bm.Block(x, y, p.xspacing, p.yspacing - 1), bm.Block((j % across) * p.xspacing, (j / across) * p.yspacing, 0, 0))) {
-					gi.flags	= Font::GLYPH_TABLE;	// here means it's a dupe of another character
+					gi.flags	= GlyphInfo::TABLE;	// here means it's a dupe of another character
 					gi.u		= j;
 					gi.w		= 0;
 				}
 			}
 
 		} else if (i > 'a' - 'A' && c >= 'a' && c <= 'z' && glyph_info[i + 'A' - 'a'].w) {
-			gi.flags	= Font::GLYPH_TABLE;	// here means it's a dupe of another character
+			gi.flags	= GlyphInfo::TABLE;	// here means it's a dupe of another character
 			gi.u		= i + 'A' - 'a';
 		}
 	}
@@ -865,7 +869,7 @@ Font FontMaker2(FontParams2 &p) {
 			int	xc[4] = {0,0,0,0};
 			for (int i = 0; i < num; i++) {
 				GlyphInfo	&gi	= glyph_info[i];
-				if (gi.w && (gi.flags & Font::GLYPH_PACKED)) {
+				if (gi.w && (gi.flags & GlyphInfo::PACKED)) {
 					int	c	= 0;
 					for (int j = 1; j < 4; j++) {
 						if (xc[j] < xc[c])
@@ -885,7 +889,7 @@ Font FontMaker2(FontParams2 &p) {
 			}
 			for (int i = 0, x = max(max(max(xc[0], xc[1]), xc[2]), xc[3]); i < num; i++) {
 				GlyphInfo	&gi	= glyph_info[i];
-				if (gi.w && !(gi.flags & Font::GLYPH_PACKED)) {
+				if (gi.w && !(gi.flags & GlyphInfo::PACKED)) {
 					x += gi.w + 1;
 					if (x > curr_width) {
 						if (next_width)
@@ -943,7 +947,7 @@ Font FontMaker2(FontParams2 &p) {
 		int	y		= 0;
 		for (int i = 0; i < num; i++) {
 			GlyphInfo	&gi	= glyph_info[i];
-			if (gi.w && (gi.flags & Font::GLYPH_PACKED)) {
+			if (gi.w && (gi.flags & GlyphInfo::PACKED)) {
 				int			w	= gi.w;
 				int			c	= 0;
 				int			sx	= (i % across) * p.xspacing,
@@ -970,7 +974,7 @@ Font FontMaker2(FontParams2 &p) {
 		}
 		for (int i = 0, x = max(max(max(xc[0], xc[1]), xc[2]), xc[3]); i < num; i++) {
 			GlyphInfo	&gi	= glyph_info[i];
-			if (gi.w && !(gi.flags & Font::GLYPH_PACKED)) {
+			if (gi.w && !(gi.flags & GlyphInfo::PACKED)) {
 				int			w	= gi.w;
 				int			sx = (i % across) * p.xspacing,
 							sy = (i / across) * p.yspacing;
@@ -988,7 +992,7 @@ Font FontMaker2(FontParams2 &p) {
 		}
 	} else*/ {
 		for (int i = 0, x = 0, y = 0; i < num; i++) {
-			GlyphInfo	&gi	= glyph_info[i];
+			auto&	gi	= glyph_info[i];
 			if (int w = gi.w) {
 				int		sx = (i % across) * p.xspacing,
 						sy = (i / across) * p.yspacing;
@@ -1002,7 +1006,7 @@ Font FontMaker2(FontParams2 &p) {
 				gi.u	= x;
 				gi.v	= y;
 				x		+= w + 1;
-			} else if (gi.flags & Font::GLYPH_TABLE) {
+			} else if (gi.flags & GlyphInfo::TABLE) {
 				gi		= glyph_info[gi.u];
 			}
 		}
@@ -1051,7 +1055,7 @@ Font FontMaker2(FontParams2 &p) {
 
 	RootFontBank	bank;
 	for (int i = 0; i < num; i++) {
-		GlyphInfo	&gi	= glyph_info[i];
+		auto&	gi	= glyph_info[i];
 		if (gi.w || gi.s) {
 			uint8	chars[8];
 			int		c	= p.chars[i];
@@ -1065,8 +1069,8 @@ Font FontMaker2(FontParams2 &p) {
 		}
 	}
 
-	ISO_openarray<GlyphInfo>	glyphs(bank.Count());
-	bank.Write(glyphs);
+	ISO_openarray<TexGlyphInfo>	glyphs(bank.Count());
+	bank.Write(glyphs.begin());
 	font.glyph_info = glyphs.detach();
 
 	font.firstchar	= bank.FirstEntry();
@@ -1076,186 +1080,422 @@ Font FontMaker2(FontParams2 &p) {
 	return font;
 }
 
-#ifdef PLAT_PC
+struct ISOSlugFont : Font {
+	uint8	firstchar, numchars;
 
-#define TTFONT2
+	ISO_openarray<SlugGlyphInfo>	glyph_buffer;
 
-#ifdef TTFONT2
-struct TTPoint {
-	int			type;
-	float2p		p;
-};
-struct TTGlyph {
-	int	x, y, s;
-	ISO_openarray<TTPoint>		points;
-};
-#else
-struct TTCurve {
-	int			type;
-	ISO_openarray<float2p>		points;
+	ISODataBuffer	band_buffer;
+	ISODataBuffer	indices_buffer;
+	ISODataBuffer	curve_buffer;
+	ISOTexture		palette;
 };
 
-struct TTContour {
-	float2p	start;
-	ISO_openarray<TTCurve>		curves;
-};
+ISO_DEFSAME(ISOSlugFont, SlugFont);
 
-struct TTGlyph {
-	int	x, y, s;
-	ISO_openarray<TTContour>	contours;
-};
-#endif
+dynamic_array<uint16> MakeSlugBands(range<const float2*> points, int num_bands, uint16x2 *hdest) {
+	temp_array<dynamic_array<uint32>>	hbands(num_bands), vbands(num_bands);
 
-struct TTFont {
-	uint16						firstchar, numchars;
-	ISO_openarray<TTGlyph>		glyphs;
-};
-
-#ifdef TTFONT2
-ISO_DEFUSERCOMPV(TTPoint, type, p);
-ISO_DEFUSERCOMPV(TTGlyph, x, y, s, points);
-#else
-ISO_DEFUSERCOMPV(TTCurve, type, points);
-ISO_DEFUSERCOMPV(TTContour, start, curves);
-ISO_DEFUSERCOMPV(TTGlyph, x, y, s, contours);
-#endif
-ISO_DEFUSERCOMPV(TTFont, firstchar, numchars, glyphs);
-
-float tofloat(const FIXED &f) { return (long&)f / 65536.f; }
-
-TTFont TTFontMaker(TTFontParams &p) {
-	static MAT2		mat2 = {{0,1},{0,0},{0,0},{0,1}};
-
-	if (!p.firstchar)	p.firstchar	= ' ';
-	if (!p.numchars)	p.numchars	= 127 - p.firstchar;
-
-	HDC					hdc;
-	HFONT				hFont;
-	OUTLINETEXTMETRIC	otm;
-	ABC					abc;
-
-	hdc		= CreateCompatibleDC(NULL);
-	hFont	= CreateFontA(
-		0,					// logical height of font
-		0,						// logical average character width
-		0,						// angle of escapement
-		0,						// base-line orientation angle
-		p.weight,				// font weight
-		p.italics,				// italic attribute flag
-		p.underline,			// underline attribute flag
-		p.strikeout,			// strikeout attribute flag
-		DEFAULT_CHARSET,		// character set identifier
-		OUT_DEFAULT_PRECIS,		// output precision
-		CLIP_DEFAULT_PRECIS,	// clipping precision
-		DEFAULT_QUALITY,		// output quality
-		FF_DONTCARE,			// pitch and family
-		p.name				 	// pointer to typeface name string
-	);
-
-	SelectObject(hdc, hFont);
-
-	GetOutlineTextMetrics(hdc, sizeof(otm), &otm);
-	hFont	= CreateFontA(
-		0,						// logical height of font
-		otm.otmEMSquare,		// logical average character width
-		0,						// angle of escapement
-		0,						// base-line orientation angle
-		p.weight,				// font weight
-		p.italics,				// italic attribute flag
-		p.underline,			// underline attribute flag
-		p.strikeout,			// strikeout attribute flag
-		DEFAULT_CHARSET,		// character set identifier
-		OUT_DEFAULT_PRECIS,		// output precision
-		CLIP_DEFAULT_PRECIS,	// clipping precision
-		DEFAULT_QUALITY,		// output quality
-		FF_DONTCARE,			// pitch and family
-		p.name				 	// pointer to typeface name string
-	);
-	DeleteObject(SelectObject(hdc, hFont));
-
-	int				buffersize	= 1024;
-	malloc_block	buffer(buffersize);
-
-	TTFont		font;
-	font.firstchar	= p.firstchar;
-	font.numchars	= p.numchars;
-	font.glyphs.Create(p.numchars);
-
-	for (int i = 0, c = p.firstchar; i < p.numchars; i++, c++) {
-		TTGlyph			&glyph	= font.glyphs[i];
-		GLYPHMETRICS	gm;
-		int				n		= GetGlyphOutlineW(hdc, c, GGO_NATIVE, &gm, buffersize, buffer, &mat2);
-
-		glyph.s	= gm.gmCellIncX;
-		glyph.x	= gm.gmptGlyphOrigin.x;
-		glyph.y	= gm.gmptGlyphOrigin.y;
-
-		if (n > 0) {
-			TTPOLYGONHEADER	*tth	= (TTPOLYGONHEADER*)buffer;
-#ifdef TTFONT2
-			while ((char*)tth < buffer + n) {
-				TTPOLYCURVE	*ttc	= (TTPOLYCURVE*)(tth + 1);
-				TTPOLYCURVE	*end	= (TTPOLYCURVE*)((char*)tth + tth->cb);
-				TTPoint		&pt		= glyph.points.Append();
-
-				pt.type	= 1;
-				pt.p = float2{tofloat(tth->pfxStart.x), tofloat(tth->pfxStart.y)};
-
-				while (ttc < end) {
-					for (int v = 0; v < ttc->cpfx; v++) {
-						TTPoint		&pt		= glyph.points.Append();
-						pt.type	= v < ttc->cpfx - 1 ? ttc->wType : 1;
-						pt.p = float2{tofloat(ttc->apfx[v].x), tofloat(ttc->apfx[v].y)};
-					}
-					ttc = (TTPOLYCURVE*)&ttc->apfx[ttc->cpfx];
-				}
-
-				glyph.points[glyph.points.Count() - 1].type = 0;
-				tth = (TTPOLYGONHEADER*)end;
-			}
-#else
-			while ((char*)tth < buffer + n) {
-				TTPOLYCURVE	*ttc	= (TTPOLYCURVE*)(tth + 1);
-				TTPOLYCURVE	*end	= (TTPOLYCURVE*)((char*)tth + tth->cb);
-				TTContour	&cont	= glyph.contours.Append();
-
-				cont.start.set(tofloat(tth->pfxStart.x), tofloat(tth->pfxStart.y));
-
-				while (ttc < end) {
-					TTCurve		&curve	= cont.curves.Append();
-					float2p	*d		= curve.points.Create(ttc->cpfx);
-					curve.type			= ttc->wType;
-					for (int v = 0; v < ttc->cpfx; v++)
-						d++->set(tofloat(ttc->apfx[v].x), tofloat(ttc->apfx[v].y));
-					ttc = (TTPOLYCURVE*)&ttc->apfx[ttc->cpfx];
-				}
-
-				tth = (TTPOLYGONHEADER*)end;
-			}
-#endif
-		}
-
-		GetCharABCWidthsW(hdc, c, c, &abc);
-
+	for (int i = 0, n = points.size() / 2 - 1; i < n; ++i) {
+		auto	p	= &points[i * 2];
+		if (is_nan(p[1]))
+			continue;
+		auto	a	= p[0] - p[1] * 2 + p[2];
+		auto	b	= p[0] - p[1];
+		auto	c	= p[0];
+		auto	t	= clamp(b / a, zero, one);
+		auto	m	= c - t * b;
+		auto	mins	= to<int>(floor(min(p[0], p[2], m) * num_bands));
+		auto	maxs	= min(to<int>(floor(max(p[0], p[2], m) * num_bands)), num_bands - 1);
+		auto	flat	= a == zero & b == zero;
+		if (!flat.x)
+			for (int x = mins.x; x <= maxs.x; x++)
+				vbands[x].push_back(i);
+		if (!flat.y)
+			for (int y = mins.y; y <= maxs.y; y++)
+				hbands[y].push_back(i);
 	}
 
-	return font;
+	dynamic_array<uint16>		indices;
 
+	struct Band {
+		uint32	offset, size;
+	};
+
+	auto	get_offsets = [&](const dynamic_array<uint32> *bands) {
+		dynamic_array<Band>	offsets;
+		for (int i = 0; i < num_bands; i++) {
+			if (i > 0 && bands[i] == bands[i - 1]) {
+				offsets.push_back(offsets.back());
+
+			} else {
+				offsets.push_back({indices.size32(), bands[i].size32()});
+				indices.append(bands[i]);
+			}
+		}
+		return offsets;
+	};
+
+	auto	hband_offsets = get_offsets(hbands);
+	auto	vband_offsets = get_offsets(vbands);
+
+	auto	vdest = hdest + num_bands;
+
+	for (int i = 0; i < num_bands; i++) {
+		sort(indices.slice(hband_offsets[i].offset, hband_offsets[i].size), [&](uint16 a, uint16 b) {
+			return max(points[a * 2].x, points[a * 2 + 1].x, points[a * 2 + 2].x) > max(points[b * 2].x, points[b * 2 + 1].x, points[b * 2 + 2].x);
+		});
+		sort(indices.slice(vband_offsets[i].offset, vband_offsets[i].size), [&](uint16 a, uint16 b) {
+			return max(points[a * 2].y, points[a * 2 + 1].y, points[a * 2 + 2].y) > max(points[b * 2].y, points[b * 2 + 1].y, points[b * 2 + 2].y);
+		});
+		hdest[i] = {hband_offsets[i].offset, hband_offsets[i].size};
+		vdest[i] = {vband_offsets[i].offset, vband_offsets[i].size};
+	}
+
+	return indices;
 }
 
-#endif
+dynamic_array<float2> GetSlugPoints(const curves& c) {
+	if (direction(c)) {
+		curves	c2 = c;
+		reverse_curves(c2);
+		if (!direction(c2))
+			return GetSlugPoints(c2);
+		ISO_TRACEF("wierd curve\n");
+	}
+//	ISO_ASSERT(!direction(c));
+
+	interval<float2>	ext(none);
+	for (auto& i : c)
+		ext |= float2{i.x, i.y};
+
+	dynamic_array<bezier_chain<float2,2>>	chains2 = get_bezier2(c, 6, len(ext.extent()) / 250);
+	dynamic_array<float2> points;
+
+	for (auto &c : chains2) {
+		points.append(c.c);
+		points.push_back(nan);
+	}
+	return points;
+}
+
+template<typename S, typename D> uint32 AppendISO(const S& srce, ISO_openarray<D>& dest) {
+	uint32	offset = dest.size32();
+	dest.Resize(offset + num_elements(srce));
+	copy(srce, &dest[offset]);
+	return offset;
+}
+
+ISO_rgba to_ISO_rgba(rgba8 c) {
+	return force_cast<ISO_rgba>(c);
+}
+
+template<typename I, class P = equal_to> auto unique_indices(I i, I end, P pred = P()) {
+	if (i == end)
+		return end;
+
+	I prev = i;
+	while (++i != end) {
+		if (!pred(*prev, *i))
+			*++prev = move(*i);
+		else
+			*prev = *i;
+	}
+	return ++prev;
+}
+
+template<class C, class P = equal_to> inline auto unique_indices(C&& c, P pred = P()) {
+	return unique_indices(begin(c), end(c), pred);
+}
+
+struct gradient {
+	glyph_fill::colour_line	colours;
+	bool	can_extend;
+
+	gradient(const glyph_fill::colour_line &c) : colours(c), can_extend(c.extend != c.EXTEND_NONE) {}
+
+	void make(block<ISO_rgba, 1> dest) const {
+		auto	n	= colours.colours.begin() + 1;
+		float	t	= n[-1].t;
+		float	dt	= (colours.colours.back().t - t) / (dest.size() - 1);
+
+		for (auto& i : dest) {
+			while (n < colours.colours.end() - 1 && t >= n->t)
+				++n;
+			i	= force_cast<ISO_rgba>((rgba8)evaluate(n[-1], n[0], t));
+			t	+= dt;
+		}
+	}
+
+	bool operator<(const gradient& b) const {
+		auto	sizea	= colours.colours.size() + int(can_extend);
+		auto	sizeb	= b.colours.colours.size() + int(b.can_extend);
+		return sizea < sizeb || (sizea == sizeb && colours.colours < b.colours.colours);
+	}
+	bool operator==(const gradient& b) const {
+		return colours == b.colours;
+	}
+};
+
+ISO_ptr<ISOSlugFont> SlugMaker(ISO_ptr<FontWrapper> fw, int num_bands) {
+	struct glyph_info {
+		uint32				indices_offset	= 0;
+		uint32				curves_offset	= 0;
+		interval<float2>	ext				= empty;
+		float				advance			= 0;
+		bool				layered			= false;
+	};
+	struct layer_info {
+		uint32				indices_offset	= 0;
+		uint32				curves_offset	= 0;
+		uint8x4				colour;
+	};
+
+	ISO_ptr<ISOSlugFont>	out(fw.ID());
+	
+	if (num_bands == 0)
+		num_bands = 8;
+
+	uint32	num_glyphs	= fw->glyphs.size32();
+	uint32	num_layers	= 0;
+
+	for (auto& i : fw->layers_map)
+		num_layers += i->size32();
+
+	dynamic_array<glyph_info>			glyph_infos(num_glyphs);
+	dynamic_array<layer_info>			layer_infos(num_layers);
+	ISO_ptr<ISO_openarray<uint16x2>>	band_buffer(none, (num_glyphs + num_layers) * num_bands * 2);
+	ISO_ptr<ISO_openarray<uint16>>		indices_buffer(none, 0);
+//	ISO_ptr<ISO_openarray<array_vec<unorm8, 2>>>	curve_buffer(none, 0);
+//	ISO_ptr<ISO_openarray<array_vec<unorm16, 2>>>	curve_buffer(none, 0);
+	ISO_ptr<ISO_openarray<float2>>					curve_buffer(none, 0);
+	ISO_ptr<bitmap>						palette;
+
+	// make gradient texture
+	dynamic_array<gradient>	gradients;
+	for (auto& i : fw->layers_map) {
+		for (auto& j : *i)
+			gradients.push_back(j.cols);
+	}
+	temp_array<uint32>	indices		= int_range(gradients.size32());
+	temp_array<uint32>	rev_indices	= indices;
+
+	auto	indices2	= make_double_index_container(rev_indices, indices);
+	auto	gradients2	= make_indexed_container(gradients, indices2);
+	sort(gradients2);
+	auto	end			= unique_indices(gradients2);
+	auto	num_unique	= end - gradients2.begin();
+	uint32	num_single	= 0;
+
+	for (auto&& i : slice_to(gradients2, num_unique)) {
+		if (i->colours.colours.size() > 1)
+			break;
+		++num_single;
+	}
+
+	bool	single_pal	= false;//true;
+	uint32	col_width	= 64;
+	uint32	col_grads	= single_pal ? div_round_up(num_single, col_width) : 0;
+	uint32	col_height	= col_grads + num_unique - num_single;
+
+	if (col_height) {
+		col_height	= next_pow2(col_height);
+		palette.Create(none, col_width, col_height, BMF_NOMIP|BMF_NOCOMPRESS);
+
+		if (single_pal) {
+			auto	single = palette->ScanLine(0);
+			for (auto&& i : slice_to(gradients2, num_single))
+				*single++ = to_ISO_rgba(i->colours.colours[0].c);
+		}
+
+		if (num_unique - num_single) {
+			uint32	y	= col_grads;
+			for (auto&& i : slice(gradients2, num_single, num_unique - num_single))
+				i->make(palette->ScanLineBlock(y++));
+		}
+	}
+
+	// add layered glyphs
+	uint32	index = num_glyphs;
+	for (auto& i : fw->layers_map) {
+		auto&		gi0		= glyph_infos[i.index()];
+		gi0.layered			= true;
+		gi0.indices_offset	= index;
+		gi0.curves_offset	= i->size32();
+
+		for (auto& j : *i)
+			gi0.ext	|= get_extent(GetSlugPoints(j));
+
+		float2x3	ext_mat		= translate(gi0.ext.a) * scale(gi0.ext.extent());
+
+		for (auto& j : *i) {
+			auto&	gi			= layer_infos[index - num_glyphs];
+			uint32	gradient	= rev_indices[index - num_glyphs];
+
+			if (gradient < num_single) {
+				if (j.cols.colours.empty()) {
+					gi.colour	= zero;
+				} else if (single_pal) {
+					gi.colour.x		= gradient % col_width;
+					gi.colour.y		= gradient / col_width;
+					gi.colour.z		= GradientTransform::SOLID;
+					gi.colour.w		= zero;
+				} else {
+					gi.colour	= as<uint8>(j.cols.colours[0].c);
+				}
+			} else {
+				auto	m		= ext_mat / j.grad.transform;
+				float2	g[4]	= {m.x, m.y, m.z, j.grad.params};
+				AppendISO(g, *curve_buffer);
+				gi.colour.xy	= as<uint8>(uint16(((gradient - num_single + col_grads) * 0x10000 + 0x8000) / col_height));
+				gi.colour.z		= j.grad.fill | (j.cols.extend << 4);
+				gi.colour.w		= zero;
+			}
+
+			dynamic_array<float2> points = scale_with_extent(GetSlugPoints(j), gi0.ext);
+			gi.curves_offset	= AppendISO(points, *curve_buffer);
+
+			auto	indices		= MakeSlugBands(points, num_bands, &(*band_buffer)[index * num_bands * 2]);
+			gi.indices_offset	= AppendISO(indices, *indices_buffer);
+			++index;
+		}
+	}
+
+	// add monochrome glyphs
+	for (index = 0; index < num_glyphs; index++) {
+		auto	glyph	= fw->glyphs[index];
+		auto&	gi		= glyph_infos[index];
+
+		gi.advance	= glyph.advance;
+		
+		if (!gi.layered && !glyph.empty()) {
+			auto	points		= GetSlugPoints(glyph);
+			gi.ext				= get_extent(points);
+
+			decltype(points) points2		= scale_with_extent(points, gi.ext);
+			gi.curves_offset	= AppendISO(points2, *curve_buffer);
+
+			auto	indices		= MakeSlugBands(points2, num_bands, &(*band_buffer)[index * num_bands * 2]);
+			gi.indices_offset	= AppendISO(indices, *indices_buffer);
+		}
+	}
+
+
+	interval<float2>	ext = empty;
+	float				maxadv = 0;
+	for (auto& i : glyph_infos) {
+		ISO_ASSERT(i.ext.a.y > -1e6f && i.ext.a.x > -1e6f);
+
+		ext |= i.ext;
+		maxadv = max(maxadv, i.advance);
+	}
+	
+	auto	scale	= 255 / max(ext.extent(), float2{maxadv, fw->spacing});
+	float	scale1	= reduce_min(scale);
+
+	temp_array<SlugGlyphInfo>	glyph_infos2 = transformc(glyph_infos, [&](const glyph_info& g) {
+		SlugGlyphInfo	gi;
+
+		auto	p0	= (g.ext.a - ext.a) * scale1;
+		gi.k	= p0.x;
+		gi.y	= max(p0.y, -127);
+		auto	p1	= g.ext.extent() * scale1;
+		gi.w	= p1.x;
+		gi.h	= p1.y;
+		gi.s	= g.advance * scale1;
+		gi.flags	= 0;
+
+		if (g.layered) {
+			gi.flags	|= GlyphInfo::LAYERED;
+			gi.bands			= g.indices_offset;
+			auto	gl			= (GlyphLayered*)&gi;
+			gl->offset			= g.indices_offset;
+			gl->num_layers		= g.curves_offset;
+		} else {
+			gi.bands			= glyph_infos.index_of(g);
+			gi.indices_offset	= g.indices_offset;
+			gi.curves_offset	= g.curves_offset;
+		}
+
+		return gi;
+	});
+
+	RootFontBank	bank;
+	uint32	num_chars	= fw->max_char + 1;
+
+	hash_map<uint32, char32>	glyphid_to_char;
+	if (fw->ligatures) {
+		for (auto &i : fw->glyph_map)
+			glyphid_to_char[*i] = i.index();
+	}
+
+	for (auto &i : fw->glyph_map) {
+		auto	c	= i.index();
+		auto	g	= *i;
+		//auto	g	= &i - fw->glyph_map.begin();
+		auto	*gi	= &glyph_infos2[g];
+
+		if (c < num_chars) {
+			uint8	chars[8];
+			gi->flags	|= GetGlyphFlags(c);
+			if (c < 0xc0) {
+				chars[0] = c;
+				bank.Add(gi, chars, 1);
+			}
+			if (c >= 0x80)
+				bank.Add(gi, chars, put_char(c, (char*)chars));
+		} else {
+			auto&	lig	= fw->ligatures[c - num_chars];
+			string_builder	b;
+			for (auto g : lig.b.glyphs)
+				b << glyphid_to_char[g];
+			bank.Add(gi, (uint8*)b.begin(), b.length());
+		}
+	}
+
+	uint32	num_bank	= bank.Count();
+	out->glyph_buffer.Create(num_bank + num_layers);
+	bank.Write(out->glyph_buffer.begin());
+
+	for (int i = 0; i < num_bank; i++) {
+		auto&	gi = out->glyph_buffer[i];
+		if (gi.flags & gi.LAYERED) {
+			auto	gl = (GlyphLayered*)&gi;
+			gl->offset = gl->offset - (i - num_bank + num_glyphs);
+		}
+	}
+
+	SlugLayerInfo*	layer = (SlugLayerInfo*)(out->glyph_buffer.begin() + num_bank);
+	for (auto &i : layer_infos) {
+		layer->colour			= i.colour;
+		layer->indices_offset	= i.indices_offset;
+		layer->curves_offset	= i.curves_offset;
+		++layer;
+	}
+
+	out->height			= fw->height	* scale1;
+	out->baseline		= fw->baseline	* scale1;
+	out->top			= ext.a.y		* scale1;
+	out->spacing		= fw->spacing	* scale1;
+
+	out->firstchar		= bank.FirstEntry();
+	out->numchars		= bank.NumEntries();
+
+	out->band_buffer	= band_buffer;
+	out->indices_buffer	= indices_buffer;
+	out->curve_buffer	= curve_buffer;
+	out->palette		= palette;
+	return out;
+}
 
 initialise font_initialise(
-	ISO::getdef<Font>(),
+	ISO::getdef<TexFont>(),
 	ISO::getdef<FontParams>(),
 	ISO::getdef<FontParams2>(),
 	ISO_get_cast(FontParamsBitmap),
 	ISO_get_cast(FontBitmap),
 	ISO_get_conversion(FontMaker1),
-#ifdef PLAT_PC
-	ISO::getdef<TTFontParams>(),
-	ISO::getdef<TTFont>(),
-	ISO_get_conversion(TTFontMaker),
-#endif
-	ISO_get_conversion(FontMaker2)
+	ISO_get_conversion(FontMaker2),
+	ISO::getdef<SlugFont>(),
+	ISO_get_operation(SlugMaker)
 );

@@ -1,6 +1,10 @@
-#include "filetypes/ebml.h"
+#include "ebml.h"
 #include "base/array.h"
 #include "base/maths.h"
+
+namespace iso {
+struct vbitmap_yuv;
+}
 
 namespace matroska {
 using namespace iso;
@@ -692,6 +696,21 @@ struct MultiTrackReader {
 		return block_entry->block.GetTime(cluster);
 	}
 	Block::Frame *GetNextFrame(int *track_index);
+};
+
+struct Decoder {
+	virtual ~Decoder()	{}
+	virtual bool init(const VideoTrack* video_track, int threads)			= 0;
+	virtual bool decode_frame(const void *buffer, size_t size, int f)		= 0;
+	virtual bool get_frame(vbitmap_yuv *bm)									= 0;
+};
+
+struct DecoderType : static_list<DecoderType> {
+	typedef Decoder* ftype();
+	const char *name;
+	ftype		*f;
+	bool operator==(const char *name2) const { return strcmp(name, name2) == 0; }
+	DecoderType(const char *name, ftype *f) : name(name), f(f) {}
 };
 
 } //namespace matroska

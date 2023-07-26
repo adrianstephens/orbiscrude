@@ -271,8 +271,8 @@ template<typename A, typename B> static int process(DXGI_COMPONENTS::LAYOUT layo
 		case DXGI_COMPONENTS::R16G16B16A16:	return ((components<16,16,16,16	>*)p)->process(f, type);
 		case DXGI_COMPONENTS::R32G32:		return ((components<32,32		>*)p)->process(f, type);
 //		case DXGI_COMPONENTS::R32G8X24:		return ((components<X24,8,32	>*)p)->process(f, type);
-		case DXGI_COMPONENTS::R10G10B10A2:	return ((components<2,10,10,10	>*)p)->process(f, type);
-		case DXGI_COMPONENTS::R11G11B10:	return ((components<10,11,11	>*)p)->process(f, type);
+		case DXGI_COMPONENTS::R10G10B10A2:	return ((components<10,10,10,2	>*)p)->process(f, type);
+		case DXGI_COMPONENTS::R11G11B10:	return ((components<11,11,10	>*)p)->process(f, type);
 		case DXGI_COMPONENTS::R8G8B8A8:		return ((components<8,8,8,8		>*)p)->process(f, type);
 		case DXGI_COMPONENTS::R16G16:		return ((components<16,16		>*)p)->process(f, type);
 		case DXGI_COMPONENTS::R32:			return ((components<32			>*)p)->process(f, type);
@@ -282,7 +282,7 @@ template<typename A, typename B> static int process(DXGI_COMPONENTS::LAYOUT layo
 		case DXGI_COMPONENTS::R8:			return ((components<8			>*)p)->process(f, type);
 		case DXGI_COMPONENTS::R1:			return ((components<1			>*)p)->process(f, type);
 		case DXGI_COMPONENTS::B5G6R5:		return ((components<5,6,5		>*)p)->process(f, type);
-		case DXGI_COMPONENTS::B5G5R5A1:		return ((components<1,5,5,5		>*)p)->process(f, type);
+		case DXGI_COMPONENTS::B5G5R5A1:		return ((components<5,5,5,1		>*)p)->process(f, type);
 		case DXGI_COMPONENTS::R4G4B4A4:		return ((components<4,4,4,4		>*)p)->process(f, type);
 		case DXGI_COMPONENTS::R9G9B9E5:		return ((shared_exponent<9,5>	 *)p)->process(f, type);
 		case DXGI_COMPONENTS::R8G8_B8G8:	return ((shared_chroma<bg_rg	>*)p)->process(f, type);
@@ -297,9 +297,9 @@ template<typename A, typename B> static int process(DXGI_COMPONENTS::LAYOUT layo
 		default: return 0;
 	}
 }
-template<typename A, typename B> static int process(DXGI_COMPONENTS format, A *p, B (&f)[4]) {
-	return process(format.Layout(), format.Type(), p, f);
-}
+//template<typename A, typename B> static int process(DXGI_COMPONENTS format, A *p, B (&f)[4]) {
+//	return process(format.Layout(), format.Type(), p, f);
+//}
 
 template<typename T> static inline T GetChannel(const T *in, DXGI_COMPONENTS::CHANNEL c) {
 	switch (c) {
@@ -319,20 +319,20 @@ template<typename T> static inline void ArrangeComponents(uint16 chans, const T 
 	}
 }
 
-inline int GetComponents(DXGI_COMPONENTS format, const void *p, float *f) {
-	return p ? process(format, p, (float(&)[4])*f) : 0;
+inline int GetComponents(DXGI_COMPONENTS::LAYOUT layout, DXGI_COMPONENTS::TYPE type, const void *p, float *f) {
+	return p ? process(layout, type, p, (float(&)[4])*f) : 0;
 }
-inline int GetComponents(DXGI_COMPONENTS format, const void *p, int *f) {
-	return p ? process(format, p, (int(&)[4])*f) : 0;
+inline int GetComponents(DXGI_COMPONENTS::LAYOUT layout, DXGI_COMPONENTS::TYPE type, const void *p, int *f) {
+	return p ? process(layout, type, p, (int(&)[4])*f) : 0;
 }
-inline int PutComponents(DXGI_COMPONENTS format, void *p, const float *f) {
-	return p ? process(format, p, (const float(&)[4])*f) : 0;
+inline int PutComponents(DXGI_COMPONENTS::LAYOUT layout, DXGI_COMPONENTS::TYPE type, void *p, const float *f) {
+	return p ? process(layout, type, p, (const float(&)[4])*f) : 0;
 }
-inline int PutComponents(DXGI_COMPONENTS format, void *p, const int *f) {
-	return p ? process(format, p, (const int(&)[4])*f) : 0;
+inline int PutComponents(DXGI_COMPONENTS::LAYOUT layout, DXGI_COMPONENTS::TYPE type, void *p, const int *f) {
+	return p ? process(layout, type, p, (const int(&)[4])*f) : 0;
 }
 
-inline float GetComponent(DXGI_COMPONENTS format, const void *p) {
+inline float GetComponent0(DXGI_COMPONENTS format, const void *p) {
 	uint32	v = *(uint32*)p;
 	switch (format.layout) {
 		case DXGI_COMPONENTS::R32G32B32A32:	return get_component<float>(v, 32,	format.Type());
@@ -355,7 +355,7 @@ inline float GetComponent(DXGI_COMPONENTS format, const void *p) {
 		case DXGI_COMPONENTS::R4G4B4A4:		return get_component<float>(v, 4,	format.Type());
 		default: {
 			float	f[4];
-			GetComponents(format, p, f);
+			GetComponents(format.Layout(), format.Type(), p, f);
 			return f[0];
 		}
 	}
@@ -365,35 +365,71 @@ struct DXGI_ConstComponents {
 	DXGI_COMPONENTS	format;
 	const void	*p;
 	DXGI_ConstComponents(DXGI_COMPONENTS format, const void *p) : format(format), p(p) {}
-	void	get_swizzled(float *r)	const	{ float f[4]; if (p) GetComponents(format, p, f); ArrangeComponents(format.chans, f, r, 15); }
+	void	get_swizzled(float *r)	const	{ float f[4]; GetComponents(format.Layout(), format.Type(), p, f); ArrangeComponents(format.chans, f, r, 15); }
+	void	get_swizzled(int *r)	const	{ int	i[4]; GetComponents(format.Layout(), format.Type(), p, i); ArrangeComponents(format.chans, i, r, 15); }
 
-	operator float()	const				{ float f[4]; if (p) GetComponents(format, p, f); return GetChannel(f, format.GetChan(0)); }
+	operator float()	const				{ float f[4]; GetComponents(format.Layout(), format.Type(), p, f); return GetChannel(f, format.GetChan(0)); }
 	operator float4()	const				{ float4 r;  get_swizzled((float*)&r); return r; }
-#ifndef SIMD_CLANG_H
-	//	operator float4p()	const				{ float4p r; get_swizzled(&r.x); return r; }
-#endif
+	operator int32x4()	const				{ int32x4 r; get_swizzled((int*)&r); return r; }
+	operator ISO_rgba()	const				{ int32x4 r; get_swizzled((int*)&r); return ISO_rgba(r.x, r.y, r.z, r.w); }
 };
 
 struct DXGI_Components : DXGI_ConstComponents {
 	DXGI_Components(DXGI_COMPONENTS format, void *p) : DXGI_ConstComponents(format, p) {}
-	void	operator=(const float4p &f)		{ PutComponents(format, unconst(p), (float*)&f); }
+	void	operator=(const float4p &f)		{ PutComponents(format.Layout(), format.Type(), unconst(p), (float*)&f); }
+	void	operator=(const int32x4 &f)		{ PutComponents(format.Layout(), format.Type(), unconst(p), (int*)&f); }
 };
 
 template<typename T> void assign(array_vec<T, 4> &f, const DXGI_ConstComponents &c)	{ c.get_swizzled(&f.x); }
 template<typename T> void assign(array_vec<T, 3> &f, const DXGI_ConstComponents &c)	{ f = project(c); }
 
-inline void assign(ISO_rgba &f, const DXGI_ConstComponents &c)	{ HDRpixel h; assign(h, c); f = h; }
-
 template<> struct param_element<uint8&, DXGI_COMPONENTS> : DXGI_Components {
 	param_element(uint8 &t, DXGI_COMPONENTS p) : DXGI_Components(p, &t) {}
-	template<typename T> friend void assign(T &f, const param_element &c)		{ assign(f, (const DXGI_ConstComponents&)c); }
 };
 template<> struct param_element<const uint8&, DXGI_COMPONENTS> : DXGI_ConstComponents {
 	param_element(const uint8 &t, DXGI_COMPONENTS p) : DXGI_ConstComponents(p, &t) {}
-	template<typename T> friend void assign(T &f, const param_element &c)		{ assign(f, (const DXGI_ConstComponents&)c); }
 };
 
-template<typename D> const void *copy_slices(const block<D, 3> &dest, const void *srce, DXGI_COMPONENTS::LAYOUT layout, DXGI_COMPONENTS::TYPE type, uint64 depth_stride);
+//template<typename T> class byte_stride_iterator : public stride_iterator<T> {
+//	using stride_iterator<T>::stride_iterator;
+//
+//	friend constexpr T*			begin(const byte_stride_iterator& i)				{ return i.i; }
+//	friend constexpr int		intra_pitch(const byte_stride_iterator &i)			{ return i.stride(); }
+//	friend void					intra_move(byte_stride_iterator &i, intptr_t n)		{ i.i = (T*)((uint8*)i.i + n); }
+//	friend constexpr intptr_t	intra_diff(const byte_stride_iterator &a, const byte_stride_iterator &b)	{ return (uint8*)a.i - (uint8*)b.i; }
+//};
+
+template<typename D> const void* copy_slices0(const block<D, 3> &dest, const void *srce, DXGI_COMPONENTS format, uint64 depth_stride) {
+	uint32		w	= dest.template size<1>(), h = dest.template size<2>(), d = dest.template size<3>();
+	uint32		s1	= format.Bytes();
+	uint32		s2	= dxgi_align(s1 * w);//, s3 = s2 * h;
+	copy(make_strided_iblock(make_param_iterator(strided((const uint8*)srce, s1), move(format)), w, s2, h, depth_stride, d), dest);
+	return (const uint8*)srce + s2 * h;//s3 * d;
+}
+
+
+template<typename D, int N> const void* copy_slices(const block<D, 3> &dest, const BC<N> *srce, uint64 depth_stride) {
+	uint32		w	= round_pow2(dest.template size<1>(), 2), h = round_pow2(dest.template size<2>(), 2), d = dest.template size<3>();
+	uint32		s2	= dxgi_align((uint32)sizeof(BC<N>) * w);//, s3 = s2 * h;
+	copy(make_strided_block(srce, w, s2, h, depth_stride, d), dest);
+	return (const uint8*)srce + s2 * h;//s3 * d;
+}
+
+inline const void *copy_slices(const block<HDRpixel, 3> &dest, const void *srce, DXGI_COMPONENTS format, uint64 depth_stride) {
+	return copy_slices0(dest, srce, format, depth_stride);
+}
+
+inline const void *copy_slices(const block<ISO_rgba, 3> &dest, const void *srce, DXGI_COMPONENTS format, uint64 depth_stride) {
+	switch (format.Layout()) {
+		case DXGI_COMPONENTS::BC1:	return copy_slices(dest, (const BC<1>*)srce, depth_stride);
+		case DXGI_COMPONENTS::BC2:	return copy_slices(dest, (const BC<2>*)srce, depth_stride);
+		case DXGI_COMPONENTS::BC3:	return copy_slices(dest, (const BC<3>*)srce, depth_stride);
+		case DXGI_COMPONENTS::BC4:	return copy_slices(dest, (const BC<4>*)srce, depth_stride);
+		case DXGI_COMPONENTS::BC5:	return copy_slices(dest, (const BC<5>*)srce, depth_stride);
+		default:
+			return copy_slices0(dest, srce, format, depth_stride);
+	}
+}
 
 }
 

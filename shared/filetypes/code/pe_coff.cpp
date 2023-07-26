@@ -308,7 +308,7 @@ struct ISO_METADATA : refs<ISO_METADATA>, METADATA {
 	}
 
 	ISO::Browser2	Lookup(TABLETYPE t, uint32 i) {
-		return i ? GetTable(0, t, 0, tables[t].n)[i - 1] : ISO::Browser2();
+		return i ? GetTable(none, t, 0, tables[t].n)[i - 1] : ISO::Browser2();
 	}
 	ISO::Browser2	Lookup(const Token &i) {
 		return Lookup(i.type(), i.index());
@@ -378,7 +378,7 @@ NATIVE_TYPE ISO_METADATA::DumpNativeType(string_accum &a, byte_reader &r) {
 				if (num_elem)
 					a << '+';
 			}
-			a << num_elem << ']';
+			a << (uint32)num_elem << ']';
 			break;
 		}
 		default:
@@ -1163,7 +1163,7 @@ ISO_DEFUSERCOMPV(EXPORT_DIRECTORY,TimeDateStamp,MajorVersion,MinorVersion,DLLNam
 
 template<> struct ISO::def<coff::TIMEDATE> : ISO::VirtualT2<coff::TIMEDATE> {
 	static ISO_ptr<void>	Deref(const pe::TIMEDATE &t) {
-		return ISO_ptr<string>(0, to_string(DateTime::FromUnixTime(DateTime::Secs(t.secs_from1970))));
+		return ISO_ptr<string>(0, to_string(DateTime::FromUnixTime(Duration::Secs(t.secs_from1970))));
 	}
 };
 

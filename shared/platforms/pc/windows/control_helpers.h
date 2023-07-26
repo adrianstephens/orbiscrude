@@ -13,7 +13,7 @@
 
 namespace iso { namespace win {
 
-const char*	GetValueDialog(HWND hWndParent, const char *_value = 0);
+const char*	GetValueDialog(HWND hWndParent, text _value = none);
 bool		GetValueDialog(HWND hWndParent, fixed_string<1024> &value);
 
 //-----------------------------------------------------------------------------
@@ -76,19 +76,7 @@ template<typename T> struct TScrollInfo {
 		}
 		return MoveTo(p);
 	}
-
-	operator SCROLLINFO() {
-		SCROLLINFO	si;
-		T	scale	= Scale();
-		si.cbSize	= sizeof(SCROLLINFO);
-		si.fMask	= SIF_ALL;
-		si.nMin		= 0;
-		si.nMax		= (max - min) / scale;
-		si.nPos		= (pos - min) / scale;
-		si.nPage	= page / scale;
-		return si;
-	}
-	TScrollInfo& operator=(const SCROLLINFO &si) {
+	void Set(const SCROLLINFO &si) {
 		T	scale	= 1;
 		if (si.fMask & SIF_TRACKPOS) {
 			pos			= mul_div(T(si.nTrackPos - si.nMin), max - min, T(si.nMax - si.nMin)) + min;
@@ -105,6 +93,20 @@ template<typename T> struct TScrollInfo {
 		}
 		if (si.fMask & SIF_PAGE)
 			page	= si.nPage * scale;
+	}
+	operator SCROLLINFO() {
+		SCROLLINFO	si;
+		T	scale	= Scale();
+		si.cbSize	= sizeof(SCROLLINFO);
+		si.fMask	= SIF_ALL;
+		si.nMin		= 0;
+		si.nMax		= (max - min) / scale;
+		si.nPos		= (pos - min) / scale;
+		si.nPage	= page / scale;
+		return si;
+	}
+	TScrollInfo& operator=(const SCROLLINFO &si) {
+		Set(si);
 		return *this;
 	}
 };
@@ -142,8 +144,8 @@ struct SortColumn {
 
 template<typename C> struct SortedListViewControl : ListViewControl, SortColumn {
 	C		sorted_order;
-	typedef typename container_traits<C>::reference E;
-	typedef typename container_traits<const C>::reference constE;
+	typedef reference_t<C> E;
+	typedef reference_t<const C> constE;
 
 	template<typename C2> SortedListViewControl(C2 &&c) : sorted_order(forward<C2>(c)) {}
 
@@ -171,6 +173,15 @@ struct ColumnSorter {
 	template<typename T> inline int compare(T a, T b) const { return a < b ? -dir : a > b ? dir : 0; }
 	ColumnSorter(int dir) : dir(dir) {}
 };
+
+template<typename L> struct _LambdaColumnSorter : ColumnSorter {
+	L				&&lambda;
+	template<typename T> inline int operator()(T a, T b) const { return lambda(a, b) * dir; }
+	_LambdaColumnSorter(L &&lambda, int dir) : ColumnSorter(dir), lambda(forward<L>(lambda)) {}
+};
+template<typename L> _LambdaColumnSorter<L> LambdaColumnSorter(L &&lambda, int dir) {
+	return {forward<L>(lambda), dir};
+}
 
 template<typename T> struct _StructFieldSorter;
 template<typename C, typename T> struct _StructFieldSorter<T C::*> : ColumnSorter {
@@ -201,7 +212,7 @@ struct ColumnTextSorter : ColumnSorter {
 class EditControl2 : public Subclass<EditControl2, EditControl> {
 	Control		owner;
 public:
-	LRESULT		Proc(UINT message, WPARAM wParam, LPARAM lParam);
+	LRESULT		Proc(MSG_ID msg, WPARAM wParam, LPARAM lParam);
 	void		SetOwner(Control c) { owner = c; }
 	template<typename T> void operator=(const T &t) const { SetText(to_string(t)); }
 };
@@ -374,9 +385,9 @@ template<class X, class B> struct EditableListView : B, refs<X> {
 		edit_index	= i;
 		edit_col	= col;
 	}
-	void	EditName(int i) {
-		EditColumn(i, 0);
-	}
+//	void	EditName(int i) {
+//		EditColumn(i, 0);
+//	}
 	void	RightClick(Control from, int row, int col, const Point &pt, uint32 flags)	{}
 	void	LeftClick(Control from, int row, int col, const Point &pt, uint32 flags)	{}
 	void	GetDispInfo(string_accum &sa, int row, int col)		{}// sa << "unimplemented"; }
@@ -456,7 +467,7 @@ public:
 
 struct TextFinder : FINDREPLACEA {
 	fixed_string<256>	ss;
-	static TextFinder	*CheckMessage(UINT message, WPARAM wParam, LPARAM lParam);
+	static TextFinder	*CheckMessage(MSG_ID msg, WPARAM wParam, LPARAM lParam);
 	TextFinder(HWND hWnd);
 	~TextFinder() { SetModelessDialog(0); }
 };
@@ -473,9 +484,18 @@ struct ProgressTaskBar : ProgressBarControl {
 	com_ptr<ITaskbarList3>	taskbar_list;
 	Control					top;
 
+	ProgressTaskBar() {}
 	ProgressTaskBar(ProgressTaskBar &&b) : ProgressBarControl(move(b)), taskbar_list(move(b.taskbar_list)), top(b.top) { b.hWnd = 0; }
-	ProgressTaskBar(const WindowPos &wpos, uint32 total) {
-		Create(wpos, 0, VISIBLE | OVERLAPPED | CAPTION | ((total == 0) * MARQUEE));
+	ProgressTaskBar(const WindowPos &wpos, uint32 total) { Create(wpos, total); }
+	~ProgressTaskBar() {
+		if (taskbar_list && top)
+			taskbar_list->SetProgressState(top, TBPF_NOPROGRESS);
+		if (hWnd)
+			PostMessage(WM_CLOSE);
+	}
+
+	void Create(const WindowPos &wpos, uint32 total) {
+		ProgressBarControl::Create(wpos, 0, VISIBLE | OVERLAPPED | CAPTION | ((total == 0) * MARQUEE));
 		if (total)
 			SetRange(0, 100);
 		else
@@ -484,12 +504,6 @@ struct ProgressTaskBar : ProgressBarControl {
 		top = wpos.parent;
 		while (Control parent = top.Parent() ? top.Parent() : top.Owner())
 			top = parent;
-	}
-	~ProgressTaskBar() {
-		if (taskbar_list && top)
-			taskbar_list->SetProgressState(top, TBPF_NOPROGRESS);
-		if (hWnd)
-			PostMessage(WM_CLOSE);
 	}
 
 	void	SetPos(uint32 pos) {
@@ -504,12 +518,17 @@ struct ProgressTaskBar : ProgressBarControl {
 };
 
 struct Progress : ProgressTaskBar {
-	const char	*caption;
+	const char	*caption	= nullptr;
 	uint64		total;
-	uint64		prev;
+	uint64		prev		= 0;
 
+	Progress() {}
 	Progress(const WindowPos &wpos, const char *caption, uint64 total) : ProgressTaskBar(wpos, total ? 100 : 0), caption(caption), total(total), prev(0) {}
 
+	void Create(const WindowPos& wpos, const char* _caption, uint64 _total) {
+		ProgressTaskBar::Create(wpos, _total ? 100 : 0);
+		Reset(_caption, _total);
+	}
 	void Reset(const char *_caption, uint64 _total) {
 		caption = _caption;
 		prev	= 0;
@@ -553,7 +572,7 @@ void		SetColumnWidths(HeaderControl c);
 
 void		HighLightTree(TreeControl tree, HTREEITEM prev, uint32 val);
 void		HighLightTree(TreeControl tree, uint32 addr, uint32 val);
-HTREEITEM	FindOffset(TreeControl tree, HTREEITEM h, uint32 offset);
+HTREEITEM	FindOffset(TreeControl tree, HTREEITEM h, uint32 offset, bool stop_equal = true);
 dynamic_array<arbitrary> GetParamHierarchy(TreeControl tree, HTREEITEM hItem);
 
 //-----------------------------------------------------------------------------

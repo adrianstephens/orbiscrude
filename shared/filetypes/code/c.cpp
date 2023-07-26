@@ -17,7 +17,7 @@ public:
 		if (type->subtype->GetType() != ISO::COMPOSITE)
 			puts("typedef ");
 		if (forward)
-			format("struct %s", type->id.get_tag());
+			begin() << "struct " << type->id.get_tag();
 		else
 			DumpType(type->subtype, type->id.get_tag(), true);
 		puts(";\n\n");

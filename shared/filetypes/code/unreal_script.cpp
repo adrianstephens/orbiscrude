@@ -258,7 +258,7 @@ class DisassemblerUnreal : public Disassembler {
 			uint64	offset;
 			uint32	indent;
 			string	dis;
-			Line(uint64 offset, uint32 indent, const char *dis) : offset(offset), indent(indent), dis(dis) {}
+			Line(uint64 offset, uint32 indent, string_ref dis) : offset(offset), indent(indent), dis(dis) {}
 		};
 		dynamic_array<Line>		lines;
 
@@ -342,26 +342,30 @@ class DisassemblerUnreal : public Disassembler {
 			va_start(valist, fmt);
 			buffer_accum<256>	ba;
 			ba.vformat(fmt, valist) << '\n';
-			lines.emplace_back(op_start, indent, (const char*)ba);
+			lines.emplace_back(op_start, indent, ba);
 		}
 
-		int		Count()												{ return lines.size32(); }
-		void	GetLine(string_accum &a, int i, int, SymbolFinder)	{
+		int		Count()	const override {
+			return lines.size32();
+		}
+		void	GetLine(string_accum &a, int i, int, SymbolFinder) const override {
 			if (i < lines.size32())
 				a << formatted(lines[i].offset, FORMAT::HEX | FORMAT::ZEROES, 4) << repeat("    ", lines[i].indent) << lines[i].dis;
 		}
-		uint64	GetAddress(int i)									{ return lines[min(i, lines.size32() - 1)].offset; }
+		uint64	GetAddress(int i) const override {
+			return lines[min(i, lines.size32() - 1)].offset;
+		}
 
-		State(const memory_block &block) : reader(block) {}
+		State(const_memory_block block) : reader(block) {}
 	};
 
 public:
 	const char*	GetDescription() override { return "unreal bytecode"; }
-	virtual Disassembler::State*		Disassemble(const memory_block &block, uint64 addr, SymbolFinder sym_finder);
+	Disassembler::State*	Disassemble(const_memory_block block, uint64 addr, SymbolFinder sym_finder) override;
 } dis_unreal;
 
 
-Disassembler::State *DisassemblerUnreal::Disassemble(const memory_block &block, uint64 addr, SymbolFinder sym_finder) {
+Disassembler::State *DisassemblerUnreal::Disassemble(const_memory_block block, uint64 addr, SymbolFinder sym_finder) {
 	State	*state = new State(block);
 
 	while (!state->reader.eof()) {

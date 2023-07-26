@@ -24,6 +24,7 @@ struct octree {
 	position3			centre;
 	float3				scale;
 	int					max_depth;
+	node				*root = nullptr;
 
 	dynamic_array<int>	indices;
 	dynamic_array<node>	nodes;

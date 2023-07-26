@@ -161,6 +161,7 @@ struct LightInt : public e_link<LightInt>, DeleteOnDestroy<LightInt>, Light, ali
 };
 
 class LightHandler {//: public DeleteOnDestroy<LightHandler> {
+	static CreateWithWorld<LightHandler> maker;
 	e_list<LightInt>	lights;
 
 	ShaderLoop			num_lights;
@@ -321,11 +322,6 @@ public:
 //	}
 };
 
-struct LightHandlerMaker: Handles2<LightHandlerMaker, WorldEvent> {
-	void	operator()(WorldEvent *ev) {
-		if (ev->state == WorldEvent::BEGIN)
-			::new LightHandler(ev->world);
-	}
-} light_handler_maker;
+CreateWithWorld<LightHandler> LightHandler::maker;
 
 }//iso

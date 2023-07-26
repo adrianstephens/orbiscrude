@@ -216,7 +216,7 @@ public:
 	bool operator()(const ISO_WAVEFORMATEX *fmt, RIFF_chunk	&chunk, sample *sm) {
 		if (fmt->wFormatTag != ISO_WAVE_FORMAT_VORBIS)
 			return false;
-		if (ISO_ptr<sample> p = Read(0, chunk))
+		if (ISO_ptr<sample> p = Read(none, chunk))
 			return true;
 		return false;
 	}

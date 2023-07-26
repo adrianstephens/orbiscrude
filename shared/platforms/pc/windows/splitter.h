@@ -65,7 +65,7 @@ public:
 
 class ArrangeWindow : public Window<ArrangeWindow>, public ControlArrangement {
 public:
-	LRESULT		Proc(UINT message, WPARAM wParam, LPARAM lParam);
+	LRESULT		Proc(MSG_ID msg, WPARAM wParam, LPARAM lParam);
 	void		Arrange()	const { ControlArrangement::Arrange(GetClientRect()); }
 	ArrangeWindow(ControlArrangement::Token *_arrange, Control *_controls, int _num_controls) : ControlArrangement(_arrange, _controls, _num_controls) {}
 };
@@ -94,8 +94,7 @@ struct SplitAdjuster {
 	};
 	int		flags, gripper, range;
 
-	SplitAdjuster() : flags(0) {}
-	SplitAdjuster(int _flags) { Init(_flags); }
+	SplitAdjuster(int _flags = 0) { Init(_flags); }
 
 	iso_export void Init(int _flags);
 
@@ -149,7 +148,7 @@ protected:
 	}
 
 public:
-	iso_export LRESULT	Proc(UINT message, WPARAM wParam, LPARAM lParam);
+	iso_export LRESULT	Proc(MSG_ID msg, WPARAM wParam, LPARAM lParam);
 
 	iso_export void		Init(int _flags, int pos = 0);
 	Control				GetPane(int i)			const		{ return pane[i];	}
@@ -177,16 +176,16 @@ public:
 	WindowPos			_GetPanePos(int i)		const		{ return WindowPos(*this, _GetPaneRect(i)); }
 	WindowPos			GetPanePos(int i)		const		{ return WindowPos(*this, GetPaneRect(i)); }
 
-	void		SetPanes(Control pane0, Control pane1)							{ _SetPanes(pane0, pane1); UpdateSplitter(true); }
-	void		SetPanes(Control pane0, Control pane1, int _pos)				{ _SetPanes(pane0, pane1); SetPos(_pos); UpdateSplitter(true); }
-	void		SetPanesClient(Control pane0, Control pane1, int _pos)			{ _SetPanes(pane0, pane1); SetClientPos(_pos); UpdateSplitter(true); }
-	void		SetPanesProportional(Control pane0, Control pane1, int _pos)	{ _SetPanes(pane0, pane1); SetProportionalPos(_pos); UpdateSplitter(true); }
+	void		SetPanes(Control pane0, Control pane1)							{ _SetPanes(pane0, pane1); UpdateSplitter(flags & SWF_ALWAYSSPLIT); }
+	void		SetPanes(Control pane0, Control pane1, int _pos)				{ _SetPanes(pane0, pane1); SetPos(_pos); UpdateSplitter(flags & SWF_ALWAYSSPLIT); }
+	void		SetPanesClient(Control pane0, Control pane1, int _pos)			{ _SetPanes(pane0, pane1); SetClientPos(_pos); UpdateSplitter(flags & SWF_ALWAYSSPLIT); }
+	void		SetPanesProportional(Control pane0, Control pane1, int _pos)	{ _SetPanes(pane0, pane1); SetProportionalPos(_pos); UpdateSplitter(flags & SWF_ALWAYSSPLIT); }
 	void		SetProportionalPos(int _pos, int _flags)						{ flags = _flags; SetProportionalPos(_pos); }
 
 	SplitterWindow(int flags = 0, int pos = 0) {
 		Init(flags, pos);
 	}
-	SplitterWindow(const WindowPos &wpos, const char *caption, int flags, Style style = CHILD | VISIBLE, StyleEx exstyle = NOEX, ID id = ID()) {
+	SplitterWindow(const WindowPos &wpos, const char *caption, int flags, Style style = CHILD | VISIBLE | CLIPCHILDREN | CLIPSIBLINGS, StyleEx exstyle = NOEX, ID id = ID()) {
 		Init(flags);
 		Create(wpos, caption, style, exstyle, id);
 	}
@@ -206,7 +205,7 @@ class MultiSplitterWindow : public Window<MultiSplitterWindow>, public SplitAdju
 
 	void		UpdateSplitters();
 public:
-	iso_export LRESULT	Proc(UINT message, WPARAM wParam, LPARAM lParam);
+	iso_export LRESULT	Proc(MSG_ID msg, WPARAM wParam, LPARAM lParam);
 
 	iso_export void		Init(int n, int flags);
 	int					NumPanes()				const	{ return panes.size32(); }
@@ -247,8 +246,8 @@ public:
 		WM_ISO_NEWPANE	= WM_USER + 0x100,
 	};
 
-	iso_export LRESULT	Super(UINT message, WPARAM wParam, LPARAM lParam);
-	iso_export LRESULT	Proc(UINT message, WPARAM wParam, LPARAM lParam);
+	iso_export LRESULT	Super(MSG_ID msg, WPARAM wParam, LPARAM lParam);
+	iso_export LRESULT	Proc(MSG_ID msg, WPARAM wParam, LPARAM lParam);
 	iso_export InfiniteSplitterWindow(int _flags) : SplitterWindow(_flags | SWF_ALWAYSSPLIT) {}
 };
 

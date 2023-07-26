@@ -63,9 +63,7 @@ class URLcomponents : public URLcomponents0 {
 		ISO_ASSERT(d <= buffer.end());
 	}
 public:
-	URLcomponents(const char *url, uint16 def_port = 0) 		: URLcomponents0(def_port)	{ Parse(url, string_end(url)); }
-	URLcomponents(const string &url, uint16 def_port = 0) 		: URLcomponents0(def_port)	{ Parse(url.begin(), url.end()); }
-	URLcomponents(const count_string &url, uint16 def_port = 0) : URLcomponents0(def_port)	{ Parse(url.begin(), url.end()); }
+	URLcomponents(string_ref url, uint16 def_port = 0) 		: URLcomponents0(def_port)	{ Parse(url.begin(), url.end()); }
 };
 
 struct HTTP_Header {
@@ -261,7 +259,7 @@ public:
 
 	Context			context;
 
-	HTTP(Context context, const char *url) : URLcomponents(url), context(context) {}
+	HTTP(Context context, string_ref url) : URLcomponents(url), context(context) {}
 	bool			PutMessage(ostream_ref file, string_accum &sa, const char *headers = 0, const void *data = 0, size_t datalen = 0) const;
 	bool			Response(ostream_ref file, CODE code, const char *headers = 0, const void *data = 0, size_t datalen = 0) const;
 	bool			Request(ostream_ref file, const char *verb, const char *object, const char *headers = 0, const void *data = 0, size_t datalen = 0) const;
@@ -295,10 +293,10 @@ public:
 
 	// HTTP_Headers headers
 	template<typename S> auto	Response(S&& file, CODE code, const HTTP_Headers &headers, const const_memory_block &data = none) const {
-		return Response(forward<S>(file), code, string() << headers, data);
+		return Response(forward<S>(file), code, (string() << headers).term(), data);
 	}
 	template<typename S> auto	Request(S&& file, const char *verb, const char *object, const HTTP_Headers &headers, const const_memory_block &data = none) const {
-		return Request(forward<S>(file), verb, object, string() << headers, data);
+		return Request(forward<S>(file), verb, object, (string() << headers).term(), data);
 	}
 
 	// make socket

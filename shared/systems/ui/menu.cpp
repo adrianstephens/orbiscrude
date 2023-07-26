@@ -1,5 +1,6 @@
 #include "graphics.h"
 #include "font.h"
+#include "events.h"
 #include "menu_structs.h"
 #include "postprocess/post.h"
 #include "scenegraph.h"
@@ -12,14 +13,14 @@ namespace iso {
 using namespace iso;
 
 class MenuSystem : public Handles2<MenuSystem, AppEvent> {
-	ISO_ptr<fx>	iso_fx;
+	ISO::ptr<fx>	iso_fx;
 public:
 	layout_menu *shaders;
 
 	void	operator()(AppEvent *ev) {
-		unused(ISO::getdef<Font>());
+		unused(ISO::getdef<TexFont>());
 		if (ev->state == AppEvent::BEGIN)
-			shaders	= (iso_fx = ISO::root("data")["menu"]) ? (layout_menu*)(ISO_ptr<technique>*)*iso_fx : 0;
+			shaders	= (iso_fx = ISO::root("data")["menu"]) ? (layout_menu*)(ISO::ptr<technique>*)*iso_fx : 0;
 	}
 } menu_system;
 
@@ -28,7 +29,7 @@ float	fontparams::ParaSpacing() const { return font->spacing * (paragraph + 1) *
 
 MenuRect GetTextBox(const char *text, uint32 flags, fontparams *fp, float w, float h) {
 	ISO_ASSERT(fp);
-	Font	*font	= fp->font;
+	TexFont	*font	= fp->font;
 	float	w1		= w / fp->scale;
 	float	h1		= h / fp->scale;
 
@@ -128,7 +129,7 @@ public:
 	}
 };
 
-inline const mi_type* mi_gettype(const ISO_ptr<void> &p) {
+inline const mi_type* mi_gettype(const ISO::ptr<void> &p) {
 	return static_cast<const mi_type*>(p.GetType());
 }
 
@@ -171,9 +172,9 @@ struct RenderRegionValue {
 	crc32			id;
 	const ISO::Type	*type;
 	void			*data;
-	RenderRegionValue(crc32 _id, const ISO::Type *_type, void *_data) : id(_id), type(_type), data(_data)	{}
-	RenderRegionValue(crc32 _id, const ISO_ptr<void> &p) : id(_id), type(p.GetType()), data(p)					{}
-	RenderRegionValue(const ISO_ptr<void> &p) : id(p.ID().get_crc32()), type(p.GetType()), data(p)					{}
+	RenderRegionValue(crc32 id, const ISO::Type *type, void *data) : id(id), type(type), data(data)	{}
+	RenderRegionValue(crc32 id, const ISO::ptr<void> &p) : id(id), type(p.GetType()), data(p)		{}
+	RenderRegionValue(const ISO::ptr<void> &p) : id(p.ID().get_crc32()), type(p.GetType()), data(p)	{}
 	ISO::Browser 	Lookup(const RenderRegion *rr) {
 		if (rr) {
 			if (type == ISO::getdef<REGION_PARAM>()) {
@@ -272,14 +273,14 @@ struct RenderRegionValues : RenderRegionValuesNode, ISO::VirtualDefaults {
 	}
 };
 
-//MenuValue::MenuValue(MenuInstance *mi, ISO_ptr<anything> &a) {
+//MenuValue::MenuValue(MenuInstance *mi, ISO::ptr<anything> &a) {
 //	insert(*(RenderRegionValuesNode**)&mi->values, a->Count(), RenderRegionValue *_values);
 //}
 
 void MenuValue::init(MenuInstance *mi, tag2 id, const ISO::Type *type, void *data, RenderRegion *rr) {
 	linear_allocator		a(dummy);
 	RenderRegionValuesNode	*node	= new(a) RenderRegionValuesNode;
-	RenderRegionValue		*value	= new(a) RenderRegionValue(id, type, data);
+	RenderRegionValue		*value	= new(a) RenderRegionValue(id.get_crc32(), type, data);
 	ISO_ASSERT(a.getp() < this + 1);
 	node->count		= 1;
 	node->values	= value;
@@ -301,7 +302,7 @@ struct menu_item {
 	static void			Create			(MenuInstance *mi, InstanceData &d)	{}
 	static void			Destroy			(MenuInstance *mi, InstanceData &d)	{}
 	static bool			CanBeSelected	(MenuInstance *mi, InstanceData &d)	{ return false;		}
-	static mreturn		Update			(MenuInstance *mi, void *my)		{ return mi->SendUpdate(0, NULL); }
+	static mreturn		Update			(MenuInstance *mi, void *my)		{ return mi->SendUpdate(none, NULL); }
 
 	static inline void	mi_Reserve		(const mitem &p, MenuInstance *mi, InstanceData &d)								{ if (p) mi_gettype(p)->vReserve(p, mi, d);				}
 	static inline void	mi_Create		(const mitem &p, MenuInstance *mi, InstanceData &d)								{ if (p) mi_gettype(p)->vCreate(p, mi, d);				}
@@ -457,7 +458,7 @@ mreturn menu::Update(MenuInstance *mi, InstanceData d) const {
 			if (my->prev && my->prev->next != my)
 				break;
 			if (!flags.test(NO_CANCEL)) {
-				mi->SendEvent(0, MMSG_NOTIFY, ret);
+				mi->SendEvent(none, MMSG_NOTIFY, ret);
 				my->pop(mi, false);
 			}
 			return MIU_DEFAULT;
@@ -467,7 +468,7 @@ mreturn menu::Update(MenuInstance *mi, InstanceData d) const {
 				break;
 			if (flags.test(NO_CANCELALL))
 				return MIU_DEFAULT;
-			mi->SendEvent(0, MMSG_NOTIFY, ret);
+			mi->SendEvent(none, MMSG_NOTIFY, ret);
 			my->pop(mi, false);
 			break;
 	}
@@ -680,7 +681,7 @@ struct mi_list : _mi_list, menu_item {
 		}
 		if (changed) {
 			if (mi_Update((*this)[my->active], mi, (*my)[my->active]))
-				mi->SendEvent(0, MMSG_NOTIFY, ret);
+				mi->SendEvent(none, MMSG_NOTIFY, ret);
 			ret = MIU_NOTDEFAULT;
 		} else if (forwards && flags.test(forwards > 0 ? ARR_NO_WRAP1 : ARR_NO_WRAP0)) {
 			if (Next(mi, my, -forwards)) {
@@ -902,7 +903,7 @@ struct mi_offset : _mi_offset, menu_item {
 		}
 		mi_Draw(item, mi, d, &rr2, state);
 #ifdef ISO_EDITOR
-		mi->SendEvent(0, MMSG_EDITOR, MenuEditor(this, d, rr, &rr2).me());
+		mi->SendEvent(none, MMSG_EDITOR, MenuEditor(this, d, rr, &rr2).me());
 #endif
 	}
 };
@@ -970,7 +971,7 @@ struct mi_box : _mi_box, menu_item {
 		}
 
 #ifdef ISO_EDITOR
-		mi->SendEvent(0, MMSG_EDITOR, MenuEditor(this, d, rr, &rr2).me());
+		mi->SendEvent(none, MMSG_EDITOR, MenuEditor(this, d, rr, &rr2).me());
 #endif
 	}
 };
@@ -1073,7 +1074,7 @@ struct mi_centre : _mi_centre, menu_item {
 		rr2.matrix			= rr->matrix * translate((rr->size.x - rr2.size.x) / 2, (rr->size.y - rr2.size.y) / 2, 0);
 		mi_Draw(item, mi, d, &rr2, state);
 #ifdef ISO_EDITOR
-		mi->SendEvent(0, MMSG_EDITOR, MenuEditor(this, d, rr, &rr2).me());
+		mi->SendEvent(none, MMSG_EDITOR, MenuEditor(this, d, rr, &rr2).me());
 #endif
 	}
 };
@@ -1431,7 +1432,7 @@ struct mi_button : _mi_button, menu_item {
 				c = max(c * s, one);
 			}
 			// quads
-			ImmediateStream<PostEffects::vertex_tex_col> ims(rr->ctx, prim<QuadListT>(), verts<QuadListT>(9));
+			ImmediateStream<PostEffects::vertex_tex_col> ims(rr->ctx, prim<QuadList>, verts<QuadList>(9));
 			PostEffects	post(rr->ctx);
 			PostEffects::vertex_tex_col	*p = ims.begin();
 			float2 v[] = { float2(zero), c,				float2(rr->size - c),	float2(rr->size) };
@@ -1511,7 +1512,7 @@ struct mi_trigger_menu : _mi_trigger_menu, menu_item {
 	mreturn Update(MenuInstance *mi, InstanceData &d) const {
 		mreturn ret = item ? mi_Update(item, mi, d) : MIU_DEFAULT;
 		if (ret == MIU_TRIGGER) {
-			mi->SendEvent(0, MMSG_NOTIFY, ret);
+			mi->SendEvent(none, MMSG_NOTIFY, ret);
 //			ret	= mi->currmenu == mi->topmenu ? MIU_ABORTUPDATE : MIU_CANCEL;
 			mi->PushMenu(triggermenu, back, false);
 			ret = MIU_ABORTUPDATE;
@@ -2328,7 +2329,7 @@ struct mi_warp : _mi_warp, menu_item {
 
 		mi_Draw(item, mi, d, &rr2, state);
 #ifdef ISO_EDITOR
-		mi->SendEvent(0, MMSG_EDITOR, MenuEditor(this, d, rr, &rr2).me());
+		mi->SendEvent(none, MMSG_EDITOR, MenuEditor(this, d, rr, &rr2).me());
 #endif
 	}
 };
@@ -2571,7 +2572,7 @@ initialise menu_defs(
 
 float2x3 RenderRegion::region_trans = identity;
 
-RenderRegion::RenderRegion(GraphicsContext &_ctx, param(float4x4) _matrix, float _w, float _h) : ctx(_ctx), matrix(_matrix), fp(0), pass(0) {
+RenderRegion::RenderRegion(GraphicsContext &ctx, param(float4x4) matrix, float _w, float _h) : ctx(ctx), matrix(matrix), fp(0), pass(0) {
 	size	= float2{_w, _h};
 	offset	= zero;
 	cols[0] = cols[1] = colour(one);
@@ -2605,8 +2606,18 @@ RenderRegion &RenderRegion::SetField(REGION_PARAM i, float v) {
 		case REGION_HEIGHT1:		offset.y += v - size.y; size.y = v;					break;
 
 		case REGION_SCALE1:			matrix = matrix * scale(concat(float2(v), one, one)) * translate(position3(concat(size, zero)) * trans_scale(v)); break;
-		case REGION_SCALE_X:		if (v < 0) matrix = matrix * translate(size.x, 0, 0); matrix = matrix * scale(float4{v, one, one, one}); v = abs(v); size.x /= v; offset.x /= v; break;
-		case REGION_SCALE_Y:		if (v < 0) matrix = matrix * translate(0, size.y, 0); matrix = matrix * scale(float4{one, v, one, one}); v = abs(v); size.y /= v; offset.y /= v; break;
+		case REGION_SCALE_X:
+			if (v < 0)
+				matrix = matrix * translate(size.x, 0, 0);
+			matrix = matrix * scale(float4{v, one, one, one});
+			v = abs(v); size.x /= v; offset.x /= v;
+			break;
+		case REGION_SCALE_Y:
+			if (v < 0)
+				matrix = matrix * translate(0, size.y, 0);
+			matrix = matrix * scale(float4{one, v, one, one});
+			v = abs(v); size.y /= v; offset.y /= v;
+			break;
 		case REGION_SCALE_X1:		matrix = matrix * scale(float4{v, one, one, one}) * translate(size.x * trans_scale(v), 0, 0); break;
 		case REGION_SCALE_Y1:		matrix = matrix * scale(float4{one, v, one, one}) * translate(0, size.y * trans_scale(v), 0); break;
 
@@ -2643,7 +2654,7 @@ MenuRect RenderRegion::GetTextBox(const char *text, uint32 flags) const {
 void RenderRegion::DrawText(const char *text, uint32 flags, float threshold, iso::technique *technique, const ISO::Browser &parameters) const {
 	ISO_ASSERT(technique && *technique && fp);
 
-	Font	*font	= fp->font;
+	TexFont	*font	= fp->font;
 	float	w1		= size.x / fp->scale;
 	float	h1		= size.y / fp->scale;
 

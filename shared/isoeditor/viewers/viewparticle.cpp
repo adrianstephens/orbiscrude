@@ -16,7 +16,7 @@ class ViewParticle : public aligned<Window<ViewParticle>, 16>, public WindowTime
 	timer			time;
 
 public:
-	LRESULT Proc(UINT message, WPARAM wParam, LPARAM lParam) {
+	LRESULT Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 		switch (message) {
 			case WM_SIZE: {
 				Point	p(lParam);

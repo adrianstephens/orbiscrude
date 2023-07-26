@@ -18,13 +18,26 @@ struct linked_recording : e_link<linked_recording>, COMRecording {
 };
 
 struct RecItemLink : e_link<RecItemLink>, RecItem {
-	Wrap<ID3D11DeviceLatest>	*device;
-	RecItemLink() : device(0) {}
+	static e_list<RecItemLink>	orphans;
+	static Mutex					orphan_mutex;
+	Wrap<ID3D11DeviceLatest>*		device;
+
+	RecItemLink() : device(0) {
+		with(orphan_mutex), orphans.push_back(this);
+	}
+	~RecItemLink() {
+		if (is_linked())
+			with(orphan_mutex), unlink();
+	}
+
 	void	init(Wrap<ID3D11DeviceLatest> *_device);
 	template<typename...PP> void	init(Wrap<ID3D11DeviceLatest> *_device, PP...pp) {
 		init(_device);
 	}
 };
+
+Mutex				RecItemLink::orphan_mutex;
+e_list<RecItemLink>	RecItemLink::orphans;
 
 #define RECORDCALLSTACK			if (recording.enable) RecordCallStack(0)
 #define DEVICE_RECORDCALLSTACK	if (device->recording.enable) device->RecordCallStack(0)
@@ -32,7 +45,6 @@ struct RecItemLink : e_link<RecItemLink>, RecItem {
 //-----------------------------------------------------------------------------
 //	Capture
 //-----------------------------------------------------------------------------
-
 
 HRESULT WINAPI Hooked_D3D11CreateDevice(IDXGIAdapter *pAdapter, D3D_DRIVER_TYPE DriverType, HMODULE Software, UINT Flags, CONST D3D_FEATURE_LEVEL *levels, UINT num, UINT SDKVersion, ID3D11Device **ppDevice, D3D_FEATURE_LEVEL *pFeatureLevel, ID3D11DeviceContext **ppImmediateContext);
 HRESULT WINAPI Hooked_D3D11CreateDeviceAndSwapChain(IDXGIAdapter *pAdapter, D3D_DRIVER_TYPE DriverType, HMODULE Software, UINT Flags, CONST D3D_FEATURE_LEVEL *levels, UINT num, UINT SDKVersion, CONST DXGI_SWAP_CHAIN_DESC *pSwapChainDesc, IDXGISwapChain **ppSwapChain, ID3D11Device **ppDevice, D3D_FEATURE_LEVEL *pFeatureLevel, ID3D11DeviceContext **ppImmediateContext);
@@ -50,6 +62,7 @@ void WINAPI Hooked_OutputDebugStringW(LPCWSTR lpOutputString) {
 }
 
 struct Capture {
+	PORT				port;
 	int					frames;
 	Semaphore			semaphore;
 	Event				event;
@@ -57,20 +70,48 @@ struct Capture {
 	volatile bool		paused, capture;
 
 	Capture() : frames(1), semaphore(0), paused(false), capture(false) {
-
-		//if (debug_pipe = Win32Handle(pipe)) {
-		//	hook(OutputDebugStringA, "kernel32.dll");
-		//	hook(OutputDebugStringW, "kernel32.dll");
-		//}
-
 		HookDXGI();
 		hook(D3D11CreateDevice,  "d3d11.dll");
 		hook(D3D11CreateDeviceAndSwapChain, "d3d11.dll");
 		ApplyHooks();
 		socket_init();
 
+		buffer_accum<256>	message("dx11:");
+		message.move(GetModuleFileNameExA(GetCurrentProcess(), 0, message.getp(), message.remaining()));
+
+		{
+			//broadcast on port 4568 + get unique port
+			IP4::socket_addr	addr(IP4::broadcast, 4568);
+			Socket				sock = IP4::UDP();
+			sock.options().broadcast(1);
+			addr.send(sock, message.data());
+			addr.local_addr(sock);
+			port	= addr.port;
+		}
+
+		RunThread([this, message]() {
+			//listen for broadcasts from 4567
+			char	buffer[1024];
+			for (;;) {
+				IP4::socket_addr	addr(PORT(4567));
+				Socket	sock	= IP4::UDP();
+				sock.options().reuse_addr();
+				addr.bind(sock);
+
+				int	n = addr.recv(sock, buffer, 1024);
+				ISO_TRACEF(str(buffer, n));
+
+				Socket	sock2	= IP4::UDP();
+				IP4::socket_addr	addr0(port);
+				addr0.bind(sock2);
+
+				addr.port		= 4568;
+				addr.send(sock2, message.data());
+			}
+		});
+
 		RunThread([this]() {
-			Socket listener = IP4::socket_addr(PORT(4567)).listener();
+			Socket listener = IP4::socket_addr(port).listen_or_close(IP4::TCP());
 			if (listener.exists()) for (;;) {
 				IP4::socket_addr	addr;
 				SocketWait			sock = addr.accept(listener);
@@ -96,6 +137,7 @@ struct Capture {
 	CaptureStats							CaptureFrames(int frames);
 	with_size<dynamic_array<Recording>>		GetRecordings();
 	with_size<dynamic_array<RecItem2>>		GetItems();
+	static void								GetItem(RecItem2 &rec, RecItemLink &i);
 	static malloc_block_all					ResourceData(uintptr_t _res);
 	static RecItem2							GetResource(uintptr_t _view);
 
@@ -132,6 +174,11 @@ struct Capture {
 };
 
 static Capture capture;
+
+uint16 WhatPort() {
+	return capture.port;
+}
+DLL_RPC(WhatPort);
 
 //-----------------------------------------------------------------------------
 //	Wraps
@@ -234,17 +281,12 @@ template<class T> class Wrap2<T, ID3D11Resource> : public Wrap2<T, ID3D11DeviceC
 public:
 	malloc_block	data;
 
-	//void	init(Wrap<ID3D11DeviceLatest> *device, malloc_block &&_data) {
-	//	RecItemLink::init(device);
-	//	data	= move(_data);
-	//}
 	template<typename D> void init(Wrap<ID3D11DeviceLatest> *device, const D *desc, const D3D11_SUBRESOURCE_DATA *sub) {
 		RecItemLink::init(device);
 		data	= const_memory_block(desc);
 	}
-	void	init(Wrap<ID3D11DeviceLatest> *_device/*, malloc_block&& _data*/) {
+	void	init(Wrap<ID3D11DeviceLatest> *_device) {
 		device	= _device;
-		//data	= move(_data);
 	}
 
 	//IUnknown
@@ -317,28 +359,42 @@ public:
 };
 
 
+auto get_ophan_device(ID3D11Resource* p) {
+	com_ptr<ID3D11Device>		dev;
+	p->GetDevice(&dev);
+	return com_wrap_system->find_wrap_carefully(dev.get());
+}
 
 ID3D11Resource* make_wrap_orphan(ID3D11Resource* p) {
 	D3D11_RESOURCE_DIMENSION	dim;
-	com_ptr<ID3D11Device>		dev;
-
 	p->GetType(&dim);
-	p->GetDevice(&dev);
 
-	auto	*wdev = com_wrap_system->find_wrap_carefully(dev.get());
+	auto	*wdev = get_ophan_device(p);
 
 #if 1
 	switch (dim) {
-		case D3D11_RESOURCE_DIMENSION_BUFFER:
-			return com_wrap_system->make_wrap((ID3D11Buffer*)p, wdev);
-		case D3D11_RESOURCE_DIMENSION_TEXTURE1D:
-			return com_wrap_system->make_wrap((ID3D11Texture1D*)p);
-		case D3D11_RESOURCE_DIMENSION_TEXTURE2D:
-			return com_wrap_system->make_wrap((ID3D11Texture2D*)p);
-		case D3D11_RESOURCE_DIMENSION_TEXTURE3D:
-			return com_wrap_system->make_wrap((ID3D11Texture3D*)p);
+		case D3D11_RESOURCE_DIMENSION_BUFFER: {
+			D3D11_BUFFER_DESC	desc;
+			((ID3D11Buffer*)p)->GetDesc(&desc);
+			return com_wrap_system->make_wrap((ID3D11Buffer*)p, wdev, &desc, nullptr);
+		}
+		case D3D11_RESOURCE_DIMENSION_TEXTURE1D: {
+			D3D11_TEXTURE1D_DESC	desc;
+			((ID3D11Texture1D*)p)->GetDesc(&desc);
+			return com_wrap_system->make_wrap((ID3D11Texture1D*)p, wdev, &desc, nullptr);
+		}
+		case D3D11_RESOURCE_DIMENSION_TEXTURE2D: {
+			D3D11_TEXTURE2D_DESC	desc;
+			((ID3D11Texture2D*)p)->GetDesc(&desc);
+			return com_wrap_system->make_wrap((ID3D11Texture2D*)p, wdev, &desc, nullptr);
+		}
+		case D3D11_RESOURCE_DIMENSION_TEXTURE3D: {
+			D3D11_TEXTURE3D_DESC	desc;
+			((ID3D11Texture3D*)p)->GetDesc(&desc);
+			return com_wrap_system->make_wrap((ID3D11Texture3D*)p, wdev, &desc, nullptr);
+		}
 		default:
-			return com_wrap_system->make_wrap((ID3D11Resource*)p);
+			return com_wrap_system->make_wrap((ID3D11Resource*)p, wdev);
 	}
 #else
 	switch (dim) {
@@ -374,6 +430,12 @@ ID3D11Resource* make_wrap_orphan(ID3D11Resource* p) {
 #endif
 }
 
+Wrap<ID3D11Texture2DLatest>* make_wrap_orphan(ID3D11Texture2DLatest* p) {
+	D3D11_TEXTURE2D_DESC1	desc;
+	p->GetDesc1(&desc);
+	return com_wrap_system->make_wrap(p, get_ophan_device(p), &desc, nullptr);
+}
+
 template<class T> class Wrap2<T, ID3D11View> : public Wrap2<T, ID3D11DeviceChild> {
 public:
 	typedef typename DX11ViewDesc<T>::type	DESC;
@@ -401,6 +463,8 @@ public:
 
 	//specific
 	void	STDMETHODCALLTYPE GetDesc(DESC *desc)				{ orig->GetDesc(desc); }
+
+	~Wrap2()	{}
 };
 
 template<> class Wrap<ID3D11View> : public Wrap2<ID3D11View, ID3D11DeviceChild> {
@@ -968,7 +1032,8 @@ public:
 
 void RecItemLink::init(Wrap<ID3D11DeviceLatest> *_device) {
 	device	= _device;
-	device->items.push_back(this);
+	with(orphan_mutex), device->items.push_back(unlink());
+//	device->items.push_back(this);
 }
 
 void Wrap<ID3DDeviceContextState>::init(Wrap<ID3D11DeviceContextLatest> *ctx, ID3DDeviceContextState *next) {
@@ -984,11 +1049,11 @@ void Wrap<ID3D11DeviceContextLatest>::RecordCallStack(const context &ctx) {
 }
 
 void Wrap<ID3D11DeviceContextLatest>::set_recording(bool enable) {
-	if (enable && !recording.enable) {
+	if (enable && !recording.enable)
 		device->recordings.push_back(&recording);
-	}
+
 	if (enable && recording.total == 0)
-		recording.Record(tag_InitialState, DeviceContext_State(this));//DeviceContext_State(orig));
+		recording.Record(tag_InitialState, DeviceContext_State(orig));//DeviceContext_State(orig));
 	recording.enable = enable;
 }
 
@@ -1920,7 +1985,7 @@ com_ptr<IDXGIAdapter> GetDXGIAdaptor(IUnknown *device) {
 
 com_ptr<IDXGIFactory5> GetDXGIFactory(IDXGIAdapter *adapter) {
 	IDXGIFactory5	*factory;
-	adapter->GetParent(IID_PPV_ARGS(&factory));
+	adapter->GetParent(COM_CREATE(&factory));
 	return factory;
 }
 
@@ -1933,7 +1998,7 @@ HRESULT WINAPI Hooked_D3D11CreateDevice(IDXGIAdapter *pAdapter, D3D_DRIVER_TYPE 
 		// get the DXGI factory that was used to create the Direct3D device
 		auto	factory	= GetDXGIFactory(pAdapter2 ? pAdapter2 : (IDXGIAdapter*)GetDXGIAdaptor(*(ID3D11DeviceLatest**)ppDevice));
 		
-		Wrap<ID3D11DeviceLatest>	*device		= com_wrap_system->make_wrap(*(ID3D11DeviceLatest**)ppDevice, *(ID3D11DeviceContextLatest**)ppImmediateContext);
+		Wrap<ID3D11DeviceLatest>	*device		= com_wrap_system->make_wrap_check(*(ID3D11DeviceLatest**)ppDevice, *(ID3D11DeviceContextLatest**)ppImmediateContext);
 		*ppDevice			= device;
 		*ppImmediateContext	= device->immediate;
 	}
@@ -1946,7 +2011,7 @@ HRESULT WINAPI Hooked_D3D11CreateDeviceAndSwapChain(IDXGIAdapter *pAdapter, D3D_
 		// get the DXGI factory that was used to create the Direct3D device
 		auto	factory	= GetDXGIFactory(pAdapter ? pAdapter : (IDXGIAdapter*)GetDXGIAdaptor(*(ID3D11DeviceLatest**)ppDevice));
 
-		Wrap<ID3D11DeviceLatest>	*device		= com_wrap_system->make_wrap(*(ID3D11DeviceLatest**)ppDevice, *(ID3D11DeviceContextLatest**)ppImmediateContext);
+		Wrap<ID3D11DeviceLatest>	*device		= com_wrap_system->make_wrap_check(*(ID3D11DeviceLatest**)ppDevice, *(ID3D11DeviceContextLatest**)ppImmediateContext);
 		*ppSwapChain		= com_wrap_system->make_wrap(*(IDXGISwapChain3**)ppSwapChain, device);
 		*ppDevice			= device;
 		*ppImmediateContext	= device->immediate;
@@ -1954,102 +2019,114 @@ HRESULT WINAPI Hooked_D3D11CreateDeviceAndSwapChain(IDXGIAdapter *pAdapter, D3D_
 	return h;
 }
 
+void Capture::GetItem(RecItem2 &rec, RecItemLink &i) {
+	auto	*obj	= static_cast<Wrap<ID3D11DeviceChild>*>(&i);
+	switch (rec.type) {
+		case RecItem::DepthStencilState:
+			rec.info	= &static_cast<Wrap<ID3D11DepthStencilState>*>(&i)->desc;
+			break;
+		case RecItem::BlendState:
+			rec.info	= &static_cast<Wrap<ID3D11BlendStateLatest>*>(&i)->desc;
+			break;
+		case RecItem::RasterizerState:
+			rec.info	= &static_cast<Wrap<ID3D11RasterizerStateLatest>*>(&i)->desc;
+			break;
+
+		case RecItem::Buffer:
+		case RecItem::Texture1D:
+		case RecItem::Texture2D:
+		case RecItem::Texture3D:
+			rec.info = static_cast<Wrap<ID3D11Buffer>*>(&i)->data;
+			break;
+
+		case RecItem::ShaderResourceView: {
+			auto	view	= static_cast<Wrap<ID3D11ShaderResourceViewLatest>*>(&i);
+			rec.info		= &view->info;
+		#if 1
+			if (!obj->is_orig_dead()) {
+				ID3D11Resource *res;
+				view->orig->GetResource(&res);
+				*unconst((ID3D11Resource*const*)rec.info) = com_wrap_system->find_wrap_carefully(res);
+			}
+		#else
+			com_ptr<ID3D11Resource>	res;
+			view->GetResource(&res);
+			*unconst((ID3D11Resource*const*)rec.info) = res;
+		#endif
+
+			//auto	wrap	= static_cast<Wrap<ID3D11ShaderResourceViewLatest>*>(&i);
+			//rec.info		= &wrap->info;
+			//if (!obj->is_orig_dead() && !com_wrap_system->is_wrap.count((_com_wrap*)wrap->info.resource)) {
+			//	ID3D11Resource *res;
+			//	wrap->orig->GetResource(&res);
+			//	auto	res2	= com_wrap_system->find_wrap_carefully(res);
+			//	*unconst((ID3D11Resource*const*)rec.info) = res2;
+			//
+			//	auto	&rec2	= r.emplace_back(i, obj);
+			//	rec2.info		= res2->data;
+			//	res2->Release();
+			//}
+			break;
+		}
+		case RecItem::RenderTargetView:
+			rec.info	= &static_cast<Wrap<ID3D11RenderTargetViewLatest>*>(&i)->info;
+			break;
+		case RecItem::DepthStencilView:	
+			rec.info	= &static_cast<Wrap<ID3D11DepthStencilView>*>(&i)->info;
+			break;
+		case RecItem::UnorderedAccessView:
+			rec.info	= &static_cast<Wrap<ID3D11UnorderedAccessViewLatest>*>(&i)->info;
+			break;
+
+		case RecItem::VertexShader:
+		case RecItem::HullShader:
+		case RecItem::DomainShader:
+		case RecItem::GeometryShader:
+		case RecItem::PixelShader:
+		case RecItem::ComputeShader:
+		case RecItem::InputLayout:
+			rec.info = static_cast<Wrap<ID3D11VertexShader>*>(&i)->blob;
+			break;
+
+		case RecItem::SamplerState:
+			rec.info	= &static_cast<Wrap<ID3D11SamplerState>*>(&i)->desc;
+			break;
+		case RecItem::Query:
+		case RecItem::Predicate:
+			rec.info	= &static_cast<Wrap<ID3D11QueryLatest>*>(&i)->desc;
+			break;
+		case RecItem::Counter:
+			rec.info	= &static_cast<Wrap<ID3D11Counter>*>(&i)->desc;
+			break;
+		#if 0
+		case RecItem::DeviceContext: {
+			auto	ctx		= static_cast<Wrap<ID3D11DeviceContextLatest>*>(&i);
+			auto	state	= static_cast<DeviceContextState*>(ctx);
+			state->Get(ctx->orig);
+			rec.info		= memory_block(*state);
+			break;
+		}
+							   #endif
+
+	}
+	if (obj->is_orig_dead())
+		rec.type = RecItem::TYPE(rec.type | RecItem::DEAD);
+}
+
 with_size<dynamic_array<RecItem2>> Capture::GetItems() {
 	dynamic_array<RecItem2>	r;
+
+	for (auto &i : RecItemLink::orphans) {
+		auto	*obj	= static_cast<Wrap<ID3D11DeviceChild>*>(&i);
+		auto	&rec	= r.emplace_back(i, obj);
+		GetItem(rec, i);
+	}
+
 	for (auto &d : devices) {
 		for (auto &i : static_cast<Wrap<ID3D11DeviceLatest>&>(d).items) {
 			auto	*obj	= static_cast<Wrap<ID3D11DeviceChild>*>(&i);
 			auto	&rec	= r.emplace_back(i, obj);
-			switch (rec.type) {
-				case RecItem::DepthStencilState:
-					rec.info	= &static_cast<Wrap<ID3D11DepthStencilState>*>(&i)->desc;
-					break;
-				case RecItem::BlendState:
-					rec.info	= &static_cast<Wrap<ID3D11BlendStateLatest>*>(&i)->desc;
-					break;
-				case RecItem::RasterizerState:
-					rec.info	= &static_cast<Wrap<ID3D11RasterizerStateLatest>*>(&i)->desc;
-					break;
-
-				case RecItem::Buffer:
-				case RecItem::Texture1D:
-				case RecItem::Texture2D:
-				case RecItem::Texture3D:
-					rec.info = static_cast<Wrap<ID3D11Buffer>*>(&i)->data;
-					break;
-
-				case RecItem::ShaderResourceView: {
-					auto	view	= static_cast<Wrap<ID3D11ShaderResourceViewLatest>*>(&i);
-					rec.info		= &view->info;
-				#if 1
-					if (!obj->is_orig_dead()) {
-						ID3D11Resource *res;
-						view->orig->GetResource(&res);
-						*unconst((ID3D11Resource*const*)rec.info) = com_wrap_system->find_wrap_carefully(res);
-					}
-				#else
-					com_ptr<ID3D11Resource>	res;
-					view->GetResource(&res);
-					*unconst((ID3D11Resource*const*)rec.info) = res;
-				#endif
-
-					//auto	wrap	= static_cast<Wrap<ID3D11ShaderResourceViewLatest>*>(&i);
-					//rec.info		= &wrap->info;
-					//if (!obj->is_orig_dead() && !com_wrap_system->is_wrap.count((_com_wrap*)wrap->info.resource)) {
-					//	ID3D11Resource *res;
-					//	wrap->orig->GetResource(&res);
-					//	auto	res2	= com_wrap_system->find_wrap_carefully(res);
-					//	*unconst((ID3D11Resource*const*)rec.info) = res2;
-					//
-					//	auto	&rec2	= r.emplace_back(i, obj);
-					//	rec2.info		= res2->data;
-					//	res2->Release();
-					//}
-					break;
-				}
-				case RecItem::RenderTargetView:
-					rec.info	= &static_cast<Wrap<ID3D11RenderTargetViewLatest>*>(&i)->info;
-					break;
-				case RecItem::DepthStencilView:	
-					rec.info	= &static_cast<Wrap<ID3D11DepthStencilView>*>(&i)->info;
-					break;
-				case RecItem::UnorderedAccessView:
-					rec.info	= &static_cast<Wrap<ID3D11UnorderedAccessViewLatest>*>(&i)->info;
-					break;
-
-				case RecItem::VertexShader:
-				case RecItem::HullShader:
-				case RecItem::DomainShader:
-				case RecItem::GeometryShader:
-				case RecItem::PixelShader:
-				case RecItem::ComputeShader:
-				case RecItem::InputLayout:
-					rec.info = static_cast<Wrap<ID3D11VertexShader>*>(&i)->blob;
-					break;
-
-				case RecItem::SamplerState:
-					rec.info	= &static_cast<Wrap<ID3D11SamplerState>*>(&i)->desc;
-					break;
-				case RecItem::Query:
-				case RecItem::Predicate:
-					rec.info	= &static_cast<Wrap<ID3D11QueryLatest>*>(&i)->desc;
-					break;
-				case RecItem::Counter:
-					rec.info	= &static_cast<Wrap<ID3D11Counter>*>(&i)->desc;
-					break;
-	#if 0
-				case RecItem::DeviceContext: {
-					auto	ctx		= static_cast<Wrap<ID3D11DeviceContextLatest>*>(&i);
-					auto	state	= static_cast<DeviceContextState*>(ctx);
-					state->Get(ctx->orig);
-					rec.info		= memory_block(*state);
-					break;
-				}
-	#endif
-
-			}
-			if (obj->is_orig_dead())
-				rec.type = RecItem::TYPE(rec.type | RecItem::DEAD);
+			GetItem(rec, i);
 		}
 	}
 	return move(r);
@@ -2265,7 +2342,7 @@ CaptureStats Capture::CaptureFrames(int frames) {
 
 	CaptureStats	stats;
 	stats.num_cmdlists	= 0;
-	stats.num_items		= 0;
+	stats.num_items		= num_elements32(RecItemLink::orphans);
 
 	for (auto &d : devices) {
 		auto	&d2 = static_cast<Wrap<ID3D11DeviceLatest>&>(d);

@@ -5,37 +5,70 @@
 using namespace iso;
 
 struct LineLoc {
-	uint32	file;
-	uint32	baseLineNum;
-	LineLoc() : file(0), baseLineNum(0) {}
-	LineLoc(uint32 file, uint32 line) : file(file), baseLineNum(line) {}
+	uint32	file, line;
+	LineLoc() : file(0), line(0) {}
+	LineLoc(uint32 file, uint32 line) : file(file), line(line) {}
 };
 
+
+// remap lines back to #line
 struct LineMapper {
 	struct File {
-		uint32					file;
-		sparse_array<LineLoc,uint32,uint32>	lines;
+		uint32		file;
+		sparse_array<LineLoc,uint32,uint32>	lines;	//lines that map to file
 	};
 	hash_map<string, File>	file_by_name;
 	hash_map<uint32, File*>	file_by_id;
+
 	void	add_file(uint32 file, const char *name) {
 		file_by_name.put(name).file = file;
-	}
-	File*	get_file(const string &name) {
-		auto	file = file_by_name[name];
-		return file.exists() ? &file.get() : nullptr;
 	}
 	File*	get_file(uint32 id) {
 		return file_by_id[id].or_default();
 	}
-	bool	start() {
-		if (file_by_name.empty())
-			return false;
-		for (auto &i : file_by_name)
-			file_by_id[i.file] = &i;
-		return true;
-	}
+	bool	start(Disassembler::Files &files);
 };
+
+bool LineMapper::start(Disassembler::Files &files) {
+	if (file_by_name.empty())
+		return false;
+
+	for (auto &i : file_by_name)
+		file_by_id[i.file] = &i;
+
+	for (auto i : files) {
+		LineMapper::File	*lines2 = 0;
+
+		for (const char *p = i.b->source; p = string_find(p, "#line "); ++p) {
+			string_scan	ss(p);
+			uint32	line	= 0;
+
+			ss.check("#line ");
+			ss >> line;
+
+			if (ss.skip_whitespace().check('"')) {
+				auto	t = file_by_name[ss.get_token(~char_set('"'))];
+				if (t.exists())
+					lines2	= &t.get();
+
+				ss.scan_skip('\n');
+			}
+
+			if (lines2) {
+				int	iline = i.b->get_line_num(p);
+				while (ss.remaining()) {
+					auto data = ss.get_raw(~char_set('\n'));
+					if (data.begins("#line "))
+						break;
+					lines2->lines[line++] = LineLoc(i.a, iline++);
+					ss.move(1);
+				}
+			}
+		}
+	}
+
+	return true;
+}
 
 string iso::GetPDBFirstFilename(istream_ref file) {
 	MSF::reader	msf(file, 0);
@@ -49,7 +82,7 @@ string iso::GetPDBFirstFilename(istream_ref file) {
 	return (const char*)dbi.filename_buf;
 }
 
-ParsedSPDB::ParsedSPDB(istream_ref file, const char *path) : flags(0) {
+ParsedSPDB::ParsedSPDB(istream_ref file, Disassembler::SharedFiles &shared_files, const char *search_path) : flags(0) {
 	PDBinfo	info;
 	ref_ptr<MSF::reader>	msf = new MSF::reader(file, 0);
 	info.load(msf, snPDB);
@@ -112,51 +145,31 @@ ParsedSPDB::ParsedSPDB(istream_ref file, const char *path) : flags(0) {
 					for (auto &i : file_checksums->entries()) {
 						uint32		file	= uint32((const uint8*)&i - sliceeam.data()) + 1;
 						const char *name	= FileName(i.name);
+						bool		found	= false;
 
 						if (auto sn = info.Stream(cstr("/src/files/") + to_lower(name))) {
 							files.add(file, name, malloc_block::unterminated(MSF::stream_reader(msf, sn)));
+							found	= true;
 
 						} else if (exists(name)) {
 							files.add(file, name, malloc_block(FileInput(name), filelength(name)));
+							found	= true;
 
-						} else if (path && exists(filename(path).add_dir(name))) {
-							filename	name2 = filename(path).add_dir(name);
-							files.add(file, name, malloc_block(FileInput(name2), filelength(name2)));
-						} else {
-							line_mapper.add_file(file, name);
-						}
-					}
-
-					if (line_mapper.start()) {
-						// remap lines back to #line
-						for (auto& i : files) {
-							LineMapper::File	*lines2 = 0;
-
-							for (const char *p = i.source; p = string_find(p, "#line "); ++p) {
-								string_scan	ss(p);
-								uint32	line	= 0;
-
-								ss.check("#line ");
-								ss >> line;
-								if (ss.skip_whitespace().check('"')) {
-									auto	fn	= ss.get_token(~char_set('"'));
-									ss.scan_skip('\n');
-									lines2	= line_mapper.get_file(fn);
-								}
-								if (lines2) {
-									int	iline = i.get_line_num(p);
-									while (ss.remaining()) {
-										auto data = ss.get_raw(~char_set('\n'));
-										if (data.begins("#line "))
-											break;
-										lines2->lines[line++] = LineLoc(i.id, iline++);
-										ss.move(1);
-									}
+						} else if (search_path) {
+							for (auto path : parts<';'>(search_path)) {
+								if (exists(filename(path).add_dir(name))) {
+									files[file] = shared_files.get(filename(path).add_dir(name));
+									found		= true;
+									break;
 								}
 							}
 						}
 
+						if (!found)
+							line_mapper.add_file(file, name);
 					}
+
+					line_mapper.start(files);
 					break;
 				}
 
@@ -174,20 +187,20 @@ ParsedSPDB::ParsedSPDB(istream_ref file, const char *path) : flags(0) {
 					if (sub->extended()) {
 						for (auto &i : sub->entries_ex()) {
 							if (i.inlinee & 0x1000) {
-								f->file			= i.fileId + 1;
-								f->baseLineNum	= i.sourceLineNum;
+								f->file		= i.fileId + 1;
+								f->line		= i.sourceLineNum;
 
 								if (auto x = line_mapper.get_file(f->file)) {
-									auto	&&m = x->lines[f->baseLineNum];
+									auto	&&m = x->lines[f->line];
 									if (m.exists())
-										*(LineLoc*)f = x->lines[f->baseLineNum].get();
+										*(LineLoc*)f = x->lines[f->line].get();
 								}
 
 								for (auto &j : f->locations) {
 									auto *patch		= lower_boundc(locations, j.offset);
 									auto *end_patch = upper_boundc(locations, j.end() - 1);
 									locations.erase(patch, end_patch);
-									locations.insert(patch, Disassembler::Location(j.offset, f->file, f->baseLineNum + j.line, j.col_start, j.col_end));
+									locations.insert(patch, Disassembler::Location(j.offset, f->file, f->line + j.line, j.col_start, j.col_end));
 								}
 							}
 							++f;
@@ -195,17 +208,17 @@ ParsedSPDB::ParsedSPDB(istream_ref file, const char *path) : flags(0) {
 					} else {
 						for (auto &i : sub->entries()) {
 							if (i.inlinee & 0x1000) {
-								f->file			= i.fileId + 1;
-								f->baseLineNum	= i.sourceLineNum;
+								f->file		= i.fileId + 1;
+								f->line		= i.sourceLineNum;
 
 								if (auto x = line_mapper.get_file(f->file))
-									*(LineLoc*)f = x->lines[f->baseLineNum].get();
+									*(LineLoc*)f = x->lines[f->line].get();
 
 								for (auto &j : f->locations) {
 									if (auto *patch = lower_boundc(locations, j.offset)) {
 										if (patch->offset == j.offset) {
 											patch->file = f->file;
-											patch->line = f->baseLineNum + j.line;
+											patch->line = f->line + j.line;
 										}
 									}
 								}
@@ -224,7 +237,7 @@ ParsedSPDB::ParsedSPDB(istream_ref file, const char *path) : flags(0) {
 							if (auto x = line_mapper.get_file(file)) {
 								for (auto &&j : i.entries()) {
 									LineLoc	loc = x->lines[j.get<0>().linenumStart];
-									locations.emplace_back(j.get<0>().offset, loc.file, loc.baseLineNum, j.get<1>().offColumnStart, j.get<1>().offColumnEnd);
+									locations.emplace_back(j.get<0>().offset, loc.file, loc.line, j.get<1>().offColumnStart, j.get<1>().offColumnEnd);
 								}
 							} else {
 								for (auto &&j : i.entries())
@@ -237,7 +250,7 @@ ParsedSPDB::ParsedSPDB(istream_ref file, const char *path) : flags(0) {
 							if (auto x = line_mapper.get_file(file)) {
 								for (auto &j : i.lines()) {
 									LineLoc	loc = x->lines[j.linenumStart];
-									locations.emplace_back(j.offset, loc.file, loc.baseLineNum);
+									locations.emplace_back(j.offset, loc.file, loc.line);
 								}
 							} else {
 								for (auto &j : i.lines())
@@ -348,4 +361,3 @@ void ParsedSDBGC::GetFileLineFromIndex(uint32 instruction, int32 &file, int32 &l
 void ParsedSDBGC::GetFileLineFromOffset(uint32 offset, int32 &file, int32 &line) const {
 
 }
-

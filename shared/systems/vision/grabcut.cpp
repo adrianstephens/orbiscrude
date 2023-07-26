@@ -260,7 +260,7 @@ enum KmeansFlags {
 	KMEANS_USE_INITIAL_LABELS	= 1,	// flag to use user-supplied initial centres
 };
 
-template<typename C, typename V=typename container_traits<typename T_noref<C>::type>::element>
+template<typename C, typename V=element_t<typename T_noref<C>::type>>
 void kmeans(const C &data, int K, dynamic_array<int> &labels, dynamic_array<V> &centres, int max_count, int flags) {
 	/*static*/ iso::rng<simple_random>	rng(0x12345678);
 	int		N		= data.size32();
@@ -485,7 +485,7 @@ void kmeans(const C &data, int K, dynamic_array<int> &labels, dynamic_array<V> &
 	}
 }
 
-template<typename C, typename V=typename container_traits<C>::element>
+template<typename C, typename V=element_t<C>>
 float kmeans(const C &data, int K, dynamic_array<int> &labels, dynamic_array<V> &centres, int max_count, int attempts, int flags) {
 	size_t					N = data.size();
 	dynamic_array<int>		best_labels(N);

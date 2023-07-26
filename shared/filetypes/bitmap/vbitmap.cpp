@@ -45,7 +45,7 @@ template<typename T> void fill_data(vbitmap_format format, const block<T, 2> &sr
 
 	for (int y = 0; y < h; y++) {
 		void	*d	= (uint8*)dest + stride * y;
-		const T	*s	= src[y];
+		const T	*s	= src[y].begin();
 
 		if (bpp <= 32) {
 			for (int x = 0; x < w; x++) {

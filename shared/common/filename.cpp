@@ -22,7 +22,8 @@ inline bool IsDirSep(char c)					{ return c == '\\' || c == '/';			}
 inline const char *GetDirSep(const char *s)		{ return str(s).find(DIRECTORY_SEP);	}
 inline const char *GetDirSepR(const char *s)	{ return str(s).rfind(DIRECTORY_SEP);	}
 
-filename::filename(const char *s) {
+filename::filename(const string_param &_s) {
+	const char *s = _s.begin(), *e = _s.end();
 	char	*d = begin();
 	if (!s || !s[0]) {
 		*d = 0;
@@ -45,8 +46,10 @@ filename::filename(const char *s) {
 		sep = '/';
 #endif
 	char	notsep	= '/' + '\\' - sep;
-	while (char c = *s++)
+	while (s != e) {
+		char	c = *s++;
 		*d++ = c == notsep ? sep : c;
+	}
 	d[-int(d[-1] == '"')] = 0;
 }
 
@@ -58,54 +61,82 @@ bool filename::is_url() const {
 	return find(':') > begin() + 1;
 }
 
-iso_export filename	filename::cleaned(const char* p) {
+iso_export filename	filename::cleaned(const string_param &_s) {
 	filename	fn;
+	const char	*s		= _s.begin(), *e = _s.end();
 	char		*d		= fn.begin();
 	int			back	= 0;
 	char_set	sep("\\/");
-	for (const char *n; n = str(p).find(sep); p = n + 1) {
-		size_t	len = n - p;
+
+#if defined(USE_FILENAME_WINDOWS) && !defined PLAT_WINRT && !defined PLAT_XONE
+	if (s[0] == '\\') {
+		char	logical[512];
+		if (GetLogicalDriveStringsA(sizeof(logical) - 1, logical)) {
+			char	name[256];
+			for (char *log = logical; *log; log = string_end(log) + 1) {
+				const char drive[] = {*log, ':', 0};
+				if (QueryDosDeviceA(drive, name, sizeof(name))) {
+					size_t	len = string_len(name);
+					if (str(s).begins(name) && s[len] == '\\') {
+						d += string_copy(d, drive);
+						s += len;
+						break;
+					}
+				}
+			}
+		}
+	}
+#endif
+
+	for (const char *n; n = str(s, e).find(sep); s = n + 1) {
+		size_t	len = n - s;
 		if (len == 0) {
 			if (d > fn.begin() + 1)
 				continue;
 		} else {
-			if (p[0] == '.') {
+			if (s[0] == '.') {
 				if (len == 1)
 					continue;
-				if (len == 2 && p[1] == '.' && back--) {
+				if (len == 2 && s[1] == '.' && back--) {
 					while (--d > fn.begin() && !sep.test(d[-1]));
 					continue;
 				}
 			}
 			back++;
-			memcpy(d, p, len);
+			memcpy(d, s, len);
 		}
 		d += len + 1;
 		d[-1] = DIRECTORY_SEP;
 	}
-	strcpy(d, p);
+	string_copy(d, s, e);
 	return fn;
 }
 
-#ifdef USE_FILENAME_WINDOWS
-
 bool filename::is_relative() const {
+#ifdef USE_FILENAME_WINDOWS
 	if (IsDirSep((*this)[0]))
 		return false;
 	const char *p = find(~char_set::alphanum);
 	return !p || *p != ':';
+#else
+	return !IsDirSep((*this)[0]);
+#endif
 }
 
 filename::drive_t filename::drive() const {
 	drive_t	d;
+#ifdef USE_FILENAME_WINDOWS
 	if (!blank() && (*this)[1] == ':')
 		d = slice(0, 2);
+#endif
 	return d;
 }
 
+#if 0
 // Translate path with device name to drive letters.
 filename filename::fix(const char *p) {
-#if !defined PLAT_WINRT && !defined PLAT_XONE
+	filename	fn;
+#if defined(USE_FILENAME_WINDOWS) && !defined PLAT_WINRT && !defined PLAT_XONE
 	if (p[0] == '\\') {
 		char	logical[512];
 		if (GetLogicalDriveStringsA(sizeof(logical) - 1, logical)) {
@@ -114,33 +145,26 @@ filename filename::fix(const char *p) {
 				const char drive[] = {*log, ':', 0};
 				if (QueryDosDeviceA(drive, name, sizeof(name))) {
 					size_t	len = string_len(name);
-					if (str(p).begins(name) && p[len] == '\\')
-						return filename(drive).add_dir(p + len);
+					if (str(p).begins(name) && p[len] == '\\') {
+						fn = filename(drive).add_dir(p + len);
+						fn.cleanup();
+						return fn;
+					}
 				}
 			}
 		}
 	}
 #endif
-	return p;
+	fn = filename(p);
+	fn.cleanup();
+	return fn;
 }
-
-#else
-
-bool filename::is_relative() const {
-	return !IsDirSep((*this)[0]);
-}
-
-filename::drive_t filename::drive() const {
-	return drive_t();
-}
-
 #endif
-
 
 const char *fn_end(const char *buff) {
 	const char *end = string_end(buff);
 	if (string_find(buff + 2, ':')) {
-		if (const char *query = string_rfind(buff, '?', end))
+		if (const char *query = string_rfind(buff, end, '?'))
 			return query;
 	}
 	return end;
@@ -250,7 +274,7 @@ filename &filename::rem_first() {
 	return *this;
 }
 
-filename &filename::add_dir(const count_string &s) {
+filename &filename::add_dir(const string_param &s) {
 	ISO_ASSERT(length() + s.length() < max_length());
 	char	*p = end();
 	for (const char *d = s.begin(), *e = s.end(); d < e;) {
@@ -275,7 +299,7 @@ filename &filename::add_dir(const count_string &s) {
 	*p = 0;
 	return *this;
 }
-filename &filename::set_dir(const count_string &s) {
+filename &filename::set_dir(const string_param &s) {
 	const char	*buff	= *this;
 	const char	*sep	= GetDirSepR(buff);
 	if (sep)
@@ -288,19 +312,19 @@ filename &filename::set_dir(const count_string &s) {
 	char	*p = *this;
 	for (const char *d = s.begin(), *e = s.end(); d < e;)
 		*p++ = *d++;
-	if (p != operator char*() && !IsDirSep(p[-1]))
+	if (p != begin() && !IsDirSep(p[-1]))
 		*p++ = DIRECTORY_SEP;
 
 	strcpy(p, n);
 	return *this;
 }
 
-filename &filename::add_ext(const char *e) {
+filename &filename::add_ext(const string_param &e) {
 	if (e) {
 		char	*p = end();
 		if (e[0] != '.')
 			*p++ = '.';
-		strcpy(p, e);
+		string_copy(p, e);
 	}
 	return *this;
 }
@@ -326,7 +350,7 @@ filename &filename::set_ext(const char *e) {
 	return *this;
 }
 
-filename filename::relative(const char *f) const {
+filename filename::relative(const string_param &f) const {
 	filename	fn(f);
 	if (!fn.is_relative())
 		return fn;
@@ -487,9 +511,9 @@ bool delete_file(const char *f) {
 bool delete_dir(const char *f) {
 	for (directory_iterator name(filename(f).add_dir("*.*")); name; ++name) {
 		if (!name.is_dir())
-			delete_file(filename(f).add_dir(name));
+			delete_file(filename(f).add_dir((const char*)name));
 		else if (str((const char*)name) != "." && str((const char*)name) != "..")
-			delete_dir(filename(f).add_dir(name));
+			delete_dir(filename(f).add_dir((const char*)name));
 	}
 	return !!RemoveDirectoryA(f);
 }
@@ -595,7 +619,7 @@ filename get_exec_path() {
 	return fn;
 }
 filename get_exec_dir() {
-	return get_exec_path().dir() += '\\';
+	return filename(get_exec_path().dir() += '\\');
 }
 
 filename get_temp_dir() {
@@ -671,7 +695,7 @@ bool recursive_directory_iterator::next() {
 		for (; !stack.empty(); stack.pop_back(), dir = dir.rem_dir()) {
 			for (directory_iterator &d = stack.back(); d; ++d) {
 				if (d.is_dir() && d[0] != '.') {
-					set_pattern(filename(dir.add_dir(d)).add_dir(pattern));
+					set_pattern(filename(dir.add_dir((const char*)d)).add_dir(pattern));
 					got_dir	= true;
 					++d;
 					break;

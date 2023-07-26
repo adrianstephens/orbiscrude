@@ -988,7 +988,7 @@ ISO_ptr<void> GNFFileHandler::Read(tag id, istream_ref file) {
 
 	ISO_ptr<anything>	a(id);
 	for (int i = 0; i < n; i++)
-		a->Append(Read1(0, file, header, tex[i]));
+		a->Append(Read1(none, file, header, tex[i]));
 
 	delete[] tex;
 	return a;
@@ -1018,8 +1018,7 @@ void GNFFileHandler::Write(ISO_ptr<bitmap> bm, ostream_ref file, GNF::Header &he
 bool GNFFileHandler::Write(ISO_ptr<void> p, ostream_ref file) {
 	GNF::Header			header;
 
-	if (p.IsType<anything>()) {
-		anything		*a		= p;
+	if (auto a = p.test_cast<anything>()) {
 		int				n		= a->Count();
 		GNF::Texture	*tex	= new GNF::Texture[n];
 		file.seek(header.Init(n));

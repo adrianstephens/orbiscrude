@@ -1085,10 +1085,10 @@ class DisassemblerDalvik : public Disassembler {
 	static string_accum&	branch(string_accum &a, uint32 r)	{ return a << "0x" << hex(r); }
 public:
 	const char*	GetDescription() override { return "Dalvik bytecode"; }
-	State*		Disassemble(const iso::memory_block &block, uint64 addr, SymbolFinder sym_finder) override;
+	State*		Disassemble(const_memory_block block, uint64 addr, SymbolFinder sym_finder) override;
 } dalvikbytecode;
 
-Disassembler::State *DisassemblerDalvik::Disassemble(const iso::memory_block &block, uint64 addr, SymbolFinder sym_finder) {
+Disassembler::State *DisassemblerDalvik::Disassemble(const_memory_block block, uint64 addr, SymbolFinder sym_finder) {
 	static const char *kinds[] = {
 		"type",
 		"field",
@@ -1102,7 +1102,7 @@ Disassembler::State *DisassemblerDalvik::Disassemble(const iso::memory_block &bl
 
 	while (p < block.end()) {
 		const Instruction	*in		= (const Instruction*)p;
-		MODE				mode	= opcodes[in->op].mode;
+		auto				mode	= opcodes[in->op].mode;
 		uint32				len		= mode_lengths[mode & 0x1f];
 		uint32				offset	= (uint8*)p - block;
 
@@ -1222,7 +1222,7 @@ Disassembler::State *DisassemblerDalvik::Disassemble(const iso::memory_block &bl
 		}
 
 		p += len;
-		state->lines.push_back((const char*)ba);
+		state->lines.push_back(ba);
 	}
 	return state;
 }

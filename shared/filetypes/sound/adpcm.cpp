@@ -2,6 +2,7 @@
 #include "iso/iso_convert.h"
 #include "filetypes/iff.h"
 #include "base/bits.h"
+#include "base/maths.h"
 
 using namespace iso;
 
@@ -473,8 +474,8 @@ public:
 
 ADPCMcodebook::ADPCMcodebook(sample &sm, int _order, int _frame_size, int table_size, int refine_iter, double thresh)
 	: order(_order), frame_size(_frame_size)
-	, coefTable(NULL)
 	, n_entries(0)
+	, coefTable(NULL)
 {
 	clear(state);
 

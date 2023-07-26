@@ -38,7 +38,7 @@ struct test_linq {
 //		auto	x0 = from(x) | transform([](int i) { return i / 10; }) | to_array();
 		auto	x0 = from(x)
 			| transform(
-				op_param<0>() / scalar(10)
+				make_deferred(op_param<0>()) / scalar(10)
 			)
 			| to_array();
 		/*
@@ -96,8 +96,8 @@ struct test_linq {
 			| first_or_default();
 
 		auto j = to_array(from(table1) | join(table2,
-			make_field(&entry1::a),										//[](const entry1 &i) { return i.a; },
-			make_field(&entry2::a),										//[](const entry2 &i) { return i.a; },
+			make_deferred_field(&entry1::a),		//[](const entry1 &i) { return i.a; },
+			make_deferred_field(&entry2::a),		//[](const entry2 &i) { return i.a; },
 			/*(op_param<1>()[make_field(&entry2::b)] + scalar(10)) / scalar(2)*/	[](const entry1 &a, const entry2 &b) { return b.b; }
 		));
 

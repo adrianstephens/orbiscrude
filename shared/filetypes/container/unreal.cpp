@@ -9,6 +9,7 @@
 #include "codec/texels/att.h"
 #include "codec/texels/astc.h"
 #include "codec/texels/etc.h"
+#include "codec/oodle.h"
 #include "archive_help.h"
 
 namespace unreal {
@@ -338,7 +339,18 @@ enum EUnrealEngineObjectUE4Version {
 	VER_UE4_CORRECT_LICENSEE_FLAG,
 
 	VER_UE4_AUTOMATIC_VERSION_PLUS_ONE,
-	VER_UE4_AUTOMATIC_VERSION = VER_UE4_AUTOMATIC_VERSION_PLUS_ONE - 1
+	VER_UE4_AUTOMATIC_VERSION = VER_UE4_AUTOMATIC_VERSION_PLUS_ONE - 1,
+
+	VER_UE5_INITIAL_VERSION = 1000,
+	VER_UE5_NAMES_REFERENCED_FROM_EXPORT_DATA,
+	VER_UE5_PAYLOAD_TOC,
+	VER_UE5_OPTIONAL_RESOURCES,
+	VER_UE5_LARGE_WORLD_COORDINATES,       
+	VER_UE5_REMOVE_OBJECT_EXPORT_PACKAGE_GUID,
+	VER_UE5_TRACK_OBJECT_EXPORT_IS_INHERITED,
+
+	VER_UE5_AUTOMATIC_VERSION_PLUS_ONE,
+	VER_UE5_AUTOMATIC_VERSION = VER_UE5_AUTOMATIC_VERSION_PLUS_ONE - 1
 };
 
 struct FEditorObjectVersion {
@@ -525,14 +537,14 @@ struct FCustomVersionContainer {
 		FString FriendlyName;
 		FCustomVersion() {}
 		FCustomVersion(FGuid InKey, int32 InVersion, FString&& FriendlyName) : Key(InKey), Version(InVersion), FriendlyName(move(FriendlyName)) {}
-		bool read(istream_ref file)		{ return iso::read(file, Key, Version); }
+		bool read(istream_ref file)		{ return file.read(Key, Version); }
 	};
 
 	struct FEnumCustomVersion_DEPRECATED {
 		uint32	Tag;
 		int32	Version;
 		operator FCustomVersion() const	{ return FCustomVersion(FGuid(0, 0, 0, Tag), Version, format_string("EnumTag%u", Tag).begin()); }
-		bool read(istream_ref file)		{ return iso::read(file, Tag, Version); }
+		bool read(istream_ref file)		{ return file.read(Tag, Version); }
 	};
 
 	struct FGuidCustomVersion_DEPRECATED {
@@ -540,7 +552,7 @@ struct FCustomVersionContainer {
 		int32	Version;
 		FString FriendlyName;
 		operator FCustomVersion() const	{ return FCustomVersion(Key, Version, FString(FriendlyName)); }
-		bool read(istream_ref file)		{ return iso::read(file, Key, Version, FriendlyName); }
+		bool read(istream_ref file)		{ return file.read(Key, Version, FriendlyName); }
 	};
 
 	TArray<FCustomVersion> Versions;
@@ -588,7 +600,7 @@ struct FEngineVersion {
 	uint32	Changelist;
 	FString Branch;
 	bool read(istream_ref file) {
-		return iso::read(file, Major, Minor,Patch, Changelist, Branch);
+		return file.read(Major, Minor,Patch, Changelist, Branch);
 	}
 };
 
@@ -624,7 +636,7 @@ struct FPackageFileSummary {
 	struct FGenerationInfo {
 		int32	ExportCount;
 		int32	NameCount;
-		bool  read(istream_ref file) { return iso::read(file, ExportCount, NameCount); }
+		bool  read(istream_ref file) { return file.read(ExportCount, NameCount); }
 	};
 
 	int32	Tag;
@@ -731,26 +743,26 @@ bool FPackageFileSummary::read(istream_ref file) {
 	if (!FileVersionUE4 && !FileVersionLicenseeUE4)
 		FileVersionUE4 = VER_UE4_AUTOMATIC_VERSION;
 
-	iso::read(file, TotalHeaderSize, FolderName, PackageFlags, NameCount, NameOffset);
+	file.read(TotalHeaderSize, FolderName, PackageFlags, NameCount, NameOffset);
 
 	if (!(PackageFlags & PKG_FilterEditorOnly) && FileVersionUE4 >= VER_UE4_ADDED_PACKAGE_SUMMARY_LOCALIZATION_ID)
 		file.read(LocalizationId);
 
 	if (FileVersionUE4 >= VER_UE4_SERIALIZE_TEXT_IN_PACKAGES)
-		iso::read(file, GatherableTextDataCount, GatherableTextDataOffset);
+		file.read(GatherableTextDataCount, GatherableTextDataOffset);
 
-	iso::read(file, ExportCount, ExportOffset, ImportCount, ImportOffset, DependsOffset);
+	file.read(ExportCount, ExportOffset, ImportCount, ImportOffset, DependsOffset);
 
 	if (FileVersionUE4 >= VER_UE4_ADD_STRING_ASSET_REFERENCES_MAP)
-		iso::read(file, SoftPackageReferencesCount, SoftPackageReferencesOffset);
+		file.read(SoftPackageReferencesCount, SoftPackageReferencesOffset);
 
 	if (FileVersionUE4 >= VER_UE4_ADDED_SEARCHABLE_NAMES)
 		file.read(SearchableNamesOffset);
 
-	iso::read(file, ThumbnailTableOffset, Guid);
+	file.read(ThumbnailTableOffset, Guid);
 
 	if (!(PackageFlags & PKG_FilterEditorOnly) && FileVersionUE4 >= VER_UE4_ADDED_PACKAGE_OWNER) {
-		iso::read(file, PersistentGuid);
+		file.read(PersistentGuid);
 		if (FileVersionUE4 < VER_UE4_NON_OUTER_PACKAGE_IMPORT)
 			file.get<FGuid>();// OwnerPersistentGuid
 	} else
@@ -795,7 +807,7 @@ bool FPackageFileSummary::read(istream_ref file) {
 	}
 
 	if (FileVersionUE4 >= VER_UE4_PRELOAD_DEPENDENCIES_IN_COOKED_EXPORTS)
-		iso::read(file, PreloadDependencyCount, PreloadDependencyOffset);
+		file.read(PreloadDependencyCount, PreloadDependencyOffset);
 
 	return true;
 }
@@ -845,9 +857,13 @@ struct FBulkData {
 		return true;
 	}
 
-	istream_ptr		reader(istream_ref file, streamptr bulk_offset) const {
-		streamptr	offset = flags & PayloadAtEndOfFile ? bulk_offset + file_offset : file_offset;
-		file.seek(offset);
+	streamptr		offset(streamptr bulk_offset) const {
+		return flags & PayloadAtEndOfFile ? bulk_offset + file_offset : file_offset;
+	}
+
+	malloc_block	data(istream_ref file, streamptr bulk_offset) const {
+		auto		pos		= make_save_pos(file);
+		file.seek(offset(bulk_offset));
 
 		if (flags & SerializeCompressedZLIB) {
 			auto	PackageFileTag	= file.get<FCompressedChunkInfo>();
@@ -870,12 +886,197 @@ struct FBulkData {
 				p	+= i.UncompressedSize;
 				fp	+= i.CompressedSize;
 			}
+			return move(mem);
+		}
+		return malloc_block(file, disk_size);
+	}
 
-			return new reader_mixout<memory_reader_owner>(move(mem));
+	istream_ptr		reader(istream_ref file, streamptr bulk_offset) const {
+		if (flags & SerializeCompressedZLIB)
+			return new reader_mixout<memory_reader_owner>(move(data(file, bulk_offset)));
+		return new istream_offset(copy(file), offset(bulk_offset), disk_size);
+	}
+};
+
+
+enum CompressionFormat : uint8 {
+	//case 0:
+	//{
+	//	// can't rely on archive serializing FName, so use String
+	//	FString LoadedString;
+	//	Archive << LoadedString;
+	//	Compressor = FName(*LoadedString);
+	//	break;
+	//}
+	COMP_NONE	= 1,
+	COMP_Oodle	= 2,
+	COMP_Zlib	= 3,
+	COMP_Gzip	= 4,
+	COMP_LZ4	= 5,
+};
+
+static constexpr uint64 DefaultBlockSize = 256 * 1024;
+static constexpr uint64 DefaultHeaderSize = 4 * 1024;
+
+struct FBlake3Hash {
+	union {
+		uint32	_;//align
+		uint8	array[32];
+	};
+};
+
+struct FHeader {
+	enum EMethod : uint8 {
+		None	= 0,	/** Header is followed by one uncompressed block. */
+		Oodle	= 3,	/** Header is followed by an array of compressed block sizes then the compressed blocks. */
+		LZ4		= 4,	/** Header is followed by an array of compressed block sizes then the compressed blocks. */
+	};
+	static constexpr uint32 ExpectedMagic = 0xb7756362; // <dot>ucb
+	uint32be	Magic				= ExpectedMagic;
+	uint32be	Crc32				= 0;
+	EMethod		Method				= None;
+	uint8		Compressor			= 0;
+	uint8		CompressionLevel	= 0;
+	uint8		BlockSizeExponent	= 0;
+	uint32be	BlockCount			= 0;
+	uint64be	TotalRawSize		= 0;
+	uint64be	TotalCompressedSize	= 0;
+	FBlake3Hash RawHash;
+};
+
+struct FEditorBulkData {
+	enum EFlags : uint32 {
+		None						= 0,
+		IsVirtualized				= 1 << 0,
+		HasPayloadSidecarFile		= 1 << 1,
+		ReferencesLegacyFile		= 1 << 2,
+		LegacyFileIsCompressed		= 1 << 3,
+		DisablePayloadCompression	= 1 << 4,
+		LegacyKeyWasGuidDerived		= 1 << 5,
+		HasRegistered				= 1 << 6,
+		IsTornOff					= 1 << 7,
+		ReferencesWorkspaceDomain	= 1 << 8,
+		StoredInPackageTrailer		= 1 << 9,
+		TransientFlags				= HasRegistered | IsTornOff,
+	};
+
+	enum EPackageSegment : uint8 {
+		Header,
+		Exports,
+		BulkDataDefault,
+		BulkDataOptional,
+		BulkDataMemoryMapped,
+		PayloadSidecar,
+	};
+	
+	EFlags			flags	= EFlags::None;
+	FGuid			BulkDataId;
+	uint8			PayloadContentId[20];
+	int64			OffsetInFile	= -1;
+	int64			PayloadSize		= 0;
+
+	bool	read(istream_ref file) {
+		//const FPackageTrailer* Trailer = GetTrailerFromOwner(Owner);
+
+		file.read(flags, BulkDataId, PayloadContentId, PayloadSize);
+		if (flags & StoredInPackageTrailer)
+			OffsetInFile = -1;//Trailer->FindPayloadOffsetInFile(PayloadContentId);
+		else if (!(flags & IsVirtualized))
+			file.read(OffsetInFile);
+
+	#if 0
+		EPackageSegment	PackageSegment = Header;
+
+		if (!(flags & IsVirtualized)) {
+			// If we can lazy load then find the PackagePath, otherwise we will want to serialize immediately.
+			FArchive* CacheableArchive = Ar.GetCacheableArchive();
+
+			FCompressedBuffer CompressedPayload;
+			SerializeData(Ar, CompressedPayload, flags);
+
+			if (CompressedPayload.GetRawSize() > 0)
+				Payload = CompressedPayload.Decompress();
+			else
+				Payload.clear();
+		}
+	#endif
+		return true;
+	}
+
+	malloc_block		data(istream_ref file) const {
+		auto	pos	= make_save_pos(file);
+		file.seek(OffsetInFile);
+
+		FHeader	header;
+		file.read(header);
+		malloc_block	raw(header.TotalRawSize);
+
+		switch (header.Method) {
+			case FHeader::None:
+				raw.read(file, header.TotalRawSize);
+				return raw;
+
+			case FHeader::Oodle: {
+				uint64	block_size			= uint64(1) << header.BlockSizeExponent;
+				int		num_blocks			= div_round_up(header.TotalRawSize, block_size);
+				temp_array<uint32be>	blocks(file, num_blocks);
+				uint8	*out	= raw;
+				for (uint32 i : blocks) {
+					temp_block	in(file, i);
+					int r = oodle::decompress(in, in.size(), out, block_size);
+					out	+= block_size;
+				}
+				return raw;
+			}
+
+			case FHeader::LZ4:
+				return malloc_block(file, header.TotalCompressedSize);
+		}
+		/*
+
+		uint32	ARCHIVE_V1_HEADER_TAG	= FPackageFileSummary::PACKAGE_FILE_TAG;
+		uint64	ARCHIVE_V2_HEADER_TAG	= ARCHIVE_V1_HEADER_TAG | ((uint64)0x22222222<<32);
+
+		auto	PackageFileTag	= file.get<FCompressedChunkInfo>();
+		CompressionFormat CompressionFormatToDecode = COMP_Zlib;
+
+		bool	swapped	= false;
+		uint64	tag		= PackageFileTag.CompressedSize;
+		if (tag == ARCHIVE_V1_HEADER_TAG || tag == swap_endian(ARCHIVE_V1_HEADER_TAG) || tag == swap_endian((uint64)ARCHIVE_V1_HEADER_TAG)) {
+			swapped = tag != ARCHIVE_V1_HEADER_TAG;
+
+		} else if ( tag == ARCHIVE_V2_HEADER_TAG || tag == swap_endian(ARCHIVE_V2_HEADER_TAG)) {
+			swapped = tag != ARCHIVE_V2_HEADER_TAG;
+			file.read(CompressionFormatToDecode);
+
+		} else {
+			//return false;
 		}
 
-		return new istream_offset(file, disk_size);
+		auto	Summary			= file.get<FCompressedChunkInfo>();
+
+		int64	chunk_size		= PackageFileTag.UncompressedSize;
+		int		nchunks			= div_round_up(Summary.UncompressedSize, chunk_size);
+
+		temp_array<FCompressedChunkInfo>	chunks(nchunks);
+		file.read(chunks);
+
+		malloc_block	mem(Summary.UncompressedSize);
+		mem.fill(0xaaaaaaaa_u32);
+		uint8			*p	= mem;
+		auto			fp	= file.tell();
+		for (auto &i : chunks) {
+			file.seek(fp);
+			zlib_reader(file, i.UncompressedSize).readbuff(p, i.UncompressedSize);
+			p	+= i.UncompressedSize;
+			fp	+= i.CompressedSize;
+		}
+
+		return new reader_mixout<memory_reader_owner>(move(mem));
+		*/
 	}
+
+
 };
 
 // UObject resource type for objects that are referenced by this package, but contained within another package
@@ -883,6 +1084,7 @@ struct FObjectImport : public FObjectResource {
 	FName			ClassPackage;
 	FName			ClassName;
 	FName			PackageName;
+	bool32			bImportOptional;
 };
 
 // UObject resource type for objects that are contained within this package and can be referenced by other packages
@@ -898,8 +1100,10 @@ struct FObjectExport : public FObjectResource {
 	bool32			bNotForServer;
 	bool32			bNotAlwaysLoadedForEditorGame;
 	bool32			bIsAsset;
+	bool32			bIsInheritedInstance;
+	bool32			bGeneratePublicHash;
 
-	FGuid			PackageGuid;
+//	FGuid			PackageGuid;
 	uint32			PackageFlags;
 
 	int32			FirstExportDependency;
@@ -928,13 +1132,24 @@ struct FObjectExport : public FObjectResource {
 			file.read(SerialOffset);
 		}
 
-		iso::read(file, bForcedExport, bNotForClient, bNotForServer, PackageGuid, PackageFlags);
+		file.read(bForcedExport, bNotForClient, bNotForServer);
+			
+		if (ver < VER_UE5_REMOVE_OBJECT_EXPORT_PACKAGE_GUID)
+			file.get<FGuid>();
+
+		if (ver >= VER_UE5_TRACK_OBJECT_EXPORT_IS_INHERITED)
+			file.read(bIsInheritedInstance);
+
+		file.read(PackageFlags);
 
 		if (ver >= VER_UE4_LOAD_FOR_EDITOR_GAME)
 			file.read(bNotAlwaysLoadedForEditorGame);
 
 		if (ver >= VER_UE4_COOKED_ASSETS_IN_EDITOR_SUPPORT)
 			file.read(bIsAsset);
+
+		if (ver >= VER_UE5_OPTIONAL_RESOURCES)
+			file.read(bGeneratePublicHash);
 
 		if (ver >= VER_UE4_PRELOAD_DEPENDENCIES_IN_COOKED_EXPORTS) {
 			iso::read(file,
@@ -982,9 +1197,13 @@ struct FLinkerTables {
 		if (sum.ImportCount > 0) {
 			file.seek(sum.ImportOffset);
 			for (auto &i : ImportMap) {
-				bool ret = iso::read(file, i.ClassPackage, i.ClassName, i.OuterIndex, i.ObjectName);
+				bool ret = file.read(i.ClassPackage, i.ClassName, i.OuterIndex, i.ObjectName);
 				if (sum.FileVersionUE4 >= VER_UE4_NON_OUTER_PACKAGE_IMPORT)
 					file.read(i.PackageName);
+
+				if (sum.FileVersionUE5 >= VER_UE5_OPTIONAL_RESOURCES)
+					file.read(i.bImportOptional);
+
 			}
 		}
 
@@ -992,7 +1211,7 @@ struct FLinkerTables {
 			file.seek(sum.ExportOffset);
 			ExportMap.resize(sum.ExportCount);
 			for (auto &i : ExportMap)
-				i.read(file, (EUnrealEngineObjectUE4Version)sum.FileVersionUE4);
+				i.read(file, (EUnrealEngineObjectUE4Version)sum.FileVersionUE5);
 		}
 
 
@@ -1119,7 +1338,7 @@ struct FPropertyTag {
 		if (!file.read(Name) || file.lookup(Name) == "None")
 			return false;
 
-		if (!iso::read(file, Type, Size, ArrayIndex))
+		if (!file.read(Type, Size, ArrayIndex))
 			return false;
 
 		if (Type.Number == 0) {
@@ -1197,7 +1416,6 @@ ObjectLoaderRaw<FBox>				load_Box("Box");
 ObjectLoaderRaw<FSphere>			load_Sphere("Sphere");
 ObjectLoaderRaw<FSoftObjectPath>	load_SoftObjectPath("SoftObjectPath");
 ObjectLoaderRaw<FSoftClassPath>		load_SoftClassPath("SoftClassPath");
-
 
 hash_map<const char*, const char*>	known_ids = {
 	{"PropertyGuids", "Guid"},
@@ -1321,7 +1539,7 @@ ISO_ptr<void> ReadTag(istream_linker& file, const FPropertyTag &tag, ISO::tag id
 
 			ISO_ptr<anything>	array(id);
 			for (int i = 0; i < size; i++)
-				array->Append(ReadTag(file, inner, 0));
+				array->Append(ReadTag(file, inner, none));
 			return array;
 		}
 		case "SetProperty"_fnv: {
@@ -1333,11 +1551,11 @@ ISO_ptr<void> ReadTag(istream_linker& file, const FPropertyTag &tag, ISO::tag id
 				ISO_ptr<anything>	remove("remove");
 				array->Append(remove);
 				for (int i = 0; i < nremove; i++)
-					remove->Append(ReadTag(file, inner, 0));
+					remove->Append(ReadTag(file, inner, none));
 			}
 
 			for (int i = 0; i < size; i++)
-				array->Append(ReadTag(file, inner, 0));
+				array->Append(ReadTag(file, inner, none));
 			return array;
 
 		}
@@ -1351,7 +1569,7 @@ ISO_ptr<void> ReadTag(istream_linker& file, const FPropertyTag &tag, ISO::tag id
 				ISO_ptr<anything>	remove("remove");
 				array->Append(remove);
 				for (int i = 0; i < nremove; i++)
-					remove->Append(ReadTag(file, inner, 0));
+					remove->Append(ReadTag(file, inner, none));
 			}
 
 			auto	count		= file.get<int>();
@@ -1363,9 +1581,9 @@ ISO_ptr<void> ReadTag(istream_linker& file, const FPropertyTag &tag, ISO::tag id
 
 			for (int i = 0; i < count; i++) {
 				ISO_ptr<pair<ISO_ptr<void>, ISO_ptr<void>>>	p(0);
-				p->a = ReadTag(file, inner, 0);
+				p->a = ReadTag(file, inner, none);
 				if (true || known_val) {
-					p->b = ReadTag(file, value, 0);
+					p->b = ReadTag(file, value, none);
 				} else {
 					if (val_size == 0 && i == count - 1)
 						val_size = tag_end - file.tell();
@@ -1485,7 +1703,7 @@ bool ReadTag(istream_linker& file, const FPropertyTag &tag, ISO::Browser2 b) {
 
 			if (auto nremove = file.get<int>()) {
 				for (int i = 0; i < nremove; i++)
-					ReadTag(file, inner, 0);
+					ReadTag(file, inner, none);
 			}
 
 			b.Resize(size);
@@ -1501,7 +1719,7 @@ bool ReadTag(istream_linker& file, const FPropertyTag &tag, ISO::Browser2 b) {
 
 			if (auto nremove = file.get<int>()) {
 				for (int i = 0; i < nremove; i++)
-					ReadTag(file, inner, 0);
+					ReadTag(file, inner, none);
 			}
 
 			auto	size	= file.get<int>();
@@ -1638,7 +1856,8 @@ typedef UObject UMaterialInterface, UActorComponent, AActor;
 
 bool UObject::read(istream_linker& file) {
 	ReadTagged(file, *this);
-	if (file.get<bool32>())
+	bool32	has_guid;
+	if (file.read(has_guid) && has_guid)
 		Append(ISO::MakePtr("guid", file.get<FGuid>()));
 	return true;
 }
@@ -1647,9 +1866,7 @@ ObjectLoaderRaw<UObject>	load_Object("UObject");
 
 bool UStruct::read(istream_linker& file) {
 	UObject::read(file);
-	file.read(Super);
-	file.read(Children);
-	file.read(ChildProperties);
+	file.read(Super, Children, ChildProperties);
 
 	auto BytecodeBufferSize			= file.get<int32>();
 	auto SerializedScriptSize		= file.get<int32>();
@@ -1661,12 +1878,12 @@ ISO_DEFUSERCOMPBV(UStruct, UObject, Super, Children, ChildProperties, Script);
 ObjectLoaderRaw<UStruct>	load_Struct("Struct");
 
 bool FImplementedInterface::read(istream_linker& file) {
-	return iso::read(file, Class, PointerOffset, bImplementedByK2);
+	return file.read(Class, PointerOffset, bImplementedByK2);
 }
 
 bool UClass::read(istream_linker& file) {
 	UStruct::read(file);
-	iso::read(file, FuncMap, ClassFlags, ClassWithin, ClassConfigName, ClassGeneratedBy, Interfaces);
+	file.read(FuncMap, ClassFlags, ClassWithin, ClassConfigName, ClassGeneratedBy, Interfaces);
 	file.get<bool32>();//bool bDeprecatedForceScriptOrder = false;
 	file.get<FName>();
 	if (file.get<bool32>())
@@ -1787,8 +2004,15 @@ enum EPixelFormat {
 };
 
 template<typename S, typename B> void read_mips(B &&bm, istream_ref file, int mips) {
-	for (int i = 0; i < mips; i++) {
-		auto	mip = bm->Mip(i);
+	if (mips > 1) {
+		for (int i = 0; i < mips; i++) {
+			auto	mip = bm->Mip(i);
+			auto	src	= make_auto_block<S>(mip.template size<1>(), mip.template size<2>());
+			file.readbuff(&src[0][0], num_elements_total(src) * sizeof(S));
+			copy(src.get(), mip);
+		}
+	} else {
+		auto	mip = bm->All();
 		auto	src	= make_auto_block<S>(mip.template size<1>(), mip.template size<2>());
 		file.readbuff(&src[0][0], num_elements_total(src) * sizeof(S));
 		copy(src.get(), mip);
@@ -1797,25 +2021,23 @@ template<typename S, typename B> void read_mips(B &&bm, istream_ref file, int mi
 
 ISO_ptr<void> ReadSourceBitmap(istream_ref file2, const char *Format, int SizeX, int SizeY, int NumSlices, int NumMips) {
 	if (Format == "TSF_G8"_cstr || Format == "TSF_BGRA8"_cstr) {
-		ISO_ptr<bitmap> bm(Format, SizeX, SizeY, BMF_MIPS, NumSlices);
-		if (Format == "TSF_G8"_cstr) {
+		ISO_ptr<bitmap> bm(Format, SizeX, SizeY, NumMips > 1 ? BMF_MIPS : 0, NumSlices);
+		if (Format == "TSF_G8"_cstr)
 			read_mips<uint8>(bm, file2, NumMips);
-		} else {
+		else
 			read_mips<Texel<B8G8R8A8>>(bm, file2, NumMips);
-		}
 		return bm;
 
 	} else {
-		ISO_ptr<HDRbitmap> bm(Format, SizeX, SizeY, BMF_MIPS, NumSlices);
-		if (Format == "TSF_G16"_cstr) {
+		ISO_ptr<HDRbitmap> bm(Format, SizeX, SizeY, NumMips > 1 ? BMF_MIPS : 0, NumSlices);
+		if (Format == "TSF_G16"_cstr)
 			read_mips<uint8>(bm, file2, NumMips);
-		} else if (Format == "TSF_BGRE8"_cstr) {
+		else if (Format == "TSF_BGRE8"_cstr)
 			read_mips<rgbe>(bm, file2, NumMips);
-		} else if (Format == "TSF_RGBA16"_cstr) {
+		else if (Format == "TSF_RGBA16"_cstr)
 			read_mips<uint16x4>(bm, file2, NumMips);
-		} else if (Format == "TSF_RGBA16F"_cstr) {
+		else if (Format == "TSF_RGBA16F"_cstr)
 			read_mips<hfloat4>(bm, file2, NumMips);
-		}
 		return bm;
 	}
 }
@@ -1825,7 +2047,7 @@ struct MipSource {
 	FBulkData	bulk;
 	int32		SizeX, SizeY, SizeZ;
 	bool read(istream_ref file) {
-		return iso::read(file, cooked, bulk, SizeX, SizeY, SizeZ);
+		return file.read(cooked, bulk, SizeX, SizeY, SizeZ);
 	}
 };
 
@@ -1850,7 +2072,6 @@ template<typename S, int X=1, int Y=1,typename B> void read_mips(B &&bm, istream
 ISO_ptr<void> ReadBakedBitmap(istream_linker& file, const char *Format, const temp_array<MipSource> &mips) {
 	ISO_ptr<bitmap> bm(Format, mips[0].SizeX, mips[0].SizeY, BMF_MIPS, mips[0].SizeZ);
 	switch (string_hash(Format)) {
-
 		case "PF_B8G8R8A8"_hash:	read_mips<Texel<B8G8R8A8>>(bm, file, mips); return bm;
 		case "PF_G8"_hash:			read_mips<uint8>(bm, file, mips); return bm;
 		case "PF_DXT1"_hash:		read_mips<const BC<1>,  4, 4>(bm, file, mips); return bm;
@@ -1937,11 +2158,27 @@ struct UTexture2D : UObject {
 	ISO_ptr<void>	Bitmap;
 	bool read(istream_linker& file) {
 		UObject::read(file);
-		FBulkData	bulk;
 
-		auto	strip0	= file.get<FStripDataFlags>();
-		if (!strip0.IsEditorDataStripped())
-			file.read(bulk);
+		auto			strip0	= file.get<FStripDataFlags>();
+		malloc_block	data;
+
+		if (!strip0.IsEditorDataStripped()) {
+			if (file.linker->CustomVer(FUE5MainStreamObjectVersion::GUID) < FUE5MainStreamObjectVersion::VirtualizedBulkDataHaveUniqueGuids) {
+				if (file.linker->CustomVer(FUE5MainStreamObjectVersion::GUID) < FUE5MainStreamObjectVersion::TextureSourceVirtualization) {
+					FBulkData	bulk;
+					file.read(bulk);
+					data = bulk.data(file, file.bulk_data());
+				} else {
+					//bulk.Serialize(Ar, this, false);
+					//bulk.CreateLegacyUniqueIdentifier(this);
+				}
+
+			} else {
+				FEditorBulkData	bulk;
+				file.read(bulk);
+				data = bulk.data(file);
+			}
+		}
 
 		auto	strip	= file.get<FStripDataFlags>();
 		auto	cooked	= file.get<bool32>();
@@ -1949,10 +2186,12 @@ struct UTexture2D : UObject {
 		auto	b	= ISO::MakeBrowser(*(anything*)this);
 
 		if (auto source = b["Source"]) {
+			memory_reader	reader(data);
+
 			if (source["bPNGCompressed"].Get<bool>()) {
-				Bitmap = (make_save_pos(file), FileHandler::Get("png")->Read(0, bulk.reader(file, file.bulk_data())));
+				Bitmap = (make_save_pos(file), FileHandler::Get("png")->Read(none, reader));
 			} else {
-				Bitmap = ReadSourceBitmap(bulk.reader(file, file.bulk_data()), source["Format"].GetString(), source["SizeX"].GetInt(), source["SizeY"].GetInt(), source["NumSlices"].GetInt(), source["NumMips"].GetInt());
+				Bitmap = ReadSourceBitmap(reader, source["Format"].GetString(), source["SizeX"].GetInt(), source["SizeY"].GetInt(), source["NumSlices"].GetInt(), source["NumMips"].GetInt());
 			}
 		} else {
 			FName	PixelFormatName;
@@ -1964,7 +2203,7 @@ struct UTexture2D : UObject {
 				FString PixelFormatString;
 				int32	FirstMipToSerialize, NumMips;
 
-				iso::read(file, SizeX, SizeY, PackedData, PixelFormatString, FirstMipToSerialize, NumMips);
+				file.read(SizeX, SizeY, PackedData, PixelFormatString, FirstMipToSerialize, NumMips);
 				temp_array<MipSource>	mips(file, NumMips);
 				Bitmap = ReadBakedBitmap(file, get(PixelFormatString), mips);
 			}
@@ -1992,7 +2231,7 @@ struct UWorld : UObject {
 	TArray<TPtr<UObject>>	StreamingLevels;
 
 	bool	read(istream_linker& file) {
-		return UObject::read(file) && file.read(PersistentLevel) && file.read(ExtraReferencedObjects) && file.read(StreamingLevels);
+		return UObject::read(file) && file.read(PersistentLevel, ExtraReferencedObjects, StreamingLevels);
 	}
 };
 ISO_DEFUSERCOMPBV(UWorld, UObject, PersistentLevel, ExtraReferencedObjects, StreamingLevels);
@@ -2120,7 +2359,7 @@ struct dtPolyDetail {
 	uint8	vertCount;
 	uint8	triCount;
 	bool	read(istream_ref file) {
-		return iso::read(file, vertBase, triBase, vertCount, triCount);
+		return file.read(vertBase, triBase, vertCount, triCount);
 	}
 };
 
@@ -2151,7 +2390,7 @@ struct dtOffMeshSegmentConnection {
 	uint8	npolys;
 	uint8	flags;
 	bool	read(istream_ref file) {
-		return iso::read(file, startA, startB, endA, endB, rad, firstPoly, npolys, flags, userId);
+		return file.read(startA, startB, endA, endB, rad, firstPoly, npolys, flags, userId);
 	}
 };
 
@@ -2170,7 +2409,7 @@ struct dtOffMeshConnection {
 	uint8	side;
 	uint32	userId;
 	bool	read(istream_ref file) {
-		return iso::read(file, pos, rad, poly, flags, side, userId);
+		return file.read(pos, rad, poly, flags, side, userId);
 	}
 };
 
@@ -2460,7 +2699,7 @@ struct FSpeedTreeWind {
 	float		MaxBranchLevel1Length;
 
 	bool	read(istream_ref file) {
-		return iso::read(file, params, options, BranchWindAnchor, MaxBranchLevel1Length);
+		return file.read(params, options, BranchWindAnchor, MaxBranchLevel1Length);
 	}
 };
 
@@ -2496,14 +2735,10 @@ struct FRawMesh {
 	bool	read(istream_ref file) {
 		int32 Version			= RAW_MESH_VER;
 		int32 LicenseeVersion	= RAW_MESH_LIC_VER;
-		file.read(Version);
-		file.read(LicenseeVersion);
-
-		iso::read(file, FaceMaterialIndices, FaceSmoothingMasks, VertexPositions, WedgeIndices, WedgeTangentX,WedgeTangentY,WedgeTangentZ);
-		file.read(WedgeTexCoords);
-		file.read(WedgeColors);
-		file.read(MaterialIndexToImportIndex);
-		return true;
+		return file.read(Version, LicenseeVersion,
+			FaceMaterialIndices, FaceSmoothingMasks, VertexPositions, WedgeIndices, WedgeTangentX,WedgeTangentY,WedgeTangentZ,
+			WedgeTexCoords, WedgeColors, MaterialIndexToImportIndex
+		);
 	}
 
 };
@@ -2561,8 +2796,8 @@ struct FMeshDescription {
 			Transient			= 1 << 3	// Attribute is not serialized
 		};
 		struct index {
-			Attribute	*a;
-			int			i;
+			const Attribute	*a;
+			int				i;
 			template<typename T> operator const T*() const {
 				auto	type = meta::TL_find<T, AttributeTypes>;
 				ISO_ASSERT(a->type == type);
@@ -2589,12 +2824,12 @@ struct FMeshDescription {
 		uint32		num_elements;
 		Flags		flags;
 
-		Attribute() {}
-		~Attribute() {}
+		Attribute()		{}
+		~Attribute()	{}
 		Attribute(Attribute&&) = default;
 		Attribute& operator=(Attribute&&) = default;
 
-		index	operator[](int i) {
+		index	operator[](int i) const {
 			return {this, i};
 		}
 
@@ -2608,7 +2843,7 @@ struct FMeshDescription {
 	};
 	struct AttributesSet : TMap<FString, Attribute> {
 		typedef TMap<FString, Attribute>	B;
-		uint32					size;
+		uint32		size;
 		bool read(istream_ref file) {
 			return file.read(size) && B::read(file);
 		}
@@ -2627,18 +2862,18 @@ struct FMeshDescription {
 	struct FMeshEdge {
 		int			VertexIDs[2];
 		TArray<int>	ConnectedTriangles;
-		bool	read(istream_ref file) { return file.read(VertexIDs[0]) && file.read(VertexIDs[1]); }
+		bool	read(istream_ref file) { return file.read(VertexIDs); }
 	};
 	struct FMeshTriangle {
 		int			VertexInstanceIDs[3];
 		int			PolygonID;
-		bool	read(istream_ref file) { return file.read(VertexInstanceIDs[0]) && file.read(VertexInstanceIDs[1]) && file.read(VertexInstanceIDs[2]) && file.read(PolygonID); }
+		bool	read(istream_ref file) { return file.read(VertexInstanceIDs, PolygonID); }
 	};
 	struct FMeshPolygon {
 		TArray<int> VertexInstanceIDs;
 		TArray<int> TriangleIDs;
 		int			PolygonGroupID;
-		bool	read(istream_ref file) { return file.read(VertexInstanceIDs) && file.read(PolygonGroupID); }
+		bool	read(istream_ref file) { return file.read(VertexInstanceIDs, PolygonGroupID); }
 	};
 	struct FMeshPolygonGroup {
 		TArray<int> Polygons;
@@ -2681,7 +2916,7 @@ struct FMeshDescription {
 AttributeValuesDescs<FMeshDescription::AttributeTypes>	FMeshDescription::descs;
 
 bool	FMeshDescription::read(istream_ref file) {
-	if (!iso::read(file,
+	if (!file.read(
 		VertexArray,			VertexInstanceArray,			EdgeArray,			PolygonArray,			PolygonGroupArray,
 		VertexAttributesSet,	VertexInstanceAttributesSet,	EdgeAttributesSet,	PolygonAttributesSet,	PolygonGroupAttributesSet,
 		TriangleArray,			TriangleAttributesSet
@@ -2723,7 +2958,6 @@ bool	FMeshDescription::read(istream_ref file) {
 }
 
 void FMeshDescription::InitSubmesh(SubMesh* sm) const {
-
 	sm->technique	= ISO::root("data")["default"]["specular"];
 
 	int		nt	= TriangleArray.size();
@@ -2752,14 +2986,14 @@ void FMeshDescription::InitSubmesh(SubMesh* sm) const {
 		dv->norm.z	= norms[i.i].Z;
 		++dv;
 	}
-	sm->UpdateExtents();
+	sm->UpdateExtent();
 }
 
 struct FRawMeshBulkData : FBulkData {
 	FGuid				Guid;
 	bool32				bGuidIsHash;
 	bool	read(istream_ref file) {
-		return FBulkData::read(file) && file.read(Guid) && file.read(bGuidIsHash);
+		return FBulkData::read(file) && file.read(Guid, bGuidIsHash);
 	}
 };
 
@@ -2768,7 +3002,7 @@ struct FMeshUVChannelInfo {
 	bool32				bOverrideDensities;
 	float				LocalUVDensities[4];
 	bool	read(istream_ref file) {
-		return iso::read(file, bInitialized, bOverrideDensities, LocalUVDensities);
+		return file.read(bInitialized, bOverrideDensities, LocalUVDensities);
 	}
 };
 
@@ -2779,7 +3013,7 @@ struct FStaticMaterial {
 	FMeshUVChannelInfo			UVChannelData;
  
 	bool	read(istream_linker &file) {
-		return iso::read(file, MaterialInterface, MaterialSlotName, ImportedMaterialSlotName, UVChannelData);
+		return file.read(MaterialInterface, MaterialSlotName, ImportedMaterialSlotName, UVChannelData);
 	}
 };
 
@@ -2807,8 +3041,7 @@ struct UStaticMesh : UObject {
 			file.get<uint32>();
 		}
 
-		file.read(LightingGuid);
-		file.read(Sockets);
+		file.read(LightingGuid, Sockets);
 
 		if (!StripFlags.IsEditorDataStripped()) {
 			auto	SourceModels = ISO::Browser((*this)["SourceModels"]);
@@ -2934,9 +3167,7 @@ struct UInstancedStaticMeshComponent : UStaticMeshComponent {
 	bool	read(istream_linker& file) {
 		UStaticMeshComponent::read(file);
 		bool	bCooked = file.get<bool32>();
-		file.read(PerInstanceSMData);
-		file.read(PerInstanceSMCustomData);
-		return true;
+		return file.read(PerInstanceSMData, PerInstanceSMCustomData);
 	}
 };
 ISO_DEFUSERCOMPBV(UInstancedStaticMeshComponent, UStaticMeshComponent, PerInstanceSMData, PerInstanceSMCustomData);
@@ -2974,7 +3205,7 @@ struct FFoliageInstanceBaseInfo {
 	FVector		CachedDrawScale;
 
 	bool	read(istream_linker& file) {
-		return iso::read(file, BasePtr, CachedLocation, CachedRotation, CachedDrawScale);
+		return file.read(BasePtr, CachedLocation, CachedRotation, CachedDrawScale);
 	}
 };
 struct FFoliageInstanceBaseCache {
@@ -2983,7 +3214,7 @@ struct FFoliageInstanceBaseCache {
 	TMap<FFoliageInstanceBaseId, FFoliageInstanceBaseInfo>	InstanceBaseMap;
 	TMap<TPtr<UWorld>, TArray<TPtr<UActorComponent>>>		InstanceBaseLevelMap;
 	bool	read(istream_linker& file) {
-		return iso::read(file, NextBaseId, InstanceBaseMap, InstanceBaseLevelMap);
+		return file.read(NextBaseId, InstanceBaseMap, InstanceBaseLevelMap);
 	}
 };
 
@@ -3063,7 +3294,7 @@ struct FSkeletalMeshImportData {
 		int32       ParentIndex;  // 0/NULL if this is the root bone.  
 		FJointPos	BonePos;      // reference position
 		bool read(istream_ref &file) {
-			return iso::read(file, Name, Flags, NumChildren, ParentIndex, BonePos);
+			return file.read(Name, Flags, NumChildren, ParentIndex, BonePos);
 		}
 	};
 	struct FRawBoneInfluence {
@@ -3079,7 +3310,7 @@ struct FSkeletalMeshImportData {
 		uint8		Reserved;		// Top secret
 		FVertex() { clear(*this); }
 		bool read(istream_ref &file) {
-			return iso::read(file, VertexIndex, Color, MatIndex, Reserved, UVs);
+			return file.read(VertexIndex, Color, MatIndex, Reserved, UVs);
 		}
 	};
 	TArray<FMaterial>	Materials;
@@ -3107,8 +3338,8 @@ struct FSkeletalMeshImportData {
 	bool	read(istream_ref file) {
 		int32 Version			= file.get();
 		int32 LicenseeVersion	= file.get();
-		iso::read(file, bDiffPose, bHasNormals, bHasTangents, bHasVertexColors, bUseT0AsRefPose, MaxMaterialIndex, NumTexCoords, Faces, Influences, Materials, Points, PointToRawMap, RefBonesBinary, Wedges);
-		return iso::read(file, MorphTargets, MorphTargetModifiedPoints, MorphTargetNames, AlternateInfluences, AlternateInfluenceProfileNames);
+		file.read(bDiffPose, bHasNormals, bHasTangents, bHasVertexColors, bUseT0AsRefPose, MaxMaterialIndex, NumTexCoords, Faces, Influences, Materials, Points, PointToRawMap, RefBonesBinary, Wedges);
+		return file.read(MorphTargets, MorphTargetModifiedPoints, MorphTargetNames, AlternateInfluences, AlternateInfluenceProfileNames);
 	}
 };
 ISO_DEFUSERCOMPV(FSkeletalMeshImportData::FMeshWedge, iVertex, UVs, Color);
@@ -3132,7 +3363,7 @@ struct FRawSkeletalMeshBulkData {
 	uint8			GeoImportVersion;
 	uint8			SkinningImportVersion;
 	bool	read(istream_linker& file) {
-		return iso::read(file, GeoImportVersion, SkinningImportVersion, BulkData, Guid, bGuidIsHash);
+		return file.read(GeoImportVersion, SkinningImportVersion, BulkData, Guid, bGuidIsHash);
 	}
 };
 
@@ -3158,7 +3389,7 @@ struct FWeightedRandomSampler {
 	TArray<int32>	Alias;
 	float			TotalWeight;
 	bool	read(istream_ref file) {
-		return iso::read(file, Prob, Alias, TotalWeight);
+		return file.read(Prob, Alias, TotalWeight);
 	}
 };
 
@@ -3178,7 +3409,7 @@ struct FMeshBoneInfo {
 	int32		ParentIndex;
 	FString		ExportName;
 	bool	read(istream_linker& file) {
-		return iso::read(file, Name, ParentIndex, ExportName);
+		return file.read(Name, ParentIndex, ExportName);
 	}
 };
 
@@ -3187,7 +3418,7 @@ struct FReferenceSkeleton {
 	TArray<FTransform>		RefBonePose;
 	TMap<FName2, int32>		NameToIndexMap;
 	bool	read(istream_linker& file) {
-		return iso::read(file, RefBoneInfo, RefBonePose, NameToIndexMap);
+		return file.read(RefBoneInfo, RefBonePose, NameToIndexMap);
 	}
 };
 
@@ -3216,7 +3447,7 @@ struct FSoftSkinVertex {
 	FBoneIndexType	InfluenceBones[12];
 	uint8			InfluenceWeights[12];
 	bool	read(istream_linker& file) {
-		return iso::read(file, Position, TangentX, TangentY, TangentZ, UVs, Color, InfluenceBones, InfluenceWeights);
+		return file.read(Position, TangentX, TangentY, TangentZ, UVs, Color, InfluenceBones, InfluenceWeights);
 	}
 };
 struct FSkelMeshSection {
@@ -3258,7 +3489,7 @@ struct FSkelMeshSection {
 		if (!StripFlags.IsEditorDataStripped())
 			file.read(SoftVertices);
 
-		return iso::read(file, bUse16BitBoneIndex, BoneMap, NumVertices, MaxBoneInfluences, ClothMappingData, CorrespondClothAssetIndex, ClothingData, OverlappingVertices, bDisabled, GenerateUpToLodIndex, OriginalDataSectionIndex, ChunkedParentSectionIndex);
+		return file.read(bUse16BitBoneIndex, BoneMap, NumVertices, MaxBoneInfluences, ClothMappingData, CorrespondClothAssetIndex, ClothingData, OverlappingVertices, bDisabled, GenerateUpToLodIndex, OriginalDataSectionIndex, ChunkedParentSectionIndex);
 	}
 
 	void	InitSubmesh(SubMesh* sm, int32 *indices) {
@@ -3286,7 +3517,7 @@ struct FSkelMeshSection {
 			dv->norm.z = i.TangentZ.Z;
 			++dv;
 		}
-		sm->UpdateExtents();
+		sm->UpdateExtent();
 	}
 
 };
@@ -3301,7 +3532,7 @@ struct FSkelMeshSourceSectionUserData {
 
 	bool	read(istream_linker& file) {
 		auto	StripFlags	= file.get<FStripDataFlags>();
-		return StripFlags.IsEditorDataStripped() || iso::read(file, bRecomputeTangent, bCastShadow, bDisabled, GenerateUpToLodIndex, CorrespondClothAssetIndex, ClothingData);
+		return StripFlags.IsEditorDataStripped() || file.read(bRecomputeTangent, bCastShadow, bDisabled, GenerateUpToLodIndex, CorrespondClothAssetIndex, ClothingData);
 	}
 };
 
@@ -3324,7 +3555,7 @@ struct FVertInfluence {
 	float			Weight;
 	uint32			VertIndex;
 	FBoneIndexType	BoneIndex;
-	bool	read(istream_linker& file) { return iso::read(file, Weight, VertIndex, BoneIndex); }
+	bool	read(istream_linker& file) { return file.read(Weight, VertIndex, BoneIndex); }
 };
 
 struct FRawSkinWeight {
@@ -3492,14 +3723,14 @@ struct FCurveMetaData {
 	TArray<FBoneReference>	LinkedBones;
 	uint8					MaxLOD;
 	bool	read(istream_linker& file) {
-		return iso::read(file, Type, LinkedBones, MaxLOD);
+		return file.read(Type, LinkedBones, MaxLOD);
 	}
 };
 
 struct FSmartNameMapping {
 	TMap<FName, FCurveMetaData> CurveMetaDataMap;
 	bool	read(istream_linker& file) {
-		return iso::read(file, CurveMetaDataMap);
+		return file.read(CurveMetaDataMap);
 	}
 };
 
@@ -3746,7 +3977,7 @@ struct FModelElement {
 	TArray<uint16>	Nodes;
 	FGuid			MapBuildDataId;
 	bool	read(istream_linker& file) {
-		return iso::read(file,  MapBuildDataId, Component, Material, Nodes);
+		return file.read( MapBuildDataId, Component, Material, Nodes);
 	}
 };
 
@@ -3756,7 +3987,7 @@ struct UModelComponent : UObject {
 	TArray<uint16>	Nodes;
 	TArray<FModelElement> Elements;
 	bool	read(istream_linker& file) {
-		return UObject::read(file) && iso::read(file, Model, Elements, ComponentIndex, Nodes);
+		return UObject::read(file) && file.read(Model, Elements, ComponentIndex, Nodes);
 	}
 };
 
@@ -3805,7 +4036,7 @@ struct USoundWave : UObject {
 		UObject::read(file);
 		auto	cooked	= file.get<bool32>();
 		auto	bulk	= file.get<FBulkData>();
-		Sample = FileHandler::Get("wav")->Read(0, bulk.reader(file, file.bulk_data()));
+		Sample = FileHandler::Get("wav")->Read(none, bulk.reader(file, file.bulk_data()));
 		return file.read(CompressedDataGuid);
 	}
 };
@@ -3829,7 +4060,7 @@ struct FEdGraphTerminalType {
 	bool			bTerminalIsConst;
 	bool			bTerminalIsWeakPointer;
 	bool read(istream_linker& file) {
-		return iso::read(file, 
+		return file.read(
 			TerminalCategory,
 			TerminalSubCategory,
 			TerminalSubCategoryObject,
@@ -3844,7 +4075,7 @@ struct FSimpleMemberReference {
 	FName2			MemberName;
 	FGuid			MemberGuid;
 	bool read(istream_linker& file) {
-		return iso::read(file, MemberParent, MemberName, MemberGuid);
+		return file.read(MemberParent, MemberName, MemberGuid);
 	}
 };
 
@@ -3860,11 +4091,11 @@ struct FEdGraphPinType {
 	bool32					bIsWeakPointer;
 
 	bool read(istream_linker& file) {
-		iso::read(file, PinCategory, PinSubCategory, PinSubCategoryObject, ContainerType);
+		file.read(PinCategory, PinSubCategory, PinSubCategoryObject, ContainerType);
 		if (ContainerType == EPinContainerType::Map)
 			file.read(PinValueType);
 
-		return iso::read(file, bIsReference, bIsWeakPointer, PinSubCategoryMemberReference, bIsConst);
+		return file.read(bIsReference, bIsWeakPointer, PinSubCategoryMemberReference, bIsConst);
 	}
 };
 
@@ -3889,7 +4120,7 @@ struct FCompressedVisibilityChunk {
 	int32			UncompressedSize;
 	TArray<uint8>	Data;
 	bool read(istream_ref file) {
-		return iso::read(file, bCompressed, UncompressedSize, Data);
+		return file.read(bCompressed, UncompressedSize, Data);
 	}
 };
 
@@ -3898,7 +4129,7 @@ struct FPrecomputedVisibilityBucket {
 	TArray<FPrecomputedVisibilityCell>	Cells;
 	TArray<FCompressedVisibilityChunk>	CellDataChunks;
 	bool read(istream_ref file) {
-		return iso::read(file, CellDataSize, Cells, CellDataChunks);
+		return file.read(CellDataSize, Cells, CellDataChunks);
 	}
 };
 struct FPrecomputedVisibilityHandler {
@@ -3929,7 +4160,7 @@ struct FPrecomputedVolumeDistanceField {
 	int32	VolumeSizeZ;
 	TArray<FColor> Data;
 	bool read(istream_ref file) {
-		return iso::read(file, VolumeMaxDistance, VolumeBox, VolumeSizeX, VolumeSizeY, VolumeSizeZ, Data);
+		return file.read(VolumeMaxDistance, VolumeBox, VolumeSizeX, VolumeSizeY, VolumeSizeZ, Data);
 	}
 };
 
@@ -3951,7 +4182,7 @@ public:
 	FVolumetricLightmapDataLayer LQLightDirection;
 
 	bool read(istream_ref file){
-		return iso::read(file, AmbientVector, SHCoefficients, SkyBentNormal, DirectionalLightShadowing, LQLightColor, LQLightDirection);
+		return file.read(AmbientVector, SHCoefficients, SkyBentNormal, DirectionalLightShadowing, LQLightColor, LQLightDirection);
 	}
 };
 
@@ -3976,7 +4207,7 @@ struct FPrecomputedVolumetricLightmapData {
 	int32 IndexInCPUSubLevelBrickDataList;
 
 	bool read(istream_ref file) {
-		return iso::read(file, Bounds, IndirectionTextureDimensions, IndirectionTexture, BrickSize, BrickDataDimensions, BrickData, SubLevelBrickPositions, IndirectionTextureOriginalValues);
+		return file.read(Bounds, IndirectionTextureDimensions, IndirectionTexture, BrickSize, BrickDataDimensions, BrickData, SubLevelBrickPositions, IndirectionTextureOriginalValues);
 	}
 };
 
@@ -4037,7 +4268,7 @@ struct FLightMap2D : FLightMap {
 
 	bool read(istream_linker& file){
 		return FLightMap::read(file)
-			&& iso::read(file, Textures, SkyOcclusionTexture, AOMaterialMaskTexture, ScaleAddVectors, CoordinateScale, CoordinateBias, bShadowChannelValid, InvUniformPenumbraSize, VirtualTexture);
+			&& file.read(Textures, SkyOcclusionTexture, AOMaterialMaskTexture, ScaleAddVectors, CoordinateScale, CoordinateBias, bShadowChannelValid, InvUniformPenumbraSize, VirtualTexture);
 	}
 };
 
@@ -4063,7 +4294,7 @@ struct FShadowMap2D : FShadowMap {
 	FVector4					InvUniformPenumbraSize;
 
 	bool read(istream_linker& file) {
-		return FShadowMap::read(file) && iso::read(file, Texture, CoordinateScale, CoordinateBias, bChannelValid, InvUniformPenumbraSize);
+		return FShadowMap::read(file) && file.read(Texture, CoordinateScale, CoordinateBias, bChannelValid, InvUniformPenumbraSize);
 	}
 };
 
@@ -4093,7 +4324,7 @@ struct FMeshMapBuildData {
 				break;
 		}
 
-		return iso::read(file, IrrelevantLights, PerInstanceLightmapData);
+		return file.read(IrrelevantLights, PerInstanceLightmapData);
 	}
 };
 
@@ -4104,7 +4335,7 @@ struct FStaticShadowDepthMapData {
 	TArray<float16>		DepthSamples;
 
 	bool read(istream_linker& file) {
-		return iso::read(file, WorldToLight, ShadowMapSizeX, ShadowMapSizeY, DepthSamples);
+		return file.read(WorldToLight, ShadowMapSizeX, ShadowMapSizeY, DepthSamples);
 	}
 };
 
@@ -4113,7 +4344,7 @@ struct FLightComponentMapBuildData {
 	FStaticShadowDepthMapData DepthMap;
 
 	bool read(istream_linker& file) {
-		return iso::read(file, ShadowMapChannel, DepthMap);
+		return file.read(ShadowMapChannel, DepthMap);
 	}
 };
 
@@ -4126,7 +4357,7 @@ struct FReflectionCaptureMapBuildData {
 	size_t			AllocatedSize;
 
 	bool read(istream_linker& file) {
-		return iso::read(file, CubemapSize, AverageBrightness, Brightness, FullHDRCapturedData, EncodedHDRCapturedData);
+		return file.read(CubemapSize, AverageBrightness, Brightness, FullHDRCapturedData, EncodedHDRCapturedData);
 	}
 };
 
@@ -4154,7 +4385,7 @@ template<int32 SHOrder> struct TVolumeLightingSample {
 	float					DirectionalLightShadowing;
 
 	bool read(istream_linker& file){
-		return iso::read(file, Position, Radius, Lighting, PackedSkyBentNormal, DirectionalLightShadowing);
+		return file.read(Position, Radius, Lighting, PackedSkyBentNormal, DirectionalLightShadowing);
 	}
 };
 
@@ -4200,7 +4431,7 @@ struct UMapBuildDataRegistry : UObject {
 		UObject::read(file);
 		auto strip = file.get<FStripDataFlags>();
 		return strip.IsDataStrippedForServer()
-			|| iso::read(file, MeshBuildData, LevelPrecomputedLightVolumeBuildData, LevelPrecomputedVolumetricLightmapBuildData, LightBuildData, ReflectionCaptureBuildData, SkyAtmosphereBuildData);
+			|| file.read(MeshBuildData, LevelPrecomputedLightVolumeBuildData, LevelPrecomputedVolumetricLightmapBuildData, LightBuildData, ReflectionCaptureBuildData, SkyAtmosphereBuildData);
 	}
 };
 
@@ -4214,7 +4445,7 @@ struct FURL {
 	FString			Portal;
 
 	bool	read(istream_ref file) {
-		return iso::read(file, Protocol, Host, Map, Portal, Op, Port, Valid);
+		return file.read(Protocol, Host, Map, Portal, Op, Port, Valid);
 	}
 };
 
@@ -4231,7 +4462,7 @@ struct ULevel : UObject {
 
 	bool	read(istream_linker& file) {
 		return UObject::read(file)
-			&& iso::read(file, Actors, URL, Model, ModelComponents, LevelScriptBlueprint, NavListStart, NavListEnd)
+			&& file.read(Actors, URL, Model, ModelComponents, LevelScriptBlueprint, NavListStart, NavListEnd)
 			;//&& iso::read(PrecomputedVisibilityHandler, PrecomputedVolumeDistanceField);
 	}
 };
@@ -4364,11 +4595,12 @@ struct FExpressionInput {
 	FExpressionInput() : OutputIndex(0), Mask(0), MaskR(0), MaskG(0), MaskB(0), MaskA(0) {}
 
 	bool read(istream_linker& file) {
-		return iso::read(file, OutputIndex, InputName, Mask, MaskR, MaskG, MaskB, MaskA);
+		return file.read(OutputIndex, InputName, Mask, MaskR, MaskG, MaskB, MaskA);
 	}
 };
 ISO_DEFUSERCOMPV(FExpressionInput, OutputIndex, InputName, Mask, MaskR, MaskG, MaskB, MaskA);
-ObjectLoaderRaw<FExpressionInput>	load_ExpressionInput("ExpressionInput");
+ObjectLoaderRaw<FExpressionInput>	load_ExpressionInput("ExpressionInput"),
+									load_MaterialAttributesInput("MaterialAttributesInput");
 
 template<typename T> struct FMaterialInput : FExpressionInput {
 	bool	bUseConstant;
@@ -4410,7 +4642,7 @@ struct FRichCurveKey {
 	float						LeaveTangentWeight;
 
 	bool read(istream_linker& file) {
-		return iso::read(file, InterpMode, TangentMode, TangentWeightMode, Time, Value, ArriveTangent, ArriveTangentWeight, LeaveTangent, LeaveTangentWeight);
+		return file.read(InterpMode, TangentMode, TangentWeightMode, Time, Value, ArriveTangent, ArriveTangentWeight, LeaveTangent, LeaveTangentWeight);
 	}
 };
 
@@ -4449,7 +4681,7 @@ struct FAssetData {
 	uint32			PackageFlags;
 
 	bool read(istream_linker &file) {
-		return iso::read(file, ObjectPath, PackagePath, AssetClass, PackageName, AssetName, TagsAndValues, ChunkIDs, PackageFlags);
+		return file.read(ObjectPath, PackagePath, AssetClass, PackageName, AssetName, TagsAndValues, ChunkIDs, PackageFlags);
 	}
 };
 
@@ -4488,7 +4720,7 @@ struct FDependsNode {
 		file.read(Identifier);
 
 		int32	num_hard, num_soft, num_name, num_softmanage, num_hardmanage, num_ref;
-		iso::read(file, num_hard, num_soft, num_name, num_softmanage, num_hardmanage, num_ref);
+		file.read(num_hard, num_soft, num_name, num_softmanage, num_hardmanage, num_ref);
 
 		auto SerializeDependencies = [&](FDependsNodeList &list, int num) {
 			list.reserve(num);
@@ -4519,7 +4751,7 @@ struct FAssetPackageData {
 	FGuid		PackageGuid;
 	FMD5Hash	CookedHash;
 	bool read(istream_ref file) {
-		return iso::read(file, DiskSize, PackageGuid, CookedHash);
+		return file.read(DiskSize, PackageGuid, CookedHash);
 	}
 };
 
@@ -4649,7 +4881,10 @@ void LoadThumbnails(istream_ref file, anything &thumbs) {
 			auto		fp = make_save_pos(file, FileOffset);
 			int32		width, height, size;
 			read(file, width, height, size);
-			thumbs.Append(FileHandler::Get("png")->Read((const char*)ObjectClassName, file));
+			if (height > 0)
+				thumbs.Append(FileHandler::Get("png")->Read((const char*)ObjectClassName, file));
+			else
+				thumbs.Append(FileHandler::Get("jpg")->Read((const char*)ObjectClassName, file));
 		}
 	}
 }
@@ -4827,7 +5062,7 @@ struct FSaveGameHeader {
 			file.seek(0);
 			SaveGameFileVersion = InitialVersion;
 		} else {
-			iso::read(file, SaveGameFileVersion, PackageFileUE4Version, SavedEngineVersion);
+			file.read(SaveGameFileVersion, PackageFileUE4Version, SavedEngineVersion);
 
 			if (SaveGameFileVersion >= AddedCustomVersions) {
 				file.read(CustomVersionFormat);
@@ -4849,7 +5084,7 @@ struct WESaveGameHeader {
 	FCustomVersionContainer CustomVersions;
 
 	bool	read(istream_ref file) {
-		iso::read(file, FileTypeTag, PackageFileUE4Version, SavedEngineVersion, CustomVersionFormat);
+		file.read(FileTypeTag, PackageFileUE4Version, SavedEngineVersion, CustomVersionFormat);
 		CustomVersions.read(file, static_cast<FCustomVersionContainer::Type>(CustomVersionFormat));
 		return FileTypeTag == TAG;
 	}
@@ -4957,7 +5192,7 @@ struct FPakInfo {
 		return Magic == PakFile_Magic;
 	}
 	bool	read(istream_ref file, uint32 ver) {
-		iso::read(file, bEncryptedIndex, Magic, Version, IndexOffset, IndexSize, IndexHash);
+		file.read(bEncryptedIndex, Magic, Version, IndexOffset, IndexSize, IndexHash);
 		if (Magic != PakFile_Magic)
 			return false;
 
@@ -5016,7 +5251,7 @@ struct FPakEntry {
 	EFlags		Flags;
 
 	bool	read(istream_ref file, uint32 ver) {
-		iso::read(file, Offset, Size, UncompressedSize);
+		file.read(Offset, Size, UncompressedSize);
 
 		if (ver < FPakInfo::Version_FNameBasedCompressionMethod) {
 			enum ECompressionFlags : int32 {
@@ -5184,7 +5419,7 @@ struct FPakFileFile : ISO::VirtualDefaults {
 			return cache;
 
 		if (!asset)
-			return ISO::MakePtr(0, entry.get(r->file));
+			return ISO::MakePtr(none, entry.get(r->file));
 
 		cstring	class_name	= (const char*)asset->AssetClass;
 #if 0
@@ -5193,7 +5428,7 @@ struct FPakFileFile : ISO::VirtualDefaults {
 			return cache = ReadPackage((const char*)asset->AssetName, file0, file0);
 		}
 #endif
-		return ISO::MakePtr(0, entry.get(r->file));
+		return ISO::MakePtr(none, entry.get(r->file));
 
 		ISO_TRACEF("Load ") << asset->AssetName << '\n';
 
@@ -5218,15 +5453,15 @@ ISO_DEFUSERVIRTX(FPakFileFile, "File");
 
 FPakFileRoot::FPakFileRoot(istream_ref	file, const FPakFile& pak) : file(file.clone()), root("root") {
 	for (auto &i : pak.data->Index.with_keys()) {
-		ISO_TRACEF("Making folder ") << i.k << '\n';
-		auto	folder = GetDir(root, get(i.k));
-		for (auto j : i.v.with_keys()) {
-			ISO_TRACEF("  adding file ") << (const char*)j.k << '\n';
-			auto	&entry = pak.data->Files[j.v];
-			if (j.k == "AssetRegistry"_cstr && false) {
+		ISO_TRACEF("Making folder ") << i.a << '\n';
+		auto	folder = GetDir(root, get(i.a));
+		for (auto j : i.b.with_keys()) {
+			ISO_TRACEF("  adding file ") << (const char*)j.a << '\n';
+			auto	&entry = pak.data->Files[j.b];
+			if (j.a == "AssetRegistry"_cstr && false) {
 				registry.read(memory_reader(entry.get(file)));
 			} else {
-				folder->Append(ISO_ptr<FPakFileFile>(get(j.k), this, entry));
+				folder->Append(ISO_ptr<FPakFileFile>(get(j.a), this, entry));
 			}
 		}
 	}

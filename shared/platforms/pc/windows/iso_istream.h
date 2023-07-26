@@ -102,5 +102,64 @@ public:
 	HRESULT STDMETHODCALLTYPE Clone(IStream **ppstm)																			{ return E_NOTIMPL; }
 };
 
+class IStream_adapter {
+protected:
+	com_ptr2<IStream>	istream;
+public:
+	IStream_adapter(IStream *istream)	: istream(istream)	{}
+	bool		exists()					{ return istream; }
+	bool		eof()						{ return tell() >= length(); }
+	streamptr	length()					{
+		STATSTG	stat;
+		istream->Stat(&stat, STATFLAG_NONAME);
+		return stat.cbSize.QuadPart;
+	}
+	streamptr	tell()						{ streamptr pos = 0; istream->Seek((const LARGE_INTEGER&)pos, SEEK_CUR, (ULARGE_INTEGER*)&pos); return pos; }
+	void		seek(streamptr offset)		{ istream->Seek((const LARGE_INTEGER&)offset, SEEK_SET, nullptr); }
+	void		seek_cur(streamptr offset)	{ istream->Seek((const LARGE_INTEGER&)offset, SEEK_CUR, nullptr); }
+	void		seek_end(streamptr offset)	{ istream->Seek((const LARGE_INTEGER&)offset, SEEK_END, nullptr); }
+
+	IStream*	_clone() const				{ return istream; }
+
+	const wchar_t*	get_filename() const {
+		STATSTG	stat;
+		istream->Stat(&stat, STATFLAG_DEFAULT);
+		return stat.pwcsName;
+
+	}
+};
+
+
+struct IStream_reader0 : public IStream_adapter {
+	using IStream_adapter::IStream_adapter;
+	size_t	readbuff(void *buffer, size_t size) {
+		ULONG	read;
+		istream->Read(buffer, size, &read);
+		return read;
+	}
+	int		getc() { uint8 c; return readbuff(&c, 1) ? c : EOF; }
+};
+typedef reader_mixout<IStream_reader0>	IStream_reader;
+
+struct IStream_writer0 : public IStream_adapter {
+	using IStream_adapter::IStream_adapter;
+	size_t	writebuff(const void *buffer, size_t size) {
+		ULONG	written;
+		istream->Write(buffer, size, &written);
+		return written;
+	}
+};
+typedef writer_mixout<IStream_writer0>	IStream_writer;
+
+struct IStream_readwriter0 : public IStream_reader0 {
+	using IStream_reader0::IStream_reader0;
+	size_t	writebuff(const void *buffer, size_t size) {
+		ULONG	written;
+		istream->Write(buffer, size, &written);
+		return written;
+	}
+};
+typedef readwriter_mixout<IStream_readwriter0>	IStream_readwriter;
+
 }// namesapce iso
 #endif // ISO_ISTREAM_H

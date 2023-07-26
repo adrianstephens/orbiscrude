@@ -493,7 +493,7 @@ struct pm_transition1 {
 
 struct pm_transition3 {
 	int			field;
-	float3p	target;
+	float3p		target;
 	float		rate;
 
 	force_inline void Apply(ParticleSet &ps, Particle *begin, Particle *end, float dt, ParticleModifierFlags flags) const {
@@ -514,12 +514,12 @@ struct pm_curve1 {
 	int			source;
 	int			dest;
 	float		start, finish;
-	float4p	control;
+	float4p		control;
 
 	force_inline void Apply(ParticleSet &ps, Particle *begin, Particle *end, float dt, ParticleModifierFlags flags) const {
 		float	scale	= 1.f / (finish - start);
 		if (source < 16) {
-			float4	b	= bezier_spline::blend * float4(control);
+			float4	b	= bezier_helpers<3>::blend * float4(control);
 			float	bx	= b.x, by = b.y, bz = b.z, bw = b.w;
 			for (Particle *i = begin; i != end; ++i) {
 				prefetch(i + 2);
@@ -527,7 +527,7 @@ struct pm_curve1 {
 				((float*)i)[dest] = fsel(t, fsel(1 - t, t * (t * (t * bx + by) + bz) + bw, ((float*)i)[dest]), ((float*)i)[dest]);
 			}
 		} else {
-			float4	b	= transpose(bezier_spline::tangentblend) * float4(control);
+			float4	b	= transpose((float4x4)bezier_helpers<3>::tangentblend) * float4(control);
 			float	by	= b.y, bz = b.z, bw = b.w;
 			float	d	= dt * scale;
 			for (Particle *i = begin; i != end; ++i) {
@@ -543,11 +543,11 @@ struct pm_curve3 {
 	int			source;
 	int			dest;
 	float		start, finish;
-	float3p	control[4];
+	float3p		control[4];
 
 	force_inline void Apply(ParticleSet &ps, Particle *begin, Particle *end, float dt, ParticleModifierFlags flags) const {
 		float	scale		= 1.f / (finish - start);
-		float3x4	b		= float3x4(float3x4(control[0],control[1],control[2],control[3]) * bezier_spline::blend);
+		float3x4	b		= float3x4(float3x4(control[0],control[1],control[2],control[3]) * bezier_helpers<3>::blend);
 		for (Particle *i = begin; i != end; ++i) {
 			prefetch(i + 2);
 			float		t	= (((float*)i)[source] - start) * scale;
@@ -1091,38 +1091,29 @@ ParticleVertex *PutQuad(QuadList<ParticleVertex> p, param(position3) pos, param(
 	return p.next();
 }
 
-template<> VertexElements GetVE<ParticleVertex>() {
-	static VertexElement ve[] = {
-		VertexElement(&ParticleVertex::pos,	"position"_usage),
-		VertexElement(&ParticleVertex::uv,	"texcoord0"_usage),
-		VertexElement(&ParticleVertex::col,	"color"_usage),
-		VertexElement(0, GetComponentType<float[3]>(),	"normal"_usage),
-		VertexElement(0, GetComponentType<float[4]>(),	"tangent"_usage),
-	};
-	return ve;
+template<> static const VertexElements ve<ParticleVertex> = (const VertexElement[]) {
+	{&ParticleVertex::pos,	"position"_usage},
+	{&ParticleVertex::uv,	"texcoord0"_usage},
+	{&ParticleVertex::col,	"color"_usage},
+	{0, GetComponentType<float[3]>(),	"normal"_usage},
+	{0, GetComponentType<float[4]>(),	"tangent"_usage},
 };
 
 #elif defined(PLAT_X360) || defined(USE_DX11) || defined(USE_DX12) || defined(PLAT_PS4)
-template<> VertexElements GetVE<Particle>() {
-	static VertexElement ve[] = {
-		VertexElement(&Particle::pos,		"position"_usage),
-		VertexElement(&Particle::col,		"texcoord0"_usage),
-		VertexElement(&Particle::params,	"texcoord1"_usage),
-		VertexElement(&Particle::speed,		"texcoord2"_usage)
-	};
-	return ve;
-}
+template<> static const VertexElements ve<Particle> = (const VertexElement[]) {
+	{&Particle::pos,		"position"_usage},
+	{&Particle::col,		"texcoord0"_usage},
+	{&Particle::params,		"texcoord1"_usage},
+	{&Particle::speed,		"texcoord2"_usage},
+};
 #elif defined(PLAT_PS3)
-template<> VertexElements *GetVE<Particle>() {
-	static VertexElement ve[] = {
-		VertexElement(&Particle::pos,		USAGE_POSITION),
-		VertexElement(&Particle::col,		USAGE_TEXCOORD, 0),
-		VertexElement(&Particle::params,	USAGE_TEXCOORD, 1),
-		VertexElement(&Particle::speed,		USAGE_TEXCOORD, 2),
-		MakeVE<float[2]>(0,					USAGE_TEXCOORD,	7, 1),
-	};
-	return ve;
-}
+template<> static const VertexElements *ve<Particle> = (const VertexElement[]) {
+	{&Particle::pos,		USAGE_POSITION},
+	{&Particle::col,		USAGE_TEXCOORD, 0},
+	{&Particle::params,		USAGE_TEXCOORD, 1},
+	{&Particle::speed,		USAGE_TEXCOORD, 2},
+	MakeVE<float[2]>(0,		USAGE_TEXCOORD,	7, 1),
+};
 
 VertexBuffer<float[2]> &GetCornerVB() {
 	static float corners[][2] = {

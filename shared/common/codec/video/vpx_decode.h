@@ -1494,7 +1494,7 @@ struct Common {
 	dynamic_array<PARTITION_CONTEXT>	above_seg_context;
 	dynamic_array<int>					above_dependency;
 
-	GPU							*gpu;
+	GPU							*gpu = nullptr;
 
 	Common();
 	~Common();

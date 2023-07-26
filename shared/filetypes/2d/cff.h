@@ -163,18 +163,18 @@ enum op1 {
 struct packed_int : holder<int32> {
 	template<typename R> bool	read(R &r, uint8 b0) {
 		if (b0 < 32) {
-			if (b0 == shortint)		//	b0==28:		bytes:3; range:�32768..+32767
+			if (b0 == shortint)		//	b0==28:		bytes:3; range:-32768..+32767
 				t = r.get<int16be>();
-			else if (b0 == longint)	//	b0==29:		bytes:5; range:�2^31..+2^31-1
+			else if (b0 == longint)	//	b0==29:		bytes:5; range:-2^31..+2^31-1
 				t = r.get<int32be>();
 			else
 				return false;
 		} else {
-			if (b0 < 247)		// 32<b0<246:	bytes:1; range:�107..+107
+			if (b0 < 247)		// 32<b0<246:	bytes:1; range:-107..+107
 				t = int(b0) - 139;
 			else if (b0 < 251)	// 247<b0<250:	bytes:2; range:+108..+1131
 				t = (int(b0) - 247) * +256 + r.getc() + 108;
-			else if (b0 < 255)	// 251<b0<254:	bytes:2; range:�1131..�108
+			else if (b0 < 255)	// 251<b0<254:	bytes:2; range:-1131..�108
 				t = (int(b0) - 251) * -256 - r.getc() - 108;
 			else
 				return false;
@@ -220,6 +220,8 @@ struct packed_float : holder<float> {
 			*p = trans[b & 15];
 			if ((b & 15) == 12)
 				*++p = '-';
+			if (p == end(s) - 1)
+				return false;
 		} while (*p++);
 		return !!from_string(s, t);
 	}
@@ -272,7 +274,7 @@ struct value {
 	Type	type;
 	uint32	data;
 
-	template<typename R> inline int get_num(uint8 b0, R &r) {
+	template<typename R> static inline int get_num(uint8 b0, R &r) {
 		return b0 < 247	?  int(b0) - 139							// 32  < b0 < 246:	bytes:1; range:�107..+107
 			 : b0 < 251	? (int(b0) - 247) * +256 + r.getc() + 108	// 247 < b0 < 250:	bytes:2; range:+108..+1131
 						: (int(b0) - 251) * -256 - r.getc() - 108;	// 251 < b0 < 254:	bytes:2; range:�1131..�108
@@ -322,7 +324,7 @@ struct value_op : value {
 		if (b0 < 0x20) {
 			switch (b0) {
 				case op_shortint:
-					type = t_prop;
+					type = t_int;
 					data = r.template get<int16be>();
 					break;
 				case escape:
@@ -376,6 +378,9 @@ struct index {
 	uint8		offsets;
 
 	template<typename T> const_memory_block get(uint32 i) const {
+		ISO_ASSERT(i < count);
+		if (i >= count)
+			return none;
 		T		*table	= (T*)&offsets;
 		uint8	*data	= (uint8*)(table + count + 1) - 1;
 		return const_memory_block(data + uint32(table[i]), uint32(table[i + 1]) - uint32(table[i]));
@@ -439,19 +444,15 @@ struct dictionary : dynamic_array<dict_entry> {
 	bool	add(istream_ref file) {
 		uint32	prev	= 0;
 		while (!file.eof()) {
-			value_prop	v = file.get();
+			auto	v = file.get<value_prop>();
 			if (v.type == t_prop) {
-				dict_entry	*e = new(expand()) dict_entry;
-				e->p		= (prop&)v.data;
-				e->vals		= prev;
-				prev		= vals.size32();
+				push_back({(prop&)v.data, prev});
+				prev	= vals.size32();
 			} else {
 				vals.push_back(v);
 			}
 		}
-		dict_entry	*e = new(expand()) dict_entry;
-		e->p		= (prop)-1;
-		e->vals		= prev;
+		push_back({(prop)-1, prev});
 		return true;
 	}
 
@@ -460,6 +461,10 @@ struct dictionary : dynamic_array<dict_entry> {
 	}
 
 	dictionary()	{}
+	dictionary(istream_ref file) {
+		add(file);
+	}
+
 	dictionary(index *ind) {
 		for (int i = 0, n = ind->count; i < n; i++)
 			add(memory_reader((*ind)[i]));

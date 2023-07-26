@@ -1,5 +1,5 @@
-#ifndef NURBS_H
-#define NURBS_H
+#ifndef MESH_NURBS_H
+#define MESH_NURBS_H
 
 #include "patch.h"
 
@@ -11,11 +11,11 @@ struct NurbsModel {
 	ISO_openarray<SubPatch>		subpatches;
 };
 
+ISO_DEFUSERCOMPV(NurbsModel, minext, maxext, subpatches);
+
+void Draw(GraphicsContext &ctx, SubPatch &subpatch);
+void Draw(GraphicsContext &ctx, ISO_ptr<NurbsModel> &patch);
+
 } // namespace iso
 
-ISO_DEFUSERCOMPV(iso::NurbsModel, minext, maxext, subpatches);
-
-void Draw(iso::GraphicsContext &ctx, iso::SubPatch &subpatch);
-void Draw(iso::GraphicsContext &ctx, iso::ISO_ptr<iso::NurbsModel> &patch);
-
-#endif// NURBS_H
+#endif// MESH_NURBS_H

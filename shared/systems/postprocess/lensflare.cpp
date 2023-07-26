@@ -37,24 +37,18 @@ ISO_DEFUSERCOMPV(LensFlare, tex, sprites);
 
 // ----------------------------------------------------------------------------
 
-namespace iso {
-template<> VertexElements GetVE<LensFlareTestVertex>() {
-	static VertexElement ve[] = {
-		VertexElement(&LensFlareTestVertex::pos,	"position"_usage),
-		VertexElement(&LensFlareTestVertex::uv,		"texcoord"_usage)
-	};
-	return ve;
+
+template<> static const VertexElements ve<LensFlareTestVertex> = (const VertexElement[]) {
+	{&LensFlareTestVertex::pos,	"position"_usage},
+	{&LensFlareTestVertex::uv,	"texcoord"_usage}
 };
 
-template<> VertexElements GetVE<LensFlareVertex>() {
-	static VertexElement ve[] = {
-		VertexElement(&LensFlareVertex::pos,		"position"_usage),
-		VertexElement(&LensFlareVertex::uv,			"texcoord"_usage),
-		VertexElement(&LensFlareVertex::col,		"colour"_usage)
-	};
-	return ve;
+template<> static const VertexElements ve<LensFlareVertex> = (const VertexElement[]) {
+	{&LensFlareVertex::pos,		"position"_usage},
+	{&LensFlareVertex::uv,		"texcoord"_usage},
+	{&LensFlareVertex::col,		"colour"_usage}
 };
-}
+
 // ----------------------------------------------------------------------------
 
 const int MAX_LENS_FLARES = 256;
@@ -176,7 +170,7 @@ void LensFlares::Render(GraphicsContext &ctx, param(float3x4) view, param(float4
 					float alpha = (iso::pow(float(light_view.z), i->falloff) * 9 - 1) / 9;
 					if (alpha > 0) {
 						LensFlareVertex			*v = new(vertices) LensFlareVertex[verts<QuadListT>()];
-						QuadListT<LensFlareVertex>	q(v);
+						QuadListT<LensFlareVertex*>	q(v);
 
 						float2	pos		= light_proj.xy * i->t; // push/pull it relative to center of screen, which is (0, 0)
 						float	scale	= i->scale;

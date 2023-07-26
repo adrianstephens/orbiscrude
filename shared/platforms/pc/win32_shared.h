@@ -4,7 +4,7 @@
 #include "base/strings.h"
 #include "base/array.h"
 #include "base/vector.h"
-#include "base/colour.h"
+#include "extra/colour.h"
 
 namespace iso { namespace win {
 
@@ -40,6 +40,7 @@ public:
 
 	bool operator==(const H<T> &b)	const	{ return h == b.h; }
 	bool operator!=(const H<T> &b)	const	{ return h != b.h; }
+	friend string_accum& operator<<(string_accum &sa, const H &h) { return sa << hex((intptr_t)h.h); }
 };
 
 class global_base {

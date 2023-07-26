@@ -22,9 +22,6 @@
     <ClCompile Include="..\..\shared\common\sound.cpp">
       <Filter>Common</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\shared\common\base\vector.cpp">
-      <Filter>Common</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\shared\platforms\pc\_sound.cpp">
       <Filter>Common</Filter>
     </ClCompile>

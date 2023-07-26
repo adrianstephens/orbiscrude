@@ -45,8 +45,8 @@ void ControlArrangement::GetRects(const ControlArrangement::Token *p, Rect rect,
 //	ArrangeWindow
 //-----------------------------------------------------------------------------
 
-LRESULT	ArrangeWindow::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
-	switch (message) {
+LRESULT	ArrangeWindow::Proc(MSG_ID msg, WPARAM wParam, LPARAM lParam) {
+	switch (msg) {
 		case WM_SIZE:
 			Arrange();
 			return 0;
@@ -58,9 +58,9 @@ LRESULT	ArrangeWindow::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 		case WM_CTLCOLORSTATIC:
 		case WM_CTLCOLORBTN:
 		case WM_DROPFILES:
-			return Parent()(message, wParam, lParam);
+			return Parent()(msg, wParam, lParam);
 	}
-	return Super(message, wParam, lParam);
+	return Super(msg, wParam, lParam);
 }
 
 //-----------------------------------------------------------------------------
@@ -73,10 +73,12 @@ void SplitAdjuster::Init(int _flags) {
 }
 
 void SplitterWindow::_SetPane(int i, Control c) {
-	if ((pane[i] = c) && c.Parent() != *this)
-		c.SetParent(*this);
-	if (IsVisible())
-		c.Show();
+	if (pane[i] = c) {
+		if (c.Parent() != *this)
+			c.SetParent(*this);
+		if (IsVisible())
+			c.Show();
+	}
 }
 
 void SplitterWindow::Init(int _flags, int _pos) {
@@ -144,8 +146,8 @@ void SplitterWindow::UpdateSplitter(bool always) {
 		pane[0].Move(r0);
 		pane[1].Move(r1);
 		Invalidate(rcGripper);
-		pane[0].Update();
-		pane[1].Update();
+		//pane[0].Update();
+		//pane[1].Update();
 
 	} else if (pane[0]) {
 		pane[0].Move(r);
@@ -177,8 +179,8 @@ void SplitterWindow::SetPaneAndSize(int i, Control c) {
 	}
 }
 
-LRESULT SplitterWindow::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
-	switch (message) {
+LRESULT SplitterWindow::Proc(MSG_ID msg, WPARAM wParam, LPARAM lParam) {
+	switch (msg) {
 		case WM_CREATE:
 			pane[0] = pane[1] = Control();
 			break;
@@ -240,7 +242,7 @@ LRESULT SplitterWindow::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 				}
 
 				case WM_DESTROY:
-					Parent()(message, wParam, lParam);
+					Parent()(msg, wParam, lParam);
 					if (!(flags & SWF_ALWAYSSPLIT)) {
 						Control	p	= Parent();
 						int		w	= WhichPane(lParam);
@@ -264,23 +266,30 @@ LRESULT SplitterWindow::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 			return 0;
 
 		default:
-			if (message < WM_USER)
+			if (msg < WM_USER)
 				break;
 
+		case WM_KEYDOWN:
 		case WM_CHAR:
 		case WM_NOTIFY:
 		case WM_DROPFILES:
-			if (auto entry = recursion.check(MessageRecord(message, wParam, lParam)))
-				return Parent()(message, wParam, lParam);
+			if (auto entry = recursion.check(MessageRecord(msg, wParam, lParam)))
+				return Parent()(msg, wParam, lParam);
 			break;
 
 		case WM_COMMAND:
-			if (HIWORD(wParam) != 0xffff)
-				return Parent()(message, wParam, lParam);
+			if (HIWORD(wParam) == 0xffff) {
+				if (auto r = pane[0](msg, wParam, lParam))
+					return r;
+				if (auto r = pane[1](msg, wParam, lParam))
+					return r;
+			} else {
+				return Parent()(msg, wParam, lParam);
+			}
 			break;
 	}
 
-	return Super(message, wParam, lParam);
+	return Super(msg, wParam, lParam);
 }
 
 //-------------------------------------
@@ -345,10 +354,10 @@ WindowPos MultiSplitterWindow::InsertPane(int i, int w) {
 	while (pane < panes.end())
 		pane++->edge += w;
 
-	uint32	max = panes.back().edge / 2;
+	uint32	max = panes.back().edge;
 	uint32	val = flags & SWF_PROP ? MAXWORD : range;
 	for (auto &i : panes)
-		i.edge = i.edge / 2 * val / max;
+		i.edge = i.edge * val / max;
 
 	UpdateSplitters();
 	return GetPanePos(i);
@@ -360,8 +369,8 @@ void MultiSplitterWindow::RemovePane(int i) {
 }
 
 
-LRESULT MultiSplitterWindow::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
-	switch (message) {
+LRESULT MultiSplitterWindow::Proc(MSG_ID msg, WPARAM wParam, LPARAM lParam) {
+	switch (msg) {
 		case WM_SIZE: {
 			Point	size(lParam);
 			range = flags & SWF_VERT ? size.x : size.y;
@@ -416,6 +425,32 @@ LRESULT MultiSplitterWindow::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 			return 0;
 		}
 
+		case WM_PARENTNOTIFY:
+			switch (LOWORD(wParam)) {
+				case WM_CREATE: {
+					Control	c(lParam);
+					auto	pt	= c.GetRelativeRect().TopLeft();
+					for (int i = 0; i < panes.size32(); i++) {
+						if (pt == GetPaneRect(i).TopLeft()) {
+							panes[i].c = c;
+							return 0;
+						}
+					}
+					break;
+				}
+
+				case WM_DESTROY:
+					Parent()(msg, wParam, lParam);
+					if (!(flags & SWF_ALWAYSSPLIT)) {
+						Control	p	= Parent();
+						int		w	= WhichPane(lParam);
+						if (w >= 0)
+							panes[w].c = Control();
+					}
+					break;
+			}
+			break;
+
 		case WM_NCDESTROY:
 			if (flags & SWF_DELETE_ON_DESTROY)
 				delete this;
@@ -424,22 +459,23 @@ LRESULT MultiSplitterWindow::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
 			return 0;
 
 		default:
-			if (message < WM_USER)
+			if (msg < WM_USER)
 				break;
+		case WM_KEYDOWN:
 		case WM_CHAR:
 		case WM_NOTIFY:
 //		case WM_COMMAND:
 		case WM_DROPFILES:
 			if (!(flags & SWF_PASSUP)) {
 				flags |= SWF_PASSUP;
-				int	r = Parent()(message, wParam, lParam);
+				int	r = Parent()(msg, wParam, lParam);
 				flags &= ~SWF_PASSUP;
 				return r;
 			}
 			break;
 	}
 
-	return Super(message, wParam, lParam);
+	return Super(msg, wParam, lParam);
 }
 
 //-------------------------------------
@@ -518,23 +554,23 @@ void InfiniteSplitterWindow::UpdateSplitter(bool root) {
 	}
 }
 
-LRESULT InfiniteSplitterWindow::Proc(UINT message, WPARAM wParam, LPARAM lParam) {
-	if (message == WM_ISO_NEWPANE)
-		return Parent()(message, wParam, lParam);
+LRESULT InfiniteSplitterWindow::Proc(MSG_ID msg, WPARAM wParam, LPARAM lParam) {
+	if (msg == WM_ISO_NEWPANE)
+		return Parent()(msg, wParam, lParam);
 
-	int r = SplitterWindow::Proc(message, wParam, lParam);
-	if (message == WM_MOUSEMOVE)
+	int r = SplitterWindow::Proc(msg, wParam, lParam);
+	if (msg == WM_MOUSEMOVE)
 		UpdateSplitter(false);
 
 	return r;
 }
 
-LRESULT InfiniteSplitterWindow::Super(UINT message, WPARAM wParam, LPARAM lParam) {
-	if (message == WM_ISO_NEWPANE)
-		return Parent()(message, wParam, lParam);
+LRESULT InfiniteSplitterWindow::Super(MSG_ID msg, WPARAM wParam, LPARAM lParam) {
+	if (msg == WM_ISO_NEWPANE)
+		return Parent()(msg, wParam, lParam);
 
-	int r = SplitterWindow::Proc(message, wParam, lParam);
-	if (message == WM_MOUSEMOVE)
+	int r = SplitterWindow::Proc(msg, wParam, lParam);
+	if (msg == WM_MOUSEMOVE)
 		UpdateSplitter(true);
 
 	return r;

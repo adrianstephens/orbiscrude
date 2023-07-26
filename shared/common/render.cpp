@@ -132,7 +132,9 @@ void RenderEvent::SetShaderParams() {
 //-----------------------------------------------------------------------------
 
 struct RenderObjectTree : SceneTree, DeleteOnDestroy<RenderObjectTree> {
-	friend struct RenderObjectTreeMaker;
+	friend CreateWithWorld<RenderObjectTree>;
+	static CreateWithWorld<RenderObjectTree> maker;
+
 	bool	dirty;
 	void	operator()(RenderEvent &re) {
 		if (dirty) {
@@ -173,12 +175,7 @@ struct RenderObjectTree : SceneTree, DeleteOnDestroy<RenderObjectTree> {
 	}
 };
 
-struct RenderObjectTreeMaker : Handles2<RenderObjectTreeMaker, WorldEvent> {
-	void	operator()(WorldEvent *ev) {
-		if (ev->state == WorldEvent::BEGIN)
-			new RenderObjectTree(ev->world);
-	}
-} tree_maker;
+CreateWithWorld<RenderObjectTree>	RenderObjectTree::maker;
 
 RenderCollector::RenderCollector(RenderEvent *_re)
 	: MaskTester(_re->exclude & ~RMASK_DYNAMIC, _re->require & ~RMASK_DYNAMIC)

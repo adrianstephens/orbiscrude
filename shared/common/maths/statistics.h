@@ -84,7 +84,7 @@ template<typename T> struct stats2 : stats<T>, interval<T> {
 	}
 };
 template<typename C> C standardise(C &&range) {
-	stats<typename container_traits<C>::element> s;
+	stats<element_t<C>> s;
 	for (auto &i : range)
 		s.add(i);
 
@@ -97,7 +97,7 @@ template<typename C> C standardise(C &&range) {
 }
 
 template<typename C> C standardise_rms(C &&range) {
-	stats<typename container_traits<C>::element> s;
+	stats<element_t<C>> s;
 	for (auto &i : range)
 		s.add(i);
 

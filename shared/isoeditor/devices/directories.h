@@ -7,15 +7,16 @@ namespace iso {
 			string					name;
 			uint64					size;
 			Entry() : size(0) {}
-			Entry(const string &name, uint64 size = 0) : name(move(name)), size(size) {}
-			Entry(string &&name, uint64 size = 0) : name(move(name)), size(size) {}
+			Entry(string_ref &&name, uint64 size = 0) : name(move(name)), size(size) {}
+			//Entry(const string &name, uint64 size = 0) : name(move(name)), size(size) {}
+			//Entry(string &&name, uint64 size = 0) : name(move(name)), size(size) {}
 		};
 		struct Dir : Entry, ISO::VirtualDefaults {
 			dynamic_array<Dir*>		subdirs;
 			dynamic_array<Entry*>	entries;
 			Dir() {}
-			Dir(const string &name) : Entry(name) {}
-			Dir(string &&name) : Entry(move(name)) {}
+			//Dir(const string &name) : Entry(name) {}
+			Dir(string_ref &&name) : Entry(move(name)) {}
 			~Dir()	{
 				for (auto i : subdirs)
 					delete i;

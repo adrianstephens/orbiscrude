@@ -1,134 +1,289 @@
 #include "sim_dxbc.h"
-#include "dx_shaders.h"
+#include "dxgi_read.h"
 #include "base/maths.h"
 #include "base/soft_float.h"
-#include "dxgi_read.h"
 
 using namespace iso;
 using namespace dx;
 
 //-----------------------------------------------------------------------------
-//	DeclReader
+//	DeclResources
 //-----------------------------------------------------------------------------
 
-Decls::Decls(const memory_block &ucode) {
-	clear(*this);
-	for (const Opcode *op = ucode; op < ucode.end(); op = op->next())
-		Process(op);
-}
-
-bool Decls::Process(const Opcode *op) {
+static bool Process(Decls &d, const Opcode *op, bool const_phase) {
 	auto			code	= op->Op();
 	const uint32	*p		= op->operands();
 
 	switch (code) {
 		default: return false;
 
-		case OPCODE_DCL_GLOBAL_FLAGS:					global_flags 			= *op;	break;
-		case OPCODE_DCL_TEMPS:							num_temp 				= *p;	break;
+		case OPCODE_DCL_INPUT:
+		case OPCODE_DCL_INPUT_SIV:
+		case OPCODE_DCL_INPUT_SGV:
+		case OPCODE_DCL_INPUT_PS:
+		case OPCODE_DCL_INPUT_PS_SIV:
+		case OPCODE_DCL_INPUT_PS_SGV: {
+			ASMOperand	r(p);
+			int i;
+			switch (r.type) {
+				case Operand::TYPE_INPUT:								i = r.indices[0].index; break;
+				case Operand::TYPE_INPUT_DOMAIN_POINT:					i = Decls::vDomain; break;
+				case Operand::TYPE_INPUT_PRIMITIVEID:					i = Decls::vPrim; break;
+				case Operand::TYPE_INPUT_COVERAGE_MASK:					i = Decls::vCoverage; break;
+				case Operand::TYPE_INPUT_GS_INSTANCE_ID:				i = Decls::vInstanceID; break;
+				case Operand::TYPE_INPUT_THREAD_ID:						i = Decls::vThreadID; break;
+				case Operand::TYPE_INPUT_THREAD_GROUP_ID:				i = Decls::vThreadGroupID; break;
+				case Operand::TYPE_INPUT_THREAD_ID_IN_GROUP:			i = Decls::vThreadIDInGroup; break;
+				case Operand::TYPE_INPUT_THREAD_ID_IN_GROUP_FLATTENED:	i = Decls::vThreadIDInGroup; break;// + 3;
+				case Operand::TYPE_INPUT_FORK_INSTANCE_ID:				i = Decls::vForkInstanceID; break;
+				case Operand::TYPE_INPUT_JOIN_INSTANCE_ID:				i = Decls::vJoinInstanceID; break;
+				case Operand::TYPE_OUTPUT_CONTROL_POINT_ID:				i = Decls::vOutputControlPointID; break;
+				case Operand::TYPE_INPUT_CONTROL_POINT:
+				case Operand::TYPE_OUTPUT_CONTROL_POINT:
+					d.patch_mask |= bits64(r.indices[0].index / d.num_input, r.indices[1].index / d.num_input);
+				default:
+					return true;
+			}
+			if (r.indices.size() == 2)
+				d.input_mask |= bits64(i, r.indices[1].index);
+			else
+				d.input_mask |= bit64(i);
+			break;
+		}
+
+		case OPCODE_DCL_OUTPUT:
+		case OPCODE_DCL_OUTPUT_SIV:
+		case OPCODE_DCL_OUTPUT_SGV: {
+			ASMOperand	r(p);
+			int i;
+			switch (r.type) {
+				case Operand::TYPE_OUTPUT:								i = r.indices[0].index; break;
+				case Operand::TYPE_OUTPUT_DEPTH:						//i = Decls::oDepth; break;
+				case Operand::TYPE_OUTPUT_DEPTH_LESS_EQUAL:				//i = Decls::oDepthLessEqual; break;
+				case Operand::TYPE_OUTPUT_DEPTH_GREATER_EQUAL:			i = Decls::oDepth; break;//i = Decls::oDepthGreaterEqual; break;
+				case Operand::TYPE_OUTPUT_COVERAGE_MASK:				i = Decls::oCoverage; break;
+				default:
+					return true;
+			}
+			if (const_phase)
+				d.const_output_mask |= bit64(i);
+			else
+				d.output_mask |= bit64(i);
+			break;
+		}
+		case OPCODE_DCL_TEMPS:							d.num_temp 				= *p;	break;
 		case OPCODE_DCL_INDEXABLE_TEMP: {
 			uint32	i		= p[0];
 			uint32	num		= p[1];
 			uint32	comps	= p[2];
-			num_index += num;
+			d.num_index += num;
 			break;
 		}
-		case OPCODE_DCL_MAX_OUTPUT_VERTEX_COUNT:		max_output 				= *p;	break;
-		case OPCODE_DCL_THREAD_GROUP:					thread_group			= *(uint3p*)p;	break;
-		case OPCODE_DCL_INPUT_CONTROL_POINT_COUNT:		input_control_points	= op->ControlPointCount;							break;
-		case OPCODE_DCL_OUTPUT_CONTROL_POINT_COUNT:		output_control_points	= op->ControlPointCount;							break;
-		case OPCODE_DCL_TESS_DOMAIN:					tess_domain				= (TessellatorDomain)op->TessDomain;				break;
-		case OPCODE_DCL_TESS_PARTITIONING:				tess_partitioning		= (TessellatorPartitioning)op->TessPartitioning;	break;
-		case OPCODE_DCL_GS_INPUT_PRIMITIVE:				gs_input				= (PrimitiveType)op->InputPrimitive;				break;
-		case OPCODE_DCL_GS_OUTPUT_PRIMITIVE_TOPOLOGY:	gs_output				= (PrimitiveTopology)op->OutputPrimitiveTopology;	break;
-		case OPCODE_DCL_TESS_OUTPUT_PRIMITIVE:			tess_output				= (TessellatorOutputPrimitive)op->OutputPrimitive;	break;
-		case OPCODE_DCL_HS_FORK_PHASE_INSTANCE_COUNT:	forks					+= *p;	break;
-		case OPCODE_DCL_HS_JOIN_PHASE_INSTANCE_COUNT:	joins					+= *p;	break;
-		case OPCODE_DCL_GS_INSTANCE_COUNT:				instances				+= *p;	break;
-		case OPCODE_DCL_HS_MAX_TESSFACTOR:				max_tesselation			= *p;	break;
+		case OPCODE_DCL_MAX_OUTPUT_VERTEX_COUNT:		d.max_output 			= *p;	break;
+		case OPCODE_DCL_THREAD_GROUP:					d.thread_group			= *(uint3p*)p;	break;
+		case OPCODE_DCL_INPUT_CONTROL_POINT_COUNT:		d.num_input				= op->ControlPointCount;							break;
+		case OPCODE_DCL_OUTPUT_CONTROL_POINT_COUNT:		d.max_output			= op->ControlPointCount;							break;
+		case OPCODE_DCL_TESS_DOMAIN:					d.tess_domain			= (TessellatorDomain)op->TessDomain;				break;
+		case OPCODE_DCL_TESS_PARTITIONING:				d.tess_partitioning		= (TessellatorPartitioning)op->TessPartitioning;	break;
+		case OPCODE_DCL_GS_INPUT_PRIMITIVE:				d.input_prim			= (PrimitiveType)op->InputPrimitive;				break;
+		case OPCODE_DCL_GS_OUTPUT_PRIMITIVE_TOPOLOGY:	d.output_topology		= (PrimitiveTopology)op->OutputPrimitiveTopology;	break;
+		case OPCODE_DCL_TESS_OUTPUT_PRIMITIVE:			d.tess_output			= (TessellatorOutputPrimitive)op->OutputPrimitive;	break;
+		case OPCODE_DCL_HS_FORK_PHASE_INSTANCE_COUNT:	d.forks					+= *p;	break;
+		case OPCODE_DCL_HS_JOIN_PHASE_INSTANCE_COUNT:	d.joins					+= *p;	break;
+		case OPCODE_DCL_GS_INSTANCE_COUNT:				d.instances				+= *p;	break;
+		case OPCODE_DCL_HS_MAX_TESSFACTOR:				d.max_tesselation		= *p;	break;
 	}
 	return true;
 }
 
-SimulatorDXBC::Register	dummy;
-float		tex_default[4] = {0, 0, 0, 1};
+uint3p dx::GetThreadGroupDXBC(const_memory_block ucode) {
+	for (const Opcode *op = ucode; op < ucode.end(); op = op->next()) {
+		if (op->Op() == OPCODE_DCL_THREAD_GROUP)
+			return *(uint3p*)op->operands();
+	}
+	return zero;
+}
 
-void SimulatorDXBC::Init(const memory_block &_ucode, uint64 _ucode_addr) {
+const Opcode *Process(DeclResources &d, const Opcode *op) {
+	const uint32	*p	= op->operands();
+	switch (op->Op()) {
+
+		//input
+
+		case OPCODE_DCL_INPUT: {
+			ASMOperand		a(p);
+			d.inputs.emplace(a.indices ? a.indices[0].index : a.type, uint8(a.num_components), uint8(a.swizzle_bits));
+			break;
+		}
+		case OPCODE_DCL_INPUT_SIV:
+		case OPCODE_DCL_INPUT_SGV:
+		case OPCODE_DCL_INPUT_PS_SIV:
+		case OPCODE_DCL_INPUT_PS_SGV: {
+			ASMOperand		a(p);
+			d.inputs.emplace(a.indices ? a.indices[0].index : a.type, uint8(a.num_components), uint8(a.swizzle_bits), 0, (SystemValue)*p++);
+			break;
+		}
+		case OPCODE_DCL_INPUT_PS: {
+			ASMOperand		a(p);
+			d.inputs.emplace(a.indices ? a.indices[0].index : a.type, uint8(a.num_components), uint8(a.swizzle_bits), op->InterpolationMode);
+			break;
+		}
+
+		//output
+
+		case OPCODE_DCL_OUTPUT: {
+			ASMOperand		a(p);
+			d.outputs.emplace(a.indices ? a.indices[0].index : a.type, uint8(a.num_components), uint8(a.swizzle_bits));
+			break;
+		}
+		
+		case OPCODE_DCL_OUTPUT_SIV:
+		case OPCODE_DCL_OUTPUT_SGV: {
+			ASMOperand		a(p);
+			p++;
+			d.outputs.emplace(a.indices ? a.indices[0].index : a.type, uint8(a.num_components), uint8(a.swizzle_bits), 0, (SystemValue)*p++);
+			break;
+		}
+
+		case OPCODE_DCL_STREAM: {
+			ASMOperand a(p);
+			break;
+		}
+
+		//resources
+
+		case OPCODE_DCL_SAMPLER: {
+			ASMOperand		a(p);
+			d.smp.emplace(a.indices[0].index, (SamplerMode)op->SamplerMode);
+			break;
+		}
+		case OPCODE_DCL_CONSTANT_BUFFER: {
+			ASMOperand		a(p);
+			d.cb.emplace(a.indices[0].index, a.indices[1].index, op->AccessPattern);
+			break;
+		}
+		case OPCODE_DCL_RESOURCE: {
+			ASMOperand		a(p);
+			d.srv.emplace(a.indices[0].index, (ResourceDimension)op->ResourceDim, ResourceReturnType(*p++), op->SampleCount);
+			break;
+		}
+		case OPCODE_DCL_INDEX_RANGE: {
+			ASMOperand a(p);
+			uint32	i = *p++;
+			break;
+		}
+		case OPCODE_DCL_THREAD_GROUP_SHARED_MEMORY_RAW: {
+			ASMOperand a(p);
+			uint32	i = *p++;
+			break;
+		}
+		case OPCODE_DCL_THREAD_GROUP_SHARED_MEMORY_STRUCTURED: {
+			ASMOperand a(p);
+			uint32	stride	= *p++;
+			uint32	count	= *p++;
+			break;
+		}
+		case OPCODE_DCL_UNORDERED_ACCESS_VIEW_RAW: {
+			ASMOperand a(p);
+			d.uav.emplace(a.indices[0].index, RESOURCE_DIMENSION_UNKNOWN, 0, 0);
+			break;
+		}
+		case OPCODE_DCL_RESOURCE_RAW: {
+			ASMOperand a(p);
+			d.srv.emplace(a.indices[0].index, RESOURCE_DIMENSION_UNKNOWN, 0, 0);
+			break;
+		}
+		case OPCODE_DCL_UNORDERED_ACCESS_VIEW_STRUCTURED: {
+			ASMOperand a(p);
+			d.uav.emplace(a.indices[0].index, RESOURCE_DIMENSION_UNKNOWN, 0, *p++);
+			break;
+		}
+		case OPCODE_DCL_RESOURCE_STRUCTURED: {
+			ASMOperand a(p);
+			d.srv.emplace(a.indices[0].index, RESOURCE_DIMENSION_UNKNOWN, 0, *p++);
+			break;
+		}
+		case OPCODE_DCL_UNORDERED_ACCESS_VIEW_TYPED: {
+			ASMOperand a(p);
+			d.uav.emplace(a.indices[0].index, (ResourceDimension)op->ResourceDim, ResourceReturnType(*p++), op->SampleCount);
+			break;
+		}
+		case OPCODE_DCL_FUNCTION_BODY: {
+			uint32	i = *p++;
+			break;
+		}
+		case OPCODE_DCL_FUNCTION_TABLE: {
+			uint32 functionTable	= *p++;
+			uint32 TableLength		= *p++;
+			for (uint32 i = 0; i < TableLength; i++) {
+				uint32	j = *p++;
+			}
+			break;
+		}
+		case OPCODE_DCL_INTERFACE: {
+			uint32	interfaceID = *p++;
+			uint32	numTypes	= *p++;
+			DeclarationCount CountToken = (DeclarationCount&)*p++;
+			break;
+		}
+		case OPCODE_HS_DECLS:
+			break;
+
+		case OPCODE_CUSTOMDATA: {
+			CustomDataClass customClass = (CustomDataClass)op->custom.Class;
+			uint32 customDataLength = *p++;			// DWORD length including token0 and this length token
+			ISO_ASSERT(customDataLength >= 2);
+
+			switch (customClass) {
+				case CUSTOMDATA_DCL_IMMEDIATE_CONSTANT_BUFFER: {
+					uint32 dataLength = customDataLength - 2;
+					ISO_ASSERT(dataLength % 4 == 0);
+					break;
+				}
+
+				default:
+					return 0;
+			}
+			break;
+		}
+		default:
+			//if (!Process((Decls&)d, op, false))
+				return 0;
+	}
+	return op->next();
+}
+
+void dx::Read(DeclResources &decl, const_memory_block ucode) {
+	for (const Opcode *op = ucode; op < ucode.end(); op = op->next())
+		Process(decl, op);
+}
+
+//-----------------------------------------------------------------------------
+//	SimulatorDXBC
+//-----------------------------------------------------------------------------
+
+SimulatorDXBC::Register	dummy;
+
+void SimulatorDXBC::Init(const DXBC::UcodeHeader *header, const_memory_block _ucode) {
+	stage		= conv<SHADERSTAGE>(header->ProgramType);
 	ucode		= _ucode;
-	ucode_addr	= _ucode_addr;
 	phase		= phNormal;
 	fork_count	= 0;
-	num_temp	= 0;
-	input_mask	= patch_mask = output_mask = const_output_mask = 0;
-	max_output	= 1;
-	streamptr	= 0;
-
 
 	dynamic_array<const Opcode*>	loop_stack;
-	size_t	gmem	= 0;
 
 	for (const Opcode *op = ucode; op < ucode.end(); op = op->next()) {
-		if (Decls::Process(op))
+		if (Process(*(Decls*)this, op, phase == phConstantsFork || phase == phConstantsJoin))
 			continue;
 
 		const uint32	*p = op->operands();
 		switch (op->Op()) {
-			case OPCODE_DCL_INPUT:
-			case OPCODE_DCL_INPUT_SIV:
-			case OPCODE_DCL_INPUT_SGV:
-			case OPCODE_DCL_INPUT_PS:
-			case OPCODE_DCL_INPUT_PS_SIV:
-			case OPCODE_DCL_INPUT_PS_SGV: {
-				ASMOperand	r(p);
-				int i;
-				switch (r.type) {
-					case Operand::TYPE_INPUT:								i = r.indices[0].index; break;
-					case Operand::TYPE_INPUT_DOMAIN_POINT:					i = vDomain; break;
-					case Operand::TYPE_INPUT_PRIMITIVEID:					i = vPrim; break;
-					case Operand::TYPE_INPUT_COVERAGE_MASK:					i = vMask; break;
-					case Operand::TYPE_INPUT_GS_INSTANCE_ID:				i = vInstanceID; break;
-					case Operand::TYPE_INPUT_THREAD_ID:						i = vThreadID; break;
-					case Operand::TYPE_INPUT_THREAD_GROUP_ID:				i = vThreadGroupID; break;
-					case Operand::TYPE_INPUT_THREAD_ID_IN_GROUP:			i = vThreadIDInGroup; break;
-					case Operand::TYPE_INPUT_THREAD_ID_IN_GROUP_FLATTENED:	i = vThreadIDInGroup; break;// + 3;
-					case Operand::TYPE_INPUT_FORK_INSTANCE_ID:				i = vForkInstanceID; break;
-					case Operand::TYPE_INPUT_JOIN_INSTANCE_ID:				i = vJoinInstanceID; break;
-					case Operand::TYPE_OUTPUT_CONTROL_POINT_ID:				i = vOutputControlPointID; break;
-					case Operand::TYPE_INPUT_CONTROL_POINT:
-					case Operand::TYPE_OUTPUT_CONTROL_POINT:
-						patch_mask |= bits64(r.indices[0].index / input_control_points, r.indices[1].index / input_control_points);
-						continue;
-					default:												continue;
-				}
-				if (r.indices.size() == 2)
-					input_mask |= bits64(i, r.indices[1].index);
-				else
-					input_mask |= bit64(i);
+			case OPCODE_DCL_GLOBAL_FLAGS:
+				global_flags = *op;
 				break;
-			}
-
-			case OPCODE_DCL_OUTPUT:
-			case OPCODE_DCL_OUTPUT_SIV:
-			case OPCODE_DCL_OUTPUT_SGV: {
-				ASMOperand	r(p);
-				int i;
-				switch (r.type) {
-					case Operand::TYPE_OUTPUT:								i = r.indices[0].index; break;
-					case Operand::TYPE_OUTPUT_DEPTH:						i = oDepth; break;
-					case Operand::TYPE_OUTPUT_DEPTH_LESS_EQUAL:				i = oDepthLessEqual; break;
-					case Operand::TYPE_OUTPUT_DEPTH_GREATER_EQUAL:			i = oDepthGreaterEqual; break;
-					case Operand::TYPE_OUTPUT_COVERAGE_MASK:				i = oMask; break;
-					default:												continue;
-				}
-				if (phase == phConstantsFork || phase == phConstantsJoin)
-					const_output_mask |= bit64(i);
-				else
-					output_mask |= bit64(i);
-				break;
-			}
 
 			case OPCODE_DCL_STREAM:
-				gmem += 4096 * sizeof(Register);
+				gmem_size += 4096 * sizeof(Register);
 				break;
 
 			case OPCODE_LOOP:
@@ -183,7 +338,7 @@ void SimulatorDXBC::Init(const memory_block &_ucode, uint64 _ucode_addr) {
 				Resource	&res	= grp[index];
 				res.init(RESOURCE_DIMENSION_BUFFER, DXGI_FORMAT_UNKNOWN, i, 0);
 				res.n	= i;
-				gmem	+= i;
+				gmem_size	+= i;
 				break;
 			}
 			case OPCODE_DCL_THREAD_GROUP_SHARED_MEMORY_STRUCTURED: {
@@ -194,17 +349,17 @@ void SimulatorDXBC::Init(const memory_block &_ucode, uint64 _ucode_addr) {
 				Resource	&res	= grp[index];
 				res.init(RESOURCE_DIMENSION_BUFFER, DXGI_FORMAT_UNKNOWN, stride, count);
 				res.n	= stride * count;
-				gmem	+= res.n;
+				gmem_size	+= res.n;
 				break;
 			}
 		}
 	}
 
-	group_mem.resize(gmem);
+	group_mem.resize(gmem_size);
 	uint8	*g = group_mem;
 	for (auto &i : grp) {
-		i.p = g;
-		g += i.n;
+		i->p = g;
+		g += i->n;
 	}
 
 	phase			= phNormal;
@@ -214,56 +369,17 @@ void SimulatorDXBC::Init(const memory_block &_ucode, uint64 _ucode_addr) {
 	SetNumThreads(threads.size32());
 }
 
-void SimulatorDXBC::Reset() {
-	active_stack.clear();
-	active_threads.clear();
-	
-	auto r = regs.begin();
-	group_mem.fill(0xcd);
-
-	for (auto &t : threads) {
-		t.reset(r);
-		memset(r, 0xcd, input_offset * sizeof(Register));
-		active_threads.push_back(&t);
-		r += regs_per_thread;
-	}
-	phase		= phNormal;
-	fork_count	= 0;
-	streamptr	= 0;
-}
-
 void SimulatorDXBC::SetNumThreads(int num_threads) {
-	active_threads.clear();
 	threads.resize(num_threads);
 	
 	const_offset	= regs_per_thread * num_threads;
 	patch_offset	= const_offset + highest_set_index(const_output_mask) + 1;
 
-	regs.resize(patch_offset + (highest_set_index(patch_mask) + 1) * input_control_points);
-
-	regs.raw_data().fill(0xcd);
-	group_mem.fill(0xcd);
-
-	auto *r = regs.begin();
-	for (auto &t : threads) {
-		t.reset(r);
-		r += regs_per_thread;
-		active_threads.push_back(&t);
-	}
+	regs.resize(patch_offset + (highest_set_index(patch_mask) + 1) * num_input);
 }
 
-void SimulatorDXBC::InterpolateInputQuad(int t, int r, const Triangle &tri, float u0, float v0, float u1, float v1) {
-	threads[t + 0].regs[input_offset + r] = tri.interpolate(u0, v0);
-	threads[t + 1].regs[input_offset + r] = tri.interpolate(u1, v0);
-	threads[t + 2].regs[input_offset + r] = tri.interpolate(u0, v1);
-	threads[t + 3].regs[input_offset + r] = tri.interpolate(u1, v1);
-}
-
-void SimulatorDXBC::InterpolateInputQuad(int t, int r, const Triangle &tri, float2 uv0, float2 uv1, float2 uv2) {
-	threads[t + 0].regs[input_offset + r] = tri.interpolate(uv0);
-	threads[t + 1].regs[input_offset + r] = tri.interpolate(uv1);
-	threads[t + 2].regs[input_offset + r] = tri.interpolate(uv2);
-	threads[t + 3].regs[input_offset + r] = tri.interpolate(uv1 + uv2 - uv0);
+SimulatorDXBC::THREADFLAGS SimulatorDXBC::ThreadFlags(int t) const {
+	return THREADFLAGS(IsActive(t) | (IsDiscarded(t) << 1));
 }
 
 uint32 SimulatorDXBC::offset(ThreadState &ts, const ASMIndex &ix) {
@@ -298,7 +414,7 @@ SimulatorDXBC::Register &SimulatorDXBC::ref(ThreadState &ts, const ASMOperand &o
 		case Operand::TYPE_OUTPUT_CONTROL_POINT_ID:				return ts.regs[input_offset + vOutputControlPointID];
 		case Operand::TYPE_INPUT_DOMAIN_POINT:					return ts.regs[input_offset + vDomain];
 		case Operand::TYPE_INPUT_PRIMITIVEID:					return ts.regs[input_offset + vPrim];
-		case Operand::TYPE_INPUT_COVERAGE_MASK:					return ts.regs[input_offset + vMask];
+		case Operand::TYPE_INPUT_COVERAGE_MASK:					return ts.regs[input_offset + vCoverage];
 		case Operand::TYPE_INPUT_GS_INSTANCE_ID:				return ts.regs[input_offset + vInstanceID];
 		case Operand::TYPE_INPUT_THREAD_ID:						return ts.regs[input_offset + vThreadID];
 		case Operand::TYPE_INPUT_THREAD_GROUP_ID:				return ts.regs[input_offset + vThreadGroupID];
@@ -310,9 +426,9 @@ SimulatorDXBC::Register &SimulatorDXBC::ref(ThreadState &ts, const ASMOperand &o
 		case Operand::TYPE_OUTPUT_CONTROL_POINT:				r = regs + patch_offset; break;
 		case Operand::TYPE_INPUT_PATCH_CONSTANT:				r = regs + const_offset; break;
 		case Operand::TYPE_OUTPUT_DEPTH:						return ts.regs[output_offset + oDepth];
-		case Operand::TYPE_OUTPUT_DEPTH_LESS_EQUAL:				return ts.regs[output_offset + oDepthLessEqual];
-		case Operand::TYPE_OUTPUT_DEPTH_GREATER_EQUAL:			return ts.regs[output_offset + oDepthGreaterEqual];
-		case Operand::TYPE_OUTPUT_COVERAGE_MASK:				return ts.regs[output_offset + oMask];
+		//case Operand::TYPE_OUTPUT_DEPTH_LESS_EQUAL:				return ts.regs[output_offset + oDepthLessEqual];
+		//case Operand::TYPE_OUTPUT_DEPTH_GREATER_EQUAL:			return ts.regs[output_offset + oDepthGreaterEqual];
+		case Operand::TYPE_OUTPUT_COVERAGE_MASK:				return ts.regs[output_offset + oCoverage];
 		case Operand::TYPE_NULL:
 		default:												return dummy;
 	}
@@ -341,7 +457,7 @@ const void *SimulatorDXBC::reg_data(int thread, ASMOperand::Type type, const ran
 		case Operand::TYPE_OUTPUT_CONTROL_POINT_ID:				r += input_offset + vOutputControlPointID; break;
 		case Operand::TYPE_INPUT_DOMAIN_POINT:					r += input_offset + vDomain; break;
 		case Operand::TYPE_INPUT_PRIMITIVEID:					r += input_offset + vPrim; break;
-		case Operand::TYPE_INPUT_COVERAGE_MASK:					r += input_offset + vMask; break;
+		case Operand::TYPE_INPUT_COVERAGE_MASK:					r += input_offset + vCoverage; break;
 		case Operand::TYPE_INPUT_GS_INSTANCE_ID:				r += input_offset + vInstanceID; break;
 		case Operand::TYPE_INPUT_THREAD_ID:						r += input_offset + vThreadID + 5; break;
 		case Operand::TYPE_INPUT_THREAD_GROUP_ID:				r += input_offset + vThreadGroupID + 7; break;
@@ -353,9 +469,9 @@ const void *SimulatorDXBC::reg_data(int thread, ASMOperand::Type type, const ran
 		case Operand::TYPE_OUTPUT_CONTROL_POINT:				r = regs + patch_offset; break;
 		case Operand::TYPE_INPUT_PATCH_CONSTANT:				r = regs + const_offset; break;
 		case Operand::TYPE_OUTPUT_DEPTH:						r += output_offset + oDepth; break;
-		case Operand::TYPE_OUTPUT_DEPTH_LESS_EQUAL:				r += output_offset + oDepthLessEqual; break;
-		case Operand::TYPE_OUTPUT_DEPTH_GREATER_EQUAL:			r += output_offset + oDepthGreaterEqual; break;
-		case Operand::TYPE_OUTPUT_COVERAGE_MASK:				r += output_offset + oMask; break;
+		//case Operand::TYPE_OUTPUT_DEPTH_LESS_EQUAL:				r += output_offset + oDepthLessEqual; break;
+		//case Operand::TYPE_OUTPUT_DEPTH_GREATER_EQUAL:			r += output_offset + oDepthGreaterEqual; break;
+		case Operand::TYPE_OUTPUT_COVERAGE_MASK:				r += output_offset + oCoverage; break;
 		case Operand::TYPE_NULL:
 		default:												return 0;
 	}
@@ -379,7 +495,7 @@ int SimulatorDXBC::reg(const ASMOperand::Type type, int index) const {
 		case Operand::TYPE_OUTPUT_CONTROL_POINT_ID:				return input_offset + vOutputControlPointID;
 		case Operand::TYPE_INPUT_DOMAIN_POINT:					return input_offset + vDomain;
 		case Operand::TYPE_INPUT_PRIMITIVEID:					return input_offset + vPrim;
-		case Operand::TYPE_INPUT_COVERAGE_MASK:					return input_offset + vMask;
+		case Operand::TYPE_INPUT_COVERAGE_MASK:					return input_offset + vCoverage;
 		case Operand::TYPE_INPUT_GS_INSTANCE_ID:				return input_offset + vInstanceID;
 		case Operand::TYPE_INPUT_THREAD_ID:						return input_offset + vThreadID;
 		case Operand::TYPE_INPUT_THREAD_GROUP_ID:				return input_offset + vThreadGroupID;
@@ -388,28 +504,36 @@ int SimulatorDXBC::reg(const ASMOperand::Type type, int index) const {
 		case Operand::TYPE_INPUT_FORK_INSTANCE_ID:				return input_offset + vForkInstanceID;
 		case Operand::TYPE_INPUT_JOIN_INSTANCE_ID:				return input_offset + vJoinInstanceID;
 		case Operand::TYPE_OUTPUT_DEPTH:						return output_offset + oDepth;
-		case Operand::TYPE_OUTPUT_DEPTH_LESS_EQUAL:				return output_offset + oDepthLessEqual;
-		case Operand::TYPE_OUTPUT_DEPTH_GREATER_EQUAL:			return output_offset + oDepthGreaterEqual;
-		case Operand::TYPE_OUTPUT_COVERAGE_MASK:				return output_offset + oMask;
+		//case Operand::TYPE_OUTPUT_DEPTH_LESS_EQUAL:				return output_offset + oDepthLessEqual;
+		//case Operand::TYPE_OUTPUT_DEPTH_GREATER_EQUAL:			return output_offset + oDepthGreaterEqual;
+		case Operand::TYPE_OUTPUT_COVERAGE_MASK:				return output_offset + oCoverage;
 		case Operand::TYPE_NULL:
 		default:												return -1;
 	}
 }
 
-range<stride_iterator<const SimulatorDXBC::Register>> SimulatorDXBC::GetRegFile(Operand::Type type, int i) const {
+range<stride_iterator<void>> SimulatorDXBC::_GetRegFile(Operand::Type type, int i) const {
 	auto	r		= regs.begin();
 	size_t	stride	= regs_per_thread * sizeof(Register);
 	size_t	num		= threads.size();
 
 	switch (type) {
+		case Operand::TYPE_OUTPUT:
+			if (stage == GS) {
+				r		= (Register*)group_mem + i;
+				stride	= count_bits(output_mask) * sizeof(Register);
+				num		*= max_output;
+			} else {
+				r += output_offset + i;
+			}
+			break;
 		case Operand::TYPE_TEMP:								r += i; break;
-		case Operand::TYPE_OUTPUT:								r += output_offset + i; break;
 		case Operand::TYPE_INDEXABLE_TEMP:						r += num_temp + i; break;
 		case Operand::TYPE_INPUT:								r += input_offset + i; break;
 		case Operand::TYPE_OUTPUT_CONTROL_POINT_ID:				r += input_offset + vOutputControlPointID; break;
 		case Operand::TYPE_INPUT_DOMAIN_POINT:					r += input_offset + vDomain; break;
 		case Operand::TYPE_INPUT_PRIMITIVEID:					r += input_offset + vPrim; break;
-		case Operand::TYPE_INPUT_COVERAGE_MASK:					r += input_offset + vMask; break;
+		case Operand::TYPE_INPUT_COVERAGE_MASK:					r += input_offset + vCoverage; break;
 		case Operand::TYPE_INPUT_GS_INSTANCE_ID:				r += input_offset + vInstanceID; break;
 		case Operand::TYPE_INPUT_THREAD_ID:						r += input_offset + vThreadID; break;
 		case Operand::TYPE_INPUT_THREAD_GROUP_ID:				r += input_offset + vThreadGroupID; break;
@@ -418,17 +542,17 @@ range<stride_iterator<const SimulatorDXBC::Register>> SimulatorDXBC::GetRegFile(
 		case Operand::TYPE_INPUT_FORK_INSTANCE_ID:				r += input_offset + vForkInstanceID; break;
 		case Operand::TYPE_INPUT_JOIN_INSTANCE_ID:				r += input_offset + vJoinInstanceID; break;
 		case Operand::TYPE_INPUT_PATCH_CONSTANT:				r += const_offset + i; stride = sizeof(Register); num = highest_set_index(const_output_mask) + 1; break;
-		case Operand::TYPE_INPUT_CONTROL_POINT:					r += patch_offset + i; stride = sizeof(Register) * (highest_set_index(patch_mask) + 1); num = input_control_points; break;
-		case Operand::TYPE_OUTPUT_CONTROL_POINT:				r += patch_offset + i; stride = sizeof(Register) * (highest_set_index(patch_mask) + 1); num = output_control_points; break;
+		case Operand::TYPE_INPUT_CONTROL_POINT:					r += patch_offset + i; stride = sizeof(Register) * (highest_set_index(patch_mask) + 1); num = num_input; break;
+		case Operand::TYPE_OUTPUT_CONTROL_POINT:				r += patch_offset + i; stride = sizeof(Register) * (highest_set_index(patch_mask) + 1); num = max_output; break;
 		case Operand::TYPE_OUTPUT_DEPTH:						r += output_offset + oDepth; break;
-		case Operand::TYPE_OUTPUT_DEPTH_LESS_EQUAL:				r += output_offset + oDepthLessEqual; break;
-		case Operand::TYPE_OUTPUT_DEPTH_GREATER_EQUAL:			r += output_offset + oDepthGreaterEqual; break;
-		case Operand::TYPE_OUTPUT_COVERAGE_MASK:				r += output_offset + oMask; break;
+//		case Operand::TYPE_OUTPUT_DEPTH_LESS_EQUAL:				r += output_offset + oDepthLessEqual; break;
+//		case Operand::TYPE_OUTPUT_DEPTH_GREATER_EQUAL:			r += output_offset + oDepthGreaterEqual; break;
+		case Operand::TYPE_OUTPUT_COVERAGE_MASK:				r += output_offset + oCoverage; break;
 		case Operand::TYPE_NULL:
 		default:	return none;
 	}
 
-	return make_range_n(strided(r, stride), num);
+	return make_range_n(stride_iterator<void>((void*)r, stride), num);
 }
 
 
@@ -607,16 +731,19 @@ template<typename F, typename...OO> void SimulatorDXBC::operate_vec(bool sat, F 
 //	}
 }
 
-SimulatorDXBC::Resource *SimulatorDXBC::get_resource(const ASMOperand &o) {
+Resource &SimulatorDXBC::get_resource(const ASMOperand &o) {
 	switch (o.type) {
-		case Operand::TYPE_RESOURCE:				return &srv[o.indices[0].index];
-		case Operand::TYPE_UNORDERED_ACCESS_VIEW:	return &uav[o.indices[0].index];
-//		case Operand::TYPE_RASTERIZER:				return &rtv;
-		case Operand::TYPE_THREAD_GROUP_SHARED_MEMORY: return &grp[o.indices[0].index];
-		default:									return 0;
+		case Operand::TYPE_RESOURCE:				return srv[o.indices[0].index];
+		case Operand::TYPE_UNORDERED_ACCESS_VIEW:	return uav[o.indices[0].index];
+//		case Operand::TYPE_RASTERIZER:				return rtv;
+		case Operand::TYPE_THREAD_GROUP_SHARED_MEMORY: return grp[o.indices[0].index];
+		default: {
+			static Resource dummy;
+			return dummy;
+		}
 	}
 }
-SimulatorDXBC::Sampler *SimulatorDXBC::get_sampler(const ASMOperand &o) {
+Sampler *SimulatorDXBC::get_sampler(const ASMOperand &o) {
 	switch (o.type) {
 		case Operand::TYPE_SAMPLER:					return &smp[o.indices[0].index];
 		default:									return 0;
@@ -648,16 +775,37 @@ const SimulatorDXBC::Register& SimulatorDXBC::get_const(const ASMOperand &op) {
 	}
 }
 
-const Opcode *SimulatorDXBC::Run(int max_steps) {
-	const Opcode	*op = ucode;
 
-	while (op < ucode.end() && op->IsDeclaration())
-		op = op->next();
+const void *SimulatorDXBC::Continue(const void *p, int max_steps) {
+	const Opcode	*op = (const Opcode*)p;
 
 	while (op && op < ucode.end() && max_steps--)
 		op = ProcessOp(op);
 
 	return op;
+}
+const void *SimulatorDXBC::Run(int max_steps) {
+	active_stack.clear();
+	active_threads.clear();
+
+	auto r = regs.begin();
+	group_mem.fill(0xcd);
+
+	for (auto &t : threads) {
+		t.reset(r);
+		memset(r, 0xcd, input_offset * sizeof(Register));
+		active_threads.push_back(&t);
+		r += regs_per_thread;
+	}
+	phase		= phNormal;
+	fork_count	= 0;
+	streamptr	= 0;
+
+	const Opcode	*op = ucode;
+	while (op < ucode.end() && op->IsDeclaration())
+		op = op->next();
+
+	return Continue(op, max_steps);
 }
 
 float sampler_address(float v, uint32 s, TextureAddressMode mode) {
@@ -669,232 +817,6 @@ float sampler_address(float v, uint32 s, TextureAddressMode mode) {
 		case TEXTURE_ADDRESS_MODE_CLAMP:		return clamp(v, 0, s - 1);
 		case TEXTURE_ADDRESS_MODE_MIRROR_ONCE:	{ float t = clamp(f, 0, 2); return s * (t < 1 ? t : 2 - t); }
 	}
-}
-
-struct sampler_comparer {
-	ComparisonFunction	comp;
-	float				ref;
-	sampler_comparer(ComparisonFunction _comp, float _ref) : comp(_comp), ref(_ref) {}
-	float	operator()(float f) {
-		switch (comp) {
-			default:
-			case COMPARISON_NEVER:			return 0;
-			case COMPARISON_LESS:			return f < ref;
-			case COMPARISON_EQUAL:			return f == ref;
-			case COMPARISON_LESS_EQUAL:		return f <= ref;
-			case COMPARISON_GREATER:		return f > ref;
-			case COMPARISON_NOT_EQUAL:		return f != ref;
-			case COMPARISON_GREATER_EQUAL:	return f >= ref;
-			case COMPARISON_ALWAYS:			return 1;
-		}
-	}
-};
-
-struct RawTextureReader {
-	memory_block	mem;
-	uint32			tsize, stride, stride2;
-	RawTextureReader(SimulatorDXBC::Resource *t, uint32 _stride) : mem(t ? t->data() : none) {
-		if (t) {
-			if (is_buffer(t->dim)) {
-				tsize	= 1;
-				stride	= _stride ? _stride : t->width;
-				stride2 = 0;
-			} else {
-				tsize	= t->format.Bytes();
-				stride	= dxgi_align(tsize * adjust_size(t->format, t->width));
-				stride2 = t->depth ? stride * adjust_size(t->format, t->height) : 0; 
-			}
-		}
-	}
-	void	*index(uint32 x, uint32 y, uint32 z) {
-		return mem ? (uint8*)mem + stride2 * z + stride * y + x * tsize : (void*)tex_default;
-	}
-};
-
-struct TextureReader : SimulatorDXBC::Resource {
-	struct MIP {
-		uint8	*base;
-		uint32	stride;
-		uint32	stride2;
-		uint8*	row(uint32 y, uint32 z) const { return base + stride2 * z + stride * y; }
-	};
-	uint32			tsize;
-	bool			block;
-	TexelOffset		offset;
-	int				maxlod;
-	MIP				mips[16];
-
-	TextureReader(SimulatorDXBC::Resource *t, uint8 swizzle, TexelOffset offset = 0);
-
-	bool	check(uint32 x, uint32 y, uint32 z, uint32 mip) {
-		return p && (is_buffer(dim) ? x < height : mip <= maxlod && x < max(width >> mip, 1) && y < max(height >> mip, 1));
-	}
-
-	DXGI_Components	index(uint32 x, uint32 y, uint32 z, uint32 mip) {
-		if (is_buffer(dim))
-			return DXGI_Components(format,
-				!p ? 0 : mips[0].row(y, z) + x * tsize
-			);
-
-		return DXGI_Components(format,
-			!p ? 0 : block
-			? mips[mip].row(y >> 2, z) + (((x & ~3) + (y & 3)) << 2) + (x & 3)
-			: mips[mip].row(y, z) + x * tsize
-		);
-	}
-	DXGI_Components	checked_index(uint32 x, uint32 y, uint32 z, uint32 mip) {
-		return check(x, y, z, mip) ? index(x, y, z, mip) : DXGI_Components(DXGI_COMPONENTS(format.Layout(), format.Type(), DXGI_COMPONENTS::ALL0), this);
-	}
-
-	float	lod(const float4p &ddx, const float4p &ddy);
-	float	biased_lod(SimulatorDXBC::Sampler *samp, const float4p &ddx, const float4p &ddy) {
-		return lod(ddx, ddy) + (samp ? samp->bias : 0);
-	}
-	float	clamped_lod(SimulatorDXBC::Sampler *samp, const float4p &ddx, const float4p &ddy) {
-		return clamp(biased_lod(samp, ddx, ddy), samp->minlod, min(samp->maxlod, maxlod));
-	}
-
-	float4	sample(float x, float y, float z, uint32 mip, bool bi);
-
-	float4	sample(SimulatorDXBC::Sampler *samp, const float4p &i, float lod);
-	float	sample_c(SimulatorDXBC::Sampler *samp, const float4p &i, float ref, float lod);
-	float4	gather4(SimulatorDXBC::Sampler *samp, const float4p &i, float lod);
-	float4	gather4_c(SimulatorDXBC::Sampler *samp, const float4p &i, float ref, float lod);
-};
-
-TextureReader::TextureReader(SimulatorDXBC::Resource *t, uint8 swizzle, TexelOffset offset) : SimulatorDXBC::Resource(*t), block(format.IsBlock()), offset(offset) {
-	format.chans = Rearrange((DXGI_COMPONENTS::SWIZZLE)format.chans, Swizzle(
-		DXGI_COMPONENTS::CHANNEL((swizzle >> 0) & 3),
-		DXGI_COMPONENTS::CHANNEL((swizzle >> 2) & 3),
-		DXGI_COMPONENTS::CHANNEL((swizzle >> 4) & 3),
-		DXGI_COMPONENTS::CHANNEL((swizzle >> 6) & 3)
-	));
-
-	int	dbl		= format.layout == DXGI_COMPONENTS::BC1;
-
-	maxlod		= t->mips - 1;
-	tsize		= format.Bytes() << dbl;
-
-	if (is_buffer(dim)) {
-		mips[0].base		= *this;
-		mips[0].stride		= 0;
-		mips[0].stride2		= 0;
-	} else {
-		uint8		*base	= *this;
-		for (int i = 0; i <= maxlod; i++) {
-			mips[i].base	= (uint8*)((uintptr_t)base << dbl);
-			mips[i].stride	= dxgi_align(mip_stride(format, width, i));
-			mips[i].stride2	= uses_z(dim) ? mips[i].stride * mip_size(format, height, i) : 0;
-			base			+= mips[i].stride2 * max(depth >> i, 1);
-		}
-	}
-}
-
-float TextureReader::lod(const float4p &ddx, const float4p &ddy) {
-	float	dudx	= ddx.x * width;
-	float	dudy	= ddy.x * width;
-	float	dvdx	= ddx.y * height;
-	float	dvdy	= ddy.y * height;
-	float	d		= max(square(dudx) + square(dvdx), square(dudy) + square(dvdy));
-	return 0.5f * log2(d);
-}
-
-float4 TextureReader::sample(float x, float y, float z, uint32 mip, bool bi) {
-	float	s = iorf::exp2(-mip).f();
-	x *= s;
-	y *= s;
-	z *= s;
-
-	uint32	ix	= uint32(x), iy = uint32(y), iz = uint32(z);
-	float4	r0	= index(ix, iy, iz, mip);
-
-	if (!bi)
-		return r0;
-
-	float4	r1	= index(ix + 1, y, z, mip);
-	float4	r2	= index(ix, iy + 1, z, mip);
-	float4	r3	= index(ix + 1, iy + 1, z, mip);
-	float	fx	= frac(x), fy = frac(y);
-	return (1 - fy) * ((1 - fx) * r0 + fx * r1) + fy * ((1 - fx) * r2 + fx * r3);
-}
-
-float4 TextureReader::sample(SimulatorDXBC::Sampler *samp, const float4p &i, float lod) {
-	if (!samp) {
-		return index(
-			uint32(sampler_address(i.x * width  + offset.x, width,  TEXTURE_ADDRESS_MODE_WRAP)),
-			uint32(sampler_address(i.y * height + offset.y, height, TEXTURE_ADDRESS_MODE_WRAP)),
-			uint32(sampler_address(i.z * depth  + offset.z, depth,  TEXTURE_ADDRESS_MODE_WRAP)),
-			0
-		);
-	}
-
-	float	x = sampler_address(i.x * width  + offset.x - .5f, width,  samp->address_u);
-	float	y = sampler_address(i.y * height + offset.y - .5f, height, samp->address_v);
-	float	z = sampler_address(i.z * depth  + offset.z - .5f, depth,  samp->address_w);
-
-	if (lod > maxlod)
-		return sample(x, y, z, maxlod, samp->filter.min == TextureFilterMode::LINEAR);
-
-	lod			= clamp(lod, samp->minlod, samp->maxlod);
-	float	fl	= frac(lod);
-
-	float4	r	= sample(x, y, z, uint32(lod), samp->filter.mag == TextureFilterMode::LINEAR);
-	if (samp->filter.mip == TextureFilterMode::POINT || fl == 0)
-		return r;
-
-	float4	r2	= sample(x, y, z, uint32(lod) + 1, samp->filter.mag == TextureFilterMode::LINEAR);
-	return (1 - fl) * r + fl * r2;
-}
-
-float TextureReader::sample_c(SimulatorDXBC::Sampler *samp, const float4p &i, float ref, float lod) {
-	sampler_comparer	c(samp->comparison, ref);
-
-	float	x = sampler_address(i.x * width  + offset.x - .5f, width,  samp->address_u);
-	float	y = sampler_address(i.y * height + offset.y - .5f, height, samp->address_v);
-	float	z = sampler_address(i.z * depth  + offset.z - .5f, depth,  samp->address_w);
-
-	uint32	ix	= uint32(x), iy = uint32(y), iz = uint32(z), im = uint32(lod);
-	float	r	= c(index(ix, iy, iz, im));
-
-	if (samp->filter.mag != TextureFilterMode::POINT) {
-		float	r1	= c(index(ix + 1, y, z, im));
-		float	r2	= c(index(ix, iy + 1, z, im));
-		float	r3	= c(index(ix + 1, iy + 1, z, im));
-		
-		float	fx = frac(x), fy = frac(y);
-		r = (1 - fy) * ((1 - fx) * r + fx * r1) + fy * ((1 - fx) * r2 + fx * r3);
-	}
-	return r;
-}
-
-float4 TextureReader::gather4(SimulatorDXBC::Sampler *samp, const float4p &i, float lod) {
-	uint32	ix	= uint32(sampler_address(i.x * width  + offset.x - .5f, width,  samp->address_u));
-	uint32	iy	= uint32(sampler_address(i.y * height + offset.y - .5f, height, samp->address_v));
-	uint32	iz	= uint32(sampler_address(i.z * depth  + offset.z - .5f, depth,  samp->address_w));
-	uint32	im	= uint32(lod);
-
-	return {
-		(float)index(ix, iy, iz, im),
-		(float)index(ix + 1, iy, iz, im),
-		(float)index(ix, iy + 1, iz, im),
-		(float)index(ix + 1, iy + 1, iz, im)
-	};
-}
-
-float4 TextureReader::gather4_c(SimulatorDXBC::Sampler *samp, const float4p &i, float ref, float lod) {
-	sampler_comparer	c(samp->comparison, ref);
-
-	uint32	ix	= uint32(sampler_address(i.x * width  + offset.x - .5f, width,  samp->address_u));
-	uint32	iy	= uint32(sampler_address(i.y * height + offset.y - .5f, height, samp->address_v));
-	uint32	iz	= uint32(sampler_address(i.z * depth  + offset.z - .5f, depth,  samp->address_w));
-	uint32	im	= uint32(lod);
-
-	return {
-		c(index(ix, iy, iz, im)),
-		c(index(ix + 1, iy, iz, im)),
-		c(index(ix, iy + 1, iz, im)),
-		c(index(ix + 1, iy + 1, iz, im))
-	};
 }
 
 int CountCases(const Opcode *op, const Opcode *end, bool &loop) {
@@ -1130,7 +1052,7 @@ const Opcode *SimulatorDXBC::ProcessOp(const Opcode *op) {
 			active_threads.clear();
 			
 			auto	*t = threads.begin();
-			for (int i = 0; i < output_control_points && t < threads.end(); i++, t++) {
+			for (int i = 0; i < max_output && t < threads.end(); i++, t++) {
 				(uint32&)t->regs[input_offset + vOutputControlPointID] = i;
 				active_threads.push_back(t);
 			}
@@ -1400,13 +1322,13 @@ const Opcode *SimulatorDXBC::ProcessOp(const Opcode *op) {
 
 									  
 		case OPCODE_IMM_ATOMIC_ALLOC: {
-			auto	*res = get_resource(ops[0]);
-			operate_vec(sat, [res](ThreadState &ts, array_vec<uint32, 4> i) { uint32 x = res->counter++; i = x; }, ops[1]);
+			auto&	res = get_resource(ops[0]);
+			operate_vec(sat, [res](ThreadState &ts, array_vec<uint32, 4> i) mutable { uint32 x = res.counter++; i = x; }, ops[1]);
 			break;
 		}
 		case OPCODE_IMM_ATOMIC_CONSUME: {
-			auto	*res = get_resource(ops[0]);
-			operate_vec(sat, [res](ThreadState &ts, array_vec<uint32, 4> i) { uint32 x = --res->counter; i = x; }, ops[1]);
+			auto&	res = get_resource(ops[0]);
+			operate_vec(sat, [res](ThreadState &ts, array_vec<uint32, 4> i) mutable { uint32 x = --res.counter; i = x; }, ops[1]);
 			break;
 		}
 
@@ -1435,45 +1357,45 @@ const Opcode *SimulatorDXBC::ProcessOp(const Opcode *op) {
 
 // TEXTURE SAMPLE
 		case OPCODE_LOD: {
-			TextureReader			tex(get_resource(ops[2]), ops[2].swizzle_bits, tex_offset);
-			SimulatorDXBC::Sampler	*samp = get_sampler(ops[3]);
-			operate_vec(sat, [&tex, samp](ThreadState &ts, float4p &r, float4p ddx, float4p ddy) { r.y = tex.biased_lod(samp, ddx, ddy); r.x = clamp(r.y, samp->minlod, min(samp->maxlod, tex.maxlod)); r.z = r.w = 0; }, ops[0], ddx(ops[1]), ddy(ops[1]));
+			operate_vec(sat, [tex = TextureReader(get_resource(ops[2]), ops[2].swizzle_bits, tex_offset), samp = get_sampler(ops[3])](ThreadState &ts, float4p &r, float4p ddx, float4p ddy) {
+				r.y = tex.biased_lod(samp, ddx.xyz, ddy.xyz); r.x = clamp(r.y, samp->min_lod, min(samp->max_lod, tex.max_lod)); r.z = r.w = 0;
+			}, ops[0], ddx(ops[1]), ddy(ops[1]));
 			break;
 		}
 		case OPCODE_SAMPLE: {
-			TextureReader			tex(get_resource(ops[2]), ops[2].swizzle_bits, tex_offset);
-			SimulatorDXBC::Sampler	*samp = get_sampler(ops[3]);
-			operate_vec(sat, [&tex, samp](ThreadState &ts, float4p &r, float4p i, float4p ddx, float4p ddy) { r = tex.sample(samp, i, tex.biased_lod(samp, ddx, ddy)); }, ops[0], ops[1], ddx(ops[1]), ddy(ops[1]));
+			operate_vec(sat, [tex = TextureReader(get_resource(ops[2]), ops[2].swizzle_bits, tex_offset), samp = get_sampler(ops[3])](ThreadState &ts, float4p &r, float4p i, float4p ddx, float4p ddy) {
+				r = tex.samplef(samp, i.xyz, tex.biased_lod(samp, ddx.xyz, ddy.xyz));
+			}, ops[0], ops[1], ddx(ops[1]), ddy(ops[1]));
 			break;
 		}
 		case OPCODE_SAMPLE_L: {		//lod
-			TextureReader			tex(get_resource(ops[2]), ops[2].swizzle_bits, tex_offset);
-			SimulatorDXBC::Sampler	*samp = get_sampler(ops[3]);
-			operate_vec(sat, [&tex, samp](ThreadState &ts, float4p &r, float4p i, float lod) { r = tex.sample(samp, i, lod); }, ops[0], ops[1], ops[2]);
+			operate_vec(sat, [tex = TextureReader(get_resource(ops[2]), ops[2].swizzle_bits, tex_offset), samp = get_sampler(ops[3])](ThreadState &ts, float4p &r, float4p i, float lod) {
+				r = tex.samplef(samp, i.xyz, lod);
+			}, ops[0], ops[1], ops[2]);
 			break;
 		}
 		case OPCODE_SAMPLE_B: {		//bias
-			TextureReader			tex(get_resource(ops[2]), ops[2].swizzle_bits, tex_offset);
-			SimulatorDXBC::Sampler	*samp = get_sampler(ops[3]);
-			operate_vec(sat, [&tex, samp](ThreadState &ts, float4p &r, float4p i, float4p ddx, float4p ddy, float bias) { r = tex.sample(samp, i, tex.biased_lod(samp, ddx, ddy) + bias); }, ops[0], ops[1], ddx(ops[1]), ddy(ops[1]), ops[4]);
+			operate_vec(sat, [tex = TextureReader(get_resource(ops[2]), ops[2].swizzle_bits, tex_offset), samp = get_sampler(ops[3])](ThreadState &ts, float4p &r, float4p i, float4p ddx, float4p ddy, float bias) {
+				r = tex.samplef(samp, i.xyz, tex.biased_lod(samp, ddx.xyz, ddy.xyz) + bias);
+			}, ops[0], ops[1], ddx(ops[1]), ddy(ops[1]), ops[4]);
 			break;
 		}
 		case OPCODE_SAMPLE_D: {		//derivs
-			TextureReader			tex(get_resource(ops[2]), ops[2].swizzle_bits, tex_offset);
-			SimulatorDXBC::Sampler	*samp = get_sampler(ops[3]);
-			operate_vec(sat, [&tex, samp](ThreadState &ts, float4p &r, float4p i, float4p ddx, float4p ddy) { r = tex.sample(samp, i, tex.biased_lod(samp, ddx, ddy)); }, ops[0], ops[1], ops[4], ops[5]);
+			operate_vec(sat, [tex = TextureReader(get_resource(ops[2]), ops[2].swizzle_bits, tex_offset), samp = get_sampler(ops[3])](ThreadState &ts, float4p &r, float4p i, float4p ddx, float4p ddy) {
+				r = tex.samplef(samp, i.xyz, tex.biased_lod(samp, ddx.xyz, ddy.xyz));
+			}, ops[0], ops[1], ops[4], ops[5]);
 			break;
 		}
 		case OPCODE_SAMPLE_C: {		//comparison
-			TextureReader			tex(get_resource(ops[2]), ops[2].swizzle_bits, tex_offset);
-			SimulatorDXBC::Sampler	*samp = get_sampler(ops[3]);
-			operate_vec(sat, [&tex, samp](ThreadState &ts, float &r, float4p i, float4p ddx, float4p ddy, float ref) { r = tex.sample_c(samp, i, ref, tex.biased_lod(samp, ddx, ddy)); }, ops[0], ops[1], ddx(ops[1]), ddy(ops[1]), ops[4]);
+			operate_vec(sat, [tex = TextureReader(get_resource(ops[2]), ops[2].swizzle_bits, tex_offset), samp = get_sampler(ops[3])](ThreadState &ts, float &r, float4p i, float4p ddx, float4p ddy, float ref) {
+				r = tex.samplec(samp, i.xyz, tex.biased_lod(samp, ddx.xyz, ddy.xyz), ref);
+			}, ops[0], ops[1], ddx(ops[1]), ddy(ops[1]), ops[4]);
 			break;
 		}
 		case OPCODE_SAMPLE_C_LZ: {	//comparison, level 0
-			TextureReader			tex(get_resource(ops[2]), ops[2].swizzle_bits, tex_offset);
-			SimulatorDXBC::Sampler	*samp = get_sampler(ops[3]);
-			operate_vec(sat, [&tex, samp](ThreadState &ts, float &r, float4p i, float ref) { r = tex.sample_c(samp, i, ref, 0); }, ops[0], ops[1], ops[4]);
+			operate_vec(sat, [tex = TextureReader(get_resource(ops[2]), ops[2].swizzle_bits, tex_offset), samp = get_sampler(ops[3])](ThreadState &ts, float &r, float4p i, float ref) {
+				r = tex.samplec(samp, i.xyz, 0, ref);
+			}, ops[0], ops[1], ops[4]);
 			break;
 		}
 
@@ -1488,25 +1410,23 @@ const Opcode *SimulatorDXBC::ProcessOp(const Opcode *op) {
 //		case OPCODE_CHECK_ACCESS_FULLY_MAPPED:
 
 		case OPCODE_GATHER4: {
-			TextureReader			tex(get_resource(ops[2]), ops[2].swizzle_bits, tex_offset);
-			SimulatorDXBC::Sampler	*samp = get_sampler(ops[3]);
-			operate_vec(sat, [&tex, samp](ThreadState &ts, float4p &r, float4p i, float4p ddx, float4p ddy) { r = tex.gather4(samp, i, tex.biased_lod(samp, ddx, ddy)); }, ops[0], ops[1], ddx(ops[1]), ddy(ops[1]));
+			operate_vec(sat, [tex = TextureReader(get_resource(ops[2]), ops[2].swizzle_bits, tex_offset), samp = get_sampler(ops[3])](ThreadState &ts, float4p &r, float4p i, float4p ddx, float4p ddy) {
+				r = tex.gather4(samp, i.xyz, tex.biased_lod(samp, ddx.xyz, ddy.xyz));
+			}, ops[0], ops[1], ddx(ops[1]), ddy(ops[1]));
 			break;
 		}
 		case OPCODE_GATHER4_C: {
-			TextureReader			tex(get_resource(ops[2]), ops[2].swizzle_bits, tex_offset);
-			SimulatorDXBC::Sampler	*samp = get_sampler(ops[3]);
-			operate_vec(sat, [&tex, samp](ThreadState &ts, float4p &r, float4p i, float4p ddx, float4p ddy, float ref) { r = tex.gather4_c(samp, i, tex.biased_lod(samp, ddx, ddy), ref); }, ops[0], ops[1], ddx(ops[1]), ddy(ops[1]), ops[4]);
+			operate_vec(sat, [tex = TextureReader(get_resource(ops[2]), ops[2].swizzle_bits, tex_offset), samp = get_sampler(ops[3])](ThreadState &ts, float4p &r, float4p i, float4p ddx, float4p ddy, float ref) {
+				r = tex.gather4c(samp, i.xyz, tex.biased_lod(samp, ddx.xyz, ddy.xyz), ref);
+			}, ops[0], ops[1], ddx(ops[1]), ddy(ops[1]), ops[4]);
 			break;
 		}
 		case OPCODE_GATHER4_PO: {
-			TextureReader			tex(get_resource(ops[3]), ops[3].swizzle_bits);
-			SimulatorDXBC::Sampler	*samp = get_sampler(ops[4]);
-			operate_vec(sat, [&tex, samp](ThreadState &ts, float4p &r, float4p i, float4p ddx, float4p ddy, array_vec<int32, 4> offset) {
+			operate_vec(sat, [tex = TextureReader(get_resource(ops[3]), ops[3].swizzle_bits, tex_offset), samp = get_sampler(ops[4])](ThreadState &ts, float4p &r, float4p i, float4p ddx, float4p ddy, array_vec<int32, 4> offset) {
 				uint32	ix	= uint32(sampler_address(i.x * tex.width  + offset.x - .5f, tex.width,  samp->address_u));
 				uint32	iy	= uint32(sampler_address(i.y * tex.height + offset.y - .5f, tex.height, samp->address_v));
 				uint32	iz	= uint32(sampler_address(i.z * tex.depth  + offset.z - .5f, tex.depth,  samp->address_w));
-				uint32	im	= uint32(tex.clamped_lod(samp, ddx, ddy));
+				uint32	im	= uint32(tex.clamped_lod(samp, ddx.xyz, ddy.xyz));
 				r.x = tex.index(ix, iy, iz, im);
 				r.y = tex.index(ix + 1, iy, iz, im);
 				r.z = tex.index(ix, iy + 1, iz, im);
@@ -1515,14 +1435,12 @@ const Opcode *SimulatorDXBC::ProcessOp(const Opcode *op) {
 			break;
 		}
 		case OPCODE_GATHER4_PO_C: {
-			TextureReader			tex(get_resource(ops[3]), ops[3].swizzle_bits);
-			SimulatorDXBC::Sampler	*samp = get_sampler(ops[4]);
-			operate_vec(sat, [&tex, samp](ThreadState &ts, float4p &r, float4p i, float4p ddx, float4p ddy, array_vec<int32, 4> offset, float ref) {
-				sampler_comparer	c(samp->comparison, ref);
+			operate_vec(sat, [tex = TextureReader(get_resource(ops[3]), ops[3].swizzle_bits, tex_offset), samp = get_sampler(ops[4])](ThreadState &ts, float4p &r, float4p i, float4p ddx, float4p ddy, array_vec<int32, 4> offset, float ref) {
+				Sampler::Comparer	c(samp->comparison_func, ref);
 				uint32	ix	= uint32(sampler_address(i.x * tex.width  + offset.x - .5f, tex.width,  samp->address_u));
 				uint32	iy	= uint32(sampler_address(i.y * tex.height + offset.y - .5f, tex.height, samp->address_v));
 				uint32	iz	= uint32(sampler_address(i.z * tex.depth  + offset.z - .5f, tex.depth,  samp->address_w));
-				uint32	im	= uint32(tex.clamped_lod(samp, ddx, ddy));
+				uint32	im	= uint32(tex.clamped_lod(samp, ddx.xyz, ddy.xyz));
 				r.x = c(tex.index(ix, iy, iz, im));
 				r.y = c(tex.index(ix + 1, iy, iz, im));
 				r.z = c(tex.index(ix, iy + 1, iz, im));
@@ -1536,40 +1454,39 @@ const Opcode *SimulatorDXBC::ProcessOp(const Opcode *op) {
 //		case OPCODE_GATHER4_PO_C_FEEDBACK:
 
 		case OPCODE_BUFINFO: {
-			SimulatorDXBC::Resource	*res = get_resource(ops[1]);
-			operate_vec(sat, [res](ThreadState &ts, point4 &r) {
-				r.x = r.y = r.z = r.w = res->height;
+			operate_vec(sat, [res = get_resource(ops[1])](ThreadState &ts, point4 &r) {
+				r.x = r.y = r.z = r.w = res.height;
             }, ops[0]);
 			break;
 		}
 		case OPCODE_RESINFO: {
-			SimulatorDXBC::Resource	*res = get_resource(ops[2]);
+			Resource	&res = get_resource(ops[2]);
 			switch (op->ResinfoReturn) {
 				case RETTYPE_FLOAT:
 					operate_vec(sat, [res](ThreadState &ts, float4p &r, uint32 mip) {
-						int	dim = dimensions(res->dim);
-						r.x = max(res->width >> mip, 1);
-						r.y = dim > 1 ? max(res->height >> mip, 1) : 0;
-						r.z = dim == 3 ? max(res->depth >> mip, 1) : is_array(res->dim) ? res->depth : 0;
-						r.w = res->mips;
+						int	dim = dimensions(res.dim);
+						r.x = max(res.width >> mip, 1);
+						r.y = dim > 1 ? max(res.height >> mip, 1) : 0;
+						r.z = dim == 3 ? max(res.depth >> mip, 1) : is_array(res.dim) ? res.depth : 0;
+						r.w = res.mips;
 					}, ops[0], ops[1]);
 					break;
 				case RETTYPE_RCPFLOAT:
 					operate_vec(sat, [res](ThreadState &ts, float4p &r, uint32 mip) {
-						int	dim = dimensions(res->dim);
-						r.x = 1.f / max(res->width >> mip, 1);
-						r.y = dim > 1 ? 1.f / max(res->height >> mip, 1) : 0;
-						r.z = dim == 3 ? 1.f / max(res->depth >> mip, 1) : is_array(res->dim) ? 1.f / res->depth : 0;
-						r.w = 1.f / res->mips;
+						int	dim = dimensions(res.dim);
+						r.x = 1.f / max(res.width >> mip, 1);
+						r.y = dim > 1 ? 1.f / max(res.height >> mip, 1) : 0;
+						r.z = dim == 3 ? 1.f / max(res.depth >> mip, 1) : is_array(res.dim) ? 1.f / res.depth : 0;
+						r.w = 1.f / res.mips;
 					}, ops[0], ops[1]);
 					break;
 				case RETTYPE_UINT:
 					operate_vec(sat, [res](ThreadState &ts, point4 &r, uint32 mip) {
-						int	dim = dimensions(res->dim);
-						r.x = max(res->width >> mip, 1);
-						r.y = dim > 1 ? max(res->height >> mip, 1) : 0;
-						r.z = dim == 3 ? max(res->depth >> mip, 1) : is_array(res->dim) ? res->depth : 0;
-						r.w = res->mips;
+						int	dim = dimensions(res.dim);
+						r.x = max(res.width >> mip, 1);
+						r.y = dim > 1 ? max(res.height >> mip, 1) : 0;
+						r.z = dim == 3 ? max(res.depth >> mip, 1) : is_array(res.dim) ? res.depth : 0;
+						r.w = res.mips;
 					}, ops[0], ops[1]);
 					break;
 			}
@@ -1626,259 +1543,3 @@ const Opcode *SimulatorDXBC::ProcessOp(const Opcode *op) {
 	}
 	return op->next();
 }
-
-//-----------------------------------------------------------------------------
-//	SimulatorDXBC::Resource
-//-----------------------------------------------------------------------------
-
-void SimulatorDXBC::Resource::init(ResourceDimension _dim, DXGI_COMPONENTS _format, uint32 _width, uint32 _height, uint32 _depth, uint32 _mips) {
-	dim		= _dim;
-	format	= _format;
-	width	= _width;
-	height	= _height;
-	depth	= _depth;
-	mips	= _mips ? _mips : log2(max(_width, _height));
-
-	switch (dim) {
-		case RESOURCE_DIMENSION_BUFFER:
-		case RESOURCE_DIMENSION_RAW_BUFFER:
-		case RESOURCE_DIMENSION_STRUCTURED_BUFFER:
-			n	= width * height;
-			return;
-		case RESOURCE_DIMENSION_TEXTURE1D:
-			n	= size1D(format, width, mips);
-			break;
-		case RESOURCE_DIMENSION_TEXTURE2D:
-			n	= size2D(format, width, height, mips);
-			break;
-		case RESOURCE_DIMENSION_TEXTURE3D:
-			n	= size3D(format, width, height, depth, mips);
-			break;
-		case RESOURCE_DIMENSION_TEXTURE1DARRAY:
-			n	= size1D(format, width, mips) * depth;
-			break;
-		case RESOURCE_DIMENSION_TEXTURE2DARRAY:
-		case RESOURCE_DIMENSION_TEXTURECUBEARRAY:
-		case RESOURCE_DIMENSION_TEXTURECUBE:
-			n	= size2D(format, width, height, mips) * depth;
-			break;
-//		case RESOURCE_DIMENSION_TEXTURE2DMS:
-//		case RESOURCE_DIMENSION_TEXTURE2DMSARRAY:
-		default:
-			break;
-	}
-	n -= dxgi_padding(mip_stride(format, width, mips - 1));
-}
-
-void SimulatorDXBC::Resource::set_mips(uint32 first, uint32 num) {
-	size_t	offset, size2;
-	switch (dim) {
-		case RESOURCE_DIMENSION_TEXTURE1D:
-			offset	= size1D(format, width, first);
-			width	= mip_size(format, width, first);
-			size2	= size1D(format, width, num);
-			break;
-		case RESOURCE_DIMENSION_TEXTURE2D:
-			offset	= size2D(format, width, height, first);
-			width	= mip_size(format, width, first);
-			height	= mip_size(format, height, first);
-			size2	= size2D(format, width, height, num);
-			break;
-		case RESOURCE_DIMENSION_TEXTURE3D:
-			offset	= size3D(format, width, height, depth, first);
-			width	= mip_size(format, width, first);
-			height	= mip_size(format, height, first);
-			depth	= max(depth >> first, 1);
-			size2	= size3D(format, width, height, depth, num);
-			break;
-		case RESOURCE_DIMENSION_TEXTURE1DARRAY:
-			offset	= size1D(format, width, mips) * depth;
-			width	= mip_size(format, width, first);
-			size2	= size1D(format, width, num);
-			break;
-		case RESOURCE_DIMENSION_TEXTURE2DARRAY:
-		case RESOURCE_DIMENSION_TEXTURECUBEARRAY:
-		case RESOURCE_DIMENSION_TEXTURECUBE:
-			offset	= size2D(format, width, height, first) * depth;
-			width	= mip_size(format, width, first);
-			height	= mip_size(format, height, first);
-			size2	= size2D(format, width, height, num);
-			break;
-//		case RESOURCE_DIMENSION_TEXTURE2DMS:
-//		case RESOURCE_DIMENSION_TEXTURE2DMSARRAY:
-		default:
-			return;
-	}
-
-	p	= (uint8*)p + offset;
-	n	= size2 - dxgi_padding(mip_stride(format, width, num - 1));
-	mips	= num;
-}
-
-void SimulatorDXBC::Resource::set_slices(uint32 first, uint32 num) {
-	size_t	stride2	= size2D(format, width, height, 1);
-	p	= (uint8*)p + stride2 * first;
-	n	= stride2 * num  - dxgi_padding(mip_stride(format, width, mips - 1));
-	depth	= num;
-}
-
-void SimulatorDXBC::Resource::set_sub(uint32 sub) {
-	uint32	mip		= sub % mips;
-	uint32	slice	= (sub / mips) % depth;
-	set_mips(mip, 1);
-	set_slices(slice, 1);
-}
-
-//-----------------------------------------------------------------------------
-//	DeclReader
-//-----------------------------------------------------------------------------
-
-const Opcode *DeclReader::Process(const Opcode *op) {
-	if (Decls::Process(op))
-		return op->next();
-
-	const uint32	*p		= op->operands();
-	switch (op->Op()) {
-		case OPCODE_DCL_CONSTANT_BUFFER:
-			cb.emplace_back(ASMOperand(p), op->AccessPattern);
-			break;
-
-		case OPCODE_DCL_INPUT:
-			inputs.emplace_back(ASMOperand(p));
-			break;
-
-		case OPCODE_DCL_INDEXABLE_TEMP: {
-			uint32	tempReg		= *p++;
-			uint32	numTemps	= *p++;
-			uint32	tempComponentCount = *p++;
-			break;
-		}
-		case OPCODE_DCL_OUTPUT:
-			outputs.emplace_back(ASMOperand(p));
-			break;
-
-		case OPCODE_DCL_MAX_OUTPUT_VERTEX_COUNT:
-			max_output = *p++;
-			break;
-
-		case OPCODE_DCL_INPUT_SIV:
-		case OPCODE_DCL_INPUT_SGV:
-		case OPCODE_DCL_INPUT_PS_SIV:
-		case OPCODE_DCL_INPUT_PS_SGV: {
-			ASMOperand operand(p);
-			inputs.emplace_back(operand, (SystemValue)*p++);
-			break;
-		}
-		case OPCODE_DCL_OUTPUT_SIV:
-		case OPCODE_DCL_OUTPUT_SGV: {
-			ASMOperand operand(p);
-			SystemValue	sv = (SystemValue)*p++;
-			new (outputs) InputOutput(operand, (SystemValue)*p++);
-			break;
-		}
-		case OPCODE_DCL_STREAM: {
-			ASMOperand operand(p);
-			break;
-		}
-		case OPCODE_DCL_SAMPLER:
-			smp.emplace_back(ASMOperand(p), (SamplerMode)op->SamplerMode);
-			break;
-		case OPCODE_DCL_RESOURCE: {
-			ASMOperand operand(p);
-			srv.emplace_back(operand, (ResourceDimension)op->ResourceDim, ResourceReturnType(*p++), op->SampleCount);
-			break;
-		}
-		case OPCODE_DCL_INPUT_PS: {
-			ASMOperand operand(p);
-			auto	&i	= inputs.emplace_back(operand);
-			i.interp	= op->InterpolationMode;
-			break;
-		}
-		case OPCODE_DCL_INDEX_RANGE: {
-			ASMOperand operand(p);
-			uint32	i = *p++;
-			break;
-		}
-		case OPCODE_DCL_THREAD_GROUP_SHARED_MEMORY_RAW: {
-			ASMOperand operand(p);
-			uint32	i = *p++;
-			break;
-		}
-		case OPCODE_DCL_THREAD_GROUP_SHARED_MEMORY_STRUCTURED: {
-			ASMOperand operand(p);
-			uint32	stride	= *p++;
-			uint32	count	= *p++;
-			break;
-		}
-		case OPCODE_DCL_UNORDERED_ACCESS_VIEW_RAW:
-			uav.emplace_back(ASMOperand(p), RESOURCE_DIMENSION_UNKNOWN, 0, 0);
-			break;
-
-		case OPCODE_DCL_RESOURCE_RAW:
-			srv.emplace_back(ASMOperand(p), RESOURCE_DIMENSION_UNKNOWN, 0, 0);
-			break;
-
-		case OPCODE_DCL_UNORDERED_ACCESS_VIEW_STRUCTURED: {
-			ASMOperand operand(p);
-			uav.emplace_back(operand, RESOURCE_DIMENSION_UNKNOWN, 0, *p++);
-			break;
-		}
-		case OPCODE_DCL_RESOURCE_STRUCTURED: {
-			ASMOperand operand(p);
-			srv.emplace_back(operand, RESOURCE_DIMENSION_UNKNOWN, 0, *p++);
-			break;
-		}
-		case OPCODE_DCL_UNORDERED_ACCESS_VIEW_TYPED: {
-			ASMOperand operand(p);
-			uav.emplace_back(operand, (ResourceDimension)op->ResourceDim, ResourceReturnType(*p++), op->SampleCount);
-			break;
-		}
-		case OPCODE_DCL_FUNCTION_BODY: {
-			uint32	i = *p++;
-			break;
-		}
-		case OPCODE_DCL_FUNCTION_TABLE: {
-			uint32 functionTable	= *p++;
-			uint32 TableLength		= *p++;
-			for (uint32 i = 0; i < TableLength; i++) {
-				uint32	j = *p++;
-			}
-			break;
-		}
-		case OPCODE_DCL_INTERFACE: {
-			uint32	interfaceID = *p++;
-			uint32	numTypes	= *p++;
-			DeclarationCount CountToken = (DeclarationCount&)*p++;
-			break;
-		}
-		case OPCODE_HS_DECLS:
-			break;
-
-		case OPCODE_CUSTOMDATA: {
-			CustomDataClass customClass = (CustomDataClass)op->custom.Class;
-			uint32 customDataLength = *p++;			// DWORD length including token0 and this length token
-			ISO_ASSERT(customDataLength >= 2);
-
-			switch (customClass) {
-				case CUSTOMDATA_DCL_IMMEDIATE_CONSTANT_BUFFER: {
-					uint32 dataLength = customDataLength - 2;
-					ISO_ASSERT(dataLength % 4 == 0);
-					break;
-				}
-
-				default:
-					return 0;
-			}
-			break;
-		}
-		default:
-			return 0;
-	}
-	return op->next();
-}
-
-DeclReader::DeclReader(const memory_block &ucode) {
-	for (const Opcode *op = ucode; op;)
-		op = Process(op);
-}
-

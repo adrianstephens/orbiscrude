@@ -1,8 +1,15 @@
 #ifndef	DCT_H
 #define	DCT_H
 
+#define USE_VEC
+
 #include "base/defs.h"
 #include "base/maths.h"
+
+#ifdef USE_VEC
+#include "base/vector.h"
+#endif
+
 
 namespace iso {
 
@@ -149,6 +156,11 @@ template<typename T, int BITS> struct dct_consts {
 	static inline T round(T2 x) {
 		return round_pow2(x, BITS);
 	}
+#ifdef USE_VEC
+	template<int N> static inline auto round(vec<T2, N> x) {
+		return to<T>(round_pow2(x, BITS));
+	}
+#endif
 	static inline int result(T x, int bits) {
 		return round_pow2(x, BITS - bits);
 	}
@@ -157,6 +169,11 @@ template<typename T, int BITS> struct dct_consts {
 template<> inline float dct_consts<float,0>::round(float x) {
 	return x;
 }
+//#ifdef USE_VEC
+//template<> inline auto dct_consts<float,0>::round(vec<float, N> x) {
+//	return x;
+//}
+//#endif
 template<> inline int dct_consts<float,0>::result(float x, int bits) {
 	return int(x * (1 << bits) + 0.5f);
 }
@@ -225,13 +242,23 @@ template<typename T, int BITS> struct dct<T, BITS, 4> {
 		s2 = s1 - s3 + s6;
 		s1 = K::sinpi_3_9_sqrt2 * s7;
 
-		// 1-D transform scaling factor is sqrt(2)
 		output[0] = K::round(s0 + s4);
 		output[1] = K::round(s1);
 		output[2] = K::round(s2 - s4);
 		output[3] = K::round(s2 - s0 + s4);
 	}
 	static void iadst(const T *input, T *output) {
+	#ifdef USE_VEC
+		auto	x	= load<4>(input);
+		mat<T2, 4, 4>	m = {
+			vec<T2,4>{K::sinpi_1_9_sqrt2,	 K::sinpi_2_9_sqrt2,	 K::sinpi_3_9_sqrt2,	 K::sinpi_1_9_sqrt2 + K::sinpi_2_9_sqrt2	},
+			vec<T2,4>{K::sinpi_3_9_sqrt2,	 K::sinpi_3_9_sqrt2, 	 0,						-K::sinpi_3_9_sqrt2							},
+			vec<T2,4>{K::sinpi_4_9_sqrt2,	-K::sinpi_1_9_sqrt2, 	-K::sinpi_3_9_sqrt2,	 K::sinpi_4_9_sqrt2 - K::sinpi_1_9_sqrt2	},
+			vec<T2,4>{K::sinpi_2_9_sqrt2,	-K::sinpi_4_9_sqrt2,	 K::sinpi_3_9_sqrt2,	 K::sinpi_2_9_sqrt2 - K::sinpi_4_9_sqrt2	},
+		};
+		auto	s	= m * to<T2>(x);
+		store(K::template round<4>(s), output);
+	#else
 		T	x0 = input[ 0];
 		T	x1 = input[ 1];
 		T	x2 = input[ 2];
@@ -249,18 +276,16 @@ template<typename T, int BITS> struct dct<T, BITS, 4> {
 		T2	s4 = K::sinpi_1_9_sqrt2 * x2;
 		T2	s5 = K::sinpi_2_9_sqrt2 * x3;
 		T2	s6 = K::sinpi_4_9_sqrt2 * x3;
-		T2	s7 = x0 - x2 + x3;
+		T2	s7 = K::sinpi_3_9_sqrt2 * (x0 - x2 + x3);
 
-		s0 = s0 + s3 + s5;
-		s1 = s1 - s4 - s6;
-		s3 = s2;
-		s2 = K::sinpi_3_9_sqrt2 * s7;
+		T2	s8 = s0 + s3 + s5;
+		T2	s9 = s1 - s4 - s6;
 
-		// 1-D transform scaling factor is sqrt(2)
-		output[ 0] = K::round(s0 + s3);
-		output[ 1] = K::round(s1 + s3);
-		output[ 2] = K::round(s2);
-		output[ 3] = K::round(s0 + s1 - s3);
+		output[ 0] = K::round(s8 + s2);
+		output[ 1] = K::round(s9 + s2);
+		output[ 2] = K::round(s7);
+		output[ 3] = K::round(s8 + s9 - s2);
+	#endif
 	}
 };
 
@@ -304,16 +329,40 @@ template<typename T, int BITS> struct dct<T, BITS, 8> {
 		output[ 7] = K::round(x3 * K::cospi_28_64 - x0 * K::cospi_4_64);
 	}
 	static void idct(const T *input, T *output) {
+	#ifdef USE_VEC
+		auto	x	= load<8>(input);
+		//stage 1
+		auto	y	= to<T2>(x.odd);
+		y	= y * vec<T2, 4>{ K::cospi_28_64, -K::cospi_20_64, K::cospi_20_64, K::cospi_28_64} + y.wzyx * vec<T2, 4>{-K::cospi_4_64, K::cospi_12_64, K::cospi_12_64, K::cospi_4_64};
+		x	= concat(x.even, K::template round<4>(y));
+
+		//stage2
+		y	= to<T2>(x.lo);
+		y	= y.xxyy * vec<T2,4>{K::cospi_16_64, K::cospi_16_64, K::cospi_24_64, K::cospi_8_64} + y.zzww * vec<T2,4>{K::cospi_16_64, -K::cospi_16_64, -K::cospi_8_64, K::cospi_24_64};
+		//x	= concat(K::template round<4>(y), x.hi.yxwz + x.hi.xyzw * vec<T,4>{1, -1, -1, 1});
+		x	= concat(K::template round<4>(y), x.hi.yxwz + -masked.yz(+x.hi));
+
+		//stage3
+		auto	t = to<T2>(x.hi.yz);
+		t	= t.yx * K::cospi_16_64 + t.xy * vec<T2,2>{-K::cospi_16_64, K::cospi_16_64};
+		x	= concat(x.lo.xyyx + x.lo.wzzw * vec<T,4>{1,1,-1,-1}, x.hi.x, K::template round<2>(t), x.hi.w);
+
+		// stage 4
+		x	= concat(x.lo.xyzw + x.hi.wzyx, x.lo.wzyx - x.hi);
+		store(x, output);
+		return;
+	#endif
+
 		T step1[ 8], step2[ 8];
 		// stage 1
 		step1[ 0] = input[ 0];
-		step1[ 2] = input[ 4];
 		step1[ 1] = input[ 2];
+		step1[ 2] = input[ 4];
 		step1[ 3] = input[ 6];
 		step1[ 4] = K::round(input[ 1] * K::cospi_28_64 - input[ 7] * K::cospi_4_64);
-		step1[ 7] = K::round(input[ 1] * K::cospi_4_64 + input[ 7] * K::cospi_28_64);
 		step1[ 5] = K::round(input[ 5] * K::cospi_12_64 - input[ 3] * K::cospi_20_64);
 		step1[ 6] = K::round(input[ 5] * K::cospi_20_64 + input[ 3] * K::cospi_12_64);
+		step1[ 7] = K::round(input[ 1] * K::cospi_4_64  + input[ 7] * K::cospi_28_64);
 
 		// stage 2
 		step2[ 0] = K::round((step1[ 0] + step1[ 2]) * K::cospi_16_64);
@@ -488,6 +537,12 @@ template<typename T, int BITS> struct dct<T, BITS, 8> {
 		output[ 7] = -x1;
 	}
 };
+#ifdef USE_VEC
+vec<int16,16> swizzle_0_8_4_12_2_10_6_14_1_9_5_13_3_11_7_15(const vec<int16,16> &x);
+vec<int,8> swizzle_7_6_5_4_3_2_1_0(const vec<int,8> &x);
+vec<int16, 8> swizzle_0_1_2_3_9_10_13_14(const vec<int16, 16>& x);
+vec<int, 8> swizzle_1_0_3_2_7_6_5_4(const vec<int, 8>& x);
+#endif
 
 template<typename T, int BITS> struct dct<T, BITS, 16> {
 	typedef dct_consts<T, BITS>		K;
@@ -594,6 +649,61 @@ template<typename T, int BITS> struct dct<T, BITS, 16> {
 		output[15] = K::round(step1[ 0] * -K::cospi_2_64 + step1[ 7] * K::cospi_30_64);
 	}
 	static void idct(const T *input, T *output) {
+	#ifdef USE_VEC
+		//ISO_OUTPUT("hi\n");
+		auto	x	= load<16>(input);
+
+		//stage 1
+		//x	= swizzle<0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15>(x);
+		x = swizzle_0_8_4_12_2_10_6_14_1_9_5_13_3_11_7_15(x);
+		auto	x1	= x;
+
+		//stage 2
+		auto	y2	= to<T2>(x.hi);
+//		y2			= y2 * K::cospi_2_64;
+		y2			= y2							* vec<T2, 8>{+K::cospi_30_64, +K::cospi_14_64, +K::cospi_22_64, +K::cospi_6_64,		+K::cospi_6_64,  +K::cospi_22_64, +K::cospi_14_64, +K::cospi_30_64}
+					+ swizzle_7_6_5_4_3_2_1_0(y2)	* vec<T2, 8>{-K::cospi_2_64,  -K::cospi_18_64, -K::cospi_10_64, -K::cospi_26_64,	+K::cospi_26_64, +K::cospi_10_64, +K::cospi_18_64, +K::cospi_2_64};
+//					+ swizzle<7,6,5,4,3,2,1,0>(y2)	* vec<T2, 8>{-K::cospi_2_64,  -K::cospi_18_64, -K::cospi_10_64, -K::cospi_26_64,	+K::cospi_26_64, +K::cospi_10_64, +K::cospi_18_64, +K::cospi_2_64};
+		x.hi = K::template round<8>(y2);
+		auto	x2	= x;
+
+		// stage 3
+		auto	y3	= to<T2>(x.lo.hi);
+		y3	= y3 * vec<T2, 4>{ K::cospi_28_64, K::cospi_12_64, K::cospi_12_64, K::cospi_28_64} + y3.wzyx * vec<T2, 4>{-K::cospi_4_64, -K::cospi_20_64, K::cospi_20_64, K::cospi_4_64};
+		//x	= concat(x.lo.lo, K::template round<4>(y3), swizzle<1,0,3,2,5,4,7,6>(x.hi) + x.hi * vec<T,8>{1,-1,-1,1,1,-1,-1,1});
+		x	= concat(x.lo.lo, K::template round<4>(y3), swizzle<1,0,3,2,5,4,7,6>(x.hi) + -masked.mask<1,2,5,6>(+x.hi));
+		auto	x3	= x;
+
+		// stage 4
+		//auto	y4	= to<T2>((vec<T, 8>)swizzle<0,1,2,3,9,10,13,14>(x));
+		auto	y4	= to<T2>(swizzle_0_1_2_3_9_10_13_14(x));
+		y4			= y4							* vec<T2,8>{+K::cospi_16_64, -K::cospi_16_64, +K::cospi_24_64, +K::cospi_24_64, -K::cospi_8_64,  -K::cospi_24_64, +K::cospi_24_64, +K::cospi_8_64}
+					+ swizzle_1_0_3_2_7_6_5_4(y4)	* vec<T2,8>{+K::cospi_16_64, +K::cospi_16_64, -K::cospi_8_64,  +K::cospi_8_64,  +K::cospi_24_64, -K::cospi_8_64,  -K::cospi_8_64,  +K::cospi_24_64};
+//					+ swizzle<1,0,3,2,7,6,5,4>(y4)	* vec<T2,8>{+K::cospi_16_64, +K::cospi_16_64, -K::cospi_8_64,  +K::cospi_8_64,  +K::cospi_24_64, -K::cospi_8_64,  -K::cospi_8_64,  +K::cospi_24_64};
+
+		vec<T,8>	t4	= K::template round<8>(y4);
+		x			= concat(t4.lo, x.lo.hi.yxwz + x.lo.hi * vec<T,4>{1, -1, -1, 1}, x[8], t4.hi.lo, x[11], x[12], t4.hi.hi, x[15]);
+		auto	x4	= x;
+
+		// stage 5
+//		x = swizzle<3,2,1,0,4,6,5,7,11,10,9,8,15,14,13,12>(x) + x * vec<T,16>{1,1,-1,-1,0,-1,1,0,1,1,-1,-1,-1,-1,1,1};
+		x = swizzle<3,2,1,0,4,6,5,7,11,10,9,8,15,14,13,12>(x) + clear(masked.mask<4,7>(-masked.mask<2,3,5,10,11,12,13>(x)));
+		x.lo.hi.yz	= K::template round<2>(to<T2>(x.lo.hi.yz) * K::cospi_16_64);
+		auto	x5	= x;
+
+		// stage 6
+//		x = swizzle<7,6,5,4,3,2,1,0,8,9,13,12,11,10,14,15>(x) + x * vec<T,16>{1,1,1,1,-1,-1,-1,-1,0,0,-1,-1,1,1,0,0};
+		x = swizzle<7,6,5,4,3,2,1,0,8,9,13,12,11,10,14,15>(x) + clear(masked.mask<8,9,14,15>(-masked.mask<4,5,6,7,10,11>(x)));
+		masked.mask<10,11,12,13>(x) = K::template round<16>(to<T2>(x) * K::cospi_16_64);
+		auto	x6	= x;
+
+		// stage 7
+//		x	= swizzle<15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0>(x) + x * vec<T,16>{1,1,1,1,1,1,1,1,-1,-1,-1,-1,-1,-1,-1,-1};
+		x	= swizzle<15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0>(x) + -masked.mask<8,9,10,11,12,13,14,15>(x);
+		auto	x7	= x;
+		store(x, output);
+		return;
+	#endif
 		T	step1[16], step2[16];
 
 		// stage 1
@@ -614,6 +724,10 @@ template<typename T, int BITS> struct dct<T, BITS, 16> {
 		step1[14]	= input[14 / 2];
 		step1[15]	= input[30 / 2];
 
+	#ifdef USE_VEC
+		ISO_ALWAYS_ASSERT(all(load<16>(step1) == x1));
+	#endif
+
 		// stage 2
 		step2[ 0]	= step1[ 0];
 		step2[ 1]	= step1[ 1];
@@ -632,6 +746,10 @@ template<typename T, int BITS> struct dct<T, BITS, 16> {
 		step2[13]	= K::round(step1[10] * K::cospi_10_64 + step1[13] * K::cospi_22_64);
 		step2[14]	= K::round(step1[ 9] * K::cospi_18_64 + step1[14] * K::cospi_14_64);
 		step2[15]	= K::round(step1[ 8] * K::cospi_2_64  + step1[15] * K::cospi_30_64);
+
+	#ifdef USE_VEC
+		ISO_ALWAYS_ASSERT(all(load<16>(step2) == x2));
+	#endif
 
 		// stage 3
 		step1[ 0]	= step2[ 0];
@@ -652,6 +770,10 @@ template<typename T, int BITS> struct dct<T, BITS, 16> {
 		step1[14]	= step2[15] - step2[14];
 		step1[15]	= step2[14] + step2[15];
 
+	#ifdef USE_VEC
+		ISO_ALWAYS_ASSERT(all(load<16>(step1) == x3));
+	#endif
+
 		// stage 4
 		step2[ 0]	= K::round((step1[ 0] + step1[ 1]) * K::cospi_16_64);
 		step2[ 1]	= K::round((step1[ 0] - step1[ 1]) * K::cospi_16_64);
@@ -670,6 +792,10 @@ template<typename T, int BITS> struct dct<T, BITS, 16> {
 		step2[13]	= K::round( step1[13] * K::cospi_24_64 - step1[10] * K::cospi_8_64);
 		step2[14]	= K::round( step1[ 9] * K::cospi_24_64 + step1[14] * K::cospi_8_64);
 		step2[15]	= step1[15];
+
+	#ifdef USE_VEC
+		ISO_ALWAYS_ASSERT(all(load<16>(step2) == x4));
+	#endif
 
 		// stage 5
 		step1[ 0]	= step2[ 0] + step2[ 3];
@@ -690,6 +816,10 @@ template<typename T, int BITS> struct dct<T, BITS, 16> {
 		step1[14]	= step2[13] + step2[14];
 		step1[15]	= step2[12] + step2[15];
 
+	#ifdef USE_VEC
+		ISO_ALWAYS_ASSERT(all(load<16>(step1) == x5));
+	#endif
+
 		// stage 6
 		step2[ 0]	= step1[ 0] + step1[ 7];
 		step2[ 1]	= step1[ 1] + step1[ 6];
@@ -708,6 +838,10 @@ template<typename T, int BITS> struct dct<T, BITS, 16> {
 		step2[14]	= step1[14];
 		step2[15]	= step1[15];
 
+	#ifdef USE_VEC
+		ISO_ALWAYS_ASSERT(all(load<16>(step2) == x6));
+	#endif
+
 		// stage 7
 		output[ 0]	= step2[ 0] + step2[15];
 		output[ 1]	= step2[ 1] + step2[14];
@@ -725,6 +859,11 @@ template<typename T, int BITS> struct dct<T, BITS, 16> {
 		output[13]	= step2[ 2] - step2[13];
 		output[14]	= step2[ 1] - step2[14];
 		output[15]	= step2[ 0] - step2[15];
+
+	#ifdef USE_VEC
+		ISO_ALWAYS_ASSERT(all(load<16>(output) == x7));
+	#endif
+
 	}
 	static void fadst(const T *input, T *output) {
 		T	x0	= input[15];

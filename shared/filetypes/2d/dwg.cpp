@@ -166,15 +166,15 @@ enum OBJECTTYPE : uint16 {
 	POINT					= 0x1B,		//	E
 	FACE_3D					= 0x1C,		//	E
 	POLYLINE_PFACE			= 0x1D,		//	E
-	POLYLINE_MESH			= 0x1E,		//	e
+	POLYLINE_MESH			= 0x1E,		//	E
 	SOLID					= 0x1F,		//	E
 	TRACE					= 0x20,		//	E
-	SHAPE					= 0x21,		//	e
+	SHAPE					= 0x21,		//	E
 	VIEWPORT				= 0x22,		//	E
 	ELLIPSE					= 0x23,		//	E
 	SPLINE					= 0x24,		//	E
 	REGION					= 0x25,		//	e
-	SOLID_3D				= 0x26,		//	e
+	SOLID_3D				= 0x26,		//	E
 	BODY					= 0x27,		//	e
 	RAY						= 0x28,		//	E
 	XLINE					= 0x29,		//	E
@@ -255,8 +255,8 @@ enum OBJECTTYPE : uint16 {
 	VISUALSTYLE,			//	o
 	WIPEOUTVARIABLE,
 
-	ACDBDICTIONARYWDFLT,	//	o	aka DICTIONARYWDFLT
-	TABLESTYLE,				//	o
+	ACDBDICTIONARYWDFLT,	//	O	aka DICTIONARYWDFLT
+	TABLESTYLE,				//	O
 	EXACXREFPANELOBJECT,
 	NPOCOLLECTION,
 	ACDBSECTIONVIEWSTYLE,
@@ -292,20 +292,22 @@ using ALL_OBJECTTYPES = meta::value_list<OBJECTTYPE,
 	ACDBDICTIONARYWDFLT,	TABLESTYLE,	EXACXREFPANELOBJECT,	NPOCOLLECTION,	ACDBSECTIONVIEWSTYLE,	ACDBDETAILVIEWSTYLE,	ACDB_BLKREFOBJECTCONTEXTDATA_CLASS,	ACDB_MTEXTATTRIBUTEOBJECTCONTEXTDATA_CLASS
 >;
 
-template<class L, OBJECTTYPE...T> void switchT(L &&lambda, OBJECTTYPE t, meta::value_list<OBJECTTYPE, T...>) {
-	bool	unused[] = {t == T && (lambda.template operator()<T>(), true)...};
-}
-template<typename R, class L, OBJECTTYPE...T> R switchT(L &&lambda, OBJECTTYPE t, meta::value_list<OBJECTTYPE, T...>) {
-	R		result;
-	bool	unused[] = {t == T && ((result = lambda.template operator()<T>()), true)...};
-	return result;
-}
-
-template<typename R, typename L, typename T, T...V> R switchT(L &&lambda, T t) {
-	R		result;
-	bool	unused[] = {t == V && ((result = lambda.template operator()<V>()), true)...};
-	return result;
-}
+//template<class L, OBJECTTYPE...T> void switchT(L &&lambda, OBJECTTYPE t, meta::value_list<OBJECTTYPE, T...>) {
+//	bool	unused[] = {t == T && (lambda.template operator()<T>(), true)...};
+//}
+//template<typename R, class L, OBJECTTYPE...T> R switchT(L &&lambda, OBJECTTYPE t, meta::value_list<OBJECTTYPE, T...>) {
+//	R		result;
+//	bool	unused[] = {t == T && ((result = lambda.template operator()<T>()), true)...};
+//	return result;
+//}
+//template<class L, typename E, E...e> void switchT(L &&lambda, E i, meta::value_list<E, e...>) {
+//	bool	unused[] = {i == e && (lambda.template operator()<e>(), true)...};
+//}
+//template<typename R, class L, typename E, E...e> R switchT(L &&lambda, E i, meta::value_list<E, e...>) {
+//	R		result;
+//	bool	unused[] = {i == e && ((result = lambda.template operator()<e>()), true)...};
+//	return result;
+//}
 
 struct TypeNames {
 	uint32	start, num;
@@ -2400,6 +2402,7 @@ template<> struct ObjectT<SOLID_3D>			: Entity {
 };
 
 template<> struct ObjectT<REGION>			: Entity {};
+template<> struct ObjectT<BODY>				: Entity {};
 template<> struct ObjectT<OLEFRAME>			: Entity {};
 template<> struct ObjectT<TOLERANCE>		: Entity {};
 template<> struct ObjectT<OLE2FRAME>		: Entity {};
@@ -4976,7 +4979,7 @@ bool DWG::read18(const HeaderBase* h0, istream_ref file) {
 			Entry2() {}
 			Entry2(uint32 page, uint32 size, uint32 address) : page(page), size(size), address(address) {}
 		};
-		sparse_array<Entry2, uint32>	entries;
+		sparse_array<Entry2, uint32, uint16>	entries;
 
 		PageMap(const_memory_block mem) {
 			uint32 address = 0x100;
@@ -5796,11 +5799,11 @@ struct make_browser {
 };
 
 template<> struct ISO::def<dwg::Entity> : ISO::VirtualT2<dwg::Entity> {
-	static ISO::Browser2	Deref(const dwg::Entity &ent) { return dwg::switchT<ISO::Browser2>(make_browser(&ent), ent.type, dwg::ALL_OBJECTTYPES()); }
+	static ISO::Browser2	Deref(const dwg::Entity &ent) { return switchT<ISO::Browser2>(make_browser(&ent), ent.type, dwg::ALL_OBJECTTYPES()); }
 };
 
 template<> struct ISO::def<dwg::Object> : ISO::VirtualT2<dwg::Object> {
-	static ISO::Browser2	Deref(const dwg::Object &ent) { return dwg::switchT<ISO::Browser2>(make_browser(&ent), ent.type, dwg::ALL_OBJECTTYPES()); }
+	static ISO::Browser2	Deref(const dwg::Object &ent) { return switchT<ISO::Browser2>(make_browser(&ent), ent.type, dwg::ALL_OBJECTTYPES()); }
 };
 
 template<typename T> struct ISO::def<dwg::HandleCollection<T>>	: TISO_virtualarray<dwg::HandleCollection<T>>		{};
@@ -5811,9 +5814,7 @@ ISO_DEFUSERCOMPV(dwg::DWG, blocks, layers, textstyles, linetypes, views, ucs, vp
 class DWGFileHandler : public FileHandler {
 	const char*		GetExt()			override { return "dwg"; }
 	const char*		GetDescription()	override { return "Autodesk Drawing"; }
-	int				Check(const filename &fn) override {
-		return CHECK_NO_OPINION;
-	}
+	int				Check(const char *fn) override { return CHECK_NO_OPINION; }
 
 	ISO_ptr<void>	Read(tag id, istream_ref file) override {
 		char	h[128];
@@ -6151,7 +6152,7 @@ com_ptr<ID2D1Geometry> LayerBuilder::AddEntities(const dwg::HandleRange::Contain
 			d2d::matrix	trans = ent->transformation() * translate(-pos0);
 			geoms.push_back(d2d::Geometry(factory, geom, trans));
 
-		} else if (!enabled.size() || enabled.check(i->layerH)) {
+		} else if (!enabled.size() || enabled.count(i->layerH)) {
 			if (i->type == dwg::TEXT) {
 				geoms.append(AddText(i->as<dwg::TEXT>()));
 
@@ -6313,7 +6314,7 @@ LRESULT ViewDWG::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 		case WM_NOTIFY: {
 			NMHDR	*nmh = (NMHDR*)lParam;
 			switch (nmh->code) {
-				case d2d::PAINT: {
+				case d2d::PAINT_INFO::CODE: {
 					Paint((d2d::PAINT_INFO*)nmh);
 					break;
 				}

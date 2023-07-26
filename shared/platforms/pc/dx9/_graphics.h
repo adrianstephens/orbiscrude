@@ -537,28 +537,27 @@ DEFCOMPTYPE(int32,				D3DDECLTYPE_SHORT2);
 DEFCOMPTYPE(uint32,				D3DDECLTYPE_SHORT2);
 #undef DEFCOMPTYPE
 
-template<typename T>	ComponentType	GetComponentType()			{ return ComponentType(_ComponentType<T>::value); }
-template<typename T>	ComponentType	GetComponentType(const T&)	{ return ComponentType(_ComponentType<T>::value); }
+template<typename T> constexpr ComponentType	GetComponentType()			{ return ComponentType(_ComponentType<T>::value); }
+template<typename T> constexpr ComponentType	GetComponentType(const T&)	{ return ComponentType(_ComponentType<T>::value); }
 
 struct VertexElement : D3DVERTEXELEMENT9 {
-	VertexElement()		{}
-	VertexElement(_none&)	{ Terminate(); }
-	VertexElement(size_t offset, ComponentType type, ComponentUsage usage, uint8 usage_index = 0, int stream = 0) {
-		Stream		= WORD(stream);
-		Offset		= WORD(offset);
-		Type		= type;
-		Method		= D3DDECLMETHOD_DEFAULT;
-		Usage		= usage;
-		UsageIndex	= usage_index;
-	}
-	template<typename B, typename T> VertexElement(T B::* p, ComponentUsage usage, int usage_index = 0, int stream = 0) {
-		Stream		= WORD(stream);
-		Offset		= WORD(uintptr_t(ptr(((B*)0)->*p)));
-		Type		= GetComponentType<T>();
-		Method		= D3DDECLMETHOD_DEFAULT;
-		Usage		= usage;
-		UsageIndex	= usage_index;
-	}
+	VertexElement()				{}
+	VertexElement(const _none&)	{ Terminate(); }
+	constexpr VertexElement(size_t offset, ComponentType type, ComponentUsage usage, uint8 usage_index = 0, int stream = 0) : D3DVERTEXELEMENT9{
+		WORD(stream),
+		WORD(offset),
+		type,
+		D3DDECLMETHOD_DEFAULT,
+		usage,
+		usage_index,
+	} {}
+	template<typename B, typename T> constexpr VertexElement(T B::* p, ComponentUsage usage, int usage_index = 0, int stream = 0) : VertexElement(
+		uintptr_t(ptr(((B*)0)->*p)),
+		GetComponentType<T>(),
+		usage,
+		usage_index,
+		stream
+	) {}
 	void	Terminate() {
 		Stream		= 0xff;
 		Offset		= 0;

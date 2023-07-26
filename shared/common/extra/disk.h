@@ -104,4 +104,5 @@ struct PartitionEntry {
 };
 
 }//namespace iso
+
 #endif //DISK_H

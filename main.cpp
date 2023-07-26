@@ -1,3 +1,5 @@
+#define ISO_TEST
+
 #include "main.h"
 #include "iso/iso_files.h"
 #include "iso/iso_binary.h"
@@ -221,9 +223,11 @@ class OrbisCrude : public MainWindow {
 public:
 	static RecentFiles	recent;
 	static int			num;
+
 	filename	fn;
 	string		exec_cmd;
 	string		exec_dir;
+	Menu		menu_select;
 
 	LRESULT		Proc(MSG_ID message, WPARAM wParam, LPARAM lParam);
 	bool		OpenView(const ISO::Browser2 &b);
@@ -312,7 +316,6 @@ LRESULT OrbisCrude::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 	switch (message) {
 		case WM_CREATE:
 			//BlurBehind(true);
-			//Editor::CommandAll(*this, ID(), Editor::MODE_create);
 			break;//return 0;
 
 		case WM_DROPFILES: {
@@ -340,17 +343,28 @@ LRESULT OrbisCrude::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 			break;
 		}
 
-//		case WM_INITMENUPOPUP:
-//			new MenuIntercept(FindWindow("#32768", NULL));
-//			break;
+		case WM_INITMENUPOPUP: {
+			Menu	menu((HMENU)wParam);
+			int		i = LOWORD(lParam);
+			ISO_OUTPUTF("popup") << i << ' ' << menu << '\n';
+			if (menu_select && menu_select.GetSubMenuByPos(LOWORD(lParam)) == menu) {
+				ISO_OUTPUTF("popup got\n");
+				fixed_string<256>	name;
+				Menu::Item			item(MIIM_DATA);
+				if (item.Text(name, 256)._GetByPos(menu_select, i) && (void*)item.Param())
+					(*(MenuCallback*)item.Param())(*this, menu);
+			}
+			break;
+		}
 
 		case WM_MENUSELECT:
 			if (lParam && ((HIWORD(wParam) & MF_POPUP))) {
-				Menu				menu((HMENU)lParam);
-				fixed_string<256>	name;
-				Menu::Item			item(MIIM_DATA);
-				if (item.Text(name, 256)._GetByPos(menu, LOWORD(wParam)) && (void*)item.Param())
-					(*(MenuCallback*)item.Param())(*this, menu.GetSubMenuByPos(LOWORD(wParam)));
+				menu_select = (HMENU)lParam;
+				//Menu				menu((HMENU)lParam);
+				//fixed_string<256>	name;
+				//Menu::Item			item(MIIM_DATA);
+				//if (item.Text(name, 256)._GetByPos(menu, LOWORD(wParam)) && (void*)item.Param())
+				//	(*(MenuCallback*)item.Param())(*this, menu.GetSubMenuByPos(LOWORD(wParam)));
 			}
 			break;
 
@@ -378,7 +392,7 @@ LRESULT OrbisCrude::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 					}
 					{
 						Busy	bee;
-						if (auto p = FileHandler::Read64(0, fn)) {
+						if (auto p = FileHandler::Read64(tag(), fn)) {
 							recent.add(fn);
 							OpenView(ISO::Browser2(p));
 							SetTitle(fn.name());
@@ -413,7 +427,7 @@ LRESULT OrbisCrude::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 					break;
 
 				default:
-					if (id && Editor::CommandAll(*this, id, Editor::MODE_command))
+					if (id && Editor::CommandAll(*this, id))
 						return 1;
 					break;
 			}
@@ -422,16 +436,17 @@ LRESULT OrbisCrude::Proc(MSG_ID message, WPARAM wParam, LPARAM lParam) {
 		case WM_NOTIFY: {
 			NMHDR	*nmh = (NMHDR*)lParam;
 			switch (nmh->code) {
+			#if 0
 				case NM_LDOWN: {
 					NMMOUSE			*nmm	= (NMMOUSE*)nmh;
 					ToolBarControl	tb(nmh->hwndFrom);
 					if (nmm->pt.x < tb.GetItemRectByID(nmm->dwItemSpec).Left() + tb.ButtonSize().x) {
-						Editor::CommandAll(*this, nmm->dwItemSpec, Editor::MODE_click);
-							//child(WM_COMMAND, nmm->dwItemSpec, Editor::MODE_click);
+						if (Editor::CommandAll(*this, nmm->dwItemSpec))
+							return 1;
 					}
 					break;
 				}
-
+			#endif
 				case TCN_DRAG:
 					if (nmh->hwndFrom == child) {
 						TabControl2		tab(nmh->hwndFrom);
@@ -517,9 +532,9 @@ Editor *Editor::Find(ISO::Browser2 &b) {
 	}
 }
 
-bool Editor::CommandAll(MainWindow &main, ID id, MODE mode) {
+bool Editor::CommandAll(MainWindow &main, ID id) {
 	for (iterator i = begin(); i != end(); ++i) {
-		if (i->Command(main, id, mode))
+		if (i->Command(main, id))
 			return true;
 	}
 	return false;
@@ -577,9 +592,9 @@ bool CheckForUpdates(char *cmdline) {
 			buffer_accum<256>	message;
 			VersionString(message << "Version ", new_ver) << " has been downloaded.\n\n"
 				<< "Would you like to switch to this version?\n"
-				<< "(the current executable will be renamed to " << (const char*)ren_exe << ")";
+				<< "(the current executable will be renamed to " << ren_exe << ")";
 
-			if (MessageBox(NULL, message, "ORBIScrude", MB_ICONQUESTION | MB_YESNO) == IDYES) {
+			if (MessageBox(NULL, message.term(), "ORBIScrude", MB_ICONQUESTION | MB_YESNO) == IDYES) {
 				rename(cur_exe, filename(cur_exe).relative(ren_exe));
 				rename(new_exe, cur_exe);
 
@@ -611,7 +626,7 @@ bool CheckForUpdates(char *cmdline) {
 				malloc_block	mb(inp, len);
 
 				uint16			v[4];
-				(((string_scan(mb) >> v[0]).move(1) >> v[1]).move(1) >> v[2]).move(1) >> v[3];
+				(((string_scan(mb, mb.end()) >> v[0]).move(1) >> v[1]).move(1) >> v[2]).move(1) >> v[3];
 				uint64			new_ver	= (uint64((v[0] << 16) | v[1]) << 32) | (v[2] << 16) | v[3];
 
 				if (new_ver > ver) {
@@ -692,7 +707,7 @@ LONG WINAPI ExceptionFilter(EXCEPTION_POINTERS *ep) {
 		ba << "Failed to create a minidump at " << fn << " with error code " << GetLastError() << "\n\n";
 	}
 
-	if (MessageBox(NULL, ba << "Would you like to debug?", "Crash", MB_ICONERROR | MB_YESNO) == IDYES) {
+	if (MessageBox(NULL, (ba << "Would you like to debug?").term(), "Crash", MB_ICONERROR | MB_YESNO) == IDYES) {
 		SetUnhandledExceptionFilter(0);
 
 	//	switch (ep->ExceptionRecord->ExceptionCode) {
@@ -761,8 +776,10 @@ void CreateReadPipe(HANDLE pipe) {
 
 void WINAPI Hooked_OutputDebugStringA(LPCSTR lpOutputString) {
 	if (console) {
-		AddTextANSI(*console, lpOutputString);
-		console->EnsureVisible();
+//		JobQueue::Main().add([s = string(lpOutputString)]() {
+			AddTextANSI(*console, string(lpOutputString));
+			console->EnsureVisible();
+//		});
 	}
 	if (IsDebuggerPresent())
 		get_orig(OutputDebugStringA)(lpOutputString);
@@ -787,21 +804,96 @@ template<typename T> struct maybe_owned : pointer_pair<T, bool, 2> {
 	//T*		detach()	{ return b ? exchange(B::p, nullptr).a.get() : strdup(B::p); }
 };
 
+void warshall_shortest_path(block<float, 2> w) {
+	int		V	= w.size();
+	for (int k = 0; k < V; ++k) {
+		auto	wk = w[k];
+		for (int i = 0; i < V; ++i) {
+			if (i != k) {
+				auto	wi	= w[i];
+				auto	wik	= wi[k];
+				for (int j = 0; j < V; ++j)
+					wi[j] = min(wi[j], wik + wk[j]);
+			}
+		}
+	}
+}
+
+auto_block<int,2> warshall_shortest_path_path(block<float, 2> w) {
+	int		V		= w.size();
+	auto	next	= make_auto_block<int>(V, V);
+	
+	for (int i = 0; i < V; ++i)
+		for (int j = 0; j < V; ++j)
+			next[i][j] = w[i][j] ? j : -1;
+
+	for (int k = 0; k < V; ++k) {
+		auto	wk = w[k];
+		for (int i = 0; i < V; ++i) {
+			if (i != k) {
+				auto	wi = w[i];
+				auto	wik	= wi[k];
+				auto	ni	= next[i];
+				for (int j = 0; j < V; ++j) {
+					if (wi[j] > wik + wk[j]) {
+						wi[j] = wik + wk[j];
+						ni[j] = ni[k];
+					}
+				}
+			}
+		}
+	}
+	return next;
+}
+
+dynamic_array<int> get_path(const block<int,2> &next, int u, int v) {
+	dynamic_array<int>	path;
+	if (next[u][v] != -1) {
+		path.push_back(u);
+		while (u != v) {
+			u = next[u][v];
+			path.push_back(u);
+		}
+	}
+	return path;
+}
 
 int __stdcall WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, char *cmdline, int show) {
-	unorm3_11_11_10	tt;
-	
-	bitfield_vec_base<scaled_bits<uint32,2047,11>, scaled_bits<uint32,2047,11>, scaled_bits<uint32,1023,10>>		tt2;
-	ISO_TRACEF("sizeof tt2") << sizeof(tt2) << '\n';
-
 	OleInitialize(NULL);
+	socket_init();
+	AppEvent(AppEvent::PRE_GRAPHICS).send();
 
-	auto *con = new DockableWindow(Rect(0,0,200,200), "OC console");
-	console = new D2DTextWindow(con->GetChildWindowPos()
-		, "OC console"
-		, Control::CHILD | Control::VISIBLE
-	);
-	con->Show();
+	RunThread([]() {
+		char	buffer[1024];
+		for (;;) {
+			IP4::socket_addr	addr(PORT(4568));
+			Socket				sock = IP4::UDP();
+			sock.options().reuse_addr();
+			addr.bind(sock);
+
+			int	n = addr.recv(sock, buffer, 1024);
+			if (n < 0)
+				break;
+			ISO_TRACEF(str(buffer, n)) << "@" << addr.ip << ':' << addr.port << '\n';
+		}
+	});
+
+	{
+		//broadcast on port 4567
+		IP4::socket_addr	addr(IP4::broadcast, 4567);
+		Socket				sock = IP4::UDP();
+		sock.options().broadcast(1);
+		addr.send(sock, "host");
+	}
+
+//	RunThread([]() {
+		auto *con = new DockableWindow(Rect(0,0,200,200), "OC console");
+		console = new D2DTextWindow(con->GetChildWindowPos()
+			, "OC console"
+			, Control::CHILD | Control::VISIBLE
+		);
+		con->Show();
+//	});
 
 //	hook(OutputDebugStringA, "kernel32.dll");
 //	hook(OutputDebugStringW, "kernel32.dll");
@@ -814,7 +906,6 @@ int __stdcall WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, char *cmdlin
 #else
 	SetProcessDPIAware();
 #endif
-	socket_init();
 
 	uint32	check = 1;
 	if (!RegKey(HKEY_CURRENT_USER, "Software\\Isopod\\OrbisCrude\\General").values()["check for updates"].get(check) || check) {
@@ -867,7 +958,7 @@ int __stdcall WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, char *cmdlin
 	bool		licensed = false;
 	if (exists(license)) try {
 		FileHandler		*ix	= FileHandler::Get("ix");
-		ISO::Browser2	b	= ix->Read(0, FileInput(license));
+		ISO::Browser2	b	= ix->Read(tag(), FileInput(license));
 		licensed			= iso::crc32(buffer_accum<256>() << "ORBIScrude License;" << b["name"].GetString() << ";" << b["email"].GetString() << ";" << b["id"].GetString()) == b["hash"].GetInt();
 //		licensed			= crc32(buffer_accum<256>() << b["type"].GetString() << ";" << b["name"].GetString() << ";" << b["email"].GetString() << ";" << b["id"].GetString()) == b["hash"].GetInt();
 	} catch(...) {}
@@ -887,7 +978,7 @@ int __stdcall WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, char *cmdlin
 
 	main->Dock(DOCK_BOTTOM, *console);
 	con->Destroy();
-	Editor::CommandAll(*main, ID(), Editor::MODE_create);
+	AppEvent(AppEvent::BEGIN).send();
 
 	while (ProcessMessage(true))
 		;
@@ -898,7 +989,7 @@ int __stdcall WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, char *cmdlin
 		for (auto i : OrbisCrude::recent.Items())
 			b.Append().Set(i.Text());
 	}
-
-
+	
+	AppEvent(AppEvent::END).send();
 	return 0;
 }

@@ -501,7 +501,7 @@ public:
 			FileInput		file(part->fn);
 			WiiDiscInput	wdi(file, part->start, part->total, part->key);
 			wdi.seek(offset);
-			p		= ReadRaw(0, wdi, uint32(length));
+			p		= ReadRaw(none, wdi, uint32(length));
 			weak	= p;
 		}
 		return p;

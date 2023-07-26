@@ -13,7 +13,7 @@ namespace iso {
 //	bool	_free(void *p, size_t size);
 //	bool	_free(void *p);
 
-template<class A> class allocator {
+template<class A> class allocator_mixin {
 public:
 	void				*alloc(size_t size)						{ return static_cast<A*>(this)->_alloc(size); }
 	void				*alloc(size_t size, size_t align)		{ return static_cast<A*>(this)->_alloc(size, align); }
@@ -25,15 +25,19 @@ public:
 	template<typename T>	T*			alloc()					{ return (T*)alloc(sizeof(T), alignof(T)); }
 	template<typename T>	T*			alloc(size_t n)			{ return (T*)alloc(sizeof(T) * n, alignof(T)); }
 	template<typename T, typename...P>	enable_if_t<!is_array<T>, T*>	make(P&&...p)		{ return new(alloc(calc_size<T>(forward<P>(p)...), alignof(T))) T(forward<P>(p)...); }
+	template<typename T>	enable_if_t<!is_array<T>, T*>	make(T&& p)		{ return new(alloc(sizeof(T), alignof(T))) T(forward<T>(p)); }
+	template<typename T>	enable_if_t<!is_array<T>, T*>	make(const T&p)	{ return new(alloc(sizeof(T), alignof(T))) T(p); }
 	template<typename T>	exists_t<array_t<T>*>	make()		{ return make_array<array_t<T>>(sizeof(T) / sizeof(array_t<T>)); }
 	template<typename T>	T*			make_array(size_t n)	{ return new(*this, alignof(T)) T[n]; }
 	template<typename T>	void		del(T *t)				{ t->~T(); free(t, sizeof(T)); }
 	template<typename T>	T			get()					{ return alloc<typename T_deref<T>::type>(); }
-	getter<allocator>					get()					{ return *this; }
+	getter<allocator_mixin>				get()					{ return *this; }
 	template<typename T>	auto		get_deleter()			{ return [this](void *p) { del((T*)p); }; }
+
+	auto	make(const char *s)	{ auto n = strlen(s) + 1; auto r = alloc(n); memcpy(r, s, n); return (char*)r; }
 };
 
-struct vallocator : allocator<vallocator> {
+struct vallocator : allocator_mixin<vallocator> {
 	void*	me;
 	void*	(*valloc)	(void*, size_t, size_t);
 	bool	(*vfree)	(void*, void*);
@@ -73,7 +77,7 @@ public:
 //	class malloc_allocator
 //-----------------------------------------------------------------------------
 
-class malloc_allocator : public allocator<malloc_allocator> {
+class malloc_allocator : public allocator_mixin<malloc_allocator> {
 	static void*	_alloc(size_t size, size_t align = 16)				{ return iso::malloc(size); }
 	static bool		_free(void *p)										{ iso::free(p); return true; }
 	static void*	realloc(void *p, size_t size, size_t align = 16)	{ return iso::realloc(p, size); }
@@ -83,7 +87,7 @@ class malloc_allocator : public allocator<malloc_allocator> {
 //	class linear_allocator
 //-----------------------------------------------------------------------------
 
-class linear_allocator : public allocator<linear_allocator> {
+class linear_allocator : public allocator_mixin<linear_allocator> {
 protected:
 	uint8	*p;
 public:
@@ -106,7 +110,7 @@ public:
 //	class checking_linear_allocator
 //-----------------------------------------------------------------------------
 
-class checking_linear_allocator : public allocator<checking_linear_allocator> {
+class checking_linear_allocator : public allocator_mixin<checking_linear_allocator> {
 	struct back_allocator;
 
 protected:
@@ -151,7 +155,7 @@ public:
 	back_allocator& back()		{ return *(back_allocator*)this; }
 };
 
-struct back_allocator : checking_linear_allocator, allocator<back_allocator> {
+struct back_allocator : checking_linear_allocator, allocator_mixin<back_allocator> {
 	void	*_alloc(size_t size)				{ return back_alloc(size); }
 	void	*_alloc(size_t size, size_t align)	{ return back_alloc(size, align); }
 };
@@ -160,7 +164,7 @@ struct back_allocator : checking_linear_allocator, allocator<back_allocator> {
 //	class circular_allocator
 //-----------------------------------------------------------------------------
 
-class circular_allocator : public allocator<circular_allocator> {
+class circular_allocator : public allocator_mixin<circular_allocator> {
 protected:
 	uint8		*a, *b;
 	uint8		*p, *g;
@@ -254,7 +258,7 @@ public:
 	template<typename T> auto push_back(T &&t) {
 		typedef noref_t<T>	T2;
 		if (memory_block p = push_back(sizeof(T2), alignof(T2)))
-			return new(p) T2(forward<T>(t));
+			return new(placement(p)) T2(forward<T>(t));
 		return (T2*)nullptr;
 	}
 };
@@ -264,7 +268,7 @@ public:
 //	can only free last allocation
 //-----------------------------------------------------------------------------
 
-template<size_t BLOCK> class arena_allocator : public allocator<arena_allocator<BLOCK>> {
+template<size_t BLOCK> class arena_allocator : public allocator_mixin<arena_allocator<BLOCK>> {
 protected:
 	struct Node {
 		Node*		next;
@@ -273,9 +277,9 @@ protected:
 		uint8*		free;
 		uint8		data[];
 		Node(Node *next, size_t capacity) : next(next), begin(data), end(data + capacity), free(data) {}
+		constexpr const_memory_block	allocated() const { return {data, free}; }
 	};
 
-	Node*	head	= nullptr;
 	Node*	spare	= nullptr;
 
 	void	add_node(size_t capacity) {
@@ -289,15 +293,32 @@ protected:
 		}
 		head	= new(malloc(capacity + sizeof(Node))) Node(head, capacity);
 	}
-
 public:
+	struct restorer {
+		arena_allocator	&a;
+		void			*p;
+		restorer(arena_allocator &a) : a(a), p(a.head ? a.head->free : nullptr) {}
+		~restorer() { a.free_to(p); }
+	};
+
+	Node*	head	= nullptr;
 
 	~arena_allocator() {
+		delete spare;
 		for (Node *n = head; n; ) {
 			Node* next = n->next;
 			delete n;
 			n = next;
 		}
+	}
+
+	void clear() {
+		for (Node *n = head; n; ) {
+			Node* next = n->next;
+			delete n;
+			n = next;
+		}
+		head = nullptr;
 	}
 
 	void*	_alloc(size_t size) {
@@ -334,6 +355,29 @@ public:
 			}
 		}
 	}
+	void	free_to(void *p) {
+		while (head && !(p && p >= head->begin && p < head->free)) {
+			Node* next = head->next;
+			delete head;
+			head = next;
+		}
+		_free_last(p);
+	}
+
+	void*	get_free_point() const {
+		return head ? head->free : nullptr;
+	}
+	restorer	get_restorer() {
+		return *this;
+	}
+
+
+	size_t	total_alloc() const {
+		size_t	t = 0;
+		for (Node *n = head; n; n = n->next)
+			t += n->allocated().size();
+		return t;
+	}
 };
 
 }//namespace iso
@@ -344,9 +388,9 @@ public:
 
 // need to be global for some reason
 
-template<class A> inline void *operator new(size_t size, iso::allocator<A> &a)					{ return a.alloc(size, sizeof(void*)); }
-template<class A> inline void *operator new[](size_t size, iso::allocator<A> &a)				{ return a.alloc(size, sizeof(void*)); }
-template<class A> inline void *operator new(size_t size, iso::allocator<A> &a, size_t align)	{ return a.alloc(size, align); }
-template<class A> inline void *operator new[](size_t size, iso::allocator<A> &a, size_t align)	{ return a.alloc(size, align); }
+template<class A> inline void *operator new(size_t size, iso::allocator_mixin<A> &a)					{ return a.alloc(size, sizeof(void*)); }
+template<class A> inline void *operator new[](size_t size, iso::allocator_mixin<A> &a)					{ return a.alloc(size, sizeof(void*)); }
+template<class A> inline void *operator new(size_t size, iso::allocator_mixin<A> &a, size_t align)		{ return a.alloc(size, align); }
+template<class A> inline void *operator new[](size_t size, iso::allocator_mixin<A> &a, size_t align)	{ return a.alloc(size, align); }
 
 #endif // ALLOCATOR_H
